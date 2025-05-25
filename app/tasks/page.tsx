@@ -85,7 +85,7 @@ export default function TasksPage() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <Header onAddLineDetails={() => {}} />
+        <Header />
 
         <main className='flex-1 space-y-6 p-6'>
           {/* Page Header */}
