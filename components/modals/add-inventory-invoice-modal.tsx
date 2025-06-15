@@ -29,6 +29,7 @@ interface InventoryItem {
   unit: string
   item_type: string
   current_stock: number
+  drum_size?: number
 }
 
 interface InvoiceItem {
@@ -292,10 +293,11 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
             .single()
 
           if (currentItem) {
+            const currentStock = (currentItem as { current_stock: number }).current_stock
             await supabase
               .from("inventory_items")
               .update({
-                current_stock: currentItem.current_stock + item.quantity_issued,
+                current_stock: currentStock + item.quantity_issued,
                 updated_at: new Date().toISOString(),
               })
               .eq("id", item.item_id)
