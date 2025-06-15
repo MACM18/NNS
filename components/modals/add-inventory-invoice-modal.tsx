@@ -86,7 +86,7 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
       const { data, error } = await supabase.from("inventory_items").select("*").order("name")
 
       if (error) throw error
-      setInventoryItems(data || [])
+      setInventoryItems((data as unknown as InventoryItem[]) || [])
     } catch (error) {
       console.error("Error fetching inventory items:", error)
     }
@@ -97,7 +97,7 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
       const { data, error } = await supabase.rpc("generate_invoice_number")
 
       if (error) throw error
-      setAutoInvoiceNumber(data)
+      setAutoInvoiceNumber(String(data))
     } catch (error) {
       console.error("Error generating invoice number:", error)
       // Fallback to timestamp-based number
@@ -242,7 +242,7 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
 
       // Create invoice
       const invoiceData = {
-        auto_invoice_number: autoInvoiceNumber,
+        invoice_number: autoInvoiceNumber,
         warehouse: formData.warehouse,
         date: formData.date,
         issued_by: formData.issued_by,
