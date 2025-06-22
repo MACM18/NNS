@@ -18,6 +18,7 @@ export default function ReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [autoGenerate, setAutoGenerate] = useState(true)
   const supabase = getSupabaseClient()
+  const [generatingReports, setGeneratingReports] = useState<Set<string>>(new Set())
 
   const reports = [
     {
@@ -341,7 +342,7 @@ export default function ReportsPage() {
     switch (exportType) {
       case "csv":
         return generateCSV(data, template)
-      case "excel":
+      case "xlsx":
         return generateExcel(data, template)
       case "pdf":
         return generatePDF(data, template)
@@ -745,7 +746,7 @@ export default function ReportsPage() {
   }
 
   const handleGenerateReport = async (reportId: string) => {
-    setIsGenerating(true)
+    setGeneratingReports((prev) => new Set(prev).add(reportId))
     try {
       let reportData = null
 
@@ -777,7 +778,11 @@ export default function ReportsPage() {
       console.error("Error generating report:", error)
       toast.error("Error generating report")
     } finally {
-      setIsGenerating(false)
+      setGeneratingReports((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(reportId)
+        return newSet
+      })
     }
   }
 
@@ -902,7 +907,7 @@ export default function ReportsPage() {
                   <SelectContent>
                     <SelectItem value="pdf">PDF</SelectItem>
                     <SelectItem value="csv">CSV</SelectItem>
-                    <SelectItem value="excel">Excel</SelectItem>
+                    <SelectItem value="xlsx">Excel</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -937,13 +942,17 @@ export default function ReportsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Button onClick={() => handleGenerateReport(report.id)} disabled={isGenerating} className="w-full">
-                    {isGenerating ? (
+                  <Button
+                    onClick={() => handleGenerateReport(report.id)}
+                    disabled={generatingReports.has(report.id) || isGenerating}
+                    className="w-full"
+                  >
+                    {generatingReports.has(report.id) ? (
                       <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Download className="mr-2 h-4 w-4" />
                     )}
-                    Generate {exportFormat.toUpperCase()}
+                    Generate {exportFormat.toUpperCase() === "XLSX" ? "Excel" : exportFormat.toUpperCase()}
                   </Button>
                 </CardContent>
               </Card>
@@ -1011,7 +1020,7 @@ export default function ReportsPage() {
                   <SelectContent>
                     <SelectItem value="pdf">PDF</SelectItem>
                     <SelectItem value="csv">CSV</SelectItem>
-                    <SelectItem value="excel">Excel</SelectItem>
+                    <SelectItem value="xlsx">Excel</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
