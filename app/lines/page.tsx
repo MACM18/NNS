@@ -43,9 +43,10 @@ export default function LineDetailsPage() {
       const startDate = new Date(selectedYear, selectedMonth - 1, 1)
       const endDate = new Date(selectedYear, selectedMonth, 0)
 
+      // Fetch all columns to avoid missing-column errors
       const { data: lines, error } = await supabase
         .from("line_details")
-        .select("id, date, completed_date")
+        .select("*")
         .gte("date", startDate.toISOString().split("T")[0])
         .lte("date", endDate.toISOString().split("T")[0])
 
@@ -53,9 +54,9 @@ export default function LineDetailsPage() {
 
       const stats = {
         total: lines?.length || 0,
-        completed: lines?.filter((l) => l.completed_date).length || 0,
-        inProgress: 0, // not tracked in DB
-        pending: lines?.filter((l) => !l.completed_date).length || 0,
+        completed: lines?.filter((l: any) => l.completed === true || l.status === "completed").length || 0,
+        inProgress: 0, // no explicit tracking column
+        pending: lines?.filter((l: any) => !(l.completed === true || l.status === "completed")).length || 0,
       }
 
       setLineStats(stats)

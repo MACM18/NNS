@@ -21,7 +21,6 @@ interface LineDetail {
   dp: string
   date: string
   status?: string
-  completed_date?: string
   task_id?: string
   // Use actual database column names
   power_dp: number
@@ -69,6 +68,7 @@ interface LineDetail {
     avatar_url?: string
   }>
   created_at: string
+  completed: boolean
 }
 
 interface LineDetailsTableProps {
@@ -122,7 +122,7 @@ export function LineDetailsTable({
       // For now, set assignees as empty array since the join might be complex
       const processedLines = (lines ?? []).map((line: any) => ({
         ...line,
-        status: line.completed_date ? "completed" : "pending", // derived
+        status: line.completed === true || line.status === "completed" ? "completed" : "pending",
         assignees: [],
         // default 0s for any nullable material columns
         c_hook: line.c_hook ?? 0,
@@ -265,12 +265,6 @@ export function LineDetailsTable({
               <span className="text-sm text-muted-foreground">Status:</span>
               {getStatusBadge(line)}
             </div>
-            {line.completed_date && (
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Completed:</span>
-                <span className="font-medium">{new Date(line.completed_date).toLocaleDateString()}</span>
-              </div>
-            )}
           </CardContent>
         </Card>
 
