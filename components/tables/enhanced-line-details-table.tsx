@@ -89,7 +89,7 @@ export function LineDetailsTable({
   const [data, setData] = useState<LineDetail[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "pending">("all")
   const [sortField, setSortField] = useState<string>("date")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -109,53 +109,39 @@ export function LineDetailsTable({
       const endDate = new Date(selectedYear, selectedMonth, 0)
 
       // First, get the line details
-      let query = supabase
+      const query = supabase
         .from("line_details")
         .select("*")
         .gte("date", startDate.toISOString().split("T")[0])
         .lte("date", endDate.toISOString().split("T")[0])
-
-      // Apply status filter
-      if (statusFilter !== "all") {
-        if (statusFilter === "completed") {
-          query = query.or("status.eq.completed,completed_date.not.is.null")
-        } else if (statusFilter === "pending") {
-          query = query.or("status.eq.pending,status.is.null")
-        } else {
-          query = query.eq("status", statusFilter)
-        }
-      }
-
-      // Apply sorting
-      query = query.order(sortField, { ascending: sortDirection === "asc" })
 
       const { data: lines, error } = await query
 
       if (error) throw error
 
       // For now, set assignees as empty array since the join might be complex
-      const processedLines =
-        lines?.map((line) => ({
-          ...line,
-          assignees: [],
-          // Add default values for missing material columns
-          c_hook: line.c_hook || 0,
-          l_hook: line.l_hook || 0,
-          retainers: line.retainers || 0,
-          nut_bolt: line.nut_bolt || 0,
-          u_clip: line.u_clip || 0,
-          concrete_nail: line.concrete_nail || 0,
-          roll_plug: line.roll_plug || 0,
-          screw_nail: line.screw_nail || 0,
-          socket: line.socket || 0,
-          bend: line.bend || 0,
-          rj11: line.rj11 || 0,
-          rj12: line.rj12 || 0,
-          rj45: line.rj45 || 0,
-          fiber_rosette: line.fiber_rosette || 0,
-          s_rosette: line.s_rosette || 0,
-          fac: line.fac || 0,
-        })) || []
+      const processedLines = (lines ?? []).map((line: any) => ({
+        ...line,
+        status: line.completed_date ? "completed" : "pending", // derived
+        assignees: [],
+        // default 0s for any nullable material columns
+        c_hook: line.c_hook ?? 0,
+        l_hook: line.l_hook || 0,
+        retainers: line.retainers || 0,
+        nut_bolt: line.nut_bolt || 0,
+        u_clip: line.u_clip || 0,
+        concrete_nail: line.concrete_nail || 0,
+        roll_plug: line.roll_plug || 0,
+        screw_nail: line.screw_nail || 0,
+        socket: line.socket || 0,
+        bend: line.bend || 0,
+        rj11: line.rj11 || 0,
+        rj12: line.rj12 || 0,
+        rj45: line.rj45 || 0,
+        fiber_rosette: line.fiber_rosette || 0,
+        s_rosette: line.s_rosette || 0,
+        fac: line.fac || 0,
+      })) as LineDetail[]
 
       setData(processedLines)
     } catch (error: any) {
@@ -170,13 +156,15 @@ export function LineDetailsTable({
     }
   }
 
-  const filteredData = data.filter(
-    (item) =>
-      item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.telephone_no?.includes(searchTerm) ||
-      item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.dp?.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const filteredData = data
+    .filter(
+      (item) =>
+        item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.telephone_no?.includes(searchTerm) ||
+        item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.dp?.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+    .filter((item) => (statusFilter === "all" ? true : item.status === statusFilter))
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -197,15 +185,12 @@ export function LineDetailsTable({
     setExpandedRows(newExpanded)
   }
 
-  const getStatusBadge = (line: LineDetail) => {
-    if (line.completed_date || line.status === "completed") {
-      return <Badge className="bg-green-100 text-green-800 border-green-200">Completed</Badge>
-    } else if (line.status === "in_progress") {
-      return <Badge className="bg-blue-100 text-blue-800 border-blue-200">In Progress</Badge>
-    } else {
-      return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Pending</Badge>
-    }
-  }
+  const getStatusBadge = (line: LineDetail) =>
+    line.status === "completed" ? (
+      <Badge className="bg-green-100 text-green-800 border-green-200">Completed</Badge>
+    ) : (
+      <Badge className="bg-orange-100 text-orange-800 border-orange-200">Pending</Badge>
+    )
 
   const isPowerHigh = (value: number) => value >= 25
 
@@ -419,7 +404,6 @@ export function LineDetailsTable({
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
           </SelectContent>
         </Select>
