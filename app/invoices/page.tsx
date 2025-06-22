@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, FileText, Settings, Download, Eye, Calendar } from "lucide-react"
+import { Plus, FileText, Settings, Download, Eye, Calendar, RefreshCw } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { AuthWrapper } from "@/components/auth/auth-wrapper"
 import { getSupabaseClient } from "@/lib/supabase"
 import { useNotification } from "@/contexts/notification-context"
+import { useDataCache } from "@/contexts/data-cache-context"
 
 interface GeneratedInvoice {
   id: string
@@ -46,27 +47,21 @@ export default function InvoicesPage() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [pdfModalOpen, setPdfModalOpen] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<GeneratedInvoice | null>(null)
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
-  const [invoices, setInvoices] = useState<GeneratedInvoice[]>([])
-  const [stats, setStats] = useState<InvoiceStats>({
+  const supabase = getSupabaseClient()
+  const { addNotification } = useNotification()
+  const { cache, updateCache } = useDataCache()
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const invoices = cache.invoices.data || []
+  const stats = cache.invoices.stats || {
     thisMonth: 0,
     totalAmount: 0,
     linesBilled: 0,
     avgRate: 0,
-  })
-  const [loadingData, setLoadingData] = useState(true)
-
-  const supabase = getSupabaseClient()
-  const { addNotification } = useNotification()
-
-  useEffect(() => {
-    if (user) {
-      fetchInvoices()
-      fetchStats()
-    }
-  }, [user, refreshTrigger])
+  }
 
   const fetchInvoices = async () => {
+    setIsRefreshing(true)
     try {
       const { data, error } = await supabase
         .from("generated_invoices")
@@ -75,7 +70,10 @@ export default function InvoicesPage() {
         .limit(50)
 
       if (error) throw error
-      setInvoices(data || [])
+
+      updateCache("invoices", {
+        data: data || [],
+      })
     } catch (error: any) {
       console.error("Error fetching invoices:", error)
       addNotification({
@@ -84,7 +82,7 @@ export default function InvoicesPage() {
         type: "error",
       })
     } finally {
-      setLoadingData(false)
+      setIsRefreshing(false)
     }
   }
 
@@ -108,19 +106,31 @@ export default function InvoicesPage() {
       const linesBilled = monthlyInvoices?.reduce((sum, inv) => sum + (inv.line_count || 0), 0) || 0
       const avgRate = linesBilled > 0 ? Math.round(totalAmount / linesBilled) : 0
 
-      setStats({
-        thisMonth,
-        totalAmount,
-        linesBilled,
-        avgRate,
+      updateCache("invoices", {
+        stats: {
+          thisMonth,
+          totalAmount,
+          linesBilled,
+          avgRate,
+        },
       })
     } catch (error: any) {
       console.error("Error fetching stats:", error)
     }
   }
 
+  const refreshData = async () => {
+    await Promise.all([fetchInvoices(), fetchStats()])
+  }
+
+  useEffect(() => {
+    if (user && !cache.invoices.lastUpdated) {
+      refreshData()
+    }
+  }, [user])
+
   const handleSuccess = () => {
-    setRefreshTrigger((prev) => prev + 1)
+    refreshData() // Refresh data after generating invoices
   }
 
   const handlePreviewInvoice = (invoice: GeneratedInvoice) => {
@@ -207,6 +217,10 @@ export default function InvoicesPage() {
               <p className="text-muted-foreground">Generate monthly invoices and manage billing</p>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={refreshData} disabled={isRefreshing}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
               <Button onClick={() => setSettingsModalOpen(true)} variant="outline" className="gap-2">
                 <Settings className="h-4 w-4" />
                 Settings
@@ -281,7 +295,7 @@ export default function InvoicesPage() {
                   <CardDescription>Monthly invoices with A/B/C distribution (90%/5%/5%)</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingData ? (
+                  {isRefreshing ? (
                     <div className="text-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                       <p className="mt-2 text-sm text-muted-foreground">Loading invoices...</p>

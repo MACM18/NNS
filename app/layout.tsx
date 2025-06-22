@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/auth-context";
 import { NotificationProvider } from "@/contexts/notification-context";
+import { DataCacheProvider } from "@/contexts/data-cache-context";
 
 export const metadata: Metadata = {
   title: "NNS Telecom Dashboard",
@@ -26,7 +27,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <NotificationProvider>{children}</NotificationProvider>
+            <NotificationProvider>
+              <DataCacheProvider>{children}</DataCacheProvider>
+            </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

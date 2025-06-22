@@ -1,89 +1,175 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
-import { X } from "lucide-react"
-import { Button } from "@/components/ui/button"
-
-interface Notification {
-  id: string
-  title: string
-  message: string
-  type: "success" | "error" | "warning" | "info"
-  duration?: number
-}
-
-interface NotificationContextType {
-  notifications: Notification[]
-  addNotification: (notification: Omit<Notification, "id">) => void
-  removeNotification: (id: string) => void
-}
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { getSupabaseClient } from "@/lib/supabase"
+import { useAuth } from "@/contexts/auth-context"
+import { toast } from "sonner"
+import type { Notification, NotificationContextType } from "@/types/notifications"
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const { user } = useAuth()
+  const supabase = getSupabaseClient()
 
-  const addNotification = (notification: Omit<Notification, "id">) => {
-    const id = Math.random().toString(36).substr(2, 9)
-    const newNotification = { ...notification, id }
+  const unreadCount = notifications.filter((n) => !n.is_read).length
 
-    setNotifications((prev) => [...prev, newNotification])
+  const fetchNotifications = async () => {
+    if (!user) return
 
-    // Auto remove after duration
-    if (notification.duration !== 0) {
-      setTimeout(() => {
-        removeNotification(id)
-      }, notification.duration || 5000)
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50)
+
+      if (error) throw error
+      setNotifications(data || [])
+    } catch (error) {
+      console.error("Error fetching notifications:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const removeNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  const addNotification = async (
+    notification: Omit<Notification, "id" | "user_id" | "is_read" | "created_at" | "updated_at">,
+  ) => {
+    if (!user) return
+
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .insert({
+          ...notification,
+          user_id: user.id,
+          is_read: false,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setNotifications((prev) => [data, ...prev])
+
+      // Show toast for immediate feedback
+      toast(notification.title, {
+        description: notification.message,
+        action: notification.action_url
+          ? {
+              label: "View",
+              onClick: () => (window.location.href = notification.action_url!),
+            }
+          : undefined,
+      })
+    } catch (error) {
+      console.error("Error adding notification:", error)
+    }
   }
 
+  const markAsRead = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ is_read: true, updated_at: new Date().toISOString() })
+        .eq("id", id)
+
+      if (error) throw error
+
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)))
+    } catch (error) {
+      console.error("Error marking notification as read:", error)
+    }
+  }
+
+  const markAllAsRead = async () => {
+    if (!user) return
+
+    try {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ is_read: true, updated_at: new Date().toISOString() })
+        .eq("user_id", user.id)
+        .eq("is_read", false)
+
+      if (error) throw error
+
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error)
+    }
+  }
+
+  const deleteNotification = async (id: string) => {
+    try {
+      const { error } = await supabase.from("notifications").delete().eq("id", id)
+
+      if (error) throw error
+
+      setNotifications((prev) => prev.filter((n) => n.id !== id))
+    } catch (error) {
+      console.error("Error deleting notification:", error)
+    }
+  }
+
+  // Fetch notifications on mount and user change
+  useEffect(() => {
+    if (user) {
+      fetchNotifications()
+    }
+  }, [user])
+
+  // Set up real-time subscription
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel("notifications")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setNotifications((prev) => [payload.new as Notification, ...prev])
+          } else if (payload.eventType === "UPDATE") {
+            setNotifications((prev) => prev.map((n) => (n.id === payload.new.id ? (payload.new as Notification) : n)))
+          } else if (payload.eventType === "DELETE") {
+            setNotifications((prev) => prev.filter((n) => n.id !== payload.old.id))
+          }
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user])
+
   return (
-    <NotificationContext.Provider value={{ notifications, addNotification, removeNotification }}>
+    <NotificationContext.Provider
+      value={{
+        notifications,
+        unreadCount,
+        addNotification,
+        markAsRead,
+        markAllAsRead,
+        deleteNotification,
+        fetchNotifications,
+        isLoading,
+      }}
+    >
       {children}
-      <NotificationContainer />
     </NotificationContext.Provider>
-  )
-}
-
-function NotificationContainer() {
-  const { notifications, removeNotification } = useNotification()
-
-  return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
-      {notifications.map((notification) => (
-        <div
-          key={notification.id}
-          className={`max-w-sm p-4 rounded-lg shadow-lg border ${
-            notification.type === "success"
-              ? "bg-green-50 border-green-200 text-green-800"
-              : notification.type === "error"
-                ? "bg-red-50 border-red-200 text-red-800"
-                : notification.type === "warning"
-                  ? "bg-yellow-50 border-yellow-200 text-yellow-800"
-                  : "bg-blue-50 border-blue-200 text-blue-800"
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <h4 className="font-medium">{notification.title}</h4>
-              <p className="text-sm mt-1">{notification.message}</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => removeNotification(notification.id)}
-              className="ml-2 h-6 w-6 p-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      ))}
-    </div>
   )
 }
 

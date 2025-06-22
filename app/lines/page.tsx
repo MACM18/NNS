@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Calendar, CheckCircle, Clock, AlertCircle } from "lucide-react"
+import { Calendar, CheckCircle, Clock, AlertCircle, RefreshCw } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
@@ -13,6 +13,8 @@ import { useAuth } from "@/contexts/auth-context"
 import { AuthWrapper } from "@/components/auth/auth-wrapper"
 import { getSupabaseClient } from "@/lib/supabase"
 import { useNotification } from "@/contexts/notification-context"
+import { useDataCache } from "@/contexts/data-cache-context"
+import { Button } from "@/components/ui/button"
 
 interface LineStats {
   total: number
@@ -25,19 +27,26 @@ export default function LineDetailsPage() {
   const { user, loading } = useAuth()
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [lineStats, setLineStats] = useState<LineStats>({ total: 0, completed: 0, inProgress: 0, pending: 0 })
   const [assigneeModalOpen, setAssigneeModalOpen] = useState(false)
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  const { cache, updateCache } = useDataCache()
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const lineStats = cache.lines.stats || { total: 0, completed: 0, inProgress: 0, pending: 0 }
 
   const supabase = getSupabaseClient()
   const { addNotification } = useNotification()
 
   useEffect(() => {
-    fetchLineStats()
-  }, [selectedMonth, selectedYear, refreshTrigger])
+    if (!cache.lines.lastUpdated) {
+      fetchLineStats()
+    }
+  }, [])
 
   const fetchLineStats = async () => {
+    setIsRefreshing(true)
     try {
       // Get start and end dates for the selected month
       const startDate = new Date(selectedYear, selectedMonth - 1, 1)
@@ -59,7 +68,9 @@ export default function LineDetailsPage() {
         pending: lines?.filter((l: any) => !(l.completed === true || l.status === "completed")).length || 0,
       }
 
-      setLineStats(stats)
+      updateCache("lines", {
+        stats: stats,
+      })
     } catch (error: any) {
       console.error("Stats error:", error)
       addNotification({
@@ -67,6 +78,8 @@ export default function LineDetailsPage() {
         message: `Failed to fetch line statistics: ${error.message}`,
         type: "error",
       })
+    } finally {
+      setIsRefreshing(false)
     }
   }
 
@@ -83,7 +96,7 @@ export default function LineDetailsPage() {
   }
 
   const handleAssigneeSuccess = () => {
-    setRefreshTrigger((prev) => prev + 1)
+    fetchLineStats() // Refresh data after assignee change
     setAssigneeModalOpen(false)
     setSelectedLineId(null)
   }
@@ -119,6 +132,10 @@ export default function LineDetailsPage() {
               <p className="text-muted-foreground">Manage telecom line installations and track progress</p>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={fetchLineStats} disabled={isRefreshing}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
               <Select
                 value={selectedMonth.toString()}
                 onValueChange={(value) => setSelectedMonth(Number.parseInt(value))}

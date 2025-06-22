@@ -3,57 +3,34 @@
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import {
-  Download,
-  FileText,
-  CalendarIcon,
-  TrendingUp,
-  AlertTriangle,
-  RefreshCw,
-  BarChart3,
-  FileSpreadsheet,
-  FileImage,
-} from "lucide-react"
-import { format } from "date-fns"
+import { MonthYearPicker } from "@/components/ui/month-year-picker"
+import { Download, FileText, RefreshCw, BarChart3, FileSpreadsheet, FileImage, Clock, CheckCircle } from "lucide-react"
+import { format as formatDate } from "date-fns"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { DashboardLayout } from "@/components/layout/dashboard-layout"
+import { useNotification } from "@/contexts/notification-context"
+import { NotificationService } from "@/lib/notification-service"
+import { enhancedReportService, type ReportOptions } from "@/lib/enhanced-report-service"
 
-export default function ReportsPage() {
-  const [dateRange, setDateRange] = useState<{
-    from: Date | undefined
-    to: Date | undefined
-  }>({
-    from: new Date(2024, 0, 1),
-    to: new Date(),
-  })
-  const [exportFormat, setExportFormat] = useState("pdf")
+function ReportsPageContent() {
+  const [selectedMonth, setSelectedMonth] = useState(new Date())
+  const [exportFormat, setExportFormat] = useState<"pdf" | "csv" | "xlsx">("pdf")
   const [isGenerating, setIsGenerating] = useState(false)
+  const [autoGenerate, setAutoGenerate] = useState(true)
+  const [generatingReports, setGeneratingReports] = useState<Set<string>>(new Set())
+  const { addNotification } = useNotification()
 
   const reports = [
-    {
-      id: "material-usage",
-      title: "Material Usage Per Line",
-      description: "Detailed material consumption excluding rejected tasks",
-      icon: BarChart3,
-      color: "bg-blue-500",
-    },
-    {
-      id: "daily-balance",
-      title: "Daily Material Balance Sheet",
-      description: "Previous balance, issued, usage, balance return",
-      icon: FileSpreadsheet,
-      color: "bg-green-500",
-    },
     {
       id: "drum-numbers",
       title: "Drum Number Sheet",
       description: "Phone numbers with cable measurements and drum assignments",
       icon: FileText,
       color: "bg-purple-500",
+      generator: enhancedReportService.generateDrumNumberReport.bind(enhancedReportService),
     },
     {
       id: "material-balance",
@@ -61,52 +38,118 @@ export default function ReportsPage() {
       description: "Opening balance, stock issue, wastage, in-hand, WIP material",
       icon: FileImage,
       color: "bg-orange-500",
-    },
-  ]
-
-  const aiSuggestions = [
-    {
-      type: "dp-completion",
-      title: "DP Auto-Completion",
-      suggestions: [
-        { dp: "DP-001-A", confidence: 95, reason: "Pattern match with nearby installations" },
-        { dp: "DP-002-B", confidence: 87, reason: "Geographic clustering analysis" },
-        { dp: "DP-003-C", confidence: 92, reason: "Historical data correlation" },
-      ],
+      generator: enhancedReportService.generateMaterialBalanceReport.bind(enhancedReportService),
     },
     {
-      type: "line-grouping",
-      title: "Suggested Line Grouping",
-      suggestions: [
-        { group: "Sector A Lines", lines: ["L001", "L002", "L003"], efficiency: "+15%" },
-        { group: "Sector B Lines", lines: ["L004", "L005"], efficiency: "+12%" },
-      ],
+      id: "daily-balance",
+      title: "Daily Material Balance Sheet",
+      description: "Previous balance, issued, usage, balance return",
+      icon: FileSpreadsheet,
+      color: "bg-green-500",
+      generator: enhancedReportService.generateDailyMaterialBalanceReport.bind(enhancedReportService),
     },
     {
-      type: "error-detection",
-      title: "Potential Issues",
-      suggestions: [
-        { issue: "High power reading on L007", severity: "high", action: "Immediate inspection required" },
-        { issue: "Excessive wastage in Sector C", severity: "medium", action: "Review installation process" },
-      ],
+      id: "new-connection",
+      title: "New Connection Material Sheet",
+      description: "FTTH installation details with material breakdown",
+      icon: BarChart3,
+      color: "bg-indigo-500",
+      generator: enhancedReportService.generateNewConnectionReport.bind(enhancedReportService),
     },
   ]
 
   const handleGenerateReport = async (reportId: string) => {
-    setIsGenerating(true)
-    // Simulate report generation
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsGenerating(false)
+    setGeneratingReports((prev) => new Set(prev).add(reportId))
+    try {
+      const report = reports.find((r) => r.id === reportId)
+      if (!report) {
+        toast.error("Report not found")
+        return
+      }
 
-    // Trigger download based on format
-    const filename = `${reportId}-${format(new Date(), "yyyy-MM-dd")}.${exportFormat}`
-    console.log(`Generating ${filename}`)
+      const options: ReportOptions = {
+        format: exportFormat,
+        month: selectedMonth,
+      }
+
+      const reportData = await report.generator(options)
+
+      if (reportData) {
+        downloadReport(reportData, reportId, exportFormat)
+        toast.success("Report generated successfully!")
+
+        // Create notification for report generation
+        await NotificationService.createReportReadyNotification(report.title, formatDate(selectedMonth, "MMMM yyyy"))
+      } else {
+        toast.error("Failed to generate report")
+      }
+    } catch (error) {
+      console.error("Error generating report:", error)
+      toast.error("Error generating report")
+    } finally {
+      setGeneratingReports((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(reportId)
+        return newSet
+      })
+    }
+  }
+
+  const downloadReport = (reportData: any, reportId: string, exportType: string) => {
+    const filename = `${reportId}-${formatDate(selectedMonth, "yyyy-MM")}.${exportType}`
+
+    if (exportType === "pdf" && reportData.html) {
+      // Create a new window for PDF generation
+      const printWindow = window.open("", "_blank")
+      if (printWindow) {
+        printWindow.document.write(reportData.html)
+        printWindow.document.close()
+        printWindow.focus()
+        setTimeout(() => {
+          printWindow.print()
+        }, 250)
+      }
+    } else {
+      // Download CSV/Excel
+      let content = ""
+      let mimeType = ""
+
+      if (exportType === "csv") {
+        content = reportData
+        mimeType = "text/csv;charset=utf-8;"
+      } else if (exportType === "xlsx") {
+        // For Excel, we'll use CSV format for now
+        // In production, you would use a library like xlsx
+        content = typeof reportData === "string" ? reportData : JSON.stringify(reportData, null, 2)
+        mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;"
+      }
+
+      const blob = new Blob([content], { type: mimeType })
+      const link = document.createElement("a")
+      const url = URL.createObjectURL(blob)
+      link.setAttribute("href", url)
+      link.setAttribute("download", filename)
+      link.style.visibility = "hidden"
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
   }
 
   const handleExportAll = async () => {
     setIsGenerating(true)
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-    setIsGenerating(false)
+    try {
+      for (const report of reports) {
+        await handleGenerateReport(report.id)
+        // Add delay between reports
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+      toast.success("All reports generated successfully!")
+    } catch (error) {
+      toast.error("Error generating reports")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   return (
@@ -114,7 +157,7 @@ export default function ReportsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Reports & Analytics</h1>
-          <p className="text-muted-foreground">Generate monthly reports and AI insights</p>
+          <p className="text-muted-foreground">Generate monthly reports with professional templates</p>
         </div>
         <Button onClick={handleExportAll} disabled={isGenerating}>
           {isGenerating ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
@@ -126,62 +169,51 @@ export default function ReportsPage() {
         <TabsList>
           <TabsTrigger value="reports">Monthly Reports</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="ai-insights">AI Insights</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
 
         <TabsContent value="reports" className="space-y-6">
           {/* Filters */}
           <Card>
             <CardHeader>
-              <CardTitle>Report Filters</CardTitle>
+              <CardTitle>Report Configuration</CardTitle>
             </CardHeader>
-            <CardContent className="flex gap-4">
-              <div className="flex gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          <>
-                            {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
-                          </>
-                        ) : (
-                          format(dateRange.from, "LLL dd, y")
-                        )
-                      ) : (
-                        <span>Pick a date range</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={dateRange?.from}
-                      selected={dateRange}
-                      onSelect={setDateRange}
-                      numberOfMonths={2}
-                    />
-                  </PopoverContent>
-                </Popover>
+            <CardContent className="flex gap-4 items-center">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Select Month</label>
+                <MonthYearPicker date={selectedMonth} onDateChange={setSelectedMonth} />
               </div>
 
-              <Select value={exportFormat} onValueChange={setExportFormat}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Export format" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pdf">PDF</SelectItem>
-                  <SelectItem value="csv">CSV</SelectItem>
-                  <SelectItem value="xlsx">Excel</SelectItem>
-                </SelectContent>
-              </Select>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Export Format</label>
+                <Select value={exportFormat} onValueChange={(value: "pdf" | "csv" | "xlsx") => setExportFormat(value)}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Export format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pdf">PDF</SelectItem>
+                    <SelectItem value="csv">CSV</SelectItem>
+                    <SelectItem value="xlsx">Excel</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="auto-generate"
+                  checked={autoGenerate}
+                  onChange={(e) => setAutoGenerate(e.target.checked)}
+                />
+                <label htmlFor="auto-generate" className="text-sm font-medium">
+                  Auto-generate for current month
+                </label>
+              </div>
             </CardContent>
           </Card>
 
           {/* Reports Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
             {reports.map((report) => (
               <Card key={report.id}>
                 <CardHeader>
@@ -196,13 +228,17 @@ export default function ReportsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Button onClick={() => handleGenerateReport(report.id)} disabled={isGenerating} className="w-full">
-                    {isGenerating ? (
+                  <Button
+                    onClick={() => handleGenerateReport(report.id)}
+                    disabled={generatingReports.has(report.id) || isGenerating}
+                    className="w-full"
+                  >
+                    {generatingReports.has(report.id) ? (
                       <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Download className="mr-2 h-4 w-4" />
                     )}
-                    Generate Report
+                    Generate {exportFormat.toUpperCase() === "XLSX" ? "Excel" : exportFormat.toUpperCase()}
                   </Button>
                 </CardContent>
               </Card>
@@ -214,103 +250,85 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm font-medium">Total Lines</CardTitle>
+                <CardTitle className="text-sm font-medium">Reports Generated</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">1,234</div>
-                <p className="text-xs text-muted-foreground">+12% from last month</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">Material Usage</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">89.2%</div>
-                <p className="text-xs text-muted-foreground">Efficiency rate</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">Cost Savings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">$12,450</div>
+                <div className="text-2xl font-bold">24</div>
                 <p className="text-xs text-muted-foreground">This month</p>
               </CardContent>
             </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Auto-Generation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-sm">Active</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Next: {formatDate(new Date(), "MMM dd")}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">2.4 GB</div>
+                <p className="text-xs text-muted-foreground">Report archives</p>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
-        <TabsContent value="ai-insights" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">AI-Powered Insights</h2>
-            <Button variant="outline" size="sm">
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh Insights
-            </Button>
-          </div>
+        <TabsContent value="settings" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Report Generation Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium">Automatic Monthly Generation</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Generate all reports automatically on the 1st of each month
+                  </p>
+                </div>
+                <input type="checkbox" checked={autoGenerate} onChange={(e) => setAutoGenerate(e.target.checked)} />
+              </div>
 
-          <div className="space-y-6">
-            {aiSuggestions.map((section, index) => (
-              <Card key={index}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5" />
-                    {section.title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {section.type === "dp-completion" &&
-                    section.suggestions.map((suggestion: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <div className="font-medium">{suggestion.dp}</div>
-                          <div className="text-sm text-muted-foreground">{suggestion.reason}</div>
-                        </div>
-                        <Badge variant="secondary">{suggestion.confidence}% confidence</Badge>
-                      </div>
-                    ))}
+              <div>
+                <h4 className="font-medium mb-2">Default Export Format</h4>
+                <Select value={exportFormat} onValueChange={(value: "pdf" | "csv" | "xlsx") => setExportFormat(value)}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pdf">PDF</SelectItem>
+                    <SelectItem value="csv">CSV</SelectItem>
+                    <SelectItem value="xlsx">Excel</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  {section.type === "line-grouping" &&
-                    section.suggestions.map((suggestion: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <div className="font-medium">{suggestion.group}</div>
-                          <div className="text-sm text-muted-foreground">Lines: {suggestion.lines.join(", ")}</div>
-                        </div>
-                        <Badge variant="outline" className="text-green-600">
-                          {suggestion.efficiency} efficiency
-                        </Badge>
-                      </div>
-                    ))}
-
-                  {section.type === "error-detection" &&
-                    section.suggestions.map((suggestion: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle
-                            className={cn(
-                              "h-4 w-4",
-                              suggestion.severity === "high" ? "text-red-500" : "text-yellow-500",
-                            )}
-                          />
-                          <div>
-                            <div className="font-medium">{suggestion.issue}</div>
-                            <div className="text-sm text-muted-foreground">{suggestion.action}</div>
-                          </div>
-                        </div>
-                        <Badge variant={suggestion.severity === "high" ? "destructive" : "secondary"}>
-                          {suggestion.severity}
-                        </Badge>
-                      </div>
-                    ))}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+              <div className="pt-4">
+                <Button variant="outline">
+                  <Clock className="mr-2 h-4 w-4" />
+                  Schedule Reports
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+export default function ReportsPage() {
+  return (
+    <DashboardLayout>
+      <ReportsPageContent />
+    </DashboardLayout>
   )
 }
