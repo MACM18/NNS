@@ -14,7 +14,7 @@ interface DashboardSidebarProps {
   sidebarNav?: SidebarNavItem[]
 }
 
-export function DashboardSidebar({ isSuperAdmin, mainNav, sidebarNav }: DashboardSidebarProps) {
+export function AppSidebar({ isSuperAdmin, mainNav, sidebarNav }: DashboardSidebarProps) {
   const pathname = usePathname()
 
   const navMain: MainNavItem[] = [
@@ -95,3 +95,5 @@ export function DashboardSidebar({ isSuperAdmin, mainNav, sidebarNav }: Dashboar
     </div>
   )
 }
+
+export { AppSidebar as DashboardSidebar }
