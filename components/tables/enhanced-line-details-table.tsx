@@ -1,92 +1,154 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, ChevronDown, Eye, Phone, MapPin, Zap } from "lucide-react"
+import { Search, ChevronDown, Eye, Users, MapPin, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getSupabaseClient } from "@/lib/supabase"
 import { useNotification } from "@/contexts/notification-context"
 
-interface TelephoneLine {
+interface LineDetail {
   id: string
-  date: string
-  phone_number: string
-  dp: string
-  power_dp_new: number
-  power_inbox_new: number
   name: string
   address: string
-  cable_start_new: number
-  cable_middle_new: number
-  cable_end_new: number
-  f1_calc: number
-  g1_calc: number
-  total_calc: number
-  wastage_input: number
+  telephone_no: string
+  dp: string
+  date: string
+  status?: string
+  task_id?: string
+  // Use actual database column names
+  power_dp: number
+  power_inbox: number
+  cable_start: number
+  cable_middle: number
+  cable_end: number
+  total_cable: number
+  wastage: number
+  internal_wire: number
+  casing: number
+  conduit: number
+  cat5: number
+  c_tie: number
+  c_clip: number
+  tag_tie: number
+  flexible: number
+  pole: number
+  pole_67: number
+  top_bolt: number
+  f1: number
+  g1: number
+  // Material quantities - add defaults for missing columns
+  c_hook?: number
+  l_hook?: number
+  retainers?: number
+  nut_bolt?: number
+  u_clip?: number
+  concrete_nail?: number
+  roll_plug?: number
+  screw_nail?: number
+  socket?: number
+  bend?: number
+  rj11?: number
+  rj12?: number
+  rj45?: number
+  fiber_rosette?: number
+  s_rosette?: number
+  fac?: number
+  // Assignees
+  assignees?: Array<{
+    id: string
+    full_name: string
+    role: string
+    avatar_url?: string
+  }>
   created_at: string
+  completed: boolean
 }
 
-interface EnhancedLineDetailsTableProps {
+interface LineDetailsTableProps {
+  selectedMonth: number
+  selectedYear: number
   refreshTrigger: number
-  dateFilter: "today" | "week" | "month"
+  onAssigneeManage: (lineId: string) => void
+  onRefresh: () => void
 }
 
-export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: EnhancedLineDetailsTableProps) {
-  const [data, setData] = useState<TelephoneLine[]>([])
+export function LineDetailsTable({
+  selectedMonth,
+  selectedYear,
+  refreshTrigger,
+  onAssigneeManage,
+  onRefresh,
+}: LineDetailsTableProps) {
+  const [data, setData] = useState<LineDetail[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [sortField, setSortField] = useState<string>("created_at")
+  const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "pending">("all")
+  const [sortField, setSortField] = useState<string>("date")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const supabase = getSupabaseClient()
   const { addNotification } = useNotification()
 
   useEffect(() => {
     fetchData()
-  }, [refreshTrigger, dateFilter, sortField, sortDirection])
+  }, [selectedMonth, selectedYear, refreshTrigger, statusFilter, sortField, sortDirection])
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      let query = supabase.from("line_details").select("*").not("phone_number", "is", null) // Only get records with phone numbers
+      // Get start and end dates for the selected month
+      const startDate = new Date(selectedYear, selectedMonth - 1, 1)
+      const endDate = new Date(selectedYear, selectedMonth, 0)
 
-      // Apply date filter
-      const now = new Date()
-      let startDate: Date
+      // First, get the line details
+      const query = supabase
+        .from("line_details")
+        .select("*")
+        .gte("date", startDate.toISOString().split("T")[0])
+        .lte("date", endDate.toISOString().split("T")[0])
 
-      switch (dateFilter) {
-        case "today":
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-          break
-        case "week":
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          break
-        case "month":
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-          break
-        default:
-          startDate = new Date(0)
-      }
-
-      query = query.gte("created_at", startDate.toISOString())
-
-      // Apply sorting
-      query = query.order(sortField, { ascending: sortDirection === "asc" })
-
-      const { data: telephoneLines, error } = await query
+      const { data: lines, error } = await query
 
       if (error) throw error
 
-      setData(telephoneLines || [])
+      // For now, set assignees as empty array since the join might be complex
+      const processedLines = (lines ?? []).map((line: any) => ({
+        ...line,
+        status: line.completed === true || line.status === "completed" ? "completed" : "pending",
+        assignees: [],
+        // default 0s for any nullable material columns
+        c_hook: line.c_hook ?? 0,
+        l_hook: line.l_hook || 0,
+        retainers: line.retainers || 0,
+        nut_bolt: line.nut_bolt || 0,
+        u_clip: line.u_clip || 0,
+        concrete_nail: line.concrete_nail || 0,
+        roll_plug: line.roll_plug || 0,
+        screw_nail: line.screw_nail || 0,
+        socket: line.socket || 0,
+        bend: line.bend || 0,
+        rj11: line.rj11 || 0,
+        rj12: line.rj12 || 0,
+        rj45: line.rj45 || 0,
+        fiber_rosette: line.fiber_rosette || 0,
+        s_rosette: line.s_rosette || 0,
+        fac: line.fac || 0,
+      })) as LineDetail[]
+
+      setData(processedLines)
     } catch (error: any) {
+      console.error("Fetch error:", error)
       addNotification({
         title: "Error",
-        message: "Failed to fetch telephone line details",
+        message: `Failed to fetch line details: ${error.message}`,
         type: "error",
       })
     } finally {
@@ -94,13 +156,15 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
     }
   }
 
-  const filteredData = data.filter(
-    (item) =>
-      item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.phone_number?.includes(searchTerm) ||
-      item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.dp?.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const filteredData = data
+    .filter(
+      (item) =>
+        item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.telephone_no?.includes(searchTerm) ||
+        item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.dp?.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+    .filter((item) => (statusFilter === "all" ? true : item.status === statusFilter))
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -111,9 +175,63 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
     }
   }
 
+  const toggleRowExpansion = (id: string) => {
+    const newExpanded = new Set(expandedRows)
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id)
+    } else {
+      newExpanded.add(id)
+    }
+    setExpandedRows(newExpanded)
+  }
+
+  const getStatusBadge = (line: LineDetail) =>
+    line.status === "completed" ? (
+      <Badge className="bg-green-100 text-green-800 border-green-200">Completed</Badge>
+    ) : (
+      <Badge className="bg-orange-100 text-orange-800 border-orange-200">Pending</Badge>
+    )
+
   const isPowerHigh = (value: number) => value >= 25
 
-  const ExpandedRowContent = ({ item }: { item: TelephoneLine }) => (
+  const MaterialUsageCard = ({ line }: { line: LineDetail }) => (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm">Material Usage</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="grid grid-cols-4 gap-2 text-xs">
+          {[
+            { label: "C Hook", value: line.c_hook },
+            { label: "L Hook", value: line.l_hook },
+            { label: "Retainers", value: line.retainers },
+            { label: "Nut & Bolt", value: line.nut_bolt },
+            { label: "U Clip", value: line.u_clip },
+            { label: "Concrete Nail", value: line.concrete_nail },
+            { label: "Roll Plug", value: line.roll_plug },
+            { label: "Screw Nail", value: line.screw_nail },
+            { label: "Socket", value: line.socket },
+            { label: "Bend", value: line.bend },
+            { label: "RJ11", value: line.rj11 },
+            { label: "RJ12", value: line.rj12 },
+            { label: "RJ45", value: line.rj45 },
+            { label: "Fiber Rosette", value: line.fiber_rosette },
+            { label: "S Rosette", value: line.s_rosette },
+            { label: "FAC", value: line.fac },
+          ]
+            .filter((item) => item.value > 0)
+            .map((item) => (
+              <div key={item.label} className="flex justify-between">
+                <span className="text-muted-foreground">{item.label}:</span>
+                <span className="font-medium">{item.value}</span>
+              </div>
+            ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  const ExpandedRowContent = ({ line }: { line: LineDetail }) => (
     <div className="p-6 bg-muted/30 rounded-lg space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Technical Details */}
@@ -127,45 +245,25 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
           <CardContent className="space-y-2">
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">DP:</span>
-              <Badge variant="outline">{item.dp}</Badge>
+              <Badge variant="outline">{line.dp}</Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Power (DP):</span>
-              <span className={`font-medium ${isPowerHigh(item.power_dp_new) ? "text-red-600" : "text-green-600"}`}>
-                {item.power_dp_new?.toFixed(2) || "N/A"}
-                {isPowerHigh(item.power_dp_new) && " ⚠️"}
+              <span className={`font-medium ${isPowerHigh(line.power_dp) ? "text-red-600" : "text-green-600"}`}>
+                {line.power_dp?.toFixed(2) || "N/A"}
+                {isPowerHigh(line.power_dp) && " ⚠️"}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Power (Inbox):</span>
-              <span className={`font-medium ${isPowerHigh(item.power_inbox_new) ? "text-red-600" : "text-green-600"}`}>
-                {item.power_inbox_new?.toFixed(2) || "N/A"}
-                {isPowerHigh(item.power_inbox_new) && " ⚠️"}
+              <span className={`font-medium ${isPowerHigh(line.power_inbox) ? "text-red-600" : "text-green-600"}`}>
+                {line.power_inbox?.toFixed(2) || "N/A"}
+                {isPowerHigh(line.power_inbox) && " ⚠️"}
               </span>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Contact Information */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Phone className="h-4 w-4" />
-              Contact Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div>
-              <span className="text-sm text-muted-foreground">Phone:</span>
-              <p className="font-medium">{item.phone_number}</p>
-            </div>
-            <div>
-              <span className="text-sm text-muted-foreground">Name:</span>
-              <p className="font-medium">{item.name}</p>
-            </div>
-            <div>
-              <span className="text-sm text-muted-foreground">Address:</span>
-              <p className="text-sm">{item.address}</p>
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Status:</span>
+              {getStatusBadge(line)}
             </div>
           </CardContent>
         </Card>
@@ -182,42 +280,89 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div>
                 <span className="text-muted-foreground">Start:</span>
-                <p className="font-medium">{item.cable_start_new?.toFixed(2)}m</p>
+                <p className="font-medium">{line.cable_start?.toFixed(2)}m</p>
               </div>
               <div>
                 <span className="text-muted-foreground">Middle:</span>
-                <p className="font-medium">{item.cable_middle_new?.toFixed(2)}m</p>
+                <p className="font-medium">{line.cable_middle?.toFixed(2)}m</p>
               </div>
               <div>
                 <span className="text-muted-foreground">End:</span>
-                <p className="font-medium">{item.cable_end_new?.toFixed(2)}m</p>
+                <p className="font-medium">{line.cable_end?.toFixed(2)}m</p>
               </div>
             </div>
             <div className="border-t pt-2 space-y-1">
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">F1:</span>
-                <span className="font-medium text-blue-600">{item.f1_calc?.toFixed(2)}m</span>
+                <span className="font-medium text-blue-600">{line.f1?.toFixed(2)}m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">G1:</span>
-                <span className="font-medium text-blue-600">{item.g1_calc?.toFixed(2)}m</span>
+                <span className="font-medium text-blue-600">{line.g1?.toFixed(2)}m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Total:</span>
-                <span className="font-medium text-green-600">{item.total_calc?.toFixed(2)}m</span>
+                <span className="font-medium text-green-600">{line.total_cable?.toFixed(2)}m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Wastage:</span>
-                <span className="font-medium text-orange-600">{item.wastage_input?.toFixed(2) || "0.00"}m</span>
+                <span className="font-medium text-orange-600">{line.wastage?.toFixed(2) || "0.00"}m</span>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Assignees */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Assigned Team
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {line.assignees && line.assignees.length > 0 ? (
+              <div className="space-y-2">
+                {line.assignees.map((assignee) => (
+                  <div key={assignee.id} className="flex items-center gap-2">
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={assignee.avatar_url || "/placeholder.svg"} />
+                      <AvatarFallback className="text-xs">{assignee.full_name?.charAt(0) || "U"}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{assignee.full_name}</p>
+                      <p className="text-xs text-muted-foreground">{assignee.role}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No assignees</p>
+            )}
+            <Button size="sm" variant="outline" onClick={() => onAssigneeManage(line.id)} className="w-full mt-2">
+              <Users className="h-3 w-3 mr-1" />
+              Manage Team
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
+      {/* Material Usage - Collapsible */}
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <Button variant="outline" className="w-full">
+            <ChevronDown className="h-4 w-4 mr-2" />
+            View Material Usage Details
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-4">
+          <MaterialUsageCard line={line} />
+        </CollapsibleContent>
+      </Collapsible>
+
       <div className="text-xs text-muted-foreground">
-        Installation Date: {new Date(item.date).toLocaleDateString()} | Added:{" "}
-        {new Date(item.created_at).toLocaleDateString()}
+        Installation Date: {new Date(line.date).toLocaleDateString()} | Added:{" "}
+        {new Date(line.created_at).toLocaleDateString()}
       </div>
     </div>
   )
@@ -227,7 +372,7 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-sm text-muted-foreground">Loading telephone line details...</p>
+          <p className="mt-2 text-sm text-muted-foreground">Loading line details...</p>
         </div>
       </div>
     )
@@ -246,16 +391,26 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
             className="pl-10"
           />
         </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={sortField} onValueChange={setSortField}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="created_at">Date Created</SelectItem>
             <SelectItem value="date">Installation Date</SelectItem>
             <SelectItem value="name">Customer Name</SelectItem>
-            <SelectItem value="phone_number">Phone Number</SelectItem>
+            <SelectItem value="telephone_no">Phone Number</SelectItem>
             <SelectItem value="dp">DP</SelectItem>
+            <SelectItem value="total_cable">Cable Distance</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="outline" onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}>
@@ -265,7 +420,7 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
 
       {/* Results Count */}
       <div className="text-sm text-muted-foreground">
-        Showing {filteredData.length} of {data.length} telephone lines
+        Showing {filteredData.length} of {data.length} lines
       </div>
 
       {/* Table */}
@@ -273,14 +428,14 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("phone_number")}>
-                Phone Number
-                {sortField === "phone_number" && (
+              <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("telephone_no")}>
+                Line No.
+                {sortField === "telephone_no" && (
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
               </TableHead>
               <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("name")}>
-                Customer Name
+                Customer
                 {sortField === "name" && (
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
@@ -291,9 +446,16 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
               </TableHead>
-              <TableHead>Power Status</TableHead>
+              <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("total_cable")}>
+                Distance
+                {sortField === "total_cable" && (
+                  <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
+                )}
+              </TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Assignees</TableHead>
               <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("date")}>
-                Installation Date
+                Date
                 {sortField === "date" && (
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
@@ -302,42 +464,53 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredData.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell className="font-medium">{item.phone_number}</TableCell>
-                <TableCell>{item.name}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {item.dp}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Badge variant={isPowerHigh(item.power_dp_new) ? "destructive" : "secondary"} className="text-xs">
-                      DP: {item.power_dp_new?.toFixed(1)}
+            {filteredData.map((line) => (
+              <>
+                <TableRow key={line.id}>
+                  <TableCell className="font-medium">{line.telephone_no}</TableCell>
+                  <TableCell>{line.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="font-mono text-xs">
+                      {line.dp}
                     </Badge>
-                    <Badge
-                      variant={isPowerHigh(item.power_inbox_new) ? "destructive" : "secondary"}
-                      className="text-xs"
-                    >
-                      IB: {item.power_inbox_new?.toFixed(1)}
-                    </Badge>
-                  </div>
-                </TableCell>
-                <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                <TableCell>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[800px]">
-                      <ExpandedRowContent item={item} />
-                    </PopoverContent>
-                  </Popover>
-                </TableCell>
-              </TableRow>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-medium">{line.total_cable?.toFixed(2) || "0.00"}m</span>
+                  </TableCell>
+                  <TableCell>{getStatusBadge(line)}</TableCell>
+                  <TableCell>
+                    <div className="flex -space-x-1">
+                      {line.assignees?.slice(0, 3).map((assignee) => (
+                        <Avatar key={assignee.id} className="h-6 w-6 border-2 border-background">
+                          <AvatarImage src={assignee.avatar_url || "/placeholder.svg"} />
+                          <AvatarFallback className="text-xs">{assignee.full_name?.charAt(0) || "U"}</AvatarFallback>
+                        </Avatar>
+                      ))}
+                      {line.assignees && line.assignees.length > 3 && (
+                        <div className="h-6 w-6 rounded-full bg-muted border-2 border-background flex items-center justify-center">
+                          <span className="text-xs">+{line.assignees.length - 3}</span>
+                        </div>
+                      )}
+                      {(!line.assignees || line.assignees.length === 0) && (
+                        <span className="text-xs text-muted-foreground">None</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>{new Date(line.date).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" onClick={() => toggleRowExpansion(line.id)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+                {expandedRows.has(line.id) && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="p-0">
+                      <ExpandedRowContent line={line} />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
             ))}
           </TableBody>
         </Table>
@@ -345,7 +518,7 @@ export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: Enhance
 
       {filteredData.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-muted-foreground">No telephone line details found matching your search.</p>
+          <p className="text-muted-foreground">No line details found matching your criteria.</p>
         </div>
       )}
     </div>
