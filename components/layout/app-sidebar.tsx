@@ -48,7 +48,7 @@ const data = {
     },
     {
       title: "Line Details",
-      url: "/line-details",
+      url: "/lines",
       icon: Cable,
     },
     {
