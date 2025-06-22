@@ -66,7 +66,7 @@ export function LineDetailsTable({ refreshTrigger, dateFilter }: LineDetailsTabl
           startDate = new Date(0)
       }
 
-      query = query.gte("created_at", startDate.toISOString())
+      query = query.gte("date", startDate.toISOString())
 
       // Apply sorting
       query = query.order(sortField, { ascending: sortDirection === "asc" })
