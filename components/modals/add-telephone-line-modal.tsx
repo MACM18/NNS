@@ -14,14 +14,31 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Check, ChevronsUpDown, Calculator, Package } from "lucide-react"
-import { getSupabaseClient } from "@/lib/supabase"
-import { useNotification } from "@/contexts/notification-context"
-import { cn } from "@/lib/utils"
+} from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import {
+  AlertTriangle,
+  Check,
+  ChevronsUpDown,
+  Calculator,
+  Package,
+} from "lucide-react";
+import { getSupabaseClient } from "@/lib/supabase";
+import { useNotification } from "@/contexts/notification-context";
+import { cn } from "@/lib/utils";
 
 interface AddTelephoneLineModalProps {
   open: boolean
@@ -212,39 +229,47 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
     } catch (error) {
       console.error("Error fetching DP suggestions:", error)
     }
-  }
+  };
 
   const fetchAvailableTasks = async () => {
     try {
-      // 1️⃣  Get all accepted tasks
-      const { data: tasks, error: taskErr } = await supabase
+      // 1. Get all assigned task_ids
+      const { data: assigned, error: assignedError } = await supabase
+        .from("line_details")
+        .select("task_id")
+        .not("task_id", "is", null);
+
+      const assignedTaskIds = assigned?.map((row) => row.task_id) ?? [];
+
+      // 2. Get all accepted tasks not in assignedTaskIds
+      const { data: tasks, error: tasksError } = await supabase
         .from("tasks")
         .select("*")
         .eq("status", "accepted")
-        .order("created_at", { ascending: false })
+        .not(
+          "id",
+          "in",
+          `(${assignedTaskIds.map((id) => `"${id}"`).join(",")})`
+        );
+      // const { data: lineDetails, error } = await supabase
+      //   .from("line_details")
+      //   .select("task_id")
+      //   .not("task_id", "is", null);
+      // const taskIds =
+      //   lineDetails?.map((ld) => ld.task_id).filter(Boolean) ?? [];
 
-      if (taskErr) throw taskErr
+      // const { data: tasks, error: tasksError } = await supabase
+      //   .from("tasks")
+      //   .select("*")
+      //   .in("id", taskIds)
+      //   .order("created_at", { ascending: false });
 
-      // 2️⃣  Get the task_ids already present in line_details
-      const { data: usedRows, error: usedErr } = await supabase
-        .from("line_details")
-        .select("task_id")
-        .neq("task_id", null)
-
-      if (usedErr) throw usedErr
-
-      const usedIds = new Set<string>(
-        (usedRows ?? []).map((r) => r.task_id).filter((id): id is string => typeof id === "string" && id.length > 0),
-      )
-
-      // 3️⃣  Keep only tasks whose id is NOT in the used-id set
-      const available = (tasks ?? []).filter((t) => !usedIds.has(t.id as string))
-
-      setAvailableTasks(available)
-    } catch (err) {
-      console.error("Error fetching available tasks:", err)
+      if (assignedError) throw assignedError;
+      setAvailableTasks(tasks || []);
+    } catch (error) {
+      console.error("Error fetching available tasks:", error);
     }
-  }
+  };
 
   const validateDP = (dp: string): boolean => {
     const dpPattern = /^[A-Z]{1,4}-[A-Z]{1,4}-\d{4}-\d{3}-0[1-8]$/
@@ -313,32 +338,32 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
         }))
       }
     }
-  }
+  };
 
   const handleTaskSelection = (task: any) => {
-    setSelectedTask(task)
+    setSelectedTask(task);
     setFormData((prev) => ({
       ...prev,
-      phone_number: task.customer_phone || "",
-      dp: task.dp_location || "",
+      phone_number: task.telephone_no || "",
+      dp: task.dp || "",
       name: task.customer_name || "",
-      address: task.customer_address || "",
-    }))
-    setTaskOpen(false)
-  }
+      address: task.address || "",
+    }));
+    setTaskOpen(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
 
     if (!selectedTask) {
       addNotification({
         title: "Validation Error",
         message: "Please select a task before submitting",
         type: "error",
-      })
-      setLoading(false)
-      return
+      });
+      setLoading(false);
+      return;
     }
 
     try {
@@ -394,6 +419,8 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
 
       // Prepare data for insertion
       const insertData = {
+        // Add this line at the beginning
+        task_id: selectedTask?.id || null,
         // Add this line at the beginning
         task_id: selectedTask?.id || null,
         // Basic Information
@@ -536,10 +563,10 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
         bend_new: 0,
         rj11_new: 0,
         rj12_new: 0,
-      })
-      setDpValidationError("")
-      setSelectedTask(null)
-      setAvailableTasks([])
+      });
+      setDpValidationError("");
+      setSelectedTask(null);
+      setAvailableTasks([]);
     } catch (error: any) {
       addNotification({
         title: "Error",
@@ -569,34 +596,52 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className='space-y-6'>
           {/* Task Selection */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Task Selection</h3>
+          <div className='space-y-4'>
+            <h3 className='text-lg font-medium'>Task Selection</h3>
             <div>
-              <Label htmlFor="task_selection">Select Task</Label>
+              <Label htmlFor='task_selection'>Select Task</Label>
               <Popover open={taskOpen} onOpenChange={setTaskOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" aria-expanded={taskOpen} className="w-full justify-between">
-                    {selectedTask ? taskLabel(selectedTask) : "Select an available task"}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  <Button
+                    variant='outline'
+                    role='combobox'
+                    aria-expanded={taskOpen}
+                    className='w-full justify-between'
+                  >
+                    {selectedTask
+                      ? selectedTask.title
+                      : "Select an available task"}
+                    <ChevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0">
+                <PopoverContent className='w-full p-0'>
                   <Command>
-                    <CommandInput placeholder="Search tasks..." />
+                    <CommandInput placeholder='Search tasks...' />
                     <CommandList>
                       <CommandEmpty>No available tasks found.</CommandEmpty>
                       <CommandGroup>
                         {availableTasks.map((task) => (
-                          <CommandItem key={task.id} value={task.id} onSelect={() => handleTaskSelection(task)}>
+                          <CommandItem
+                            key={task.id}
+                            value={task.id}
+                            onSelect={() => handleTaskSelection(task)}
+                          >
                             <Check
-                              className={cn("mr-2 h-4 w-4", selectedTask?.id === task.id ? "opacity-100" : "opacity-0")}
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedTask?.id === task.id
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
                             />
-                            <div className="flex flex-col">
-                              <span className="font-medium">{taskLabel(task)}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {task.customer_name} - {task.dp_location}
+                            <div className='flex flex-col'>
+                              <span className='font-medium'>
+                                {task.telephone_no}
+                              </span>
+                              <span className='text-xs text-muted-foreground'>
+                                {task.customer_name} - {task.dp}
                               </span>
                             </div>
                           </CommandItem>
@@ -606,18 +651,21 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                   </Command>
                 </PopoverContent>
               </Popover>
-              <p className="text-xs text-muted-foreground mt-1">
-                Select an accepted task to convert to a telephone line installation.
+              <p className='text-xs text-muted-foreground mt-1'>
+                Select an accepted task to convert to a telephone line
+                installation.
               </p>
             </div>
           </div>
 
           {/* Basic Information - Auto-populated from Task */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Basic Information (From Task)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className='space-y-4'>
+            <h3 className='text-lg font-medium'>
+              Basic Information (From Task)
+            </h3>
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
               <div>
-                <Label htmlFor="date">Date</Label>
+                <Label htmlFor='date'>Date</Label>
                 <Input
                   id="date"
                   type="date"
@@ -631,32 +679,44 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                 <Input
                   id="phone_number"
                   value={formData.phone_number}
-                  onChange={(e) => handleInputChange("phone_number", e.target.value)}
-                  placeholder="e.g., 0342217442"
-                  className="bg-blue-50 dark:bg-blue-950"
+                  onChange={(e) =>
+                    handleInputChange("phone_number", e.target.value)
+                  }
+                  placeholder='e.g., 0342217442'
+                  className='bg-blue-50 dark:bg-blue-950'
                   readOnly={!!selectedTask}
                   required
                 />
-                {selectedTask && <p className="text-xs text-blue-600 mt-1">Auto-filled from selected task</p>}
+                {selectedTask && (
+                  <p className='text-xs text-blue-600 mt-1'>
+                    Auto-filled from selected task
+                  </p>
+                )}
               </div>
             </div>
           </div>
 
           {/* DP Configuration - Auto-populated from Task */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">DP Configuration (From Task)</h3>
+          <div className='space-y-4'>
+            <h3 className='text-lg font-medium'>
+              DP Configuration (From Task)
+            </h3>
             <div>
-              <Label htmlFor="dp">DP</Label>
+              <Label htmlFor='dp'>DP</Label>
               <Input
-                id="dp"
+                id='dp'
                 value={formData.dp}
                 onChange={(e) => handleInputChange("dp", e.target.value)}
-                placeholder="e.g., HR-PKJ-0536-021-05"
-                className="bg-blue-50 dark:bg-blue-950"
+                placeholder='e.g., HR-PKJ-0536-021-05'
+                className='bg-blue-50 dark:bg-blue-950'
                 readOnly={!!selectedTask}
                 required
               />
-              {selectedTask && <p className="text-xs text-blue-600 mt-1">Auto-filled from selected task</p>}
+              {selectedTask && (
+                <p className='text-xs text-blue-600 mt-1'>
+                  Auto-filled from selected task
+                </p>
+              )}
               {dpValidationError && (
                 <div className="flex items-center gap-2 mt-2 text-red-600 text-sm">
                   <AlertTriangle className="h-4 w-4" />
@@ -707,20 +767,26 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
           </div>
 
           {/* Customer Information - Auto-populated from Task */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Customer Information (From Task)</h3>
-            <div className="grid grid-cols-1 gap-4">
+          <div className='space-y-4'>
+            <h3 className='text-lg font-medium'>
+              Customer Information (From Task)
+            </h3>
+            <div className='grid grid-cols-1 gap-4'>
               <div>
                 <Label htmlFor="name">Name</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => handleInputChange("name", e.target.value)}
-                  className="bg-blue-50 dark:bg-blue-950"
+                  className='bg-blue-50 dark:bg-blue-950'
                   readOnly={!!selectedTask}
                   required
                 />
-                {selectedTask && <p className="text-xs text-blue-600 mt-1">Auto-filled from selected task</p>}
+                {selectedTask && (
+                  <p className='text-xs text-blue-600 mt-1'>
+                    Auto-filled from selected task
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="address">Address</Label>
@@ -728,11 +794,15 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                   id="address"
                   value={formData.address}
                   onChange={(e) => handleInputChange("address", e.target.value)}
-                  className="bg-blue-50 dark:bg-blue-950"
+                  className='bg-blue-50 dark:bg-blue-950'
                   readOnly={!!selectedTask}
                   required
                 />
-                {selectedTask && <p className="text-xs text-blue-600 mt-1">Auto-filled from selected task</p>}
+                {selectedTask && (
+                  <p className='text-xs text-blue-600 mt-1'>
+                    Auto-filled from selected task
+                  </p>
+                )}
               </div>
             </div>
           </div>
