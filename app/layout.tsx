@@ -3,37 +3,36 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/auth-context";
-import { NotificationProvider } from "@/contexts/notification-context"
-import { DataCacheProvider } from "@/contexts/data-cache-context"
+import { NotificationProvider } from "@/contexts/notification-context";
+import { DataCacheProvider } from "@/contexts/data-cache-context";
 
 export const metadata: Metadata = {
   title: "NNS Telecom Dashboard",
   description: "Telecom Management System",
   generator: "v0.dev",
-}
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang='en'>
       <body>
-              <ThemeProvider
+        <ThemeProvider
           attribute='class'
           defaultTheme='system'
           enableSystem
           disableTransitionOnChange
         >
           <AuthProvider>
-            <NotificationProvider>{children}
-
-        <DataCacheProvider>{children}</DataCacheProvider>
-        </NotificationProvider>
+            <NotificationProvider>
+              <DataCacheProvider>{children}</DataCacheProvider>
+            </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }
