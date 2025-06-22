@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import type { MainNavItem, SidebarNavItem } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 interface DashboardSidebarProps {
   isSuperAdmin?: boolean
