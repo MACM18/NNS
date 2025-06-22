@@ -216,28 +216,33 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
 
   const fetchAvailableTasks = async () => {
     try {
-      // 1️⃣  Get all task_ids already used in line_details
-      const { data: used, error: usedErr } = await supabase.from("line_details").select("task_id").neq("task_id", null)
+      // 1️⃣  Get all accepted tasks
+      const { data: tasks, error: taskErr } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("status", "accepted")
+        .order("created_at", { ascending: false })
+
+      if (taskErr) throw taskErr
+
+      // 2️⃣  Get the task_ids already present in line_details
+      const { data: usedRows, error: usedErr } = await supabase
+        .from("line_details")
+        .select("task_id")
+        .neq("task_id", null)
 
       if (usedErr) throw usedErr
 
-      const usedIds = (used ?? []).map((row) => row.task_id) as string[]
-      // Build csv for the PostgREST in() operator => (id1,id2,…)
-      const csv = usedIds.length ? `(${usedIds.join(",")})` : ""
+      const usedIds = new Set<string>(
+        (usedRows ?? []).map((r) => r.task_id).filter((id): id is string => typeof id === "string" && id.length > 0),
+      )
 
-      // 2️⃣  Fetch accepted tasks that are NOT in the used-id list
-      let query = supabase.from("tasks").select("*").eq("status", "accepted").order("created_at", { ascending: false })
+      // 3️⃣  Keep only tasks whose id is NOT in the used-id set
+      const available = (tasks ?? []).filter((t) => !usedIds.has(t.id as string))
 
-      // Only add the filter if we actually have ids to exclude
-      if (csv) query = query.not("id", "in", csv)
-
-      const { data, error } = await query
-
-      if (error) throw error
-
-      setAvailableTasks(data || [])
-    } catch (error) {
-      console.error("Error fetching available tasks:", error)
+      setAvailableTasks(available)
+    } catch (err) {
+      console.error("Error fetching available tasks:", err)
     }
   }
 
