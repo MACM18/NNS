@@ -11,14 +11,18 @@ import { format as formatDate } from "date-fns"
 import { cn } from "@/lib/utils"
 import { getSupabaseClient } from "@/lib/supabase"
 import { toast } from "sonner"
+import { DashboardLayout } from "@/components/layout/dashboard-layout"
+import { useNotification } from "@/contexts/notification-context"
+import { NotificationService } from "@/lib/notification-service"
 
-export default function ReportsPage() {
+function ReportsPageContent() {
   const [selectedMonth, setSelectedMonth] = useState(new Date())
   const [exportFormat, setExportFormat] = useState("pdf")
   const [isGenerating, setIsGenerating] = useState(false)
   const [autoGenerate, setAutoGenerate] = useState(true)
   const supabase = getSupabaseClient()
   const [generatingReports, setGeneratingReports] = useState<Set<string>>(new Set())
+  const { addNotification } = useNotification()
 
   const reports = [
     {
@@ -771,6 +775,10 @@ export default function ReportsPage() {
       if (reportData) {
         downloadReport(reportData, reportId, exportFormat)
         toast.success("Report generated successfully!")
+
+        // Create notification for report generation
+        const reportTitle = reports.find((r) => r.id === reportId)?.title || "Report"
+        await NotificationService.createReportReadyNotification(reportTitle, formatDate(selectedMonth, "MMMM yyyy"))
       } else {
         toast.error("Failed to generate report")
       }
@@ -1036,5 +1044,13 @@ export default function ReportsPage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+export default function ReportsPage() {
+  return (
+    <DashboardLayout>
+      <ReportsPageContent />
+    </DashboardLayout>
   )
 }
