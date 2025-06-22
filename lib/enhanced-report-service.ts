@@ -69,7 +69,7 @@ export class EnhancedReportService {
     try {
       const { data: items } = await this.supabase.from("inventory_items").select(`
           *,
-          inventory_invoice_items(quantity),
+          inventory_invoice_items(quantity_issued),
           waste_tracking(quantity)
         `)
 
