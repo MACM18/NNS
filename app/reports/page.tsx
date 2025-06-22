@@ -11,16 +11,11 @@ import { format as formatDate } from "date-fns"
 import { cn } from "@/lib/utils"
 import { getSupabaseClient } from "@/lib/supabase"
 import { toast } from "sonner"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/layout/app-sidebar"
-import { Header } from "@/components/layout/header"
-import { useAuth } from "@/contexts/auth-context"
-import { AuthWrapper } from "@/components/auth/auth-wrapper"
+import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { useNotification } from "@/contexts/notification-context"
 import { NotificationService } from "@/lib/notification-service"
 
-export default function ReportsPage() {
-  const { user, loading } = useAuth()
+function ReportsPageContent() {
   const [selectedMonth, setSelectedMonth] = useState(new Date())
   const [exportFormat, setExportFormat] = useState("pdf")
   const [isGenerating, setIsGenerating] = useState(false)
@@ -879,198 +874,183 @@ export default function ReportsPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <AuthWrapper />
-  }
-
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <Header />
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Reports & Analytics</h1>
+          <p className="text-muted-foreground">Generate monthly reports and AI insights</p>
+        </div>
+        <Button onClick={handleExportAll} disabled={isGenerating}>
+          {isGenerating ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+          Export All
+        </Button>
+      </div>
 
-        <main className="flex-1 space-y-6 p-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold">Reports & Analytics</h1>
-              <p className="text-muted-foreground">Generate monthly reports and AI insights</p>
-            </div>
-            <Button onClick={handleExportAll} disabled={isGenerating}>
-              {isGenerating ? (
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="mr-2 h-4 w-4" />
-              )}
-              Export All
-            </Button>
-          </div>
+      <Tabs defaultValue="reports" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="reports">Monthly Reports</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
 
-          <Tabs defaultValue="reports" className="space-y-6">
-            <TabsList>
-              <TabsTrigger value="reports">Monthly Reports</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="reports" className="space-y-6">
-              {/* Filters */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Report Configuration</CardTitle>
-                </CardHeader>
-                <CardContent className="flex gap-4 items-center">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Select Month</label>
-                    <MonthYearPicker date={selectedMonth} onDateChange={setSelectedMonth} />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Export Format</label>
-                    <Select value={exportFormat} onValueChange={setExportFormat}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Export format" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pdf">PDF</SelectItem>
-                        <SelectItem value="csv">CSV</SelectItem>
-                        <SelectItem value="xlsx">Excel</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="auto-generate"
-                      checked={autoGenerate}
-                      onChange={(e) => setAutoGenerate(e.target.checked)}
-                    />
-                    <label htmlFor="auto-generate" className="text-sm font-medium">
-                      Auto-generate for current month
-                    </label>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Reports Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {reports.map((report) => (
-                  <Card key={report.id}>
-                    <CardHeader>
-                      <div className="flex items-center gap-3">
-                        <div className={cn("p-2 rounded-lg", report.color)}>
-                          <report.icon className="h-5 w-5 text-white" />
-                        </div>
-                        <div>
-                          <CardTitle className="text-lg">{report.title}</CardTitle>
-                          <CardDescription>{report.description}</CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <Button
-                        onClick={() => handleGenerateReport(report.id)}
-                        disabled={generatingReports.has(report.id) || isGenerating}
-                        className="w-full"
-                      >
-                        {generatingReports.has(report.id) ? (
-                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Download className="mr-2 h-4 w-4" />
-                        )}
-                        Generate {exportFormat.toUpperCase() === "XLSX" ? "Excel" : exportFormat.toUpperCase()}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+        <TabsContent value="reports" className="space-y-6">
+          {/* Filters */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Report Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="flex gap-4 items-center">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Select Month</label>
+                <MonthYearPicker date={selectedMonth} onDateChange={setSelectedMonth} />
               </div>
-            </TabsContent>
 
-            <TabsContent value="analytics" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">Reports Generated</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">24</div>
-                    <p className="text-xs text-muted-foreground">This month</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">Auto-Generation</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <span className="text-sm">Active</span>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Export Format</label>
+                <Select value={exportFormat} onValueChange={setExportFormat}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Export format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pdf">PDF</SelectItem>
+                    <SelectItem value="csv">CSV</SelectItem>
+                    <SelectItem value="xlsx">Excel</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="auto-generate"
+                  checked={autoGenerate}
+                  onChange={(e) => setAutoGenerate(e.target.checked)}
+                />
+                <label htmlFor="auto-generate" className="text-sm font-medium">
+                  Auto-generate for current month
+                </label>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Reports Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {reports.map((report) => (
+              <Card key={report.id}>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className={cn("p-2 rounded-lg", report.color)}>
+                      <report.icon className="h-5 w-5 text-white" />
                     </div>
-                    <p className="text-xs text-muted-foreground">Next: {formatDate(new Date(), "MMM dd")}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">2.4 GB</div>
-                    <p className="text-xs text-muted-foreground">Report archives</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="settings" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Report Generation Settings</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-medium">Automatic Monthly Generation</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Generate all reports automatically on the 1st of each month
-                      </p>
+                      <CardTitle className="text-lg">{report.title}</CardTitle>
+                      <CardDescription>{report.description}</CardDescription>
                     </div>
-                    <input type="checkbox" checked={autoGenerate} onChange={(e) => setAutoGenerate(e.target.checked)} />
                   </div>
-
-                  <div>
-                    <h4 className="font-medium mb-2">Default Export Format</h4>
-                    <Select value={exportFormat} onValueChange={setExportFormat}>
-                      <SelectTrigger className="w-[200px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pdf">PDF</SelectItem>
-                        <SelectItem value="csv">CSV</SelectItem>
-                        <SelectItem value="xlsx">Excel</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="pt-4">
-                    <Button variant="outline">
-                      <Clock className="mr-2 h-4 w-4" />
-                      Schedule Reports
-                    </Button>
-                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    onClick={() => handleGenerateReport(report.id)}
+                    disabled={generatingReports.has(report.id) || isGenerating}
+                    className="w-full"
+                  >
+                    {generatingReports.has(report.id) ? (
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    Generate {exportFormat.toUpperCase() === "XLSX" ? "Excel" : exportFormat.toUpperCase()}
+                  </Button>
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Reports Generated</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">24</div>
+                <p className="text-xs text-muted-foreground">This month</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Auto-Generation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-sm">Active</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Next: {formatDate(new Date(), "MMM dd")}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">2.4 GB</div>
+                <p className="text-xs text-muted-foreground">Report archives</p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Report Generation Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium">Automatic Monthly Generation</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Generate all reports automatically on the 1st of each month
+                  </p>
+                </div>
+                <input type="checkbox" checked={autoGenerate} onChange={(e) => setAutoGenerate(e.target.checked)} />
+              </div>
+
+              <div>
+                <h4 className="font-medium mb-2">Default Export Format</h4>
+                <Select value={exportFormat} onValueChange={setExportFormat}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pdf">PDF</SelectItem>
+                    <SelectItem value="csv">CSV</SelectItem>
+                    <SelectItem value="xlsx">Excel</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="pt-4">
+                <Button variant="outline">
+                  <Clock className="mr-2 h-4 w-4" />
+                  Schedule Reports
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+export default function ReportsPage() {
+  return (
+    <DashboardLayout>
+      <ReportsPageContent />
+    </DashboardLayout>
   )
 }

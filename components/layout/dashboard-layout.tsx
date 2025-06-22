@@ -10,10 +10,6 @@ interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
-/**
- * Keeps the original sidebar + header framing around every dashboard page.
- * Wrap any page content with this layout to maintain the intended structure.
- */
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
