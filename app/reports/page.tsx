@@ -73,7 +73,7 @@ export default function ReportsPage() {
     }
   }, [selectedMonth, autoGenerate])
 
-  const generateDailyMaterialBalanceReport = async (month: Date, format: string) => {
+  const generateDailyMaterialBalanceReport = async (month: Date, exportType: string) => {
     try {
       const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
       const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
@@ -129,14 +129,14 @@ export default function ReportsPage() {
         })),
       }
 
-      return formatReportForExport(reportData, format, "daily-balance")
+      return formatReportForExport(reportData, exportType, "daily-balance")
     } catch (error) {
       console.error("Error generating daily material balance report:", error)
       return null
     }
   }
 
-  const generateDrumNumberReport = async (month: Date, format: string) => {
+  const generateDrumNumberReport = async (month: Date, exportType: string) => {
     try {
       const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
       const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
@@ -165,14 +165,14 @@ export default function ReportsPage() {
         })),
       }
 
-      return formatReportForExport(reportData, format, "drum-numbers")
+      return formatReportForExport(reportData, exportType, "drum-numbers")
     } catch (error) {
       console.error("Error generating drum number report:", error)
       return null
     }
   }
 
-  const generateMaterialBalanceReport = async (month: Date, format: string) => {
+  const generateMaterialBalanceReport = async (month: Date, exportType: string) => {
     try {
       const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
       const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
@@ -209,14 +209,14 @@ export default function ReportsPage() {
         }),
       }
 
-      return formatReportForExport(reportData, format, "material-balance")
+      return formatReportForExport(reportData, exportType, "material-balance")
     } catch (error) {
       console.error("Error generating material balance report:", error)
       return null
     }
   }
 
-  const generateNewConnectionReport = async (month: Date, format: string) => {
+  const generateNewConnectionReport = async (month: Date, exportType: string) => {
     try {
       const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
       const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
@@ -257,7 +257,7 @@ export default function ReportsPage() {
         totals: calculateMaterialTotals(lines),
       }
 
-      return formatReportForExport(reportData, format, "new-connection")
+      return formatReportForExport(reportData, exportType, "new-connection")
     } catch (error) {
       console.error("Error generating new connection report:", error)
       return null
@@ -781,7 +781,7 @@ export default function ReportsPage() {
     }
   }
 
-  const generateMaterialUsageReport = async (month: Date, format: string) => {
+  const generateMaterialUsageReport = async (month: Date, exportType: string) => {
     // Existing material usage report logic
     const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
     const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
@@ -814,7 +814,7 @@ export default function ReportsPage() {
       })),
     }
 
-    return formatReportForExport(reportData, format, "material-usage")
+    return formatReportForExport(reportData, exportType, "material-usage")
   }
 
   const downloadReport = (reportData: any, reportId: string, format: string) => {
