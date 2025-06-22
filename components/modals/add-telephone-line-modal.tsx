@@ -216,19 +216,10 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
 
   const fetchAvailableTasks = async () => {
     try {
+      // Grab every column; avoids unknown-column errors
       const { data, error } = await supabase
         .from("tasks")
-        .select(`
-        id,
-        title,
-        description,
-        customer_name,
-        customer_address,
-        customer_phone,
-        dp_location,
-        created_at,
-        status
-      `)
+        .select("*")
         .eq("status", "accepted")
         .not("id", "in", `(SELECT task_id FROM line_details WHERE task_id IS NOT NULL)`)
         .order("created_at", { ascending: false })
@@ -550,6 +541,8 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
     return !isNaN(num) && num >= 25
   }
 
+  const taskLabel = (task: any) => task?.title ?? task?.name ?? `Task ${task.id?.toString().slice(0, 8) ?? ""}`
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
@@ -570,7 +563,7 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
               <Popover open={taskOpen} onOpenChange={setTaskOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" role="combobox" aria-expanded={taskOpen} className="w-full justify-between">
-                    {selectedTask ? selectedTask.title : "Select an available task"}
+                    {selectedTask ? taskLabel(selectedTask) : "Select an available task"}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -586,7 +579,7 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                               className={cn("mr-2 h-4 w-4", selectedTask?.id === task.id ? "opacity-100" : "opacity-0")}
                             />
                             <div className="flex flex-col">
-                              <span className="font-medium">{task.title}</span>
+                              <span className="font-medium">{taskLabel(task)}</span>
                               <span className="text-xs text-muted-foreground">
                                 {task.customer_name} - {task.dp_location}
                               </span>
