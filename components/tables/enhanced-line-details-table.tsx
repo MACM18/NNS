@@ -1,157 +1,92 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, ChevronDown, Eye, Users, MapPin, Zap } from "lucide-react"
+import { Search, ChevronDown, Eye, Phone, MapPin, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getSupabaseClient } from "@/lib/supabase"
 import { useNotification } from "@/contexts/notification-context"
 
-interface LineDetail {
+interface TelephoneLine {
   id: string
-  name: string
-  address: string
-  telephone_no: string
-  dp: string
   date: string
-  status?: string
-  completed_date?: string
-  total_calc: number
+  phone_number: string
+  dp: string
   power_dp_new: number
   power_inbox_new: number
+  name: string
+  address: string
   cable_start_new: number
   cable_middle_new: number
   cable_end_new: number
   f1_calc: number
   g1_calc: number
+  total_calc: number
   wastage_input: number
-  // Material usage fields
-  c_hook: number
-  l_hook: number
-  retainers: number
-  nut_bolt: number
-  u_clip: number
-  concrete_nail: number
-  roll_plug: number
-  screw_nail: number
-  socket: number
-  bend: number
-  rj11: number
-  rj12: number
-  rj45: number
-  fiber_rosette: number
-  s_rosette: number
-  fac: number
-  internal_wire: number
-  casing: number
-  conduit: number
-  cat5: number
-  c_tie: number
-  c_clip: number
-  tag_tie: number
-  flexible: number
-  pole: number
-  pole_67: number
-  top_bolt: number
-  // Assignees
-  assignees?: Array<{
-    id: string
-    full_name: string
-    role: string
-    avatar_url?: string
-  }>
   created_at: string
 }
 
-interface LineDetailsTableProps {
-  selectedMonth: number
-  selectedYear: number
+interface EnhancedLineDetailsTableProps {
   refreshTrigger: number
-  onAssigneeManage: (lineId: string) => void
-  onRefresh: () => void
+  dateFilter: "today" | "week" | "month"
 }
 
-export function LineDetailsTable({
-  selectedMonth,
-  selectedYear,
-  refreshTrigger,
-  onAssigneeManage,
-  onRefresh,
-}: LineDetailsTableProps) {
-  const [data, setData] = useState<LineDetail[]>([])
+export function EnhancedLineDetailsTable({ refreshTrigger, dateFilter }: EnhancedLineDetailsTableProps) {
+  const [data, setData] = useState<TelephoneLine[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [sortField, setSortField] = useState<string>("date")
+  const [sortField, setSortField] = useState<string>("created_at")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const supabase = getSupabaseClient()
   const { addNotification } = useNotification()
 
   useEffect(() => {
     fetchData()
-  }, [selectedMonth, selectedYear, refreshTrigger, statusFilter, sortField, sortDirection])
+  }, [refreshTrigger, dateFilter, sortField, sortDirection])
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      // Get start and end dates for the selected month
-      const startDate = new Date(selectedYear, selectedMonth - 1, 1)
-      const endDate = new Date(selectedYear, selectedMonth, 0)
+      let query = supabase.from("line_details").select("*").not("phone_number", "is", null) // Only get records with phone numbers
 
-      let query = supabase
-        .from("line_details")
-        .select(`
-          *,
-          line_assignees!inner(
-            profiles!inner(
-              id,
-              full_name,
-              role,
-              avatar_url
-            )
-          )
-        `)
-        .gte("date", startDate.toISOString().split("T")[0])
-        .lte("date", endDate.toISOString().split("T")[0])
+      // Apply date filter
+      const now = new Date()
+      let startDate: Date
 
-      // Apply status filter
-      if (statusFilter !== "all") {
-        if (statusFilter === "completed") {
-          query = query.or("status.eq.completed,completed_date.not.is.null")
-        } else if (statusFilter === "pending") {
-          query = query.or("status.eq.pending,status.is.null")
-        } else {
-          query = query.eq("status", statusFilter)
-        }
+      switch (dateFilter) {
+        case "today":
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          break
+        case "week":
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          break
+        case "month":
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+          break
+        default:
+          startDate = new Date(0)
       }
+
+      query = query.gte("created_at", startDate.toISOString())
 
       // Apply sorting
       query = query.order(sortField, { ascending: sortDirection === "asc" })
 
-      const { data: lines, error } = await query
+      const { data: telephoneLines, error } = await query
 
       if (error) throw error
 
-      // Process the data to group assignees
-      const processedLines =
-        lines?.map((line) => ({
-          ...line,
-          assignees: line.line_assignees?.map((la: any) => la.profiles) || [],
-        })) || []
-
-      setData(processedLines)
+      setData(telephoneLines || [])
     } catch (error: any) {
       addNotification({
         title: "Error",
-        message: "Failed to fetch line details",
+        message: "Failed to fetch telephone line details",
         type: "error",
       })
     } finally {
@@ -162,7 +97,7 @@ export function LineDetailsTable({
   const filteredData = data.filter(
     (item) =>
       item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.telephone_no?.includes(searchTerm) ||
+      item.phone_number?.includes(searchTerm) ||
       item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.dp?.toLowerCase().includes(searchTerm.toLowerCase()),
   )
@@ -176,66 +111,9 @@ export function LineDetailsTable({
     }
   }
 
-  const toggleRowExpansion = (id: string) => {
-    const newExpanded = new Set(expandedRows)
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id)
-    } else {
-      newExpanded.add(id)
-    }
-    setExpandedRows(newExpanded)
-  }
-
-  const getStatusBadge = (line: LineDetail) => {
-    if (line.completed_date || line.status === "completed") {
-      return <Badge className="bg-green-100 text-green-800 border-green-200">Completed</Badge>
-    } else if (line.status === "in_progress") {
-      return <Badge className="bg-blue-100 text-blue-800 border-blue-200">In Progress</Badge>
-    } else {
-      return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Pending</Badge>
-    }
-  }
-
   const isPowerHigh = (value: number) => value >= 25
 
-  const MaterialUsageCard = ({ line }: { line: LineDetail }) => (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm">Material Usage</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <div className="grid grid-cols-4 gap-2 text-xs">
-          {[
-            { label: "C Hook", value: line.c_hook },
-            { label: "L Hook", value: line.l_hook },
-            { label: "Retainers", value: line.retainers },
-            { label: "Nut & Bolt", value: line.nut_bolt },
-            { label: "U Clip", value: line.u_clip },
-            { label: "Concrete Nail", value: line.concrete_nail },
-            { label: "Roll Plug", value: line.roll_plug },
-            { label: "Screw Nail", value: line.screw_nail },
-            { label: "Socket", value: line.socket },
-            { label: "Bend", value: line.bend },
-            { label: "RJ11", value: line.rj11 },
-            { label: "RJ12", value: line.rj12 },
-            { label: "RJ45", value: line.rj45 },
-            { label: "Fiber Rosette", value: line.fiber_rosette },
-            { label: "S Rosette", value: line.s_rosette },
-            { label: "FAC", value: line.fac },
-          ]
-            .filter((item) => item.value > 0)
-            .map((item) => (
-              <div key={item.label} className="flex justify-between">
-                <span className="text-muted-foreground">{item.label}:</span>
-                <span className="font-medium">{item.value}</span>
-              </div>
-            ))}
-        </div>
-      </CardContent>
-    </Card>
-  )
-
-  const ExpandedRowContent = ({ line }: { line: LineDetail }) => (
+  const ExpandedRowContent = ({ item }: { item: TelephoneLine }) => (
     <div className="p-6 bg-muted/30 rounded-lg space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Technical Details */}
@@ -249,32 +127,46 @@ export function LineDetailsTable({
           <CardContent className="space-y-2">
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">DP:</span>
-              <Badge variant="outline">{line.dp}</Badge>
+              <Badge variant="outline">{item.dp}</Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Power (DP):</span>
-              <span className={`font-medium ${isPowerHigh(line.power_dp_new) ? "text-red-600" : "text-green-600"}`}>
-                {line.power_dp_new?.toFixed(2) || "N/A"}
-                {isPowerHigh(line.power_dp_new) && " ⚠️"}
+              <span className={`font-medium ${isPowerHigh(item.power_dp_new) ? "text-red-600" : "text-green-600"}`}>
+                {item.power_dp_new?.toFixed(2) || "N/A"}
+                {isPowerHigh(item.power_dp_new) && " ⚠️"}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Power (Inbox):</span>
-              <span className={`font-medium ${isPowerHigh(line.power_inbox_new) ? "text-red-600" : "text-green-600"}`}>
-                {line.power_inbox_new?.toFixed(2) || "N/A"}
-                {isPowerHigh(line.power_inbox_new) && " ⚠️"}
+              <span className={`font-medium ${isPowerHigh(item.power_inbox_new) ? "text-red-600" : "text-green-600"}`}>
+                {item.power_inbox_new?.toFixed(2) || "N/A"}
+                {isPowerHigh(item.power_inbox_new) && " ⚠️"}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">Status:</span>
-              {getStatusBadge(line)}
+          </CardContent>
+        </Card>
+
+        {/* Contact Information */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Phone className="h-4 w-4" />
+              Contact Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div>
+              <span className="text-sm text-muted-foreground">Phone:</span>
+              <p className="font-medium">{item.phone_number}</p>
             </div>
-            {line.completed_date && (
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Completed:</span>
-                <span className="font-medium">{new Date(line.completed_date).toLocaleDateString()}</span>
-              </div>
-            )}
+            <div>
+              <span className="text-sm text-muted-foreground">Name:</span>
+              <p className="font-medium">{item.name}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Address:</span>
+              <p className="text-sm">{item.address}</p>
+            </div>
           </CardContent>
         </Card>
 
@@ -290,89 +182,42 @@ export function LineDetailsTable({
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div>
                 <span className="text-muted-foreground">Start:</span>
-                <p className="font-medium">{line.cable_start_new?.toFixed(2)}m</p>
+                <p className="font-medium">{item.cable_start_new?.toFixed(2)}m</p>
               </div>
               <div>
                 <span className="text-muted-foreground">Middle:</span>
-                <p className="font-medium">{line.cable_middle_new?.toFixed(2)}m</p>
+                <p className="font-medium">{item.cable_middle_new?.toFixed(2)}m</p>
               </div>
               <div>
                 <span className="text-muted-foreground">End:</span>
-                <p className="font-medium">{line.cable_end_new?.toFixed(2)}m</p>
+                <p className="font-medium">{item.cable_end_new?.toFixed(2)}m</p>
               </div>
             </div>
             <div className="border-t pt-2 space-y-1">
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">F1:</span>
-                <span className="font-medium text-blue-600">{line.f1_calc?.toFixed(2)}m</span>
+                <span className="font-medium text-blue-600">{item.f1_calc?.toFixed(2)}m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">G1:</span>
-                <span className="font-medium text-blue-600">{line.g1_calc?.toFixed(2)}m</span>
+                <span className="font-medium text-blue-600">{item.g1_calc?.toFixed(2)}m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Total:</span>
-                <span className="font-medium text-green-600">{line.total_calc?.toFixed(2)}m</span>
+                <span className="font-medium text-green-600">{item.total_calc?.toFixed(2)}m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Wastage:</span>
-                <span className="font-medium text-orange-600">{line.wastage_input?.toFixed(2) || "0.00"}m</span>
+                <span className="font-medium text-orange-600">{item.wastage_input?.toFixed(2) || "0.00"}m</span>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Assignees */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Assigned Team
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {line.assignees && line.assignees.length > 0 ? (
-              <div className="space-y-2">
-                {line.assignees.map((assignee) => (
-                  <div key={assignee.id} className="flex items-center gap-2">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage src={assignee.avatar_url || "/placeholder.svg"} />
-                      <AvatarFallback className="text-xs">{assignee.full_name?.charAt(0) || "U"}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{assignee.full_name}</p>
-                      <p className="text-xs text-muted-foreground">{assignee.role}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No assignees</p>
-            )}
-            <Button size="sm" variant="outline" onClick={() => onAssigneeManage(line.id)} className="w-full mt-2">
-              <Users className="h-3 w-3 mr-1" />
-              Manage Team
-            </Button>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Material Usage - Collapsible */}
-      <Collapsible>
-        <CollapsibleTrigger asChild>
-          <Button variant="outline" className="w-full">
-            <ChevronDown className="h-4 w-4 mr-2" />
-            View Material Usage Details
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="mt-4">
-          <MaterialUsageCard line={line} />
-        </CollapsibleContent>
-      </Collapsible>
-
       <div className="text-xs text-muted-foreground">
-        Installation Date: {new Date(line.date).toLocaleDateString()} | Added:{" "}
-        {new Date(line.created_at).toLocaleDateString()}
+        Installation Date: {new Date(item.date).toLocaleDateString()} | Added:{" "}
+        {new Date(item.created_at).toLocaleDateString()}
       </div>
     </div>
   )
@@ -382,7 +227,7 @@ export function LineDetailsTable({
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-sm text-muted-foreground">Loading line details...</p>
+          <p className="mt-2 text-sm text-muted-foreground">Loading telephone line details...</p>
         </div>
       </div>
     )
@@ -401,27 +246,16 @@ export function LineDetailsTable({
             className="pl-10"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={sortField} onValueChange={setSortField}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="created_at">Date Created</SelectItem>
             <SelectItem value="date">Installation Date</SelectItem>
             <SelectItem value="name">Customer Name</SelectItem>
-            <SelectItem value="telephone_no">Phone Number</SelectItem>
+            <SelectItem value="phone_number">Phone Number</SelectItem>
             <SelectItem value="dp">DP</SelectItem>
-            <SelectItem value="total_calc">Cable Distance</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="outline" onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}>
@@ -431,7 +265,7 @@ export function LineDetailsTable({
 
       {/* Results Count */}
       <div className="text-sm text-muted-foreground">
-        Showing {filteredData.length} of {data.length} lines
+        Showing {filteredData.length} of {data.length} telephone lines
       </div>
 
       {/* Table */}
@@ -439,14 +273,14 @@ export function LineDetailsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("telephone_no")}>
-                Line No.
-                {sortField === "telephone_no" && (
+              <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("phone_number")}>
+                Phone Number
+                {sortField === "phone_number" && (
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
               </TableHead>
               <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("name")}>
-                Customer
+                Customer Name
                 {sortField === "name" && (
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
@@ -457,16 +291,9 @@ export function LineDetailsTable({
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
               </TableHead>
-              <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("total_calc")}>
-                Distance
-                {sortField === "total_calc" && (
-                  <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
-                )}
-              </TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Assignees</TableHead>
+              <TableHead>Power Status</TableHead>
               <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("date")}>
-                Date
+                Installation Date
                 {sortField === "date" && (
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
@@ -475,53 +302,42 @@ export function LineDetailsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredData.map((line) => (
-              <>
-                <TableRow key={line.id}>
-                  <TableCell className="font-medium">{line.telephone_no}</TableCell>
-                  <TableCell>{line.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono text-xs">
-                      {line.dp}
+            {filteredData.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell className="font-medium">{item.phone_number}</TableCell>
+                <TableCell>{item.name}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {item.dp}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Badge variant={isPowerHigh(item.power_dp_new) ? "destructive" : "secondary"} className="text-xs">
+                      DP: {item.power_dp_new?.toFixed(1)}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-medium">{line.total_calc?.toFixed(2)}m</span>
-                  </TableCell>
-                  <TableCell>{getStatusBadge(line)}</TableCell>
-                  <TableCell>
-                    <div className="flex -space-x-1">
-                      {line.assignees?.slice(0, 3).map((assignee) => (
-                        <Avatar key={assignee.id} className="h-6 w-6 border-2 border-background">
-                          <AvatarImage src={assignee.avatar_url || "/placeholder.svg"} />
-                          <AvatarFallback className="text-xs">{assignee.full_name?.charAt(0) || "U"}</AvatarFallback>
-                        </Avatar>
-                      ))}
-                      {line.assignees && line.assignees.length > 3 && (
-                        <div className="h-6 w-6 rounded-full bg-muted border-2 border-background flex items-center justify-center">
-                          <span className="text-xs">+{line.assignees.length - 3}</span>
-                        </div>
-                      )}
-                      {(!line.assignees || line.assignees.length === 0) && (
-                        <span className="text-xs text-muted-foreground">None</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{new Date(line.date).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => toggleRowExpansion(line.id)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-                {expandedRows.has(line.id) && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="p-0">
-                      <ExpandedRowContent line={line} />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </>
+                    <Badge
+                      variant={isPowerHigh(item.power_inbox_new) ? "destructive" : "secondary"}
+                      className="text-xs"
+                    >
+                      IB: {item.power_inbox_new?.toFixed(1)}
+                    </Badge>
+                  </div>
+                </TableCell>
+                <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[800px]">
+                      <ExpandedRowContent item={item} />
+                    </PopoverContent>
+                  </Popover>
+                </TableCell>
+              </TableRow>
             ))}
           </TableBody>
         </Table>
@@ -529,7 +345,7 @@ export function LineDetailsTable({
 
       {filteredData.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-muted-foreground">No line details found matching your criteria.</p>
+          <p className="text-muted-foreground">No telephone line details found matching your search.</p>
         </div>
       )}
     </div>
