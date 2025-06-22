@@ -1,98 +1,188 @@
 "use client"
 
-import { LayoutDashboard, Settings, Users, Bell } from "lucide-react"
+import type * as React from "react"
+import Link from "next/link"
 import { usePathname } from "next/navigation"
+import {
+  LayoutDashboard,
+  Cable,
+  CheckSquare,
+  Package,
+  FileText,
+  BarChart3,
+  Settings,
+  User,
+  Building2,
+  ChevronRight,
+} from "lucide-react"
 
-import type { MainNavItem, SidebarNavItem } from "@/types"
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { cn } from "@/lib/utils"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarRail,
+} from "@/components/ui/sidebar"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
-interface DashboardSidebarProps {
-  isSuperAdmin?: boolean
-  mainNav?: MainNavItem[]
-  sidebarNav?: SidebarNavItem[]
-}
-
-export function AppSidebar({ isSuperAdmin, mainNav, sidebarNav }: DashboardSidebarProps) {
-  const pathname = usePathname()
-
-  const navMain: MainNavItem[] = [
+// Menu items data
+const data = {
+  user: {
+    name: "NNS Enterprise",
+    email: "admin@nns.lk",
+    avatar: "/avatars/company.jpg",
+  },
+  navMain: [
     {
       title: "Dashboard",
-      url: "/dashboard",
+      url: "/",
       icon: LayoutDashboard,
-      isActive: pathname === "/dashboard",
     },
     {
-      title: "Users",
-      url: "/users",
-      icon: Users,
-      isActive: pathname === "/users",
+      title: "Line Details",
+      url: "/lines",
+      icon: Cable,
     },
     {
-      title: "Notifications",
-      url: "/notifications",
-      icon: Bell,
-      isActive: pathname === "/notifications",
+      title: "Tasks",
+      url: "/tasks",
+      icon: CheckSquare,
     },
-  ]
-
-  const navSettings: MainNavItem[] = [
+    {
+      title: "Inventory",
+      url: "/inventory",
+      icon: Package,
+    },
+    {
+      title: "Invoices",
+      url: "/invoices",
+      icon: FileText,
+    },
+    {
+      title: "Reports",
+      url: "/reports",
+      icon: BarChart3,
+      items: [
+        {
+          title: "Monthly Reports",
+          url: "/reports",
+        },
+        {
+          title: "Analytics",
+          url: "/reports#analytics",
+        },
+        {
+          title: "AI Insights",
+          url: "/reports#ai-insights",
+        },
+      ],
+    },
     {
       title: "Settings",
       url: "/settings",
       icon: Settings,
-      isActive: pathname === "/settings",
     },
-  ]
-
-  return (
-    <div className="flex flex-col space-y-4 py-4">
-      <div className="px-3 py-2">
-        <div className="mb-2 flex items-center justify-between rounded-md px-2">
-          <h2 className="font-semibold tracking-tight">{isSuperAdmin ? "Admin" : "User"} Dashboard</h2>
-          <ThemeToggle />
-        </div>
-        <Separator className="my-2" />
-        <div className="space-y-1">
-          {navMain.map((item, index) => (
-            <Button
-              key={index}
-              variant="ghost"
-              className={cn("w-full justify-start", item.isActive && "bg-muted")}
-              onClick={() => {
-                window.location.href = item.url || "#"
-              }}
-            >
-              <item.icon className="mr-2 h-4 w-4" />
-              <span>{item.title}</span>
-            </Button>
-          ))}
-        </div>
-      </div>
-      <Separator />
-      <div className="px-3 py-2">
-        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Settings</h2>
-        <div className="space-y-1">
-          {navSettings.map((item, index) => (
-            <Button
-              key={index}
-              variant="ghost"
-              className={cn("w-full justify-start", item.isActive && "bg-muted")}
-              onClick={() => {
-                window.location.href = item.url || "#"
-              }}
-            >
-              <item.icon className="mr-2 h-4 w-4" />
-              <span>{item.title}</span>
-            </Button>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
+  ],
 }
 
-export { AppSidebar as DashboardSidebar }
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname()
+
+  return (
+    <Sidebar variant="inset" {...props}>
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild>
+              <Link href="/">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                  <Building2 className="size-4" />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">NNS Enterprise</span>
+                  <span className="truncate text-xs">Telecom Solutions</span>
+                </div>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Platform</SidebarGroupLabel>
+          <SidebarMenu>
+            {data.navMain.map((item) => {
+              const isActive =
+                pathname === item.url || (item.items && item.items.some((subItem) => pathname === subItem.url))
+
+              return (
+                <Collapsible key={item.title} asChild defaultOpen={isActive} className="group/collapsible">
+                  <SidebarMenuItem>
+                    {item.items ? (
+                      <>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton tooltip={item.title} isActive={isActive}>
+                            {item.icon && <item.icon />}
+                            <span>{item.title}</span>
+                            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {item.items.map((subItem) => (
+                              <SidebarMenuSubItem key={subItem.title}>
+                                <SidebarMenuSubButton asChild isActive={pathname === subItem.url}>
+                                  <Link href={subItem.url}>
+                                    <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ))}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </>
+                    ) : (
+                      <SidebarMenuButton tooltip={item.title} asChild isActive={isActive}>
+                        <Link href={item.url}>
+                          {item.icon && <item.icon />}
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    )}
+                  </SidebarMenuItem>
+                </Collapsible>
+              )
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild>
+              <Link href="/profile">
+                <User className="size-4" />
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">{data.user.name}</span>
+                  <span className="truncate text-xs">{data.user.email}</span>
+                </div>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+
+      <SidebarRail />
+    </Sidebar>
+  )
+}
