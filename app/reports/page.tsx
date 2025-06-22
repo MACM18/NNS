@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MonthYearPicker } from "@/components/ui/month-year-picker"
 import { Download, FileText, RefreshCw, BarChart3, FileSpreadsheet, FileImage, Clock, CheckCircle } from "lucide-react"
-import { format } from "date-fns"
+import { format as formatDate } from "date-fns"
 import { cn } from "@/lib/utils"
 import { getSupabaseClient } from "@/lib/supabase"
 import { toast } from "sonner"
@@ -66,7 +66,7 @@ export default function ReportsPage() {
   useEffect(() => {
     if (autoGenerate) {
       const currentMonth = new Date()
-      if (format(currentMonth, "yyyy-MM") === format(selectedMonth, "yyyy-MM")) {
+      if (formatDate(currentMonth, "yyyy-MM") === formatDate(selectedMonth, "yyyy-MM")) {
         // Auto-generate reports for current month
         console.log("Auto-generating reports for current month")
       }
@@ -97,11 +97,11 @@ export default function ReportsPage() {
 
       for (let day = 1; day <= daysInMonth; day++) {
         const currentDate = new Date(month.getFullYear(), month.getMonth(), day)
-        const dateStr = format(currentDate, "dd-MMM")
+        const dateStr = formatDate(currentDate, "dd-MMM")
 
         const dayUsage =
           dailyUsage?.filter(
-            (line) => format(new Date(line.date), "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd"),
+            (line) => formatDate(new Date(line.date), "yyyy-MM-dd") === formatDate(currentDate, "yyyy-MM-dd"),
           ) || []
 
         dailyData.push({
@@ -112,7 +112,7 @@ export default function ReportsPage() {
 
       const reportData = {
         title: "NNS Enterprise - Daily Material Balance",
-        month: format(month, "MMMM yyyy"),
+        month: formatDate(month, "MMMM yyyy"),
         items: items.map((item) => ({
           name: item.name,
           unit: item.unit || "NOS",
@@ -153,7 +153,7 @@ export default function ReportsPage() {
 
       const reportData = {
         title: "Drum Number Sheet",
-        month: format(month, "MMMM yyyy"),
+        month: formatDate(month, "MMMM yyyy"),
         data: lines.map((line, index) => ({
           no: index + 1,
           tpNumber: line.phone_number,
@@ -189,7 +189,7 @@ export default function ReportsPage() {
         title: "Material Balance Sheet for New Connection",
         contractorName: "NNS Enterprise",
         area: "Southern",
-        month: format(month, "MMMM"),
+        month: formatDate(month, "MMMM"),
         year: month.getFullYear(),
         data: items.map((item, index) => {
           const totalIssued =
@@ -233,13 +233,13 @@ export default function ReportsPage() {
       const reportData = {
         title: "FTTH - (PH/HR)",
         contractorName: "NNS Enterprise",
-        invoiceNo: `NNS/WPS/HR/NC/24/${format(month, "MMMM").toUpperCase()}`,
+        invoiceNo: `NNS/WPS/HR/NC/24/${formatDate(month, "MMMM").toUpperCase()}`,
         data: lines.map((line, index) => ({
           no: index + 1,
           tpNumber: line.phone_number,
           configs: line.dp || "OKR-HR",
           rtom: "OKR-HR",
-          completeDate: format(new Date(line.date), "dd-MMM-yy"),
+          completeDate: formatDate(new Date(line.date), "dd-MMM-yy"),
           f1: line.fiber_rosette_new || 0,
           g1: line.fac_new || 0,
           dwLh: line.l_hook_new || 0,
@@ -337,8 +337,8 @@ export default function ReportsPage() {
     )
   }
 
-  const formatReportForExport = (data: any, format: string, template: string) => {
-    switch (format) {
+  const formatReportForExport = (data: any, exportType: string, template: string) => {
+    switch (exportType) {
       case "csv":
         return generateCSV(data, template)
       case "excel":
@@ -445,7 +445,7 @@ export default function ReportsPage() {
     // Return HTML structure for PDF generation
     return {
       html: generateHTMLForPDF(data, template),
-      filename: `${template}-${format(selectedMonth, "yyyy-MM")}.pdf`,
+      filename: `${template}-${formatDate(selectedMonth, "yyyy-MM")}.pdf`,
     }
   }
 
@@ -797,7 +797,7 @@ export default function ReportsPage() {
 
     const reportData = {
       title: "Material Usage Per Line Report",
-      month: format(month, "MMMM yyyy"),
+      month: formatDate(month, "MMMM yyyy"),
       data: lines.map((line) => ({
         phone_number: line.phone_number,
         customer_name: line.name,
@@ -817,10 +817,10 @@ export default function ReportsPage() {
     return formatReportForExport(reportData, exportType, "material-usage")
   }
 
-  const downloadReport = (reportData: any, reportId: string, format: string) => {
-    const filename = `${reportId}-${format(selectedMonth, "yyyy-MM")}.${format}`
+  const downloadReport = (reportData: any, reportId: string, exportType: string) => {
+    const filename = `${reportId}-${formatDate(selectedMonth, "yyyy-MM")}.${exportType}`
 
-    if (format === "pdf" && reportData.html) {
+    if (exportType === "pdf" && reportData.html) {
       // Create a new window for PDF generation
       const printWindow = window.open("", "_blank")
       if (printWindow) {
@@ -971,7 +971,7 @@ export default function ReportsPage() {
                   <CheckCircle className="h-5 w-5 text-green-500" />
                   <span className="text-sm">Active</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Next: {format(new Date(), "MMM dd")}</p>
+                <p className="text-xs text-muted-foreground">Next: {formatDate(new Date(), "MMM dd")}</p>
               </CardContent>
             </Card>
             <Card>
