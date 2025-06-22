@@ -216,15 +216,25 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
 
   const fetchAvailableTasks = async () => {
     try {
-      // Grab every column; avoids unknown-column errors
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("status", "accepted")
-        .not("id", "in", `(SELECT task_id FROM line_details WHERE task_id IS NOT NULL)`)
-        .order("created_at", { ascending: false })
+      // 1️⃣  Get all task_ids already used in line_details
+      const { data: used, error: usedErr } = await supabase.from("line_details").select("task_id").neq("task_id", null)
+
+      if (usedErr) throw usedErr
+
+      const usedIds = (used ?? []).map((row) => row.task_id) as string[]
+      // Build csv for the PostgREST in() operator => (id1,id2,…)
+      const csv = usedIds.length ? `(${usedIds.join(",")})` : ""
+
+      // 2️⃣  Fetch accepted tasks that are NOT in the used-id list
+      let query = supabase.from("tasks").select("*").eq("status", "accepted").order("created_at", { ascending: false })
+
+      // Only add the filter if we actually have ids to exclude
+      if (csv) query = query.not("id", "in", csv)
+
+      const { data, error } = await query
 
       if (error) throw error
+
       setAvailableTasks(data || [])
     } catch (error) {
       console.error("Error fetching available tasks:", error)
