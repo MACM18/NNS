@@ -128,6 +128,7 @@ export default function InventoryPage() {
         title: "Error",
         message: "Failed to fetch inventory data",
         type: "error",
+        category: "system",
       });
     } finally {
       setLoadingData(false);

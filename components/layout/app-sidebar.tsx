@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import type * as React from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import type * as React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Cable,
@@ -14,7 +14,7 @@ import {
   User,
   Building2,
   ChevronRight,
-} from "lucide-react"
+} from "lucide-react";
 
 import {
   Sidebar,
@@ -30,8 +30,12 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarRail,
-} from "@/components/ui/sidebar"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+} from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 // Menu items data
 const data = {
@@ -67,6 +71,16 @@ const data = {
       icon: FileText,
     },
     {
+      title: "Vacancies",
+      url: "/careers",
+      icon: User,
+    },
+    {
+      title: "Posts",
+      url: "/content",
+      icon: FileText,
+    },
+    {
       title: "Reports",
       url: "/reports",
       icon: BarChart3,
@@ -91,24 +105,24 @@ const data = {
       icon: Settings,
     },
   ],
-}
+};
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const pathname = usePathname()
+  const pathname = usePathname();
 
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar variant='inset' {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <Building2 className="size-4" />
+            <SidebarMenuButton size='lg' asChild>
+              <Link href='/'>
+                <div className='flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground'>
+                  <Building2 className='size-4' />
                 </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">NNS Enterprise</span>
-                  <span className="truncate text-xs">Telecom Solutions</span>
+                <div className='grid flex-1 text-left text-sm leading-tight'>
+                  <span className='truncate font-semibold'>NNS Enterprise</span>
+                  <span className='truncate text-xs'>Telecom Solutions</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -122,25 +136,38 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenu>
             {data.navMain.map((item) => {
               const isActive =
-                pathname === item.url || (item.items && item.items.some((subItem) => pathname === subItem.url))
+                pathname === item.url ||
+                (item.items &&
+                  item.items.some((subItem) => pathname === subItem.url));
 
               return (
-                <Collapsible key={item.title} asChild defaultOpen={isActive} className="group/collapsible">
+                <Collapsible
+                  key={item.title}
+                  asChild
+                  defaultOpen={isActive}
+                  className='group/collapsible'
+                >
                   <SidebarMenuItem>
                     {item.items ? (
                       <>
                         <CollapsibleTrigger asChild>
-                          <SidebarMenuButton tooltip={item.title} isActive={isActive}>
+                          <SidebarMenuButton
+                            tooltip={item.title}
+                            isActive={isActive}
+                          >
                             {item.icon && <item.icon />}
                             <span>{item.title}</span>
-                            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                            <ChevronRight className='ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90' />
                           </SidebarMenuButton>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub>
                             {item.items.map((subItem) => (
                               <SidebarMenuSubItem key={subItem.title}>
-                                <SidebarMenuSubButton asChild isActive={pathname === subItem.url}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  isActive={pathname === subItem.url}
+                                >
                                   <Link href={subItem.url}>
                                     <span>{subItem.title}</span>
                                   </Link>
@@ -151,7 +178,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         </CollapsibleContent>
                       </>
                     ) : (
-                      <SidebarMenuButton tooltip={item.title} asChild isActive={isActive}>
+                      <SidebarMenuButton
+                        tooltip={item.title}
+                        asChild
+                        isActive={isActive}
+                      >
                         <Link href={item.url}>
                           {item.icon && <item.icon />}
                           <span>{item.title}</span>
@@ -160,7 +191,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     )}
                   </SidebarMenuItem>
                 </Collapsible>
-              )
+              );
             })}
           </SidebarMenu>
         </SidebarGroup>
@@ -169,12 +200,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/profile">
-                <User className="size-4" />
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">{data.user.name}</span>
-                  <span className="truncate text-xs">{data.user.email}</span>
+            <SidebarMenuButton size='lg' asChild>
+              <Link href='/profile'>
+                <User className='size-4' />
+                <div className='grid flex-1 text-left text-sm leading-tight'>
+                  <span className='truncate font-semibold'>
+                    {data.user.name}
+                  </span>
+                  <span className='truncate text-xs'>{data.user.email}</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -184,5 +217,5 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }

@@ -4,7 +4,7 @@ export interface Notification {
   title: string
   message: string
   type: "info" | "success" | "warning" | "error"
-  category: "line_added" | "task_completed" | "invoice_generated" | "report_ready" | "inventory_low" | "system"
+  category: "line_added" | "task_completed" | "invoice_generated" | "report_ready" | "inventory_low" | "system" | "post" | "job"
   is_read: boolean
   action_url?: string
   metadata?: Record<string, any>
