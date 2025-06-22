@@ -114,4 +114,5 @@ const AddTelephoneLineModal = ({ open, setOpen }: AddTelephoneLineModalProps) =>
   )
 }
 
+export { AddTelephoneLineModal }
 export default AddTelephoneLineModal
