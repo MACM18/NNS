@@ -45,7 +45,7 @@ export default function LineDetailsPage() {
 
       const { data: lines, error } = await supabase
         .from("line_details")
-        .select("id, status, date")
+        .select("id, status, date, completed_date")
         .gte("date", startDate.toISOString().split("T")[0])
         .lte("date", endDate.toISOString().split("T")[0])
 
@@ -53,16 +53,17 @@ export default function LineDetailsPage() {
 
       const stats = {
         total: lines?.length || 0,
-        completed: lines?.filter((line) => line.status === "completed" || line.date).length || 0,
+        completed: lines?.filter((line) => line.status === "completed" || line.completed_date).length || 0,
         inProgress: lines?.filter((line) => line.status === "in_progress").length || 0,
         pending: lines?.filter((line) => line.status === "pending" || !line.status).length || 0,
       }
 
       setLineStats(stats)
     } catch (error: any) {
+      console.error("Stats error:", error)
       addNotification({
         title: "Error",
-        message: "Failed to fetch line statistics",
+        message: `Failed to fetch line statistics: ${error.message}`,
         type: "error",
       })
     }

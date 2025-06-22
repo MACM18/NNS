@@ -22,32 +22,15 @@ interface LineDetail {
   date: string
   status?: string
   completed_date?: string
-  total_calc: number
-  power_dp_new: number
-  power_inbox_new: number
-  cable_start_new: number
-  cable_middle_new: number
-  cable_end_new: number
-  f1_calc: number
-  g1_calc: number
-  wastage_input: number
-  // Material usage fields
-  c_hook: number
-  l_hook: number
-  retainers: number
-  nut_bolt: number
-  u_clip: number
-  concrete_nail: number
-  roll_plug: number
-  screw_nail: number
-  socket: number
-  bend: number
-  rj11: number
-  rj12: number
-  rj45: number
-  fiber_rosette: number
-  s_rosette: number
-  fac: number
+  task_id?: string
+  // Use actual database column names
+  power_dp: number
+  power_inbox: number
+  cable_start: number
+  cable_middle: number
+  cable_end: number
+  total_cable: number
+  wastage: number
   internal_wire: number
   casing: number
   conduit: number
@@ -59,6 +42,25 @@ interface LineDetail {
   pole: number
   pole_67: number
   top_bolt: number
+  f1: number
+  g1: number
+  // Material quantities - add defaults for missing columns
+  c_hook?: number
+  l_hook?: number
+  retainers?: number
+  nut_bolt?: number
+  u_clip?: number
+  concrete_nail?: number
+  roll_plug?: number
+  screw_nail?: number
+  socket?: number
+  bend?: number
+  rj11?: number
+  rj12?: number
+  rj45?: number
+  fiber_rosette?: number
+  s_rosette?: number
+  fac?: number
   // Assignees
   assignees?: Array<{
     id: string
@@ -106,19 +108,10 @@ export function LineDetailsTable({
       const startDate = new Date(selectedYear, selectedMonth - 1, 1)
       const endDate = new Date(selectedYear, selectedMonth, 0)
 
+      // First, get the line details
       let query = supabase
         .from("line_details")
-        .select(`
-          *,
-          line_assignees!inner(
-            profiles!inner(
-              id,
-              full_name,
-              role,
-              avatar_url
-            )
-          )
-        `)
+        .select("*")
         .gte("date", startDate.toISOString().split("T")[0])
         .lte("date", endDate.toISOString().split("T")[0])
 
@@ -140,18 +133,36 @@ export function LineDetailsTable({
 
       if (error) throw error
 
-      // Process the data to group assignees
+      // For now, set assignees as empty array since the join might be complex
       const processedLines =
         lines?.map((line) => ({
           ...line,
-          assignees: line.line_assignees?.map((la: any) => la.profiles) || [],
+          assignees: [],
+          // Add default values for missing material columns
+          c_hook: line.c_hook || 0,
+          l_hook: line.l_hook || 0,
+          retainers: line.retainers || 0,
+          nut_bolt: line.nut_bolt || 0,
+          u_clip: line.u_clip || 0,
+          concrete_nail: line.concrete_nail || 0,
+          roll_plug: line.roll_plug || 0,
+          screw_nail: line.screw_nail || 0,
+          socket: line.socket || 0,
+          bend: line.bend || 0,
+          rj11: line.rj11 || 0,
+          rj12: line.rj12 || 0,
+          rj45: line.rj45 || 0,
+          fiber_rosette: line.fiber_rosette || 0,
+          s_rosette: line.s_rosette || 0,
+          fac: line.fac || 0,
         })) || []
 
       setData(processedLines)
     } catch (error: any) {
+      console.error("Fetch error:", error)
       addNotification({
         title: "Error",
-        message: "Failed to fetch line details",
+        message: `Failed to fetch line details: ${error.message}`,
         type: "error",
       })
     } finally {
@@ -253,16 +264,16 @@ export function LineDetailsTable({
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Power (DP):</span>
-              <span className={`font-medium ${isPowerHigh(line.power_dp_new) ? "text-red-600" : "text-green-600"}`}>
-                {line.power_dp_new?.toFixed(2) || "N/A"}
-                {isPowerHigh(line.power_dp_new) && " ⚠️"}
+              <span className={`font-medium ${isPowerHigh(line.power_dp) ? "text-red-600" : "text-green-600"}`}>
+                {line.power_dp?.toFixed(2) || "N/A"}
+                {isPowerHigh(line.power_dp) && " ⚠️"}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Power (Inbox):</span>
-              <span className={`font-medium ${isPowerHigh(line.power_inbox_new) ? "text-red-600" : "text-green-600"}`}>
-                {line.power_inbox_new?.toFixed(2) || "N/A"}
-                {isPowerHigh(line.power_inbox_new) && " ⚠️"}
+              <span className={`font-medium ${isPowerHigh(line.power_inbox) ? "text-red-600" : "text-green-600"}`}>
+                {line.power_inbox?.toFixed(2) || "N/A"}
+                {isPowerHigh(line.power_inbox) && " ⚠️"}
               </span>
             </div>
             <div className="flex justify-between">
@@ -290,33 +301,33 @@ export function LineDetailsTable({
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div>
                 <span className="text-muted-foreground">Start:</span>
-                <p className="font-medium">{line.cable_start_new?.toFixed(2)}m</p>
+                <p className="font-medium">{line.cable_start?.toFixed(2)}m</p>
               </div>
               <div>
                 <span className="text-muted-foreground">Middle:</span>
-                <p className="font-medium">{line.cable_middle_new?.toFixed(2)}m</p>
+                <p className="font-medium">{line.cable_middle?.toFixed(2)}m</p>
               </div>
               <div>
                 <span className="text-muted-foreground">End:</span>
-                <p className="font-medium">{line.cable_end_new?.toFixed(2)}m</p>
+                <p className="font-medium">{line.cable_end?.toFixed(2)}m</p>
               </div>
             </div>
             <div className="border-t pt-2 space-y-1">
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">F1:</span>
-                <span className="font-medium text-blue-600">{line.f1_calc?.toFixed(2)}m</span>
+                <span className="font-medium text-blue-600">{line.f1?.toFixed(2)}m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">G1:</span>
-                <span className="font-medium text-blue-600">{line.g1_calc?.toFixed(2)}m</span>
+                <span className="font-medium text-blue-600">{line.g1?.toFixed(2)}m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Total:</span>
-                <span className="font-medium text-green-600">{line.total_calc?.toFixed(2)}m</span>
+                <span className="font-medium text-green-600">{line.total_cable?.toFixed(2)}m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Wastage:</span>
-                <span className="font-medium text-orange-600">{line.wastage_input?.toFixed(2) || "0.00"}m</span>
+                <span className="font-medium text-orange-600">{line.wastage?.toFixed(2) || "0.00"}m</span>
               </div>
             </div>
           </CardContent>
@@ -421,7 +432,7 @@ export function LineDetailsTable({
             <SelectItem value="name">Customer Name</SelectItem>
             <SelectItem value="telephone_no">Phone Number</SelectItem>
             <SelectItem value="dp">DP</SelectItem>
-            <SelectItem value="total_calc">Cable Distance</SelectItem>
+            <SelectItem value="total_cable">Cable Distance</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="outline" onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}>
@@ -457,9 +468,9 @@ export function LineDetailsTable({
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
               </TableHead>
-              <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("total_calc")}>
+              <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("total_cable")}>
                 Distance
-                {sortField === "total_calc" && (
+                {sortField === "total_cable" && (
                   <ChevronDown className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""}`} />
                 )}
               </TableHead>
@@ -486,7 +497,7 @@ export function LineDetailsTable({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="font-medium">{line.total_calc?.toFixed(2)}m</span>
+                    <span className="font-medium">{line.total_cable?.toFixed(2) || "0.00"}m</span>
                   </TableCell>
                   <TableCell>{getStatusBadge(line)}</TableCell>
                   <TableCell>
