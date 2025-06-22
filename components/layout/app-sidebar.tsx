@@ -7,6 +7,7 @@ import type { MainNavItem, SidebarNavItem } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { cn } from "@/lib/utils"
 
 interface DashboardSidebarProps {
   isSuperAdmin?: boolean
@@ -56,12 +57,11 @@ export function AppSidebar({ isSuperAdmin, mainNav, sidebarNav }: DashboardSideb
         </div>
         <Separator className="my-2" />
         <div className="space-y-1">
-          {navMain.map((item) => (
+          {navMain.map((item, index) => (
             <Button
-              key={item.title}
+              key={index}
               variant="ghost"
-              className="w-full justify-start"
-              active={item.isActive}
+              className={cn("w-full justify-start", item.isActive && "bg-muted")}
               onClick={() => {
                 window.location.href = item.url || "#"
               }}
@@ -76,12 +76,11 @@ export function AppSidebar({ isSuperAdmin, mainNav, sidebarNav }: DashboardSideb
       <div className="px-3 py-2">
         <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Settings</h2>
         <div className="space-y-1">
-          {navSettings.map((item) => (
+          {navSettings.map((item, index) => (
             <Button
-              key={item.title}
+              key={index}
               variant="ghost"
-              className="w-full justify-start"
-              active={item.isActive}
+              className={cn("w-full justify-start", item.isActive && "bg-muted")}
               onClick={() => {
                 window.location.href = item.url || "#"
               }}
