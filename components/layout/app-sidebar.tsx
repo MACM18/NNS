@@ -14,6 +14,7 @@ import {
   User,
   Building2,
   ChevronRight,
+  LogOut,
 } from "lucide-react";
 
 import {
@@ -105,7 +106,7 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
-  const { profile, user, loading } = useAuth();
+  const { profile, user, loading, signOut } = useAuth();
 
   // Fallback to static data if not loaded
   const displayName =
@@ -123,8 +124,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <Building2 className='size-4' />
                 </div>
                 <div className='grid flex-1 text-left text-sm leading-tight'>
-                  <span className="truncate font-semibold">NNS Enterprise</span>
-                  <span className="truncate text-xs">Telecom Solutions</span>
+                  <span className='truncate font-semibold'>NNS Enterprise</span>
+                  <span className='truncate text-xs'>Telecom Solutions</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -210,6 +211,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <span className='truncate text-xs'>{displayEmail}</span>
                 </div>
               </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton size='lg' onClick={signOut}>
+              <LogOut className='size-4 mr-2' />
+              <span>Sign Out</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
