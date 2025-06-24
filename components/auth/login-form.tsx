@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getSupabaseClient } from "@/lib/supabase";
-import { useNotification } from "@/contexts/notification-context";
+import { toast } from "@/hooks/use-toast";
 
 interface LoginFormProps {
   onSwitchToRegister?: () => void;
@@ -25,7 +25,6 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const supabase = getSupabaseClient();
-  const { addNotification } = useNotification();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,18 +38,18 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
 
       if (error) throw error;
 
-      addNotification({
+      toast({
         title: "Success",
-        message: "Logged in successfully",
-        type: "success",
-        category: "system",
+        description: "Logged in successfully",
+        variant: "default",
+        duration: 3000,
       });
     } catch (error: any) {
-      addNotification({
+      toast({
         title: "Error",
-        message: error.message,
-        type: "error",
-        category: "system",
+        description: error.message,
+        variant: "destructive",
+        duration: 4000,
       });
     } finally {
       setLoading(false);

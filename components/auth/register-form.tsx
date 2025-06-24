@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
+import { toast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 
 interface RegisterFormProps {
@@ -48,51 +49,51 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
   const validateForm = () => {
     if (!formData.fullName.trim()) {
-      addNotification({
+      toast({
         title: "Validation Error",
-        message: "Full name is required",
-        type: "error",
-        category: "system",
+        description: "Full name is required",
+        variant: "destructive",
+        duration: 3000,
       });
       return false;
     }
 
     if (!formData.email.trim()) {
-      addNotification({
+      toast({
         title: "Validation Error",
-        message: "Email is required",
-        type: "error",
-        category: "system",
+        description: "Email is required",
+        variant: "destructive",
+        duration: 3000,
       });
       return false;
     }
 
     if (formData.password.length < 6) {
-      addNotification({
+      toast({
         title: "Validation Error",
-        message: "Password must be at least 6 characters long",
-        type: "error",
-        category: "system",
+        description: "Password must be at least 6 characters long",
+        variant: "destructive",
+        duration: 3000,
       });
       return false;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      addNotification({
+      toast({
         title: "Validation Error",
-        message: "Passwords do not match",
-        type: "error",
-        category: "system",
+        description: "Passwords do not match",
+        variant: "destructive",
+        duration: 3000,
       });
       return false;
     }
 
     if (!formData.role) {
-      addNotification({
+      toast({
         title: "Validation Error",
-        message: "Please select a role",
-        type: "error",
-        category: "system",
+        description: "Please select a role",
+        variant: "destructive",
+        duration: 3000,
       });
       return false;
     }
@@ -138,11 +139,11 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         //   // Don't throw here as the user is already created
         // }
 
-        addNotification({
+        toast({
           title: "Registration Successful",
-          message: "Please check your email to verify your account",
-          type: "success",
-          category: "system",
+          description: "Please check your email to verify your account",
+          variant: "destructive",
+          duration: 4000,
         });
 
         // Reset form
@@ -162,11 +163,11 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         }, 2000);
       }
     } catch (error: any) {
-      addNotification({
+      toast({
         title: "Registration Failed",
-        message: error.message || "An error occurred during registration",
-        type: "error",
-        category: "system",
+        description: error.message || "An error occurred during registration",
+        variant: "destructive",
+        duration: 4000,
       });
     } finally {
       setLoading(false);
