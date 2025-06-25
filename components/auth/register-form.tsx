@@ -88,16 +88,6 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
       return false;
     }
 
-    if (!formData.role) {
-      toast({
-        title: "Validation Error",
-        description: "Please select a role",
-        variant: "destructive",
-        duration: 3000,
-      });
-      return false;
-    }
-
     return true;
   };
 
@@ -109,6 +99,40 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     setLoading(true);
 
     try {
+      // Check if email is already registered (in profiles)
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", formData.email)
+        .single();
+      if (existingProfile) {
+        toast({
+          title: "Email Already Registered",
+          description:
+            "This email is already registered and approved. Please sign in or use a different email.",
+          variant: "destructive",
+          duration: 4000,
+        });
+        setLoading(false);
+        return;
+      }
+      // Check if email is pending approval (in auth, but not in profiles)
+      const { data: authUsers } = await supabase.auth.admin.listUsers();
+      const pendingUser = (authUsers?.users || []).find(
+        (u) => u.email === formData.email && u.email_confirmed_at
+      );
+      if (pendingUser) {
+        toast({
+          title: "Pending Approval",
+          description:
+            "This email is registered and pending admin approval. Please wait for approval or contact support.",
+          variant: "destructive",
+          duration: 4000,
+        });
+        setLoading(false);
+        return;
+      }
+
       // Create user with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
@@ -116,7 +140,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         options: {
           data: {
             full_name: formData.fullName,
-            role: formData.role,
+            role: "user",
           },
         },
       });
@@ -208,68 +232,6 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                 required
                 placeholder='Enter your email address'
               />
-            </div>
-
-            <div>
-              <Label htmlFor='role'>Role</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) => handleInputChange("role", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder='Select your role' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='technician'>
-                    <div className='flex flex-col'>
-                      <span>Technician</span>
-                      <span className='text-xs text-muted-foreground'>
-                        Field installation and maintenance
-                      </span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value='field_engineer'>
-                    <div className='flex flex-col'>
-                      <span>Field Engineer</span>
-                      <span className='text-xs text-muted-foreground'>
-                        Technical planning and oversight
-                      </span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value='supervisor'>
-                    <div className='flex flex-col'>
-                      <span>Supervisor</span>
-                      <span className='text-xs text-muted-foreground'>
-                        Team management and coordination
-                      </span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value='inventory_manager'>
-                    <div className='flex flex-col'>
-                      <span>Inventory Manager</span>
-                      <span className='text-xs text-muted-foreground'>
-                        Stock and material management
-                      </span>
-                    </div>
-                  </SelectItem>
-                  {/* <SelectItem value='manager'>
-                    <div className='flex flex-col'>
-                      <span>Manager</span>
-                      <span className='text-xs text-muted-foreground'>
-                        Operations and project management
-                      </span>
-                    </div>
-                  </SelectItem> */}
-                  {/* <SelectItem value='admin'>
-                    <div className='flex flex-col'>
-                      <span>Administrator</span>
-                      <span className='text-xs text-muted-foreground'>
-                        System administration and full access
-                      </span>
-                    </div>
-                  </SelectItem> */}
-                </SelectContent>
-              </Select>
             </div>
 
             <div>

@@ -5,7 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/auth-context";
 import { NotificationProvider } from "@/contexts/notification-context";
 import { DataCacheProvider } from "@/contexts/data-cache-context";
-import { Toaster } from "@/components/ui/toast";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: "NNS Telecom Dashboard",
@@ -29,8 +29,10 @@ export default function RootLayout({
         >
           <AuthProvider>
             <NotificationProvider>
-              <DataCacheProvider>{children}</DataCacheProvider>
-              <Toaster />
+              <DataCacheProvider>
+                {children}
+                <Toaster />
+              </DataCacheProvider>
             </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
