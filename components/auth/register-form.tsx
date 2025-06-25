@@ -124,25 +124,11 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Create profile record
-        // const { error: profileError } = await supabase.from("profiles").insert([
-        //   {
-        //     id: authData.user.id,
-        //     email: formData.email,
-        //     full_name: formData.fullName,
-        //     role: formData.role,
-        //   },
-        // ]);
-
-        // if (profileError) {
-        //   console.error("Profile creation error:", profileError);
-        //   // Don't throw here as the user is already created
-        // }
-
+        // Do not create profile here. Profile will be created after admin approval.
         toast({
           title: "Registration Successful",
           description: "Please check your email to verify your account",
-          variant: "destructive",
+          variant: "default",
           duration: 4000,
         });
 

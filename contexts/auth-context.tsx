@@ -10,6 +10,7 @@ interface AuthContextType {
   profile: any | null
   loading: boolean
   signOut: () => Promise<void>
+  role: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -18,6 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
+  const [role, setRole] = useState<string | null>(null)
   const supabase = getSupabaseClient()
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fetchProfile(session.user.id)
       } else {
         setProfile(null)
+        setRole(null)
       }
       setLoading(false)
     })
@@ -59,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data && data.length > 0) {
         // Profile exists, use the first one
         setProfile(data[0])
+        setRole(typeof data[0].role === "string" ? data[0].role : null)
       } else {
         // No profile exists, create one
         console.log("No profile found, creating new profile for user:", userId)
@@ -92,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data && data.length > 0) {
         setProfile(data[0])
+        setRole(typeof data[0].role === "string" ? data[0].role : null)
         console.log("Profile created successfully")
       }
     } catch (error) {
@@ -104,12 +109,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await supabase.auth.signOut()
       setUser(null)
       setProfile(null)
+      setRole(null)
     } catch (error) {
       console.error("Error signing out:", error)
     }
   }
 
-  return <AuthContext.Provider value={{ user, profile, loading, signOut }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, profile, loading, signOut, role }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

@@ -15,6 +15,7 @@ import {
   Building2,
   ChevronRight,
   LogOut,
+  Users,
 } from "lucide-react";
 
 import {
@@ -106,7 +107,7 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
-  const { profile, user, loading, signOut } = useAuth();
+  const { profile, user, loading, role, signOut } = useAuth();
 
   // Fallback to static data if not loaded
   const displayName =
@@ -197,6 +198,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               );
             })}
           </SidebarMenu>
+        </SidebarGroup>
+        <SidebarGroup>
+          {role === "admin" && (
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === "/users"}>
+                  <Link href='/users'>
+                    <Users className='mr-2 h-4 w-4' />
+                    <span>Users</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          )}
         </SidebarGroup>
       </SidebarContent>
 
