@@ -251,7 +251,7 @@ export default function InvoicesPage() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <Header  />
+        <Header />
 
         <main className='flex-1 space-y-6 p-6'>
           {/* Page Header */}

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 interface LoginFormProps {
   onSwitchToRegister?: () => void;
@@ -25,6 +26,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const supabase = getSupabaseClient();
+  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +46,8 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
         variant: "default",
         duration: 3000,
       });
+      // Redirect or perform any additional actions after successful login
+      router.push("/");
     } catch (error: any) {
       toast({
         title: "Error",
