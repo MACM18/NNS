@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -13,52 +13,62 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Plus, Trash2, Camera, Loader2, CheckCircle } from "lucide-react"
-import { getSupabaseClient } from "@/lib/supabase"
-import { useNotification } from "@/contexts/notification-context"
-import { useAuth } from "@/contexts/auth-context"
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Plus, Trash2, Camera, Loader2, CheckCircle } from "lucide-react";
+import { getSupabaseClient } from "@/lib/supabase";
+import { useNotification } from "@/contexts/notification-context";
+import { useAuth } from "@/contexts/auth-context";
 
 interface InventoryItem {
-  id: string
-  name: string
-  unit: string
-  item_type: string
-  current_stock: number
-  drum_size?: number
+  id: string;
+  name: string;
+  unit: string;
+  current_stock: number;
+  drum_size?: number;
 }
 
 interface InvoiceItem {
-  id: string
-  item_id: string
-  description: string
-  unit: string
-  quantity_requested: number
-  quantity_issued: number
+  id: string;
+  item_id: string;
+  description: string;
+  unit: string;
+  quantity_requested: number | "";
+  quantity_issued: number | "";
+  drum_number?: string; // Add drum number for cable items
 }
 
 interface AddInventoryInvoiceModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSuccess: () => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
 }
 
-export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddInventoryInvoiceModalProps) {
-  const [loading, setLoading] = useState(false)
-  const [ocrProcessing, setOcrProcessing] = useState(false)
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
-  const [autoInvoiceNumber, setAutoInvoiceNumber] = useState("")
+export function AddInventoryInvoiceModal({
+  open,
+  onOpenChange,
+  onSuccess,
+}: AddInventoryInvoiceModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [ocrProcessing, setOcrProcessing] = useState(false);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [autoInvoiceNumber, setAutoInvoiceNumber] = useState("");
   const [formData, setFormData] = useState({
-    warehouse: "",
+    warehouse: "Main Warehouse", // Default warehouse
     date: new Date().toISOString().split("T")[0],
     issued_by: "",
     drawn_by: "",
     ocr_image_url: "",
-  })
+  });
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([
     {
       id: "1",
@@ -67,73 +77,115 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
       unit: "",
       quantity_requested: 0,
       quantity_issued: 0,
+      drum_number: "",
     },
-  ])
+  ]);
 
-  const supabase = getSupabaseClient()
-  const { addNotification } = useNotification()
-  const { user } = useAuth()
+  const supabase = getSupabaseClient();
+  const { addNotification } = useNotification();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (open) {
-      fetchInventoryItems()
-      generateInvoiceNumber()
+      fetchInventoryItems();
+      generateInvoiceNumber();
     }
-  }, [open])
+  }, [open]);
 
   const fetchInventoryItems = async () => {
     try {
-      const { data, error } = await supabase.from("inventory_items").select("*").order("name")
+      const { data, error } = await supabase
+        .from("inventory_items")
+        .select("*")
+        .order("name");
 
-      if (error) throw error
-      setInventoryItems((data as unknown as InventoryItem[]) || [])
+      if (error) throw error;
+      setInventoryItems((data as unknown as InventoryItem[]) || []);
+      console.log(inventoryItems);
     } catch (error) {
-      console.error("Error fetching inventory items:", error)
+      console.error("Error fetching inventory items:", error);
     }
-  }
+  };
 
   const generateInvoiceNumber = async () => {
     try {
-      const { data, error } = await supabase.rpc("generate_invoice_number")
+      const { data, error } = await supabase.rpc("generate_invoice_number");
 
-      if (error) throw error
-      setAutoInvoiceNumber(String(data))
+      if (error) throw error;
+      setAutoInvoiceNumber(String(data));
     } catch (error) {
-      console.error("Error generating invoice number:", error)
+      console.error("Error generating invoice number:", error);
       // Fallback to timestamp-based number
-      const timestamp = Date.now().toString().slice(-6)
-      setAutoInvoiceNumber(`INV-${new Date().getFullYear()}-${timestamp}`)
+      const timestamp = Date.now().toString().slice(-6);
+      setAutoInvoiceNumber(`INV-${new Date().getFullYear()}-${timestamp}`);
     }
-  }
+  };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
-  const handleItemChange = (index: number, field: string, value: string | number) => {
+  const handleItemChange = (
+    index: number,
+    field: string,
+    value: string | number
+  ) => {
     setInvoiceItems((prev) =>
       prev.map((item, i) => {
         if (i === index) {
-          const updatedItem = { ...item, [field]: value }
+          let updatedItem = { ...item };
+          // For number fields, ensure value is number or ""
+          if (field === "quantity_requested" || field === "quantity_issued") {
+            (updatedItem as any)[field] = value === "" ? "" : Number(value);
+          } else if (field === "item_id") {
+            updatedItem.item_id = value as string;
+          } else if (field === "description") {
+            updatedItem.description = value as string;
+          } else if (field === "unit") {
+            updatedItem.unit = value as string;
+          } else if (field === "drum_number") {
+            updatedItem.drum_number = value as string;
+          }
 
           // Auto-fill description and unit when item is selected
           if (field === "item_id" && value) {
-            const selectedItem = inventoryItems.find((inv) => inv.id === value)
+            const selectedItem = inventoryItems.find((inv) => inv.id === value);
             if (selectedItem) {
-              updatedItem.description = selectedItem.name
-              updatedItem.unit = selectedItem.unit
+              updatedItem.description = selectedItem.name;
+              updatedItem.unit = selectedItem.unit;
+              // Reset drum number if not drop wire cable (case-insensitive)
+              if (
+                !selectedItem.name?.toLowerCase().includes("drop wire cable")
+              ) {
+                updatedItem.drum_number = "";
+              } else {
+                // If Drop Wire Cable, set both quantities to 2000
+                updatedItem.quantity_requested = 2000;
+                updatedItem.quantity_issued = 2000;
+              }
             }
           }
 
-          return updatedItem
+          // If user changes quantity_requested, auto-set quantity_issued if not manually changed
+          if (field === "quantity_requested") {
+            if (
+              item.quantity_issued === undefined ||
+              item.quantity_issued === null ||
+              Number(item.quantity_issued) === Number(item.quantity_requested)
+            ) {
+              updatedItem.quantity_issued = value === "" ? "" : Number(value);
+            }
+          }
+
+          return updatedItem;
         }
-        return item
-      }),
-    )
-  }
+        return item;
+      })
+    );
+  };
 
   const addNewRow = () => {
-    const newId = (invoiceItems.length + 1).toString()
+    const newId = (invoiceItems.length + 1).toString();
     setInvoiceItems((prev) => [
       ...prev,
       {
@@ -143,67 +195,77 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
         unit: "",
         quantity_requested: 0,
         quantity_issued: 0,
+        drum_number: "",
       },
-    ])
-  }
+    ]);
+  };
 
   const removeRow = (index: number) => {
     if (invoiceItems.length > 1) {
-      setInvoiceItems((prev) => prev.filter((_, i) => i !== index))
+      setInvoiceItems((prev) => prev.filter((_, i) => i !== index));
     }
-  }
+  };
 
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    setOcrProcessing(true)
+    setOcrProcessing(true);
 
     try {
       // Upload image to Supabase Storage (you'll need to set up a bucket)
-      const fileExt = file.name.split(".").pop()
-      const fileName = `${Date.now()}.${fileExt}`
-      const filePath = `invoice-images/${fileName}`
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `invoice-images/${fileName}`;
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("invoice-images")
-        .upload(filePath, file)
+        .upload(filePath, file);
 
-      if (uploadError) throw uploadError
+      if (uploadError) throw uploadError;
 
       // Get public URL
-      const { data: urlData } = supabase.storage.from("invoice-images").getPublicUrl(filePath)
+      const { data: urlData } = supabase.storage
+        .from("invoice-images")
+        .getPublicUrl(filePath);
 
-      setFormData((prev) => ({ ...prev, ocr_image_url: urlData.publicUrl }))
+      setFormData((prev) => ({ ...prev, ocr_image_url: urlData.publicUrl }));
 
       // Simulate OCR processing (you would integrate with actual OCR service here)
-      await simulateOCRProcessing()
+      await simulateOCRProcessing();
 
       addNotification({
         title: "OCR Processing Complete",
-        message: "Invoice items have been extracted. Please review and confirm.",
+        message:
+          "Invoice items have been extracted. Please review and confirm.",
         type: "success",
-      })
+        category: "system",
+      });
     } catch (error: any) {
       addNotification({
         title: "Upload Error",
         message: error.message,
         type: "error",
-      })
+        category: "system",
+      });
     } finally {
-      setOcrProcessing(false)
+      setOcrProcessing(false);
     }
-  }
+  };
 
   const simulateOCRProcessing = async () => {
     // Simulate OCR delay
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Simulate extracted items (in real implementation, this would come from OCR service)
     const extractedItems = [
       {
         id: "ocr1",
-        item_id: inventoryItems.find((item) => item.name.includes("Drop Wire"))?.id || "",
+        item_id:
+          inventoryItems.find((item) => item.name.includes("Drop Wire"))?.id ||
+          "",
         description: "Drop Wire Cable",
         unit: "meters",
         quantity_requested: 2000,
@@ -211,33 +273,37 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
       },
       {
         id: "ocr2",
-        item_id: inventoryItems.find((item) => item.name.includes("C-Hook"))?.id || "",
+        item_id:
+          inventoryItems.find((item) => item.name.includes("C-Hook"))?.id || "",
         description: "C-Hook",
         unit: "pieces",
         quantity_requested: 100,
         quantity_issued: 100,
       },
-    ]
+    ];
 
-    setInvoiceItems(extractedItems)
-  }
+    setInvoiceItems(extractedItems);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
 
     try {
       // Validate items
-      const validItems = invoiceItems.filter((item) => item.item_id && item.quantity_issued > 0)
+      const validItems = invoiceItems.filter(
+        (item) => item.item_id && Number(item.quantity_issued) > 0
+      );
 
       if (validItems.length === 0) {
         addNotification({
           title: "Validation Error",
           message: "Please add at least one valid item",
           type: "error",
-        })
-        setLoading(false)
-        return
+          category: "system",
+        });
+        setLoading(false);
+        return;
       }
 
       // Create invoice
@@ -252,80 +318,73 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
         status: "completed",
         ocr_processed: !!formData.ocr_image_url,
         ocr_image_url: formData.ocr_image_url || null,
-      }
+      };
 
       const { data: invoice, error: invoiceError } = await supabase
         .from("inventory_invoices")
         .insert([invoiceData])
         .select()
-        .single()
+        .single();
 
-      if (invoiceError) throw invoiceError
+      if (invoiceError) throw invoiceError;
 
       // Create invoice items and update stock
       for (const item of validItems) {
         // Create invoice item
-        const { error: itemError } = await supabase.from("inventory_invoice_items").insert([
-          {
-            invoice_id: invoice.id,
-            item_id: item.item_id,
-            description: item.description,
-            unit: item.unit,
-            quantity_requested: item.quantity_requested,
-            quantity_issued: item.quantity_issued,
-          },
-        ])
+        const { error: itemError } = await supabase
+          .from("inventory_invoice_items")
+          .insert([
+            {
+              invoice_id: invoice.id,
+              item_id: item.item_id,
+              description: item.description,
+              unit: item.unit,
+              quantity_requested: Number(item.quantity_requested),
+              quantity_issued: Number(item.quantity_issued),
+            },
+          ]);
 
-        if (itemError) throw itemError
+        if (itemError) throw itemError;
 
         // Update inventory stock
-        const { error: stockError } = await supabase.rpc("update_inventory_stock", {
-          item_id: item.item_id,
-          quantity_change: item.quantity_issued,
-        })
 
-        if (stockError) {
-          // If RPC doesn't exist, update manually
-          const { data: currentItem } = await supabase
+        // If RPC doesn't exist, update manually
+        const { data: currentItem } = await supabase
+          .from("inventory_items")
+          .select("current_stock")
+          .eq("id", item.item_id)
+          .single();
+
+        if (currentItem) {
+          const currentStock = (currentItem as { current_stock: number })
+            .current_stock;
+          await supabase
             .from("inventory_items")
-            .select("current_stock")
-            .eq("id", item.item_id)
-            .single()
-
-          if (currentItem) {
-            const currentStock = (currentItem as { current_stock: number }).current_stock
-            await supabase
-              .from("inventory_items")
-              .update({
-                current_stock: currentStock + item.quantity_issued,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", item.item_id)
-          }
+            .update({
+              current_stock: currentStock + Number(item.quantity_issued),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", item.item_id);
         }
 
         // Create drum tracking for cable items
-        const inventoryItem = inventoryItems.find((inv) => inv.id === item.item_id)
-        if (inventoryItem?.item_type === "cable" && inventoryItem.drum_size) {
-          const drumCount = Math.ceil(item.quantity_issued / inventoryItem.drum_size)
-
-          for (let i = 1; i <= drumCount; i++) {
-            const drumNumber = `${autoInvoiceNumber}-DRUM-${i.toString().padStart(2, "0")}`
-            const drumQuantity = Math.min(
-              inventoryItem.drum_size,
-              item.quantity_issued - (i - 1) * inventoryItem.drum_size,
-            )
-
+        const inventoryItem = inventoryItems.find(
+          (inv) => inv.id === item.item_id
+        );
+        if (inventoryItem?.name?.toLowerCase().includes("drop wire cable")) {
+          // Only use the provided drum_number for Drop Wire Cable
+          console.log(item);
+          if (item.drum_number) {
             await supabase.from("drum_tracking").insert([
               {
-                drum_number: drumNumber,
+                drum_number: item.drum_number,
                 item_id: item.item_id,
-                initial_quantity: drumQuantity,
-                current_quantity: drumQuantity,
+                initial_quantity: Number(item.quantity_issued),
+                current_quantity: Number(item.quantity_issued),
                 received_date: formData.date,
                 status: "active",
               },
-            ])
+            ]);
           }
         }
       }
@@ -334,19 +393,20 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
         title: "Success",
         message: `Invoice ${autoInvoiceNumber} created successfully`,
         type: "success",
-      })
+        category: "system",
+      });
 
-      onSuccess()
-      onOpenChange(false)
+      onSuccess();
+      onOpenChange(false);
 
       // Reset form
       setFormData({
-        warehouse: "",
+        warehouse: "Main Warehouse", // Reset to default warehouse
         date: new Date().toISOString().split("T")[0],
         issued_by: "",
         drawn_by: "",
         ocr_image_url: "",
-      })
+      });
       setInvoiceItems([
         {
           id: "1",
@@ -355,79 +415,88 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
           unit: "",
           quantity_requested: 0,
           quantity_issued: 0,
+          drum_number: "",
         },
-      ])
+      ]);
     } catch (error: any) {
       addNotification({
         title: "Error",
         message: error.message,
         type: "error",
-      })
+        category: "system",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+      <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto'>
         <DialogHeader>
           <DialogTitle>Add Inventory Invoice</DialogTitle>
           <DialogDescription>
-            Create a new inventory receipt with automatic stock updates and drum tracking.
+            Create a new inventory receipt with automatic stock updates and drum
+            tracking.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className='space-y-6'>
           {/* Invoice Header */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+              <CardTitle className='flex items-center justify-between'>
                 Invoice Information
-                <Badge variant="outline" className="font-mono">
+                <Badge variant='outline' className='font-mono'>
                   {autoInvoiceNumber}
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className='space-y-4'>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                 <div>
-                  <Label htmlFor="warehouse">Warehouse</Label>
+                  <Label htmlFor='warehouse'>Warehouse</Label>
                   <Input
-                    id="warehouse"
+                    id='warehouse'
                     value={formData.warehouse}
-                    onChange={(e) => handleInputChange("warehouse", e.target.value)}
-                    placeholder="Warehouse location"
+                    onChange={(e) =>
+                      handleInputChange("warehouse", e.target.value)
+                    }
+                    placeholder='Warehouse location'
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="date">Date</Label>
+                  <Label htmlFor='date'>Date</Label>
                   <Input
-                    id="date"
-                    type="date"
+                    id='date'
+                    type='date'
                     value={formData.date}
                     onChange={(e) => handleInputChange("date", e.target.value)}
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="issued_by">Issued By</Label>
+                  <Label htmlFor='issued_by'>Issued By</Label>
                   <Input
-                    id="issued_by"
+                    id='issued_by'
                     value={formData.issued_by}
-                    onChange={(e) => handleInputChange("issued_by", e.target.value)}
-                    placeholder="Person who issued the materials"
+                    onChange={(e) =>
+                      handleInputChange("issued_by", e.target.value)
+                    }
+                    placeholder='Person who issued the materials'
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="drawn_by">Drawn By</Label>
+                  <Label htmlFor='drawn_by'>Collected By</Label>
                   <Input
-                    id="drawn_by"
+                    id='drawn_by'
                     value={formData.drawn_by}
-                    onChange={(e) => handleInputChange("drawn_by", e.target.value)}
-                    placeholder="Person who received the materials"
+                    onChange={(e) =>
+                      handleInputChange("drawn_by", e.target.value)
+                    }
+                    placeholder='Person who received the materials'
                     required
                   />
                 </div>
@@ -435,160 +504,236 @@ export function AddInventoryInvoiceModal({ open, onOpenChange, onSuccess }: AddI
             </CardContent>
           </Card>
 
-          {/* OCR Upload Section */}
-          <Card>
+          {/* OCR Upload Section - under development */}
+          {/* <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Camera className="h-5 w-5" />
+              <CardTitle className='flex items-center gap-2'>
+                <Camera className='h-5 w-5' />
                 OCR Invoice Processing
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className='space-y-4'>
                 <div>
-                  <Label htmlFor="invoice_image">Upload Invoice Image</Label>
-                  <div className="mt-2">
+                  <Label htmlFor='invoice_image'>Upload Invoice Image</Label>
+                  <div className='mt-2'>
                     <Input
-                      id="invoice_image"
-                      type="file"
-                      accept="image/*"
+                      id='invoice_image'
+                      type='file'
+                      accept='image/*'
                       onChange={handleImageUpload}
                       disabled={ocrProcessing}
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Upload a photo of the physical invoice to automatically extract item details
+                  <p className='text-xs text-muted-foreground mt-1'>
+                    Upload a photo of the physical invoice to automatically
+                    extract item details
                   </p>
                 </div>
 
                 {ocrProcessing && (
-                  <div className="flex items-center gap-2 text-blue-600">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Processing invoice image...</span>
+                  <div className='flex items-center gap-2 text-blue-600'>
+                    <Loader2 className='h-4 w-4 animate-spin' />
+                    <span className='text-sm'>Processing invoice image...</span>
                   </div>
                 )}
 
                 {formData.ocr_image_url && !ocrProcessing && (
-                  <div className="flex items-center gap-2 text-green-600">
-                    <CheckCircle className="h-4 w-4" />
-                    <span className="text-sm">OCR processing completed. Review items below.</span>
+                  <div className='flex items-center gap-2 text-green-600'>
+                    <CheckCircle className='h-4 w-4' />
+                    <span className='text-sm'>
+                      OCR processing completed. Review items below.
+                    </span>
                   </div>
                 )}
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Invoice Items */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+              <CardTitle className='flex items-center justify-between'>
                 Invoice Items
-                <Button type="button" onClick={addNewRow} size="sm" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Row
-                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {invoiceItems.map((item, index) => (
-                  <div key={item.id} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-3">
-                      <Label>Item</Label>
-                      <Select value={item.item_id} onValueChange={(value) => handleItemChange(index, "item_id", value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select item" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {inventoryItems.map((invItem) => (
-                            <SelectItem key={invItem.id} value={invItem.id}>
-                              {invItem.name} ({invItem.unit})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+              <div className='space-y-4'>
+                {invoiceItems.map((item, index) => {
+                  const selectedItem = inventoryItems.find(
+                    (inv) => inv.id === item.item_id
+                  );
+                  // Show drum number input if item type contains 'drop wire cable' (case-insensitive)
+                  const isDropWireCable = selectedItem?.name
+                    ?.toLowerCase()
+                    .includes("drop wire cable");
+                  return (
+                    <div
+                      key={item.id}
+                      className='grid grid-cols-12 gap-2 items-end'
+                    >
+                      <div className='col-span-3'>
+                        <Label>Item</Label>
+                        <Select
+                          value={item.item_id}
+                          onValueChange={(value) =>
+                            handleItemChange(index, "item_id", value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder='Select item' />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {inventoryItems.map((invItem) => (
+                              <SelectItem key={invItem.id} value={invItem.id}>
+                                {invItem.name} ({invItem.unit})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className='col-span-3'>
+                        <Label>Description</Label>
+                        <Input
+                          value={item.description}
+                          onChange={(e) =>
+                            handleItemChange(
+                              index,
+                              "description",
+                              e.target.value
+                            )
+                          }
+                          placeholder='Item description'
+                        />
+                      </div>
+                      <div className='col-span-1'>
+                        <Label>Unit</Label>
+                        <Input
+                          value={item.unit}
+                          onChange={(e) =>
+                            handleItemChange(index, "unit", e.target.value)
+                          }
+                          placeholder='Unit'
+                          readOnly
+                        />
+                      </div>
+                      <div className='col-span-2'>
+                        <Label>Qty Requested</Label>
+                        <Input
+                          type='number'
+                          min='0'
+                          step='0.01'
+                          value={item.quantity_requested || ""}
+                          onChange={(e) =>
+                            handleItemChange(
+                              index,
+                              "quantity_requested",
+                              e.target.value === "" ? "" : e.target.value
+                            )
+                          }
+                        />
+                      </div>
+                      <div className='col-span-2'>
+                        <Label>Qty Issued</Label>
+                        <Input
+                          type='number'
+                          min='0'
+                          step='0.01'
+                          value={item.quantity_issued || ""}
+                          onChange={(e) =>
+                            handleItemChange(
+                              index,
+                              "quantity_issued",
+                              e.target.value === "" ? "" : e.target.value
+                            )
+                          }
+                        />
+                      </div>
+                      <div className='col-span-1'>
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          onClick={() => removeRow(index)}
+                          disabled={invoiceItems.length === 1}
+                        >
+                          <Trash2 className='h-4 w-4' />
+                        </Button>
+                      </div>
+                      {isDropWireCable && (
+                        <div className='col-span-12 mt-2 flex gap-2 items-center'>
+                          <Label>Drum Number</Label>
+                          <Input
+                            value={item.drum_number || ""}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "drum_number",
+                                e.target.value
+                              )
+                            }
+                            placeholder='Enter drum number'
+                            className='max-w-xs'
+                            required
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div className="col-span-3">
-                      <Label>Description</Label>
-                      <Input
-                        value={item.description}
-                        onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                        placeholder="Item description"
-                      />
-                    </div>
-                    <div className="col-span-1">
-                      <Label>Unit</Label>
-                      <Input
-                        value={item.unit}
-                        onChange={(e) => handleItemChange(index, "unit", e.target.value)}
-                        placeholder="Unit"
-                        readOnly
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label>Qty Requested</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.quantity_requested}
-                        onChange={(e) =>
-                          handleItemChange(index, "quantity_requested", Number.parseFloat(e.target.value) || 0)
-                        }
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label>Qty Issued</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.quantity_issued}
-                        onChange={(e) =>
-                          handleItemChange(index, "quantity_issued", Number.parseFloat(e.target.value) || 0)
-                        }
-                      />
-                    </div>
-                    <div className="col-span-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeRow(index)}
-                        disabled={invoiceItems.length === 1}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              <Separator className="my-4" />
+              <div className='mt-4 flex flex-row-reverse justify-start gap-4 items-center'>
+                <Button
+                  type='button'
+                  size='sm'
+                  onClick={addNewRow}
+                  className='gap-2'
+                >
+                  <Plus className='h-4 w-4' />
+                  Add Item
+                </Button>
+                {invoiceItems.length > 1 && (
+                  <span className='text-sm text-muted-foreground'>
+                    Click "Add Item" to create a new row
+                  </span>
+                )}
+              </div>
+              <Separator className='my-4' />
 
-              <div className="text-sm text-muted-foreground">
+              <div className='text-sm text-muted-foreground'>
                 <p>
                   <strong>Total Items:</strong>{" "}
-                  {invoiceItems.filter((item) => item.item_id && item.quantity_issued > 0).length}
+                  {
+                    invoiceItems.filter(
+                      (item) => item.item_id && Number(item.quantity_issued) > 0
+                    ).length
+                  }
                 </p>
                 <p>
                   <strong>Total Quantity:</strong>{" "}
-                  {invoiceItems.reduce((sum, item) => sum + (item.quantity_issued || 0), 0).toFixed(2)}
+                  {invoiceItems
+                    .reduce((sum, item) => sum + (item.quantity_issued || 0), 0)
+                    .toFixed(2)}
                 </p>
               </div>
             </CardContent>
           </Card>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type='submit' disabled={loading}>
               {loading ? "Creating Invoice..." : "Create Invoice"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

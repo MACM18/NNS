@@ -23,7 +23,6 @@ interface Profile {
   id: string
   full_name: string
   role: string
-  avatar_url?: string
   email?: string
 }
 
@@ -55,7 +54,7 @@ export function AssigneeManagementModal({ open, onOpenChange, lineId, onSuccess 
     try {
       const { data: profiles, error } = await supabase
         .from("profiles")
-        .select("id, full_name, role, avatar_url, email")
+        .select("id, full_name, role, email")
         .order("full_name")
 
       if (error) throw error
@@ -81,7 +80,6 @@ export function AssigneeManagementModal({ open, onOpenChange, lineId, onSuccess 
             id,
             full_name,
             role,
-            avatar_url,
             email
           )
         `)
@@ -201,7 +199,6 @@ export function AssigneeManagementModal({ open, onOpenChange, lineId, onSuccess 
                 {currentAssignees.map((assignee) => (
                   <Badge key={assignee.id} variant="secondary" className="flex items-center gap-1">
                     <Avatar className="h-4 w-4">
-                      <AvatarImage src={assignee.avatar_url || "/placeholder.svg"} />
                       <AvatarFallback className="text-xs">{assignee.full_name?.charAt(0) || "U"}</AvatarFallback>
                     </Avatar>
                     {assignee.full_name}
@@ -221,7 +218,6 @@ export function AssigneeManagementModal({ open, onOpenChange, lineId, onSuccess 
               >
                 <Checkbox checked={selectedUsers.has(user.id)} onChange={() => handleUserToggle(user.id)} />
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.avatar_url || "/placeholder.svg"} />
                   <AvatarFallback>{user.full_name?.charAt(0) || "U"}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
