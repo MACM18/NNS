@@ -34,7 +34,7 @@ import { Header } from "@/components/layout/header";
 import { AddInventoryInvoiceModal } from "@/components/modals/add-inventory-invoice-modal";
 import { AddWasteModal } from "@/components/modals/add-waste-modal";
 import { ManageInventoryItemsModal } from "@/components/modals/manage-inventory-items-modal";
-import { EditInvoiceModal } from "@/components/modals/edit-invoice-modal";
+import { EditInventoryInvoiceModal } from "@/components/modals/edit-inventory-invoice-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -233,9 +233,9 @@ export default function InventoryPage() {
         totalStockValue > 0 ? (totalWaste / totalStockValue) * 100 : 0;
 
       setStats({
-        totalItems: totalItems || 0,
-        lowStockAlerts: lowStockAlerts || 0,
-        activeDrums: activeDrums || 0,
+        totalItems: typeof totalItems === "number" ? totalItems : 0,
+        lowStockAlerts: typeof lowStockAlerts === "number" ? lowStockAlerts : 0,
+        activeDrums: typeof activeDrums === "number" ? activeDrums : 0,
         monthlyWastePercentage: Number(wastePercentage.toFixed(1)),
       });
     } catch (error) {
@@ -252,7 +252,23 @@ export default function InventoryPage() {
         .limit(10);
 
       if (error) throw error;
-      setInvoices((data || []) as InventoryInvoice[]);
+      setInvoices(
+        Array.isArray(data)
+          ? data.filter(
+              (d): d is InventoryInvoice =>
+                d &&
+                typeof d.id === "string" &&
+                typeof d.invoice_number === "string" &&
+                typeof d.warehouse === "string" &&
+                typeof d.date === "string" &&
+                typeof d.issued_by === "string" &&
+                typeof d.drawn_by === "string" &&
+                typeof d.total_items === "number" &&
+                typeof d.status === "string" &&
+                typeof d.created_at === "string"
+            )
+          : []
+      );
     } catch (error) {
       console.error("Error fetching invoices:", error);
     }
@@ -266,7 +282,21 @@ export default function InventoryPage() {
         .order("name");
 
       if (error) throw error;
-      setInventoryItems((data || []) as InventoryItem[]);
+      setInventoryItems(
+        Array.isArray(data)
+          ? data.filter(
+              (d): d is InventoryItem =>
+                d &&
+                typeof d.id === "string" &&
+                typeof d.name === "string" &&
+                typeof d.unit === "string" &&
+                typeof d.item_type === "string" &&
+                typeof d.current_stock === "number" &&
+                typeof d.reorder_level === "number" &&
+                typeof d.last_updated === "string"
+            )
+          : []
+      );
     } catch (error) {
       console.error("Error fetching inventory items:", error);
     }
@@ -593,7 +623,11 @@ export default function InventoryPage() {
                                     <Button
                                       size='sm'
                                       variant='secondary'
-                                      onClick={() => {
+                                      onClick={async () => {
+                                        // Ensure invoice items are fetched before opening modal
+                                        if (!invoiceItems[invoice.id]) {
+                                          await fetchInvoiceItems(invoice.id);
+                                        }
                                         setSelectedInvoice(invoice);
                                         setEditInvoiceModalOpen(true);
                                       }}
@@ -794,21 +828,20 @@ export default function InventoryPage() {
                                     drum.initial_quantity) *
                                   100
                                 ).toFixed(1)
-                              : 0;
-
+                              : "0.0";
                           return (
                             <TableRow key={drum.id}>
-                              <TableCell className='font-mono text-sm'>
-                                {drum.drum_number}
-                              </TableCell>
-                              <TableCell>{drum.item_name}</TableCell>
+                              <TableCell>{drum.drum_number}</TableCell>
+                              <TableCell>{drum.item_name || "-"}</TableCell>
                               <TableCell>{drum.initial_quantity}</TableCell>
                               <TableCell>{drum.current_quantity}</TableCell>
                               <TableCell>{usagePercentage}%</TableCell>
                               <TableCell>
-                                {new Date(
-                                  drum.received_date
-                                ).toLocaleDateString()}
+                                {drum.received_date
+                                  ? new Date(
+                                      drum.received_date
+                                    ).toLocaleDateString()
+                                  : "N/A"}
                               </TableCell>
                               <TableCell>
                                 {getStatusBadge(drum.status)}
@@ -820,11 +853,10 @@ export default function InventoryPage() {
                     </Table>
                   ) : (
                     <div className='text-center py-8 text-muted-foreground'>
-                      <Package className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                      <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
                       <p>No drums found</p>
                       <p className='text-sm'>
-                        Drums are automatically created when cable items are
-                        received
+                        Add cable drums through invoices to track usage
                       </p>
                     </div>
                   )}
@@ -837,7 +869,7 @@ export default function InventoryPage() {
                 <CardHeader>
                   <CardTitle>Waste Reports</CardTitle>
                   <CardDescription>
-                    Monthly waste tracking and analysis
+                    Track reported waste and reasons
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -852,22 +884,26 @@ export default function InventoryPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Date</TableHead>
                           <TableHead>Item</TableHead>
                           <TableHead>Quantity</TableHead>
                           <TableHead>Reason</TableHead>
+                          <TableHead>Date</TableHead>
                           <TableHead>Reported By</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {wasteReports.map((waste) => (
                           <TableRow key={waste.id}>
-                            <TableCell>
-                              {new Date(waste.waste_date).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>{waste.item_name}</TableCell>
+                            <TableCell>{waste.item_name || "-"}</TableCell>
                             <TableCell>{waste.quantity}</TableCell>
                             <TableCell>{waste.waste_reason}</TableCell>
+                            <TableCell>
+                              {waste.waste_date
+                                ? new Date(
+                                    waste.waste_date
+                                  ).toLocaleDateString()
+                                : "N/A"}
+                            </TableCell>
                             <TableCell>{waste.reported_by}</TableCell>
                           </TableRow>
                         ))}
@@ -878,7 +914,7 @@ export default function InventoryPage() {
                       <TrendingDown className='h-12 w-12 mx-auto mb-4 opacity-50' />
                       <p>No waste reports found</p>
                       <p className='text-sm'>
-                        Record waste to track material losses and costs
+                        Record waste to track inventory loss
                       </p>
                     </div>
                   )}
@@ -887,96 +923,80 @@ export default function InventoryPage() {
             </TabsContent>
           </Tabs>
         </main>
-
         {/* Modals */}
         <AddInventoryInvoiceModal
           open={addInvoiceModalOpen}
           onOpenChange={setAddInvoiceModalOpen}
+        />
+        <EditInventoryInvoiceModal
+          open={editInvoiceModalOpen}
+          invoice={selectedInvoice}
+          invoiceItems={
+            selectedInvoice ? invoiceItems[selectedInvoice.id] || [] : []
+          }
+          onClose={() => setEditInvoiceModalOpen(false)}
           onSuccess={handleSuccess}
+          supabase={supabase}
+          addNotification={addNotification}
         />
         <AddWasteModal
           open={addWasteModalOpen}
           onOpenChange={setAddWasteModalOpen}
-          onSuccess={handleSuccess}
         />
         <ManageInventoryItemsModal
           open={manageItemsModalOpen}
           onOpenChange={setManageItemsModalOpen}
           userRole={role}
         />
-        {/* Edit Invoice Modal (placeholder) */}
-        {editInvoiceModalOpen && (
-          <EditInvoiceModal
-            open={editInvoiceModalOpen}
-            invoice={selectedInvoice}
-            onClose={() => {
-              setEditInvoiceModalOpen(false);
-              setSelectedInvoice(null);
-            }}
-            onSuccess={handleSuccess}
-            supabase={supabase}
-            addNotification={addNotification}
-          />
-        )}
         {/* Delete Confirmation Dialog */}
-        {deleteConfirmOpen && (
-          <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Delete Invoice</DialogTitle>
-              </DialogHeader>
-              <div className="py-2">
-                <p>
-                  Are you sure you want to delete invoice{" "}
-                  <span className="font-mono font-semibold">
-                    {invoiceToDelete?.invoice_number}
-                  </span>
-                  ?
-                </p>
-              </div>
-              <DialogFooter className="mt-4">
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => setDeleteConfirmOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  type="button"
-                  onClick={async () => {
-                    if (!invoiceToDelete) return;
-                    const { error } = await supabase
-                      .from("inventory_invoices")
-                      .delete()
-                      .eq("id", invoiceToDelete.id);
-                    if (error) {
-                      addNotification({
-                        title: "Error",
-                        message: `Failed to delete invoice: ${error.message}`,
-                        type: "error",
-                        category: "system",
-                      });
-                    } else {
+        <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Invoice</DialogTitle>
+            </DialogHeader>
+            <p>Are you sure you want to delete this invoice?</p>
+            <DialogFooter>
+              <Button
+                variant='secondary'
+                onClick={() => setDeleteConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant='destructive'
+                onClick={async () => {
+                  if (invoiceToDelete) {
+                    try {
+                      const { error } = await supabase
+                        .from("inventory_invoices")
+                        .delete()
+                        .eq("id", invoiceToDelete.id);
+                      if (error) throw error;
                       addNotification({
                         title: "Invoice Deleted",
-                        message: `Invoice ${invoiceToDelete.invoice_number} deleted successfully`,
+                        message: `Invoice #${invoiceToDelete.invoice_number} deleted successfully`,
                         type: "success",
                         category: "system",
                       });
-                      setRefreshTrigger((prev) => prev + 1);
+                      setDeleteConfirmOpen(false);
+                      setInvoiceToDelete(null);
+                      handleSuccess();
+                    } catch (error) {
+                      addNotification({
+                        title: "Error",
+                        message: "Failed to delete invoice",
+                        type: "error",
+                        category: "system",
+                      });
                     }
-                    setDeleteConfirmOpen(false);
-                    setInvoiceToDelete(null);
-                  }}
-                >
-                  Delete
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
+                  }
+                }}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarInset>
     </SidebarProvider>
   );
