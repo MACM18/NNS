@@ -90,7 +90,10 @@ export default function LineDetailsPage() {
           lines?.filter(
             (l: any) => l.completed === true || l.status === "completed"
           ).length || 0,
-        inProgress: 0, // no explicit tracking column
+        inProgress:
+          lines?.filter(
+            (l: any) => l.status === "in_progress" || l.status === "ongoing"
+          ).length || 0,
         pending:
           lines?.filter(
             (l: any) => !(l.completed === true || l.status === "completed")

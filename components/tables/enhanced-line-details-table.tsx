@@ -134,6 +134,7 @@ export function LineDetailsTable({
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedLine, setSelectedLine] = useState<LineDetail | null>(null);
+  const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
@@ -176,12 +177,17 @@ export function LineDetailsTable({
         const assignees = (line.line_assignees || [])
           .map((a: any) => a.profiles)
           .filter(Boolean);
+        let normalizedStatus = line.status;
+        if (line.completed === true || line.status === "completed") {
+          normalizedStatus = "completed";
+        } else if (line.status === "in_progress") {
+          normalizedStatus = "in_progress";
+        } else if (!line.status || line.status === "pending") {
+          normalizedStatus = "pending";
+        }
         return {
           ...line,
-          status:
-            line.completed === true || line.status === "completed"
-              ? "completed"
-              : "pending",
+          status: normalizedStatus,
           assignees,
           // default 0s for any nullable material columns
           c_hook: line.c_hook ?? 0,
@@ -551,305 +557,368 @@ export function LineDetailsTable({
   }
 
   return (
-      <div className='space-y-4'>
-        {/* Search and Filter Controls */}
-        <div className='flex flex-col sm:flex-row gap-4'>
-          <div className='relative flex-1'>
-            <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
-            <Input
-              placeholder='Search by name, phone, address, or DP...'
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className='pl-10'
-            />
-          </div>
-          <Select
-            value={statusFilter}
-            onValueChange={(v) =>
-              setStatusFilter(v as "all" | "completed" | "pending")
-            }
-          >
-            <SelectTrigger className='w-[150px]'>
-              <SelectValue placeholder='Status' />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value='all'>All Status</SelectItem>
-              <SelectItem value='pending'>Pending</SelectItem>
-              <SelectItem value='completed'>Completed</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={sortField} onValueChange={setSortField}>
-            <SelectTrigger className='w-[180px]'>
-              <SelectValue placeholder='Sort by' />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value='date'>Installation Date</SelectItem>
-              <SelectItem value='name'>Customer Name</SelectItem>
-              <SelectItem value='telephone_no'>Phone Number</SelectItem>
-              <SelectItem value='dp'>DP</SelectItem>
-              <SelectItem value='total_cable'>Cable Distance</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            variant='outline'
-            onClick={() =>
-              setSortDirection(sortDirection === "asc" ? "desc" : "asc")
-            }
-          >
-            {sortDirection === "asc" ? "↑" : "↓"}
-          </Button>
+    <div className='space-y-4'>
+      {/* Search and Filter Controls */}
+      <div className='flex flex-col sm:flex-row gap-4'>
+        <div className='relative flex-1'>
+          <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+          <Input
+            placeholder='Search by name, phone, address, or DP...'
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className='pl-10'
+          />
         </div>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) =>
+            setStatusFilter(v as "all" | "completed" | "pending")
+          }
+        >
+          <SelectTrigger className='w-[150px]'>
+            <SelectValue placeholder='Status' />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value='all'>All Status</SelectItem>
+            <SelectItem value='pending'>Pending</SelectItem>
+            <SelectItem value='completed'>Completed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sortField} onValueChange={setSortField}>
+          <SelectTrigger className='w-[180px]'>
+            <SelectValue placeholder='Sort by' />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value='date'>Installation Date</SelectItem>
+            <SelectItem value='name'>Customer Name</SelectItem>
+            <SelectItem value='telephone_no'>Phone Number</SelectItem>
+            <SelectItem value='dp'>DP</SelectItem>
+            <SelectItem value='total_cable'>Cable Distance</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant='outline'
+          onClick={() =>
+            setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+          }
+        >
+          {sortDirection === "asc" ? "↑" : "↓"}
+        </Button>
+      </div>
 
-        {/* Results Count */}
-        <div className='text-sm text-muted-foreground'>
-          Showing {filteredData.length} of {data.length} lines
-        </div>
+      {/* Results Count */}
+      <div className='text-sm text-muted-foreground'>
+        Showing {filteredData.length} of {data.length} lines
+      </div>
 
-        {/* Table */}
-        <div className='border rounded-lg'>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead
-                  className='cursor-pointer hover:bg-muted/50'
-                  onClick={() => handleSort("telephone_no")}
-                >
-                  Line No.
-                  {sortField === "telephone_no" && (
-                    <ChevronDown
-                      className={`inline ml-1 h-4 w-4 ${
-                        sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                    />
-                  )}
-                </TableHead>
-                <TableHead
-                  className='cursor-pointer hover:bg-muted/50'
-                  onClick={() => handleSort("name")}
-                >
-                  Customer
-                  {sortField === "name" && (
-                    <ChevronDown
-                      className={`inline ml-1 h-4 w-4 ${
-                        sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                    />
-                  )}
-                </TableHead>
-                <TableHead
-                  className='cursor-pointer hover:bg-muted/50'
-                  onClick={() => handleSort("dp")}
-                >
-                  DP
-                  {sortField === "dp" && (
-                    <ChevronDown
-                      className={`inline ml-1 h-4 w-4 ${
-                        sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                    />
-                  )}
-                </TableHead>
-                <TableHead
-                  className='cursor-pointer hover:bg-muted/50'
-                  onClick={() => handleSort("total_cable")}
-                >
-                  Distance
-                  {sortField === "total_cable" && (
-                    <ChevronDown
-                      className={`inline ml-1 h-4 w-4 ${
-                        sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                    />
-                  )}
-                </TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Assignees</TableHead>
-                <TableHead
-                  className='cursor-pointer hover:bg-muted/50'
-                  onClick={() => handleSort("date")}
-                >
-                  Date
-                  {sortField === "date" && (
-                    <ChevronDown
-                      className={`inline ml-1 h-4 w-4 ${
-                        sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                    />
-                  )}
-                </TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredData.map((line) => (
-                <React.Fragment key={line.id}>
+      {/* Table */}
+      <div className='border rounded-lg'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead
+                className='cursor-pointer hover:bg-muted/50'
+                onClick={() => handleSort("telephone_no")}
+              >
+                Line No.
+                {sortField === "telephone_no" && (
+                  <ChevronDown
+                    className={`inline ml-1 h-4 w-4 ${
+                      sortDirection === "asc" ? "rotate-180" : ""
+                    }`}
+                  />
+                )}
+              </TableHead>
+              <TableHead
+                className='cursor-pointer hover:bg-muted/50'
+                onClick={() => handleSort("name")}
+              >
+                Customer
+                {sortField === "name" && (
+                  <ChevronDown
+                    className={`inline ml-1 h-4 w-4 ${
+                      sortDirection === "asc" ? "rotate-180" : ""
+                    }`}
+                  />
+                )}
+              </TableHead>
+              <TableHead
+                className='cursor-pointer hover:bg-muted/50'
+                onClick={() => handleSort("dp")}
+              >
+                DP
+                {sortField === "dp" && (
+                  <ChevronDown
+                    className={`inline ml-1 h-4 w-4 ${
+                      sortDirection === "asc" ? "rotate-180" : ""
+                    }`}
+                  />
+                )}
+              </TableHead>
+              <TableHead
+                className='cursor-pointer hover:bg-muted/50'
+                onClick={() => handleSort("total_cable")}
+              >
+                Distance
+                {sortField === "total_cable" && (
+                  <ChevronDown
+                    className={`inline ml-1 h-4 w-4 ${
+                      sortDirection === "asc" ? "rotate-180" : ""
+                    }`}
+                  />
+                )}
+              </TableHead>
+              <TableHead>Assignees</TableHead>
+              <TableHead
+                className='cursor-pointer hover:bg-muted/50'
+                onClick={() => handleSort("date")}
+              >
+                Date
+                {sortField === "date" && (
+                  <ChevronDown
+                    className={`inline ml-1 h-4 w-4 ${
+                      sortDirection === "asc" ? "rotate-180" : ""
+                    }`}
+                  />
+                )}
+              </TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredData.map((line) => (
+              <React.Fragment key={line.id}>
                 <TableRow>
-                    <TableCell className='font-medium'>
-                      {line.telephone_no}
-                    </TableCell>
-                    <TableCell>{line.name}</TableCell>
-                    <TableCell>
-                      <Badge variant='outline' className='font-mono text-xs'>
-                        {line.dp}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className='font-medium'>
-                        {line.total_cable?.toFixed(2) || "0.00"}m
-                      </span>
-                    </TableCell>
-                  <TableCell>{getStatusBadge(line)}</TableCell>
-                    <TableCell>
-                      <div className='flex -space-x-1'>
-                        {line.assignees?.slice(0, 3).map((assignee) => (
-                          <Avatar
-                            key={assignee.id}
-                            className='h-6 w-6 border-2 border-background'
-                          >
-                            <AvatarFallback className='text-xs'>
-                              {assignee.full_name?.charAt(0) || "U"}
-                            </AvatarFallback>
-                          </Avatar>
-                        ))}
-                        {line.assignees && line.assignees.length > 3 && (
-                          <div className='h-6 w-6 rounded-full bg-muted border-2 border-background flex items-center justify-center'>
-                            <span className='text-xs'>
-                              +{line.assignees.length - 3}
+                  <TableCell className='font-medium'>
+                    {line.telephone_no}
+                  </TableCell>
+                  <TableCell>{line.name}</TableCell>
+                  <TableCell>
+                    <Badge variant='outline' className='font-mono text-xs'>
+                      {line.dp}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className='font-medium'>
+                      {line.total_cable?.toFixed(2) || "0.00"}m
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className='relative'>
+                      <Select
+                        value={
+                          line.status === "in_progress"
+                            ? "in_progress"
+                            : line.status || "pending"
+                        }
+                        aria-label='Change status'
+                        disabled={statusLoadingId === line.id}
+                        onValueChange={async (newStatus) => {
+                          setStatusLoadingId(line.id);
+                          setData((prev) =>
+                            prev.map((l) =>
+                              l.id === line.id ? { ...l, status: newStatus } : l
+                            )
+                          );
+                          const { error } = await supabase
+                            .from("line_details")
+                            .update({ status: newStatus })
+                            .eq("id", line.id);
+                          if (error) {
+                            addNotification({
+                              title: "Error",
+                              message: error.message,
+                              type: "error",
+                              category: "system",
+                            });
+                            setData((prev) =>
+                              prev.map((l) =>
+                                l.id === line.id
+                                  ? { ...l, status: line.status }
+                                  : l
+                              )
+                            );
+                          } else {
+                            addNotification({
+                              title: "Success",
+                              message: `Status updated to ${newStatus}.`,
+                              type: "success",
+                              category: "system",
+                            });
+                            onRefresh();
+                          }
+                          setStatusLoadingId(null);
+                        }}
+                      >
+                        <SelectTrigger className='w-[130px]'>
+                          <SelectValue />
+                          {statusLoadingId === line.id && (
+                            <span className='absolute right-2 top-1/2 -translate-y-1/2'>
+                              <span className='animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full inline-block' />
                             </span>
-                          </div>
-                        )}
-                        {(!line.assignees || line.assignees.length === 0) && (
-                          <span className='text-xs text-muted-foreground'>
-                            None
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(line.date).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className='flex gap-2'>
-                            <Button
-                              variant='ghost'
-                              size='sm'
-                              onClick={() => toggleRowExpansion(line.id)}
-                            >
-                              <Eye className='h-4 w-4' />
-                            </Button>
-                      {/* Edit button for admin/moderator only */}
-                        {role && ["admin", "moderator"].includes(role) && (
-                              <Button
-                                variant='outline'
-                                size='sm'
-                                onClick={() => handleEditLine(line)}
-                              >
-                                <Edit2 className='h-4 w-4 mr-1' /> Edit
-                              </Button>
-                        )}
-                      {/* Delete button for admin only */}
-                        {role === "admin" && (
-                              <Button
-                                variant='destructive'
-                                size='sm'
-                                onClick={() => handleDeleteLine(line)}
-                              >
-                                <Trash2 className='h-4 w-4 mr-1' /> Delete
-                              </Button>
-                        )}
-                      {/* Complete button for moderator/admin only, and only if not already completed */}
-                        {role &&
-                          ["admin", "moderator"].includes(role) &&
-                          line.status !== "completed" && (
-                                <Button
-                                  variant='outline'
-                                  size='sm'
-                                  onClick={() => handleCompleteLine(line.id)}
-                                >
-                                  Complete
-                                </Button>
                           )}
-                      </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value='pending'>Pending</SelectItem>
+                          <SelectItem value='in_progress'>
+                            In Progress
+                          </SelectItem>
+                          <SelectItem value='completed'>Completed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className='flex -space-x-1'>
+                      {line.assignees?.slice(0, 3).map((assignee) => (
+                        <Avatar
+                          key={assignee.id}
+                          className='h-6 w-6 border-2 border-background'
+                        >
+                          <AvatarFallback className='text-xs'>
+                            {assignee.full_name?.charAt(0) || "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                      {line.assignees && line.assignees.length > 3 && (
+                        <div className='h-6 w-6 rounded-full bg-muted border-2 border-background flex items-center justify-center'>
+                          <span className='text-xs'>
+                            +{line.assignees.length - 3}
+                          </span>
+                        </div>
+                      )}
+                      {(!line.assignees || line.assignees.length === 0) && (
+                        <span className='text-xs text-muted-foreground'>
+                          None
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {new Date(line.date).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <div className='flex gap-2'>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        onClick={() => toggleRowExpansion(line.id)}
+                      >
+                        <Eye className='h-4 w-4' />
+                      </Button>
+                      {/* Edit button for admin/moderator only */}
+                      {role && ["admin", "moderator"].includes(role) && (
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={() => handleEditLine(line)}
+                        >
+                          <Edit2 className='h-4 w-4 mr-1' /> Edit
+                        </Button>
+                      )}
+                      {/* Delete button for admin only */}
+                      {role === "admin" && (
+                        <Button
+                          variant='destructive'
+                          size='sm'
+                          onClick={() => handleDeleteLine(line)}
+                        >
+                          <Trash2 className='h-4 w-4 mr-1' /> Delete
+                        </Button>
+                      )}
+                      {/* Complete button for moderator/admin only, and only if not already completed */}
+                      {role &&
+                        ["admin", "moderator"].includes(role) &&
+                        line.status !== "completed" && (
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() => handleCompleteLine(line.id)}
+                          >
+                            Complete
+                          </Button>
+                        )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+                {expandedRows.has(line.id) && (
+                  <TableRow>
+                    <TableCell colSpan={8} className='p-0'>
+                      <ExpandedRowContent line={line} />
                     </TableCell>
                   </TableRow>
-                  {expandedRows.has(line.id) && (
-                    <TableRow>
-                      <TableCell colSpan={8} className='p-0'>
-                        <ExpandedRowContent line={line} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </React.Fragment>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        {filteredData.length === 0 && (
-          <div className='text-center py-8'>
-            <p className='text-muted-foreground'>
-              No line details found matching your criteria.
-            </p>
-          </div>
-        )}
-        {/* Complete Confirmation Dialog */}
-        <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Mark Line as Completed?</DialogTitle>
-            </DialogHeader>
-            <p>
-              Are you sure you want to mark this line as completed? This action
-              cannot be undone.
-            </p>
-            <DialogFooter>
-              <Button
-                variant='outline'
-                onClick={() => setCompleteDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type='button' onClick={confirmCompleteLine}>
-                Confirm
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Modal */}
-        <EditTelephoneLineModal
-          open={editModalOpen}
-          onOpenChange={setEditModalOpen}
-          onSuccess={onRefresh}
-          lineData={selectedLine}
-        />
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete Line?</DialogTitle>
-            </DialogHeader>
-            <p>
-              Are you sure you want to delete this line? This action cannot be
-              undone.
-            </p>
-            <DialogFooter>
-              <Button
-                variant='outline'
-                onClick={() => setDeleteDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type='button'
-                variant='destructive'
-                onClick={confirmDeleteLine}
-              >
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                )}
+              </React.Fragment>
+            ))}
+          </TableBody>
+        </Table>
       </div>
+
+      {filteredData.length === 0 && (
+        <div className='text-center py-8'>
+          <p className='text-muted-foreground'>
+            No line details found matching your criteria.
+          </p>
+        </div>
+      )}
+      {/* Complete Confirmation Dialog */}
+      <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark Line as Completed?</DialogTitle>
+          </DialogHeader>
+          <p>
+            Are you sure you want to mark this line as completed? This action
+            cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button
+              variant='outline'
+              onClick={() => setCompleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type='button' onClick={confirmCompleteLine}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Modal */}
+      <EditTelephoneLineModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        onSuccess={onRefresh}
+        lineData={selectedLine}
+      />
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Line?</DialogTitle>
+          </DialogHeader>
+          <p>
+            Are you sure you want to delete this line? This action cannot be
+            undone.
+          </p>
+          <DialogFooter>
+            <Button
+              variant='outline'
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type='button'
+              variant='destructive'
+              onClick={confirmDeleteLine}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
