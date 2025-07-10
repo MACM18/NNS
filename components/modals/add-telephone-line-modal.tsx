@@ -297,20 +297,6 @@ export function AddTelephoneLineModal({
     return true;
   };
 
-  const validateHexSerial = (serial: string, fieldName: string): boolean => {
-    if (!serial) return true;
-    const hexPattern = /^[0-9A-Fa-f]+$/;
-    if (!hexPattern.test(serial)) {
-      addNotification({
-        title: "Validation Error",
-        message: `${fieldName} must be a valid hexadecimal serial number`,
-        type: "error",
-      });
-      return false;
-    }
-    return true;
-  };
-
   const checkDPUniqueness = async (dp: string): Promise<boolean> => {
     const parts = dp.split("-");
     if (parts.length !== 5) return false;
@@ -409,15 +395,6 @@ export function AddTelephoneLineModal({
           message: "Power values must be less than 25",
           type: "error",
         });
-        setLoading(false);
-        return;
-      }
-
-      // Validate hexadecimal serials
-      if (
-        !validateHexSerial(formData.ont_serial, "ONT Serial") ||
-        !validateHexSerial(formData.stb_serial, "STB Serial")
-      ) {
         setLoading(false);
         return;
       }

@@ -143,21 +143,6 @@ export function EditTelephoneLineModal({
     return true;
   };
 
-  const validateHexSerial = (serial: string, fieldName: string): boolean => {
-    if (!serial) return true;
-    const hexPattern = /^[0-9A-Fa-f]+$/;
-    if (!hexPattern.test(serial)) {
-      addNotification({
-        title: "Validation Error",
-        message: `${fieldName} must be a valid hexadecimal serial number`,
-        type: "error",
-        category: "system",
-      });
-      return false;
-    }
-    return true;
-  };
-
   const isPowerInvalid = (value: string) => {
     const num = Number.parseFloat(value);
     return !isNaN(num) && num >= 25;
@@ -199,14 +184,6 @@ export function EditTelephoneLineModal({
           type: "error",
           category: "system",
         });
-        setLoading(false);
-        return;
-      }
-      // Validate hexadecimal serials
-      if (
-        !validateHexSerial(formData.ont_serial, "ONT Serial") ||
-        !validateHexSerial(formData.stb_serial, "STB Serial")
-      ) {
         setLoading(false);
         return;
       }

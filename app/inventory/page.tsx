@@ -9,6 +9,8 @@ import {
   BarChart3,
   Eye,
   ChevronDown,
+  Pencil,
+  Trash,
 } from "lucide-react";
 import {
   Card,
@@ -139,6 +141,10 @@ export default function InventoryPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<InventoryInvoice | null>(null);
+  const [editDrumModalOpen, setEditDrumModalOpen] = useState(false);
+  const [selectedDrum, setSelectedDrum] = useState<DrumTracking | null>(null);
+  const [deleteDrumConfirmOpen, setDeleteDrumConfirmOpen] = useState(false);
+  const [drumToDelete, setDrumToDelete] = useState<DrumTracking | null>(null);
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
@@ -254,19 +260,34 @@ export default function InventoryPage() {
       if (error) throw error;
       setInvoices(
         Array.isArray(data)
-          ? data.filter(
-              (d): d is InventoryInvoice =>
-                d &&
-                typeof d.id === "string" &&
-                typeof d.invoice_number === "string" &&
-                typeof d.warehouse === "string" &&
-                typeof d.date === "string" &&
-                typeof d.issued_by === "string" &&
-                typeof d.drawn_by === "string" &&
-                typeof d.total_items === "number" &&
-                typeof d.status === "string" &&
-                typeof d.created_at === "string"
-            )
+          ? data
+              .filter(
+                (d) =>
+                  d &&
+                  typeof d.id === "string" &&
+                  typeof d.invoice_number === "string" &&
+                  typeof d.warehouse === "string" &&
+                  typeof d.date === "string" &&
+                  typeof d.issued_by === "string" &&
+                  typeof d.drawn_by === "string" &&
+                  typeof d.total_items === "number" &&
+                  typeof d.status === "string" &&
+                  typeof d.created_at === "string"
+              )
+              .map(
+                (d) =>
+                  ({
+                    id: d.id,
+                    invoice_number: d.invoice_number,
+                    warehouse: d.warehouse,
+                    date: d.date,
+                    issued_by: d.issued_by,
+                    drawn_by: d.drawn_by,
+                    total_items: d.total_items,
+                    status: d.status,
+                    created_at: d.created_at,
+                  } as InventoryInvoice)
+              )
           : []
       );
     } catch (error) {
@@ -284,17 +305,30 @@ export default function InventoryPage() {
       if (error) throw error;
       setInventoryItems(
         Array.isArray(data)
-          ? data.filter(
-              (d): d is InventoryItem =>
-                d &&
-                typeof d.id === "string" &&
-                typeof d.name === "string" &&
-                typeof d.unit === "string" &&
-                typeof d.item_type === "string" &&
-                typeof d.current_stock === "number" &&
-                typeof d.reorder_level === "number" &&
-                typeof d.last_updated === "string"
-            )
+          ? data
+              .filter(
+                (d) =>
+                  d &&
+                  typeof d.id === "string" &&
+                  typeof d.name === "string" &&
+                  typeof d.unit === "string" &&
+                  typeof d.item_type === "string" &&
+                  typeof d.current_stock === "number" &&
+                  typeof d.reorder_level === "number" &&
+                  typeof d.last_updated === "string"
+              )
+              .map(
+                (d) =>
+                  ({
+                    id: d.id,
+                    name: d.name,
+                    unit: d.unit,
+                    item_type: d.item_type,
+                    current_stock: d.current_stock,
+                    reorder_level: d.reorder_level,
+                    last_updated: d.last_updated,
+                  } as InventoryItem)
+              )
           : []
       );
     } catch (error) {
@@ -583,7 +617,9 @@ export default function InventoryPage() {
                           <TableHead>Items</TableHead>
                           <TableHead>Issued By</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Actions</TableHead>
+                          <TableHead className='w-20 text-center'>
+                            <span className='sr-only'>Actions</span>
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -602,8 +638,8 @@ export default function InventoryPage() {
                               <TableCell>
                                 {getStatusBadge(invoice.status)}
                               </TableCell>
-                              <TableCell>
-                                <div className='flex gap-2'>
+                              <TableCell className='text-center align-middle'>
+                                <div className='flex gap-1 justify-center items-center min-h-[32px]'>
                                   <Button
                                     size='sm'
                                     variant='outline'
@@ -816,6 +852,9 @@ export default function InventoryPage() {
                           <TableHead>Usage %</TableHead>
                           <TableHead>Received Date</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead className='w-20 text-center'>
+                            <span className='sr-only'>Actions</span>
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -845,6 +884,39 @@ export default function InventoryPage() {
                               </TableCell>
                               <TableCell>
                                 {getStatusBadge(drum.status)}
+                              </TableCell>
+                              <TableCell className='text-center align-middle'>
+                                <div className='flex gap-1 justify-center items-center min-h-[32px]'>
+                                  {(role === "admin" ||
+                                    role === "moderator") && (
+                                    <Button
+                                      size='icon'
+                                      variant='ghost'
+                                      aria-label='Edit Drum'
+                                      className='p-1 h-7 w-7'
+                                      onClick={() => {
+                                        setSelectedDrum(drum);
+                                        setEditDrumModalOpen(true);
+                                      }}
+                                    >
+                                      <Pencil className='h-4 w-4' />
+                                    </Button>
+                                  )}
+                                  {role === "admin" && (
+                                    <Button
+                                      size='icon'
+                                      variant='ghost'
+                                      aria-label='Delete Drum'
+                                      className='p-1 h-7 w-7'
+                                      onClick={() => {
+                                        setDrumToDelete(drum);
+                                        setDeleteDrumConfirmOpen(true);
+                                      }}
+                                    >
+                                      <Trash className='h-4 w-4 text-red-500' />
+                                    </Button>
+                                  )}
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
@@ -927,6 +999,7 @@ export default function InventoryPage() {
         <AddInventoryInvoiceModal
           open={addInvoiceModalOpen}
           onOpenChange={setAddInvoiceModalOpen}
+          onSuccess={handleSuccess}
         />
         <EditInventoryInvoiceModal
           open={editInvoiceModalOpen}
@@ -942,11 +1015,12 @@ export default function InventoryPage() {
         <AddWasteModal
           open={addWasteModalOpen}
           onOpenChange={setAddWasteModalOpen}
+          onSuccess={handleSuccess}
         />
         <ManageInventoryItemsModal
           open={manageItemsModalOpen}
           onOpenChange={setManageItemsModalOpen}
-          userRole={role}
+          userRole={role ?? ""}
         />
         {/* Delete Confirmation Dialog */}
         <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
@@ -997,6 +1071,86 @@ export default function InventoryPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {/* Edit Drum Modal (placeholder) */}
+        <Dialog open={editDrumModalOpen} onOpenChange={setEditDrumModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Drum (Coming Soon)</DialogTitle>
+            </DialogHeader>
+            <p>This feature is under development.</p>
+            <DialogFooter>
+              <Button
+                variant='secondary'
+                onClick={() => setEditDrumModalOpen(false)}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* Delete Drum Confirmation Dialog */}
+        <Dialog
+          open={deleteDrumConfirmOpen}
+          onOpenChange={setDeleteDrumConfirmOpen}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Drum</DialogTitle>
+            </DialogHeader>
+            <p>Are you sure you want to delete this drum?</p>
+            <DialogFooter>
+              <Button
+                variant='secondary'
+                onClick={() => setDeleteDrumConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant='destructive'
+                onClick={async () => {
+                  if (drumToDelete) {
+                    try {
+                      const { error } = await supabase
+                        .from("drum_tracking")
+                        .delete()
+                        .eq("id", drumToDelete.id);
+                      if (error) throw error;
+                      addNotification({
+                        title: "Drum Deleted",
+                        message: `Drum #${drumToDelete.drum_number} deleted successfully`,
+                        type: "success",
+                        category: "system",
+                      });
+                      setDeleteDrumConfirmOpen(false);
+                      setDrumToDelete(null);
+                      handleSuccess();
+                    } catch (error) {
+                      addNotification({
+                        title: "Error",
+                        message: "Failed to delete drum",
+                        type: "error",
+                        category: "system",
+                      });
+                    }
+                  }
+                }}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* Placeholder for Edit Drum Modal (implement as needed) */}
+        {/*
+        <EditDrumModal
+          open={editDrumModalOpen}
+          drum={selectedDrum}
+          onClose={() => setEditDrumModalOpen(false)}
+          onSuccess={handleSuccess}
+          supabase={supabase}
+          addNotification={addNotification}
+        />
+        */}
       </SidebarInset>
     </SidebarProvider>
   );
