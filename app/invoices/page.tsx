@@ -170,8 +170,8 @@ export default function InvoicesPage() {
           0
         ) || 0;
       const linesBilled =
-        monthlyInvoices?.reduce((sum, inv) => sum + (inv.line_count || 0), 0) ||
-        0;
+        monthlyInvoices?.reduce((sum, inv) => sum + (inv.line_count || 0), 0) /
+          thisMonth || 0;
       const avgRate =
         linesBilled > 0 ? Math.round(totalAmount / linesBilled) : 0;
 

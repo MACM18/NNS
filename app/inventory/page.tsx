@@ -72,7 +72,6 @@ interface InventoryItem {
   id: string;
   name: string;
   unit: string;
-  item_type: string;
   current_stock: number;
   reorder_level: number;
   last_updated: string;
@@ -312,10 +311,9 @@ export default function InventoryPage() {
                   typeof d.id === "string" &&
                   typeof d.name === "string" &&
                   typeof d.unit === "string" &&
-                  typeof d.item_type === "string" &&
                   typeof d.current_stock === "number" &&
                   typeof d.reorder_level === "number" &&
-                  typeof d.last_updated === "string"
+                  typeof d.updated_at === "string"
               )
               .map(
                 (d) =>
@@ -323,10 +321,9 @@ export default function InventoryPage() {
                     id: d.id,
                     name: d.name,
                     unit: d.unit,
-                    item_type: d.item_type,
                     current_stock: d.current_stock,
                     reorder_level: d.reorder_level,
-                    last_updated: d.last_updated,
+                    last_updated: d.updated_at,
                   } as InventoryItem)
               )
           : []
@@ -775,7 +772,6 @@ export default function InventoryPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Item Name</TableHead>
-                          <TableHead>Type</TableHead>
                           <TableHead>Current Stock</TableHead>
                           <TableHead>Unit</TableHead>
                           <TableHead>Reorder Level</TableHead>
@@ -789,9 +785,7 @@ export default function InventoryPage() {
                             <TableCell className='font-medium'>
                               {item.name}
                             </TableCell>
-                            <TableCell>
-                              <Badge variant='outline'>{item.item_type}</Badge>
-                            </TableCell>
+
                             <TableCell>{item.current_stock}</TableCell>
                             <TableCell>{item.unit}</TableCell>
                             <TableCell>{item.reorder_level || 0}</TableCell>
