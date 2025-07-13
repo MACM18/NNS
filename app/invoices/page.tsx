@@ -39,6 +39,7 @@ import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useDataCache } from "@/contexts/data-cache-context";
+import { min } from "date-fns";
 
 interface GeneratedInvoice {
   id: string;
@@ -73,6 +74,44 @@ export default function InvoicesPage() {
   const { addNotification } = useNotification();
   const { cache, updateCache } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pricingTiers, setPricingTiers] = useState<
+    Array<{
+      rate: number;
+      max_length: number;
+      min_length: number;
+    }>
+  >([
+    {
+      rate: 6000,
+      max_length: 100,
+      min_length: 0,
+    },
+    {
+      rate: 6500,
+      max_length: 200,
+      min_length: 101,
+    },
+    {
+      rate: 7200,
+      max_length: 300,
+      min_length: 201,
+    },
+    {
+      rate: 7800,
+      max_length: 400,
+      min_length: 301,
+    },
+    {
+      rate: 8200,
+      max_length: 500,
+      min_length: 401,
+    },
+    {
+      rate: 8400,
+      max_length: Infinity,
+      min_length: 501,
+    },
+  ]);
 
   const invoices = cache.invoices.data || [];
   const stats = cache.invoices.stats || {
@@ -144,6 +183,18 @@ export default function InvoicesPage() {
           avgRate,
         },
       });
+
+      // Get pricing tiers
+      const { data: tiers, error: tiersError } = await supabase
+        .from("company_settings")
+        .select("pricing_tiers")
+        .single();
+      if (tiersError) {
+        console.error("Error fetching pricing tiers:", tiersError);
+      }
+      if (tiers && Array.isArray(tiers.pricing_tiers)) {
+        setPricingTiers(tiers.pricing_tiers);
+      }
     } catch (error: any) {
       console.error("Error fetching stats:", error);
     }
@@ -461,30 +512,16 @@ export default function InvoicesPage() {
                 <CardContent>
                   <div className='space-y-4'>
                     <div className='grid grid-cols-2 md:grid-cols-3 gap-4'>
-                      <div className='p-4 border rounded-lg'>
-                        <div className='font-medium'>0-100m</div>
-                        <div className='text-2xl font-bold'>LKR 6,000</div>
-                      </div>
-                      <div className='p-4 border rounded-lg'>
-                        <div className='font-medium'>101-200m</div>
-                        <div className='text-2xl font-bold'>LKR 6,500</div>
-                      </div>
-                      <div className='p-4 border rounded-lg'>
-                        <div className='font-medium'>201-300m</div>
-                        <div className='text-2xl font-bold'>LKR 7,200</div>
-                      </div>
-                      <div className='p-4 border rounded-lg'>
-                        <div className='font-medium'>301-400m</div>
-                        <div className='text-2xl font-bold'>LKR 7,800</div>
-                      </div>
-                      <div className='p-4 border rounded-lg'>
-                        <div className='font-medium'>401-500m</div>
-                        <div className='text-2xl font-bold'>LKR 8,200</div>
-                      </div>
-                      <div className='p-4 border rounded-lg'>
-                        <div className='font-medium'>500m+</div>
-                        <div className='text-2xl font-bold'>LKR 8,400</div>
-                      </div>
+                      {pricingTiers.map((tier, index) => (
+                        <div key={index} className='p-4 border rounded-lg'>
+                          <div className='font-medium'>
+                            {tier.min_length}-{tier.max_length}m
+                          </div>
+                          <div className='text-2xl font-bold'>
+                            LKR {tier.rate.toLocaleString()}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                     <Button
                       onClick={() => setSettingsModalOpen(true)}

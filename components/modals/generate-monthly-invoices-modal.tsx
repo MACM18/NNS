@@ -164,6 +164,7 @@ export function GenerateMonthlyInvoicesModal({
         title: "Error",
         message: "Failed to fetch line details",
         type: "error",
+        category: "system",
       });
     } finally {
       setLoading(false);
@@ -210,48 +211,33 @@ export function GenerateMonthlyInvoicesModal({
       -2
     )}/${monthName}`;
 
-    // Split lines into 3 invoices: A=90%, B=5%, C=5%
-    const totalLines = lines.length;
-    const aCount = Math.ceil(totalLines * 0.9);
-    const bCount = Math.ceil(totalLines * 0.05);
-    const cCount = totalLines - aCount - bCount;
-
-    const aLines = lines.slice(0, aCount);
-    const bLines = lines.slice(aCount, aCount + bCount);
-    const cLines = lines.slice(aCount + bCount);
-
+    // Always generate 3 invoices: A (90%), B (5%), C (5%)
     const previews: InvoicePreview[] = [
       {
         type: "A" as const,
         percentage: 90,
-        lines: aLines,
-        totalAmount: aLines.reduce(
-          (sum, line) => sum + calculateRate(line.total_calc),
-          0
-        ),
+        lines: lines, // All lines
+        totalAmount: Math.round(totalAmount * 0.9),
         invoiceNumber: `${baseInvoiceNumber}/A`,
       },
       {
         type: "B" as const,
         percentage: 5,
-        lines: bLines,
-        totalAmount: bLines.reduce(
-          (sum, line) => sum + calculateRate(line.total_calc),
-          0
-        ),
+        lines: lines, // All lines
+        totalAmount: Math.round(totalAmount * 0.05),
         invoiceNumber: `${baseInvoiceNumber}/B`,
       },
       {
         type: "C" as const,
         percentage: 5,
-        lines: cLines,
-        totalAmount: cLines.reduce(
-          (sum, line) => sum + calculateRate(line.total_calc),
-          0
-        ),
+        lines: lines, // All lines
+        totalAmount:
+          totalAmount -
+          Math.round(totalAmount * 0.9) -
+          Math.round(totalAmount * 0.05), // Remainder to ensure 100%
         invoiceNumber: `${baseInvoiceNumber}/C`,
       },
-    ].filter((preview) => preview.lines.length > 0);
+    ];
 
     setInvoicePreviews(previews);
   };
@@ -282,7 +268,16 @@ export function GenerateMonthlyInvoicesModal({
         months.find((m) => m.value === selectedMonth)?.label
       } ${selectedYear}`;
 
+      // Delete any existing invoices for this month/year/type before inserting new ones
       for (const preview of invoicePreviews) {
+        // Remove existing invoice if present
+        await supabase
+          .from("generated_invoices")
+          .delete()
+          .eq("invoice_number", preview.invoiceNumber)
+          .eq("month", Number.parseInt(selectedMonth))
+          .eq("year", Number.parseInt(selectedYear));
+
         // Create generated invoice record
         const invoiceData = {
           invoice_number: preview.invoiceNumber,
@@ -309,6 +304,7 @@ export function GenerateMonthlyInvoicesModal({
           months.find((m) => m.value === selectedMonth)?.label
         } ${selectedYear}`,
         type: "success",
+        category: "invoice_generated",
       });
 
       onSuccess();
@@ -318,6 +314,7 @@ export function GenerateMonthlyInvoicesModal({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     } finally {
       setGenerating(false);
@@ -330,6 +327,7 @@ export function GenerateMonthlyInvoicesModal({
       title: "Preview",
       message: `Opening preview for Invoice ${preview.type}`,
       type: "info",
+      category: "system",
     });
   };
 
@@ -339,6 +337,7 @@ export function GenerateMonthlyInvoicesModal({
       title: "Download",
       message: `Downloading Invoice ${preview.type}`,
       type: "info",
+      category: "system",
     });
   };
 
