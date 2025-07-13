@@ -366,6 +366,7 @@ export function AddTelephoneLineModal({
         title: "Validation Error",
         message: "Please select a task before submitting",
         type: "error",
+        category:"system"
       });
       setLoading(false);
       return;
@@ -394,6 +395,7 @@ export function AddTelephoneLineModal({
           title: "Validation Error",
           message: "Power values must be less than 25",
           type: "error",
+          category: "system",
         });
         setLoading(false);
         return;
@@ -412,6 +414,7 @@ export function AddTelephoneLineModal({
             title: "Insufficient Cable",
             message: `Selected drum only has ${selectedDrum.current_quantity}m available, but ${formData.total_calc}m is required`,
             type: "error",
+            category: "system",
           });
           setLoading(false);
           return;
@@ -516,6 +519,7 @@ export function AddTelephoneLineModal({
         title: "Success",
         message: "Telephone line details added successfully with drum tracking",
         type: "success",
+        category: "system",
       });
 
       onSuccess();
@@ -578,6 +582,7 @@ export function AddTelephoneLineModal({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     } finally {
       setLoading(false);
@@ -1049,10 +1054,9 @@ export function AddTelephoneLineModal({
                 <div>
                   <Label htmlFor='nut_bolt' className='flex items-center gap-1'>
                     Nut & Bolt
-                    <Calculator
-                      className='h-3 w-3 text-blue-500'
-                      title='Auto-calculated: ½ of L-Hook'
-                    />
+                    <span title='Auto-calculated: ½ of L-Hook'>
+                      <Calculator className='h-3 w-3 text-blue-500' />
+                    </span>
                   </Label>
                   <Input
                     id='nut_bolt'
@@ -1139,10 +1143,11 @@ export function AddTelephoneLineModal({
                     className='flex items-center gap-1'
                   >
                     Screw Nail
-                    <Calculator
-                      className='h-3 w-3 text-blue-500'
-                      title='Auto-synced with Roll Plug'
-                    />
+                    <span title='Auto-synced with Roll Plug'>
+                      <Calculator
+                        className='h-3 w-3 text-blue-500'
+                      />
+                    </span>
                   </Label>
                   <Input
                     id='screw_nail'

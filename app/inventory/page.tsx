@@ -37,6 +37,8 @@ import { AddInventoryInvoiceModal } from "@/components/modals/add-inventory-invo
 import { AddWasteModal } from "@/components/modals/add-waste-modal";
 import { ManageInventoryItemsModal } from "@/components/modals/manage-inventory-items-modal";
 import { EditInventoryInvoiceModal } from "@/components/modals/edit-inventory-invoice-modal";
+import { EditInventoryItemModal } from "@/components/modals/edit-inventory-item-modal";
+import { EditDrumModal } from "@/components/modals/edit-drum-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -95,7 +97,7 @@ interface WasteReport {
   quantity: number;
   waste_reason: string;
   waste_date: string;
-  reported_by: string;
+  full_name: string;
   created_at: string;
   item_name?: string; // populated via join
 }
@@ -144,6 +146,12 @@ export default function InventoryPage() {
   const [selectedDrum, setSelectedDrum] = useState<DrumTracking | null>(null);
   const [deleteDrumConfirmOpen, setDeleteDrumConfirmOpen] = useState(false);
   const [drumToDelete, setDrumToDelete] = useState<DrumTracking | null>(null);
+
+  const [editItemModalOpen, setEditItemModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+
+  const [deleteWasteConfirmOpen, setDeleteWasteConfirmOpen] = useState(false);
+  const [wasteToDelete, setWasteToDelete] = useState<WasteReport | null>(null);
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
@@ -360,7 +368,7 @@ export default function InventoryPage() {
       const { data, error } = await supabase
         .from("waste_tracking")
         .select(
-          `id, item_id, quantity, waste_reason, waste_date, reported_by, created_at, inventory_items(name)`
+          `id, item_id, quantity, waste_reason, waste_date, profiles(full_name), created_at, inventory_items(name)`
         )
         .order("waste_date", { ascending: false })
         .limit(20);
@@ -369,6 +377,7 @@ export default function InventoryPage() {
       const wasteWithName = (data || []).map((w: any) => ({
         ...w,
         item_name: w.inventory_items?.name || "",
+        full_name: w.profiles?.full_name || "",
       }));
       setWasteReports(wasteWithName as WasteReport[]);
     } catch (error) {
@@ -777,6 +786,7 @@ export default function InventoryPage() {
                           <TableHead>Reorder Level</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Last Updated</TableHead>
+                          <TableHead className='text-right'>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -801,6 +811,22 @@ export default function InventoryPage() {
                                     item.last_updated
                                   ).toLocaleDateString()
                                 : "N/A"}
+                            </TableCell>
+                            <TableCell className='text-right'>
+                              {role === "admin" && (
+                                <Button
+                                  size='icon'
+                                  variant='ghost'
+                                  aria-label='Edit Item'
+                                  className='p-1 h-7 w-7'
+                                  onClick={() => {
+                                    setSelectedItem(item);
+                                    setEditItemModalOpen(true);
+                                  }}
+                                >
+                                  <Pencil className='h-4 w-4' />
+                                </Button>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -955,6 +981,11 @@ export default function InventoryPage() {
                           <TableHead>Reason</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead>Reported By</TableHead>
+                          {role === "admin" && (
+                            <TableHead className='w-20 text-center'>
+                              Actions
+                            </TableHead>
+                          )}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -970,7 +1001,23 @@ export default function InventoryPage() {
                                   ).toLocaleDateString()
                                 : "N/A"}
                             </TableCell>
-                            <TableCell>{waste.reported_by}</TableCell>
+                            <TableCell>{waste.full_name}</TableCell>
+                            {role === "admin" && (
+                              <TableCell className='text-center'>
+                                <Button
+                                  size='icon'
+                                  variant='ghost'
+                                  aria-label='Delete Waste'
+                                  className='p-1 h-7 w-7'
+                                  onClick={() => {
+                                    setWasteToDelete(waste);
+                                    setDeleteWasteConfirmOpen(true);
+                                  }}
+                                >
+                                  <Trash className='h-4 w-4 text-red-500' />
+                                </Button>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1065,23 +1112,18 @@ export default function InventoryPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* Edit Drum Modal (placeholder) */}
-        <Dialog open={editDrumModalOpen} onOpenChange={setEditDrumModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Drum (Coming Soon)</DialogTitle>
-            </DialogHeader>
-            <p>This feature is under development.</p>
-            <DialogFooter>
-              <Button
-                variant='secondary'
-                onClick={() => setEditDrumModalOpen(false)}
-              >
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Edit Drum Modal */}
+        <EditDrumModal
+          open={editDrumModalOpen}
+          drum={selectedDrum}
+          onClose={() => {
+            setEditDrumModalOpen(false);
+            setSelectedDrum(null);
+          }}
+          onSuccess={handleSuccess}
+          supabase={supabase}
+          addNotification={addNotification}
+        />
         {/* Delete Drum Confirmation Dialog */}
         <Dialog
           open={deleteDrumConfirmOpen}
@@ -1134,17 +1176,86 @@ export default function InventoryPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* Placeholder for Edit Drum Modal (implement as needed) */}
-        {/*
-        <EditDrumModal
-          open={editDrumModalOpen}
-          drum={selectedDrum}
-          onClose={() => setEditDrumModalOpen(false)}
+        <EditInventoryItemModal
+          open={editItemModalOpen}
+          onOpenChange={setEditItemModalOpen}
+          item={selectedItem}
           onSuccess={handleSuccess}
-          supabase={supabase}
-          addNotification={addNotification}
         />
-        */}
+        {/* Waste Delete Confirmation Dialog */}
+        <Dialog
+          open={deleteWasteConfirmOpen}
+          onOpenChange={setDeleteWasteConfirmOpen}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Waste Record</DialogTitle>
+            </DialogHeader>
+            <p>Are you sure you want to delete this waste record?</p>
+            <DialogFooter>
+              <Button
+                variant='secondary'
+                onClick={() => setDeleteWasteConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant='destructive'
+                onClick={async () => {
+                  if (wasteToDelete) {
+                    try {
+                      // Delete waste record
+                      const { error: deleteError } = await supabase
+                        .from("waste_tracking")
+                        .delete()
+                        .eq("id", wasteToDelete.id);
+                      if (deleteError) throw deleteError;
+                      // Add quantity back to inventory_items (manual fetch and update)
+                      const { data: itemData, error: fetchError } =
+                        await supabase
+                          .from("inventory_items")
+                          .select("current_stock")
+                          .eq("id", wasteToDelete.item_id)
+                          .single();
+                      if (fetchError) throw fetchError;
+                      const currentStock =
+                        typeof itemData?.current_stock === "number"
+                          ? itemData.current_stock
+                          : 0;
+                      const newStock = currentStock + wasteToDelete.quantity;
+                      const { error: updateError } = await supabase
+                        .from("inventory_items")
+                        .update({ current_stock: newStock })
+                        .eq("id", wasteToDelete.item_id);
+                      if (updateError) throw updateError;
+                      addNotification({
+                        title: "Waste Record Deleted",
+                        message: `Waste record deleted and stock restored for ${
+                          wasteToDelete.item_name || "item"
+                        }`,
+                        type: "success",
+                        category: "system",
+                      });
+                      setDeleteWasteConfirmOpen(false);
+                      setWasteToDelete(null);
+                      handleSuccess();
+                    } catch (error) {
+                      addNotification({
+                        title: "Error",
+                        message:
+                          "Failed to delete waste record or restore stock",
+                        type: "error",
+                        category: "system",
+                      });
+                    }
+                  }
+                }}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarInset>
     </SidebarProvider>
   );
