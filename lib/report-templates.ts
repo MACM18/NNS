@@ -3,7 +3,6 @@ export interface DrumNumberReportData {
   tpNumber: string
   pdw: number
   dw: number
-  cHook: number
   dwCus: number
   drumNumber: string
 }
@@ -118,7 +117,6 @@ export class ReportTemplates {
                 <th>TP Number</th>
                 <th>PDW</th>
                 <th>DW</th>
-                <th>C HOOK</th>
                 <th>DW CUS</th>
                 <th>DRUM NUMBER</th>
               </tr>
@@ -132,7 +130,6 @@ export class ReportTemplates {
                   <td>${row.tpNumber}</td>
                   <td>${row.pdw}</td>
                   <td>${row.dw}</td>
-                  <td>${row.cHook}</td>
                   <td>${row.dwCus}</td>
                   <td>${row.drumNumber}</td>
                 </tr>
