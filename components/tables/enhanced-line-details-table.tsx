@@ -103,6 +103,10 @@ interface LineDetail {
   }>;
   created_at: string;
   completed: boolean;
+  drum_number?: string;
+  ont_serial?: string;
+  voice_test_no?: string;
+  stb_serial?: string;
 }
 
 interface LineDetailsTableProps {
@@ -190,6 +194,18 @@ export function LineDetailsTable({
           status: normalizedStatus,
           assignees,
           // default 0s for any nullable material columns
+          total_cable: line.total_cable || 0,
+          top_bolt: line.top_bolt || 0,
+          internal_wire: line.internal_wire || 0,
+          casing: line.casing || 0,
+          c_tie: line.c_tie || 0,
+          c_clip: line.c_clip || 0,
+          conduit: line.conduit || 0,
+          tag_tie: line.tag_tie || 0,
+          flexible: line.flexible || 0,
+          cat5: line.cat5 || 0,
+          pole_67: line.pole_67 || 0,
+          pole: line.pole || 0,
           c_hook: line.c_hook ?? 0,
           l_hook: line.l_hook || 0,
           retainers: line.retainers || 0,
@@ -206,6 +222,10 @@ export function LineDetailsTable({
           fiber_rosette: line.fiber_rosette || 0,
           s_rosette: line.s_rosette || 0,
           fac: line.fac || 0,
+          drum_number: line.drum_number || "",
+          ont_serial: line.ont_serial || "",
+          voice_test_no: line.voice_test_no || "",
+          stb_serial: line.stb_serial || "",
         };
       }) as LineDetail[];
 
@@ -291,6 +311,18 @@ export function LineDetailsTable({
             { label: "Fiber Rosette", value: line.fiber_rosette },
             { label: "S Rosette", value: line.s_rosette },
             { label: "FAC", value: line.fac },
+            { label: "Drop Wire Cable", value: line.total_cable },
+            { label: "Top Bolt", value: line.top_bolt },
+            { label: "Internal Wire", value: line.internal_wire },
+            { label: "Casing", value: line.casing },
+            { label: "C Tie", value: line.c_tie },
+            { label: "C Clip", value: line.c_clip },
+            { label: "Conduit", value: line.conduit },
+            { label: "Tag Tie", value: line.tag_tie },
+            { label: "Flexible", value: line.flexible },
+            { label: "Cat5", value: line.cat5 },
+            { label: "Pole 67", value: line.pole_67 },
+            { label: "Pole", value: line.pole },
           ]
             .filter((item) => (item.value ?? 0) > 0)
             .map((item) => (
@@ -350,6 +382,20 @@ export function LineDetailsTable({
               <span className='text-sm text-muted-foreground'>Status:</span>
               {getStatusBadge(line)}
             </div>
+            <div className='flex justify-between'>
+              <span className='text-sm text-muted-foreground'>ONT Serial:</span>
+              <span className='font-medium'>{line.ont_serial || "N/A"}</span>
+            </div>
+            <div className='flex justify-between'>
+              <span className='text-sm text-muted-foreground'>
+                Voice Test No:
+              </span>
+              <span className='font-medium'>{line.voice_test_no || "N/A"}</span>
+            </div>
+            <div className='flex justify-between'>
+              <span className='text-sm text-muted-foreground'>STB Serial:</span>
+              <span className='font-medium'>{line.stb_serial || "N/A"}</span>
+            </div>
           </CardContent>
         </Card>
 
@@ -400,6 +446,10 @@ export function LineDetailsTable({
                 <span className='font-medium text-orange-600'>
                   {line.wastage?.toFixed(2) || "0.00"}m
                 </span>
+              </div>
+              <div className='flex justify-between'>
+                <span className='text-sm text-muted-foreground'>Drum No:</span>
+                <span className='font-medium'>{line.drum_number || "N/A"}</span>
               </div>
             </div>
           </CardContent>
@@ -668,7 +718,8 @@ export function LineDetailsTable({
                   />
                 )}
               </TableHead>
-              <TableHead>Assignees</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Asignees</TableHead>
               <TableHead
                 className='cursor-pointer hover:bg-muted/50'
                 onClick={() => handleSort("date")}

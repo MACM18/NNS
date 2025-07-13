@@ -87,9 +87,9 @@ export function AddTelephoneLineModal({
     cable_middle: "",
     cable_end: "",
     wastage_input: "",
-    f1_calc: 0,
-    g1_calc: 0,
-    total_calc: 0,
+    f1: "",
+    g1: "",
+    total_cable: "",
 
     // Drum Selection
     selected_drum_id: "",
@@ -136,16 +136,15 @@ export function AddTelephoneLineModal({
     const start = Number.parseFloat(formData.cable_start) || 0;
     const middle = Number.parseFloat(formData.cable_middle) || 0;
     const end = Number.parseFloat(formData.cable_end) || 0;
-
     const f1 = Math.abs(start - middle);
     const g1 = Math.abs(middle - end);
-    const total = f1 + g1;
+    const total_cable = f1 + g1;
 
     setFormData((prev) => ({
       ...prev,
-      f1_calc: f1,
-      g1_calc: g1,
-      total_calc: total,
+      f1: f1.toFixed(2),
+      g1: g1.toFixed(2),
+      total_cable: total_cable.toFixed(2),
     }));
   }, [formData.cable_start, formData.cable_middle, formData.cable_end]);
 
@@ -366,7 +365,7 @@ export function AddTelephoneLineModal({
         title: "Validation Error",
         message: "Please select a task before submitting",
         type: "error",
-        category:"system"
+        category: "system",
       });
       setLoading(false);
       return;
@@ -402,17 +401,17 @@ export function AddTelephoneLineModal({
       }
 
       // Check if selected drum has enough cable
-      if (formData.selected_drum_id && formData.total_calc > 0) {
+      if (formData.selected_drum_id && formData.total_cable > 0) {
         const selectedDrum = drumOptions.find(
           (drum) => drum.id === formData.selected_drum_id
         );
         if (
           selectedDrum &&
-          formData.total_calc > selectedDrum.current_quantity
+          formData.total_cable > selectedDrum.current_quantity
         ) {
           addNotification({
             title: "Insufficient Cable",
-            message: `Selected drum only has ${selectedDrum.current_quantity}m available, but ${formData.total_calc}m is required`,
+            message: `Selected drum only has ${selectedDrum.current_quantity}m available, but ${formData.total_cable}m is required`,
             type: "error",
             category: "system",
           });
@@ -423,7 +422,6 @@ export function AddTelephoneLineModal({
 
       // Prepare data for insertion
       const insertData = {
-        // Add this line at the beginning
         task_id: selectedTask?.id || null,
         // Basic Information
         date: formData.date,
@@ -433,14 +431,10 @@ export function AddTelephoneLineModal({
         power_inbox: Number.parseFloat(formData.power_inbox),
         name: formData.name,
         address: formData.address,
-
         // Cable Measurements
         cable_start: Number.parseFloat(formData.cable_start),
         cable_middle: Number.parseFloat(formData.cable_middle),
         cable_end: Number.parseFloat(formData.cable_end),
-        f1_calc: formData.f1_calc,
-        g1_calc: formData.g1_calc,
-        total_calc: formData.total_calc,
         wastage_input: Number.parseFloat(formData.wastage_input) || 0,
         drum_number: formData.drum_number,
 
@@ -486,13 +480,13 @@ export function AddTelephoneLineModal({
       if (error) throw error;
 
       // Record drum usage if drum was selected and cable was used
-      if (formData.selected_drum_id && formData.total_calc > 0) {
+      if (formData.selected_drum_id && Number(formData.total_cable) > 0) {
         // Record drum usage
         await supabase.from("drum_usage").insert([
           {
             drum_id: formData.selected_drum_id,
             line_details_id: lineDetails.id,
-            quantity_used: formData.total_calc,
+            quantity_used: Number(formData.total_cable),
             usage_date: formData.date,
           },
         ]);
@@ -503,7 +497,7 @@ export function AddTelephoneLineModal({
         );
         if (selectedDrum) {
           const newQuantity =
-            selectedDrum.current_quantity - formData.total_calc;
+            selectedDrum.current_quantity - Number(formData.total_cable);
           await supabase
             .from("drum_tracking")
             .update({
@@ -512,6 +506,23 @@ export function AddTelephoneLineModal({
               updated_at: new Date().toISOString(),
             })
             .eq("id", formData.selected_drum_id);
+        }
+        // Update inventory_items current_stock for Drop wire cable
+        const { data: dropWireItem } = await supabase
+          .from("inventory_items")
+          .select("id,current_stock")
+          .eq("name", "Drop Wire Cable")
+          .single();
+        if (dropWireItem) {
+          const newStock =
+            dropWireItem.current_stock - Number(formData.total_cable);
+          await supabase
+            .from("inventory_items")
+            .update({
+              current_stock: newStock,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", dropWireItem.id);
         }
       }
 
@@ -538,9 +549,9 @@ export function AddTelephoneLineModal({
         cable_middle: "",
         cable_end: "",
         wastage_input: "",
-        f1_calc: 0,
-        g1_calc: 0,
-        total_calc: 0,
+        f1: "",
+        g1: "",
+        total_cable: "",
         selected_drum_id: "",
         drum_number: "",
         retainers: "0",
@@ -955,7 +966,7 @@ export function AddTelephoneLineModal({
                   F1 (|Start - Middle|)
                 </Label>
                 <div className='text-lg font-bold text-blue-600'>
-                  {formData.f1_calc.toFixed(2)}m
+                  {formData.f1}m
                 </div>
               </div>
               <div>
@@ -963,13 +974,13 @@ export function AddTelephoneLineModal({
                   G1 (|Middle - End|)
                 </Label>
                 <div className='text-lg font-bold text-blue-600'>
-                  {formData.g1_calc.toFixed(2)}m
+                  {formData.g1}m
                 </div>
               </div>
               <div>
                 <Label className='text-sm font-medium'>Total (F1 + G1)</Label>
                 <div className='text-lg font-bold text-green-600'>
-                  {formData.total_calc.toFixed(2)}m
+                  {formData.total_cable}m
                 </div>
               </div>
               <div>
@@ -988,20 +999,20 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Drum availability check */}
-            {formData.selected_drum_id && formData.total_calc > 0 && (
+            {formData.selected_drum_id && formData.total_cable > 0 && (
               <div className='p-3 bg-blue-50 dark:bg-blue-950 rounded-lg'>
                 <div className='flex items-center gap-2'>
                   <Package className='h-4 w-4 text-blue-600' />
                   <span className='text-sm font-medium'>Drum Usage Check</span>
                 </div>
                 <p className='text-sm text-muted-foreground mt-1'>
-                  Required: {formData.total_calc.toFixed(2)}m | Available:{" "}
+                  Required: {formData.total_cable}m | Available:{" "}
                   {drumOptions
                     .find((d) => d.id === formData.selected_drum_id)
                     ?.current_quantity.toFixed(2)}
                   m
                 </p>
-                {formData.total_calc >
+                {formData.total_cable >
                   (drumOptions.find((d) => d.id === formData.selected_drum_id)
                     ?.current_quantity || 0) && (
                   <p className='text-sm text-red-600 mt-1'>
@@ -1144,9 +1155,7 @@ export function AddTelephoneLineModal({
                   >
                     Screw Nail
                     <span title='Auto-synced with Roll Plug'>
-                      <Calculator
-                        className='h-3 w-3 text-blue-500'
-                      />
+                      <Calculator className='h-3 w-3 text-blue-500' />
                     </span>
                   </Label>
                   <Input

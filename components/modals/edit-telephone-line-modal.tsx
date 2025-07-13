@@ -76,12 +76,12 @@ export function EditTelephoneLineModal({
     const end = Number.parseFloat(formData.cable_end) || 0;
     const f1 = Math.abs(start - middle);
     const g1 = Math.abs(middle - end);
-    const total = f1 + g1;
+    const total_cable = f1 + g1;
     setFormData((prev: any) => ({
       ...prev,
-      f1_calc: f1,
-      g1_calc: g1,
-      total_calc: total,
+      f1: f1.toFixed(2),
+      g1: g1.toFixed(2),
+      total_cable: total_cable.toFixed(2),
     }));
   }, [formData.cable_start, formData.cable_middle, formData.cable_end]);
 
@@ -169,28 +169,10 @@ export function EditTelephoneLineModal({
     e.preventDefault();
     setLoading(true);
     try {
-      // Validate DP format
-      if (!validateDP(formData.dp)) {
-        setLoading(false);
-        return;
-      }
-      // Validate power values
-      const powerDP = Number.parseFloat(formData.power_dp);
-      const powerInbox = Number.parseFloat(formData.power_inbox);
-      if (powerDP >= 25 || powerInbox >= 25) {
-        addNotification({
-          title: "Validation Error",
-          message: "Power values must be less than 25",
-          type: "error",
-          category: "system",
-        });
-        setLoading(false);
-        return;
-      }
-      // Prepare data for update
+      // Prepare update data
       const updateData = {
         date: formData.date,
-        phone_number: formData.phone_number,
+        telephone_no: formData.phone_number,
         dp: formData.dp,
         power_dp: Number.parseFloat(formData.power_dp),
         power_inbox: Number.parseFloat(formData.power_inbox),
@@ -198,10 +180,7 @@ export function EditTelephoneLineModal({
         address: formData.address,
         cable_start: Number.parseFloat(formData.cable_start),
         cable_middle: Number.parseFloat(formData.cable_middle),
-        cable_end: Number.parseFloat(formData.cable_end),
-        f1_calc: formData.f1_calc,
-        g1_calc: formData.g1_calc,
-        total_calc: formData.total_calc,
+        cable_end: Number.parseFloat(formData.cable_end),  
         wastage_input: Number.parseFloat(formData.wastage_input) || 0,
         drum_number: formData.drum_number,
         retainers: Number(formData.retainers) || 0,
@@ -240,6 +219,41 @@ export function EditTelephoneLineModal({
         .update(updateData)
         .eq("id", lineData.id);
       if (error) throw error;
+      // Update drum and inventory if drum or total_cable changed
+      if (formData.selected_drum_id && Number(formData.total_cable) > 0) {
+        // Update drum current quantity
+        const selectedDrum = drumOptions.find(
+          (drum) => drum.id === formData.selected_drum_id
+        );
+        if (selectedDrum) {
+          const newQuantity =
+            selectedDrum.current_quantity - Number(formData.total_cable);
+          await supabase
+            .from("drum_tracking")
+            .update({
+              current_quantity: newQuantity,
+              status: newQuantity <= 0 ? "empty" : "active",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", formData.selected_drum_id);
+        }
+        // Update inventory_items current_stock for Drop wire cable
+        const { data: dropWireItem } = await supabase
+          .from("inventory_items")
+          .select("id,current_stock")
+          .eq("name", "Drop Wire Cable")
+          .single();
+        if (dropWireItem) {
+          const newStock = dropWireItem.current_stock - Number(formData.total_cable);
+          await supabase
+            .from("inventory_items")
+            .update({
+              current_stock: newStock,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", dropWireItem.id);
+        }
+      }
       addNotification({
         title: "Success",
         message: "Line details updated successfully",
@@ -510,7 +524,7 @@ export function EditTelephoneLineModal({
                   F1 (|Start - Middle|)
                 </Label>
                 <div className='text-lg font-bold text-blue-600'>
-                  {Number(formData.f1_calc).toFixed(2)}m
+                  {Number(formData.f1).toFixed(2)}m
                 </div>
               </div>
               <div>
@@ -518,13 +532,13 @@ export function EditTelephoneLineModal({
                   G1 (|Middle - End|)
                 </Label>
                 <div className='text-lg font-bold text-blue-600'>
-                  {Number(formData.g1_calc).toFixed(2)}m
+                  {Number(formData.g1).toFixed(2)}m
                 </div>
               </div>
               <div>
                 <Label className='text-sm font-medium'>Total (F1 + G1)</Label>
                 <div className='text-lg font-bold text-green-600'>
-                  {Number(formData.total_calc).toFixed(2)}m
+                  {Number(formData.total_cable).toFixed(2)}m
                 </div>
               </div>
               <div>
