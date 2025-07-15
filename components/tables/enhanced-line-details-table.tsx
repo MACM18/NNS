@@ -285,7 +285,7 @@ export function LineDetailsTable({
       </Badge>
     );
 
-  const isPowerHigh = (value: number) => value >= 25;
+  const isPowerHigh = (value: number) => value >= 30;
 
   const MaterialUsageCard = ({ line }: { line: LineDetail }) => (
     <Card>

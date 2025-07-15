@@ -389,10 +389,10 @@ export function AddTelephoneLineModal({
       const powerDP = Number.parseFloat(formData.power_dp);
       const powerInbox = Number.parseFloat(formData.power_inbox);
 
-      if (powerDP >= 25 || powerInbox >= 25) {
+      if (powerDP >= 30 || powerInbox >= 30) {
         addNotification({
           title: "Validation Error",
-          message: "Power values must be less than 25",
+          message: "Power values must be less than 30",
           type: "error",
           category: "system",
         });
@@ -602,7 +602,7 @@ export function AddTelephoneLineModal({
 
   const isPowerInvalid = (value: string) => {
     const num = Number.parseFloat(value);
-    return !isNaN(num) && num >= 25;
+    return !isNaN(num) && num >= 30;
   };
 
   const taskLabel = (task: any) =>
@@ -778,7 +778,7 @@ export function AddTelephoneLineModal({
                 />
                 {isPowerInvalid(formData.power_dp) && (
                   <p className='text-red-600 text-xs mt-1'>
-                    ⚠️ Value must be less than 25
+                    ⚠️ Value must be less than 30
                   </p>
                 )}
               </div>
@@ -801,7 +801,7 @@ export function AddTelephoneLineModal({
                 />
                 {isPowerInvalid(formData.power_inbox) && (
                   <p className='text-red-600 text-xs mt-1'>
-                    ⚠️ Value must be less than 25
+                    ⚠️ Value must be less than 30
                   </p>
                 )}
               </div>

@@ -145,7 +145,7 @@ export function EditTelephoneLineModal({
 
   const isPowerInvalid = (value: string) => {
     const num = Number.parseFloat(value);
-    return !isNaN(num) && num >= 25;
+    return !isNaN(num) && num >= 30;
   };
 
   const handleInputChange = (field: string, value: string | number) => {
@@ -357,7 +357,7 @@ export function EditTelephoneLineModal({
                 />
                 {isPowerInvalid(formData.power_dp) && (
                   <p className='text-red-600 text-xs mt-1'>
-                    ⚠️ Value must be less than 25
+                    ⚠️ Value must be less than 30
                   </p>
                 )}
               </div>
@@ -380,7 +380,7 @@ export function EditTelephoneLineModal({
                 />
                 {isPowerInvalid(formData.power_inbox) && (
                   <p className='text-red-600 text-xs mt-1'>
-                    ⚠️ Value must be less than 25
+                    ⚠️ Value must be less than 30
                   </p>
                 )}
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Mail, Phone, MapPin, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getSupabaseClient } from "@/lib/supabase";
+import { tr } from "date-fns/locale";
+
+interface ContactData {
+  contact_numbers: string[];
+  company_name: string;
+  address: string;
+  website: string;
+}
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -17,6 +26,35 @@ export default function ContactPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const [contactData, setContactData] = useState({} as ContactData);
+  const supabase = getSupabaseClient();
+
+  // Fetch data from the table
+  const fetchContactData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("contact")
+        .select("contact_numbers,company_name,address,website")
+        .single();
+      if (error) {
+        toast({
+          title: "Error fetching contact data",
+          description: error.message,
+          variant: "destructive",
+        });
+        return [];
+      }
+      setContactData(data);
+      return data;
+    } catch (error) {
+      toast({
+        title: "Error fetching contact data",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
+      return [];
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +89,10 @@ export default function ContactPage() {
       [e.target.name]: e.target.value,
     }));
   };
+
+  useEffect(() => {
+    fetchContactData();
+  }, []);
 
   return (
     <div className='py-24'>
@@ -151,8 +193,11 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className='font-semibold text-foreground'>Phone</h3>
-                    <p className='text-muted-foreground'>+94 11 234 5678</p>
-                    <p className='text-muted-foreground'>+94 77 123 4567</p>
+                    {contactData?.contact_numbers.map((item) => (
+                      <p key={item} className='text-muted-foreground'>
+                        {item}
+                      </p>
+                    ))}
                   </div>
                 </div>
 
@@ -163,11 +208,13 @@ export default function ContactPage() {
                   <div>
                     <h3 className='font-semibold text-foreground'>Address</h3>
                     <p className='text-muted-foreground'>
-                      123 Business District
-                      <br />
-                      Colombo 03, Sri Lanka
-                      <br />
-                      00300
+                      {contactData?.address.split(",").map((line, index) => (
+                        <span key={index}>
+                          {line}
+                          {index <
+                            contactData.address.split(",").length - 1 && <br />}
+                        </span>
+                      ))}
                     </p>
                   </div>
                 </div>
@@ -183,7 +230,7 @@ export default function ContactPage() {
                     <p className='text-muted-foreground'>
                       Monday - Friday: 9:00 AM - 6:00 PM
                       <br />
-                      Saturday: 9:00 AM - 1:00 PM
+                      Saturday: 9:00 AM - 5:00 PM
                       <br />
                       Sunday: Closed
                     </p>
@@ -204,9 +251,7 @@ export default function ContactPage() {
                     <p className='text-muted-foreground'>
                       Interactive map would be embedded here
                     </p>
-                    <p className='text-sm text-muted-foreground mt-1'>
-                      Colombo 03, Sri Lanka
-                    </p>
+                    
                   </div>
                 </div>
               </CardContent>
