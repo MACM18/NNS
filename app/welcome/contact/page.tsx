@@ -10,6 +10,7 @@ import { Mail, Phone, MapPin, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getSupabaseClient } from "@/lib/supabase";
 import { tr } from "date-fns/locale";
+import Link from "next/link";
 
 interface ContactData {
   contact_numbers: string[];
@@ -26,15 +27,20 @@ export default function ContactPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const [contactData, setContactData] = useState({} as ContactData);
+  const [contactData, setContactData] = useState({
+    contact_numbers: [],
+    company_name: "",
+    address: "",
+    website: "",
+  } as ContactData);
   const supabase = getSupabaseClient();
 
   // Fetch data from the table
   const fetchContactData = async () => {
     try {
       const { data, error } = await supabase
-        .from("contact")
-        .select("contact_numbers,company_name,address,website")
+        .from("company_settings")
+        .select(`contact_numbers,company_name,address,website`)
         .single();
       if (error) {
         toast({
@@ -44,7 +50,7 @@ export default function ContactPage() {
         });
         return [];
       }
-      setContactData(data);
+      setContactData(data as ContactData);
       return data;
     } catch (error) {
       toast({
@@ -182,8 +188,12 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className='font-semibold text-foreground'>Email</h3>
-                    <p className='text-muted-foreground'>info@nns.lk</p>
-                    <p className='text-muted-foreground'>support@nns.lk</p>
+                    <p className='text-muted-foreground'>
+                      <Link href='mailto:infor@nns.lk'>info@nns.lk</Link>
+                    </p>
+                    <p className='text-muted-foreground'>
+                      <Link href='mailto:support@nns.lk'>support@nns.lk</Link>
+                    </p>
                   </div>
                 </div>
 
@@ -193,11 +203,13 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className='font-semibold text-foreground'>Phone</h3>
-                    {contactData?.contact_numbers.map((item) => (
-                      <p key={item} className='text-muted-foreground'>
-                        {item}
-                      </p>
-                    ))}
+                    <div className='space-x-2 flex flex-row flex-wrap'>
+                      {contactData?.contact_numbers?.map((item) => (
+                        <p key={item} className='text-muted-foreground'>
+                          <Link href={`tel:${item}`}>{item}</Link>
+                        </p>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -211,6 +223,9 @@ export default function ContactPage() {
                       {contactData?.address.split(",").map((line, index) => (
                         <span key={index}>
                           {line}
+                          {index < contactData.address.split(",").length - 1
+                            ? ","
+                            : "."}
                           {index <
                             contactData.address.split(",").length - 1 && <br />}
                         </span>
@@ -251,7 +266,6 @@ export default function ContactPage() {
                     <p className='text-muted-foreground'>
                       Interactive map would be embedded here
                     </p>
-                    
                   </div>
                 </div>
               </CardContent>
