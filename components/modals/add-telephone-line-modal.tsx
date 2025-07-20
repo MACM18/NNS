@@ -174,7 +174,7 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
         `,
         )
         .eq("status", "active")
-        .gt("current_quantity", 0)
+        .gt("current_quantity", 10) // Only show drums with more than 10m
         .order("drum_number")
 
       if (error) throw error
@@ -231,18 +231,6 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
         .select("*")
         .eq("status", "accepted")
         .not("id", "in", `(${assignedTaskIds.map((id) => `"${id}"`).join(",")})`)
-      // const { data: lineDetails, error } = await supabase
-      //   .from("line_details")
-      //   .select("task_id")
-      //   .not("task_id", "is", null);
-      // const taskIds =
-      //   lineDetails?.map((ld) => ld.task_id).filter(Boolean) ?? [];
-
-      // const { data: tasks, error: tasksError } = await supabase
-      //   .from("tasks")
-      //   .select("*")
-      //   .in("id", taskIds)
-      //   .order("created_at", { ascending: false });
 
       if (assignedError) throw assignedError
       setAvailableTasks(tasks || [])
@@ -363,17 +351,48 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
       }
 
       // Check if selected drum has enough cable
-      if (formData.selected_drum_id && formData.total_cable > 0) {
+      const totalCableNeeded = Number.parseFloat(formData.total_cable)
+      if (formData.selected_drum_id && totalCableNeeded > 0) {
         const selectedDrum = drumOptions.find((drum) => drum.id === formData.selected_drum_id)
-        if (selectedDrum && formData.total_cable > selectedDrum.current_quantity) {
+        if (selectedDrum && totalCableNeeded > selectedDrum.current_quantity) {
           addNotification({
             title: "Insufficient Cable",
-            message: `Selected drum only has ${selectedDrum.current_quantity}m available, but ${formData.total_cable}m is required`,
+            message: `Selected drum only has ${selectedDrum.current_quantity}m available, but ${totalCableNeeded}m is required`,
             type: "error",
             category: "system",
           })
           setLoading(false)
           return
+        }
+      }
+
+      // Calculate wastage if there's a previous usage on the same drum
+      let calculatedWastage = Number.parseFloat(formData.wastage_input) || 0
+      let previousLineId = null
+
+      if (formData.selected_drum_id && totalCableNeeded > 0) {
+        // Get the last usage of this drum
+        const { data: lastUsage, error: lastUsageError } = await supabase
+          .from("drum_usage")
+          .select("*, line_details(id, cable_end)")
+          .eq("drum_id", formData.selected_drum_id)
+          .order("usage_date", { ascending: false })
+          .limit(1)
+
+        if (lastUsageError) throw lastUsageError
+
+        if (lastUsage && lastUsage.length > 0) {
+          const previousEndPoint = lastUsage[0].cable_end_point || 0
+          const currentStartPoint = Number.parseFloat(formData.cable_start)
+          previousLineId = lastUsage[0].line_details?.id
+
+          // If current start is less than previous end, there's wastage
+          if (currentStartPoint < previousEndPoint) {
+            calculatedWastage += previousEndPoint - currentStartPoint
+            console.log(
+              `Wastage calculated: ${previousEndPoint} - ${currentStartPoint} = ${previousEndPoint - currentStartPoint}`,
+            )
+          }
         }
       }
 
@@ -384,15 +403,16 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
         date: formData.date,
         telephone_no: formData.phone_number,
         dp: formData.dp,
-        power_dp: Number.parseFloat(formData.power_dp),
-        power_inbox: Number.parseFloat(formData.power_inbox),
+        power_dp: powerDP,
+        power_inbox: powerInbox,
         name: formData.name,
         address: formData.address,
         // Cable Measurements
         cable_start: Number.parseFloat(formData.cable_start),
         cable_middle: Number.parseFloat(formData.cable_middle),
         cable_end: Number.parseFloat(formData.cable_end),
-        wastage_input: Number.parseFloat(formData.wastage_input) || 0,
+        wastage_input: calculatedWastage,
+        wastage: calculatedWastage,
         drum_number: formData.drum_number,
 
         // Inventory Fields
@@ -432,9 +452,9 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
 
       if (error) throw error
 
-      // Record drum usage if drum was selected and cable was used
-      if (formData.selected_drum_id && Number(formData.total_cable) > 0) {
-        // Get the current drum state
+      // Record drum usage and update drum quantity if drum was selected
+      if (formData.selected_drum_id && totalCableNeeded > 0) {
+        // Get current drum data
         const { data: currentDrum, error: drumError } = await supabase
           .from("drum_tracking")
           .select("current_quantity, initial_quantity")
@@ -443,54 +463,21 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
 
         if (drumError) throw drumError
 
-        // Get the last usage of this drum to calculate wastage
-        const { data: lastUsage, error: lastUsageError } = await supabase
-          .from("drum_usage")
-          .select("*, line_details(cable_end)")
-          .eq("drum_id", formData.selected_drum_id)
-          .order("usage_date", { ascending: false })
-          .limit(1)
-
-        if (lastUsageError) throw lastUsageError
-
-        // Calculate wastage if there's a previous usage
-        let wastage = 0
-        if (lastUsage && lastUsage.length > 0) {
-          const previousEndPoint = lastUsage[0].line_details?.cable_end || 0
-          const currentStartPoint = Number.parseFloat(formData.cable_start)
-
-          // If current start is less than previous end, there's wastage
-          if (currentStartPoint < previousEndPoint) {
-            wastage = previousEndPoint - currentStartPoint
-
-            // Update the previous line's wastage
-            const { error: wastageError } = await supabase
-              .from("line_details")
-              .update({
-                wastage: wastage,
-                wastage_input: wastage,
-              })
-              .eq("id", lastUsage[0].line_details_id)
-
-            if (wastageError) throw wastageError
-          }
-        }
-
         // Record drum usage
         await supabase.from("drum_usage").insert([
           {
             drum_id: formData.selected_drum_id,
             line_details_id: lineDetails.id,
-            quantity_used: Number(formData.total_cable),
+            quantity_used: totalCableNeeded,
             usage_date: formData.date,
             cable_start_point: Number.parseFloat(formData.cable_start),
             cable_end_point: Number.parseFloat(formData.cable_end),
-            wastage_calculated: wastage,
+            wastage_calculated: calculatedWastage,
           },
         ])
 
-        // Update drum current quantity
-        const newQuantity = currentDrum.current_quantity - Number(formData.total_cable)
+        // Update drum current quantity - subtract the total cable used
+        const newQuantity = currentDrum.current_quantity - totalCableNeeded
         const newStatus = newQuantity <= 10 ? "inactive" : newQuantity <= 0 ? "empty" : "active"
 
         await supabase
@@ -502,6 +489,18 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
           })
           .eq("id", formData.selected_drum_id)
 
+        // Update previous line's wastage if there was wastage calculated
+        if (previousLineId && calculatedWastage > Number.parseFloat(formData.wastage_input || "0")) {
+          const additionalWastage = calculatedWastage - Number.parseFloat(formData.wastage_input || "0")
+          await supabase
+            .from("line_details")
+            .update({
+              wastage: additionalWastage,
+              wastage_input: additionalWastage,
+            })
+            .eq("id", previousLineId)
+        }
+
         // Update inventory_items current_stock for Drop wire cable
         const { data: dropWireItem } = await supabase
           .from("inventory_items")
@@ -510,11 +509,11 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
           .single()
 
         if (dropWireItem) {
-          const newStock = dropWireItem.current_stock - Number(formData.total_cable)
+          const newStock = dropWireItem.current_stock - totalCableNeeded
           await supabase
             .from("inventory_items")
             .update({
-              current_stock: newStock,
+              current_stock: Math.max(0, newStock),
               updated_at: new Date().toISOString(),
             })
             .eq("id", dropWireItem.id)
@@ -523,7 +522,7 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
 
       addNotification({
         title: "Success",
-        message: "Telephone line details added successfully with drum tracking",
+        message: `Telephone line details added successfully. ${calculatedWastage > 0 ? `Wastage: ${calculatedWastage.toFixed(2)}m` : ""}`,
         type: "success",
         category: "system",
       })
@@ -600,8 +599,6 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
     return !isNaN(num) && num >= 30
   }
 
-  const taskLabel = (task: any) => task?.title ?? task?.name ?? `Task ${task.id?.toString().slice(0, 8) ?? ""}`
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
@@ -621,7 +618,12 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
               <Label htmlFor="task_selection">Select Task</Label>
               <Popover open={taskOpen} onOpenChange={setTaskOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" aria-expanded={taskOpen} className="w-full justify-between">
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={taskOpen}
+                    className="w-full justify-between bg-transparent"
+                  >
                     {selectedTask ? selectedTask.title : "Select an available task"}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -793,7 +795,12 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
               <Label htmlFor="drum_selection">Select Cable Drum</Label>
               <Popover open={drumOpen} onOpenChange={setDrumOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" aria-expanded={drumOpen} className="w-full justify-between">
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={drumOpen}
+                    className="w-full justify-between bg-transparent"
+                  >
                     {formData.drum_number || "Select available drum"}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -833,41 +840,44 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                 </PopoverContent>
               </Popover>
               <p className="text-xs text-muted-foreground mt-1">
-                Select a drum to track cable usage. Drums contain 2000m of cable.
+                Select a drum to track cable usage. Only drums with more than 10m are shown.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label htmlFor="cable_start">Cable Start</Label>
+                <Label htmlFor="cable_start">Cable Start (m)</Label>
                 <Input
                   id="cable_start"
                   type="number"
                   step="0.01"
                   value={formData.cable_start}
                   onChange={(e) => handleInputChange("cable_start", e.target.value)}
+                  placeholder="e.g., 1500"
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="cable_middle">Cable Middle</Label>
+                <Label htmlFor="cable_middle">Cable Middle (m)</Label>
                 <Input
                   id="cable_middle"
                   type="number"
                   step="0.01"
                   value={formData.cable_middle}
                   onChange={(e) => handleInputChange("cable_middle", e.target.value)}
+                  placeholder="e.g., 1450"
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="cable_end">Cable End</Label>
+                <Label htmlFor="cable_end">Cable End (m)</Label>
                 <Input
                   id="cable_end"
                   type="number"
                   step="0.01"
                   value={formData.cable_end}
                   onChange={(e) => handleInputChange("cable_end", e.target.value)}
+                  placeholder="e.g., 1400"
                   required
                 />
               </div>
@@ -884,11 +894,11 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                 <div className="text-lg font-bold text-blue-600">{formData.g1}m</div>
               </div>
               <div>
-                <Label className="text-sm font-medium">Total (F1 + G1)</Label>
+                <Label className="text-sm font-medium">Total Cable Used (F1 + G1)</Label>
                 <div className="text-lg font-bold text-green-600">{formData.total_cable}m</div>
               </div>
               <div>
-                <Label htmlFor="wastage_input">Wastage</Label>
+                <Label htmlFor="wastage_input">Manual Wastage</Label>
                 <Input
                   id="wastage_input"
                   type="number"
@@ -911,7 +921,7 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                   Required: {formData.total_cable}m | Available:{" "}
                   {drumOptions.find((d) => d.id === formData.selected_drum_id)?.current_quantity.toFixed(2)}m
                 </p>
-                {formData.total_cable >
+                {Number.parseFloat(formData.total_cable) >
                   (drumOptions.find((d) => d.id === formData.selected_drum_id)?.current_quantity || 0) && (
                   <p className="text-sm text-red-600 mt-1">⚠️ Insufficient cable in selected drum</p>
                 )}
