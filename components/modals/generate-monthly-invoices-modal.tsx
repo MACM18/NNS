@@ -42,7 +42,7 @@ interface LineDetail {
   id: string;
   name: string;
   phone_number: string;
-  total_calc: number;
+  total_cable: number;
   date: string;
   address: string;
 }
@@ -147,7 +147,7 @@ export function GenerateMonthlyInvoicesModal({
 
       const { data, error } = await supabase
         .from("line_details")
-        .select("id, name, phone_number, total_calc, date, address")
+        .select("id, name, phone_number, total_cable, date, address")
         .gte("date", startDate)
         .lte("date", endDate)
         .not("telephone_no", "is", null)
@@ -200,7 +200,7 @@ export function GenerateMonthlyInvoicesModal({
 
     // Calculate total amount for all lines
     const totalAmount = lines.reduce(
-      (sum, line) => sum + calculateRate(line.total_calc),
+      (sum, line) => sum + calculateRate(line.total_cable),
       0
     );
 
@@ -424,7 +424,7 @@ export function GenerateMonthlyInvoicesModal({
                       LKR{" "}
                       {lineDetails
                         .reduce(
-                          (sum, line) => sum + calculateRate(line.total_calc),
+                          (sum, line) => sum + calculateRate(line.total_cable),
                           0
                         )
                         .toLocaleString()}
@@ -512,18 +512,18 @@ export function GenerateMonthlyInvoicesModal({
                               <TableCell>{line.name}</TableCell>
                               <TableCell>{line.phone_number}</TableCell>
                               <TableCell>
-                                {line.total_calc.toFixed(2)}m
+                                {line.total_cable.toFixed(2)}m
                               </TableCell>
                               <TableCell>
                                 LKR{" "}
                                 {calculateRate(
-                                  line.total_calc
+                                  line.total_cable
                                 ).toLocaleString()}
                               </TableCell>
                               <TableCell>
                                 LKR{" "}
                                 {calculateRate(
-                                  line.total_calc
+                                  line.total_cable
                                 ).toLocaleString()}
                               </TableCell>
                             </TableRow>

@@ -64,7 +64,7 @@ export class ExportService {
         customer_name: line.name,
         dp: line.dp,
         installation_date: line.date,
-        cable_used: line.total_calc,
+        cable_used: line.total_cable,
         retainers: line.retainers,
         l_hook: line.l_hook_new,
         c_hook: line.c_hook_new,
