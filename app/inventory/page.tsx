@@ -57,6 +57,13 @@ export interface DrumTracking {
   item_id: string
   initial_quantity: number
   current_quantity: number
+  calculated_current_quantity?: number
+  calculated_status?: string
+  total_used?: number
+  total_wastage?: number
+  usage_count?: number
+  last_usage_date?: string
+  usages?: any[]
   received_date: string
   status: string
   item_name?: string
@@ -279,11 +286,48 @@ export default function InventoryPage() {
         )
         .order("received_date", { ascending: false })
       if (error) throw error
-      const drumsWithName = (data || []).map((drum: any) => ({
-        ...drum,
-        item_name: drum.inventory_items?.name || "",
-      }))
-      setDrums(drumsWithName as DrumTracking[])
+
+      // Fetch drum usage data for all drums
+      const { data: usageData, error: usageError } = await supabase
+        .from("drum_usage")
+        .select("drum_id, quantity_used, usage_date, wastage_calculated, line_details(telephone_no, name)")
+        .order("usage_date", { ascending: false })
+
+      if (usageError) throw usageError
+
+      // Calculate actual usage for each drum
+      const drumsWithUsage = (data || []).map((drum: any) => {
+        const drumUsages = (usageData || []).filter((usage: any) => usage.drum_id === drum.id)
+        const totalUsed = drumUsages.reduce((sum: number, usage: any) => sum + (usage.quantity_used || 0), 0)
+        const totalWastage = drumUsages.reduce((sum: number, usage: any) => sum + (usage.wastage_calculated || 0), 0)
+
+        // Calculate current quantity based on actual usage
+        const calculatedCurrentQuantity = drum.initial_quantity - totalUsed
+
+        // Update status based on calculated quantity
+        let calculatedStatus = drum.status
+        if (calculatedCurrentQuantity <= 0) {
+          calculatedStatus = "empty"
+        } else if (calculatedCurrentQuantity <= 10) {
+          calculatedStatus = "inactive"
+        } else {
+          calculatedStatus = "active"
+        }
+
+        return {
+          ...drum,
+          item_name: drum.inventory_items?.name || "",
+          calculated_current_quantity: Math.max(0, calculatedCurrentQuantity),
+          calculated_status: calculatedStatus,
+          total_used: totalUsed,
+          total_wastage: totalWastage,
+          usage_count: drumUsages.length,
+          last_usage_date: drumUsages.length > 0 ? drumUsages[0].usage_date : null,
+          usages: drumUsages.slice(0, 5), // Keep last 5 usages for details
+        }
+      })
+
+      setDrums(drumsWithUsage as DrumTracking[])
     } catch (error) {
       console.error("Error fetching drums:", error)
     }
@@ -397,6 +441,40 @@ export default function InventoryPage() {
 
   const handleSuccess = () => {
     setRefreshTrigger((prev) => prev + 1)
+  }
+
+  const syncDrumQuantity = async (drum: DrumTracking) => {
+    try {
+      const calculatedQuantity = drum.calculated_current_quantity ?? drum.current_quantity
+      const calculatedStatus = drum.calculated_status ?? drum.status
+
+      const { error } = await supabase
+        .from("drum_tracking")
+        .update({
+          current_quantity: calculatedQuantity,
+          status: calculatedStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", drum.id)
+
+      if (error) throw error
+
+      addNotification({
+        title: "Success",
+        message: `Drum ${drum.drum_number} quantity synced successfully`,
+        type: "success",
+        category: "system",
+      })
+
+      handleSuccess()
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message: "Failed to sync drum quantity",
+        type: "error",
+        category: "system",
+      })
+    }
   }
 
   return (
@@ -713,19 +791,33 @@ export default function InventoryPage() {
                       </TableHeader>
                       <TableBody>
                         {drums.map((drum) => {
+                          const displayQuantity = drum.calculated_current_quantity ?? drum.current_quantity
+                          const displayStatus = drum.calculated_status ?? drum.status
+                          const totalUsed = drum.total_used ?? 0
                           const usagePercentage =
-                            drum.initial_quantity > 0
-                              ? (
-                                  ((drum.initial_quantity - drum.current_quantity) / drum.initial_quantity) *
-                                  100
-                                ).toFixed(1)
-                              : "0.0"
+                            drum.initial_quantity > 0 ? ((totalUsed / drum.initial_quantity) * 100).toFixed(1) : "0.0"
+
                           return (
                             <TableRow key={drum.id}>
                               <TableCell className="font-mono">{drum.drum_number}</TableCell>
                               <TableCell>{drum.item_name || "-"}</TableCell>
                               <TableCell>{drum.initial_quantity}m</TableCell>
-                              <TableCell>{drum.current_quantity}m</TableCell>
+                              <TableCell>
+                                <div className="flex flex-col">
+                                  <span
+                                    className={
+                                      displayQuantity !== drum.current_quantity ? "text-blue-600 font-medium" : ""
+                                    }
+                                  >
+                                    {displayQuantity.toFixed(1)}m
+                                  </span>
+                                  {displayQuantity !== drum.current_quantity && (
+                                    <span className="text-xs text-muted-foreground">
+                                      (DB: {drum.current_quantity}m)
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <span>{usagePercentage}%</span>
@@ -738,15 +830,41 @@ export default function InventoryPage() {
                                             ? "bg-orange-500"
                                             : "bg-green-500"
                                       }`}
-                                      style={{ width: `${usagePercentage}%` }}
+                                      style={{ width: `${Math.min(100, Number(usagePercentage))}%` }}
                                     />
                                   </div>
                                 </div>
+                                {drum.usage_count && drum.usage_count > 0 && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    {drum.usage_count} installation{drum.usage_count !== 1 ? "s" : ""}
+                                    {drum.total_wastage && drum.total_wastage > 0 && (
+                                      <span className="text-orange-600"> • {drum.total_wastage.toFixed(1)}m waste</span>
+                                    )}
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell>
-                                {drum.received_date ? new Date(drum.received_date).toLocaleDateString() : "N/A"}
+                                <div className="flex flex-col">
+                                  <span>
+                                    {drum.received_date ? new Date(drum.received_date).toLocaleDateString() : "N/A"}
+                                  </span>
+                                  {drum.last_usage_date && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Last used: {new Date(drum.last_usage_date).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
                               </TableCell>
-                              <TableCell>{getStatusBadge(drum.status)}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  {getStatusBadge(displayStatus)}
+                                  {displayStatus !== drum.status && (
+                                    <Badge variant="outline" className="text-xs">
+                                      DB: {drum.status}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell className="text-center align-middle">
                                 <div className="flex gap-1 justify-center items-center min-h-[32px]">
                                   <Button
@@ -762,18 +880,31 @@ export default function InventoryPage() {
                                     <Cable className="h-4 w-4" />
                                   </Button>
                                   {(role === "admin" || role === "moderator") && (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      aria-label="Edit Drum"
-                                      className="p-1 h-7 w-7"
-                                      onClick={() => {
-                                        setSelectedDrum(drum)
-                                        setEditDrumModalOpen(true)
-                                      }}
-                                    >
-                                      <Pencil className="h-4 w-4" />
-                                    </Button>
+                                    <>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        aria-label="Edit Drum"
+                                        className="p-1 h-7 w-7"
+                                        onClick={() => {
+                                          setSelectedDrum(drum)
+                                          setEditDrumModalOpen(true)
+                                        }}
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      {displayQuantity !== drum.current_quantity && (
+                                        <Button
+                                          size="icon"
+                                          variant="secondary"
+                                          aria-label="Sync Database"
+                                          className="p-1 h-7 w-7"
+                                          onClick={() => syncDrumQuantity(drum)}
+                                        >
+                                          <Package className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                    </>
                                   )}
                                   {role === "admin" && (
                                     <Button
