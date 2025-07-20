@@ -476,8 +476,9 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
           },
         ])
 
-        // Update drum current quantity - subtract the total cable used
-        const newQuantity = currentDrum.current_quantity - totalCableNeeded
+        // Update drum current quantity - subtract the total cable used AND wastage
+        const totalDeduction = totalCableNeeded + calculatedWastage
+        const newQuantity = currentDrum.current_quantity - totalDeduction
         const newStatus = newQuantity <= 10 ? "inactive" : newQuantity <= 0 ? "empty" : "active"
 
         await supabase
@@ -489,6 +490,23 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
           })
           .eq("id", formData.selected_drum_id)
 
+        // Update inventory_items current_stock for Drop wire cable - subtract cable used AND wastage
+        const { data: dropWireItem } = await supabase
+          .from("inventory_items")
+          .select("id,current_stock")
+          .eq("name", "Drop Wire Cable")
+          .single()
+
+        if (dropWireItem) {
+          const newStock = dropWireItem.current_stock - totalDeduction
+          await supabase
+            .from("inventory_items")
+            .update({
+              current_stock: Math.max(0, newStock),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", dropWireItem.id)
+        }
         // Update previous line's wastage if there was wastage calculated
         if (previousLineId && calculatedWastage > Number.parseFloat(formData.wastage_input || "0")) {
           const additionalWastage = calculatedWastage - Number.parseFloat(formData.wastage_input || "0")
@@ -499,24 +517,6 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
               wastage_input: additionalWastage,
             })
             .eq("id", previousLineId)
-        }
-
-        // Update inventory_items current_stock for Drop wire cable
-        const { data: dropWireItem } = await supabase
-          .from("inventory_items")
-          .select("id,current_stock")
-          .eq("name", "Drop Wire Cable")
-          .single()
-
-        if (dropWireItem) {
-          const newStock = dropWireItem.current_stock - totalCableNeeded
-          await supabase
-            .from("inventory_items")
-            .update({
-              current_stock: Math.max(0, newStock),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", dropWireItem.id)
         }
       }
 

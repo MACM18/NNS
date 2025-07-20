@@ -38,6 +38,7 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
     totalWastage: 0,
     remainingLength: 0,
     usageCount: 0,
+    totalDeducted: 0,
   })
 
   const supabase = getSupabaseClient()
@@ -87,12 +88,14 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
       // Calculate stats
       const totalUsed = (usage || []).reduce((sum, record) => sum + record.quantity_used, 0)
       const totalWastage = (usage || []).reduce((sum, record) => sum + (record.wastage_calculated || 0), 0)
+      const totalDeducted = totalUsed + totalWastage
 
       setDrumStats({
         totalUsed,
         totalWastage,
-        remainingLength: drum.current_quantity,
+        remainingLength: drum.current_quantity, // Use actual current_quantity from drum_tracking
         usageCount: (usage || []).length,
+        totalDeducted, // Add this new field
       })
     } catch (error: any) {
       addNotification({
@@ -146,6 +149,17 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Total Deducted</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">
+                {(drumStats.totalUsed + drumStats.totalWastage).toFixed(1)}m
+              </div>
+              <div className="text-xs text-muted-foreground">Used + Wastage</div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Usage Count</CardTitle>

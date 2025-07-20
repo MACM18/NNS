@@ -300,9 +300,10 @@ export default function InventoryPage() {
         const drumUsages = (usageData || []).filter((usage: any) => usage.drum_id === drum.id)
         const totalUsed = drumUsages.reduce((sum: number, usage: any) => sum + (usage.quantity_used || 0), 0)
         const totalWastage = drumUsages.reduce((sum: number, usage: any) => sum + (usage.wastage_calculated || 0), 0)
+        const totalDeducted = totalUsed + totalWastage
 
-        // Calculate current quantity based on actual usage
-        const calculatedCurrentQuantity = drum.initial_quantity - totalUsed
+        // Calculate current quantity based on actual usage + wastage
+        const calculatedCurrentQuantity = drum.initial_quantity - totalDeducted
 
         // Update status based on calculated quantity
         let calculatedStatus = drum.status
@@ -321,6 +322,7 @@ export default function InventoryPage() {
           calculated_status: calculatedStatus,
           total_used: totalUsed,
           total_wastage: totalWastage,
+          total_deducted: totalDeducted,
           usage_count: drumUsages.length,
           last_usage_date: drumUsages.length > 0 ? drumUsages[0].usage_date : null,
           usages: drumUsages.slice(0, 5), // Keep last 5 usages for details
@@ -461,7 +463,7 @@ export default function InventoryPage() {
 
       addNotification({
         title: "Success",
-        message: `Drum ${drum.drum_number} quantity synced successfully`,
+        message: `Drum ${drum.drum_number} quantity synced successfully (${calculatedQuantity.toFixed(1)}m remaining)`,
         type: "success",
         category: "system",
       })
