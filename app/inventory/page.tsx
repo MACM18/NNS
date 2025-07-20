@@ -8,9 +8,9 @@ import {
   AlertTriangle,
   BarChart3,
   Eye,
-  ChevronDown,
   Pencil,
   Trash,
+  Cable,
 } from "lucide-react";
 import {
   Card,
@@ -39,6 +39,7 @@ import { ManageInventoryItemsModal } from "@/components/modals/manage-inventory-
 import { EditInventoryInvoiceModal } from "@/components/modals/edit-inventory-invoice-modal";
 import { EditInventoryItemModal } from "@/components/modals/edit-inventory-item-modal";
 import { EditDrumModal } from "@/components/modals/edit-drum-modal";
+import { DrumUsageDetailsModal } from "@/components/modals/drum-usage-details-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -79,16 +80,22 @@ interface InventoryItem {
   last_updated: string;
 }
 
-// Fix DrumTracking and WasteReport interfaces to use item_id, and join to inventory_items for name
-interface DrumTracking {
+export interface DrumTracking {
   id: string;
   drum_number: string;
   item_id: string;
   initial_quantity: number;
   current_quantity: number;
+  calculated_current_quantity?: number;
+  calculated_status?: string;
+  total_used?: number;
+  total_wastage?: number;
+  usage_count?: number;
+  last_usage_date?: string;
+  usages?: any[];
   received_date: string;
   status: string;
-  item_name?: string; // populated via join
+  item_name?: string;
 }
 
 interface WasteReport {
@@ -99,10 +106,9 @@ interface WasteReport {
   waste_date: string;
   full_name: string;
   created_at: string;
-  item_name?: string; // populated via join
+  item_name?: string;
 }
 
-// Update the interface to match your DB columns
 interface InventoryInvoiceItem {
   id: string;
   invoice_id: string;
@@ -146,12 +152,13 @@ export default function InventoryPage() {
   const [selectedDrum, setSelectedDrum] = useState<DrumTracking | null>(null);
   const [deleteDrumConfirmOpen, setDeleteDrumConfirmOpen] = useState(false);
   const [drumToDelete, setDrumToDelete] = useState<DrumTracking | null>(null);
-
   const [editItemModalOpen, setEditItemModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-
   const [deleteWasteConfirmOpen, setDeleteWasteConfirmOpen] = useState(false);
   const [wasteToDelete, setWasteToDelete] = useState<WasteReport | null>(null);
+  const [drumUsageModalOpen, setDrumUsageModalOpen] = useState(false);
+  const [selectedDrumForUsage, setSelectedDrumForUsage] =
+    useState<DrumTracking | null>(null);
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
@@ -187,36 +194,25 @@ export default function InventoryPage() {
 
   const fetchStats = async () => {
     try {
-      // Get total items
       const { count: totalItems } = await supabase
         .from("inventory_items")
         .select("*", { count: "exact", head: true });
 
-      // // Get low stock alerts
-      // const { count: lowStockAlerts } = await supabase
-      //   .from("inventory_items")
-      //   .select("*", { count: "exact", head: true })
-      //   .lt("current_stock", "reorder_level");
-      // // ...existing code...
-      // Get low stock alerts
       const { data: lowStockData, error: lowStockError } = await supabase.rpc(
         "low_stock_alert_count"
       );
       const lowStockAlerts = lowStockData ?? 0;
-      // ...existing code...
-      // Get active drums
+
       const { count: activeDrums } = await supabase
         .from("drum_tracking")
         .select("*", { count: "exact", head: true })
         .eq("status", "active");
 
-      // Calculate monthly waste percentage
       const now = new Date();
-      const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM format
+      const currentMonth = now.toISOString().slice(0, 7);
       const year = now.getFullYear();
-      const month = now.getMonth() + 1; // getMonth() is zero-based
+      const month = now.getMonth() + 1;
 
-      // Calculate the last day of the current month
       const lastDay = new Date(year, month, 0).getDate();
       const endDate = `${currentMonth}-${lastDay.toString().padStart(2, "0")}`;
 
@@ -341,7 +337,6 @@ export default function InventoryPage() {
     }
   };
 
-  // Fix: Remove broken left join select for drum_tracking and waste_tracking
   const fetchDrums = async () => {
     try {
       const { data, error } = await supabase
@@ -351,18 +346,66 @@ export default function InventoryPage() {
         )
         .order("received_date", { ascending: false });
       if (error) throw error;
-      // Map item_name from join
-      const drumsWithName = (data || []).map((drum: any) => ({
-        ...drum,
-        item_name: drum.inventory_items?.name || "",
-      }));
-      setDrums(drumsWithName as DrumTracking[]);
+
+      // Fetch drum usage data for all drums
+      const { data: usageData, error: usageError } = await supabase
+        .from("drum_usage")
+        .select(
+          "drum_id, quantity_used, usage_date, wastage_calculated, line_details(telephone_no, name)"
+        )
+        .order("usage_date", { ascending: false });
+
+      if (usageError) throw usageError;
+
+      // Calculate actual usage for each drum
+      const drumsWithUsage = (data || []).map((drum: any) => {
+        const drumUsages = (usageData || []).filter(
+          (usage: any) => usage.drum_id === drum.id
+        );
+        const totalUsed = drumUsages.reduce(
+          (sum: number, usage: any) => sum + (usage.quantity_used || 0),
+          0
+        );
+        const totalWastage = drumUsages.reduce(
+          (sum: number, usage: any) => sum + (usage.wastage_calculated || 0),
+          0
+        );
+        const totalDeducted = totalUsed + totalWastage;
+
+        // Calculate current quantity based on actual usage + wastage
+        const calculatedCurrentQuantity = drum.initial_quantity - totalDeducted;
+
+        // Update status based on calculated quantity
+        let calculatedStatus = drum.status;
+        if (calculatedCurrentQuantity <= 0) {
+          calculatedStatus = "empty";
+        } else if (calculatedCurrentQuantity <= 10) {
+          calculatedStatus = "inactive";
+        } else {
+          calculatedStatus = "active";
+        }
+
+        return {
+          ...drum,
+          item_name: drum.inventory_items?.name || "",
+          calculated_current_quantity: Math.max(0, calculatedCurrentQuantity),
+          calculated_status: calculatedStatus,
+          total_used: totalUsed,
+          total_wastage: totalWastage,
+          total_deducted: totalDeducted,
+          usage_count: drumUsages.length,
+          last_usage_date:
+            drumUsages.length > 0 ? drumUsages[0].usage_date : null,
+          usages: drumUsages.slice(0, 5), // Keep last 5 usages for details
+        };
+      });
+
+      setDrums(drumsWithUsage as DrumTracking[]);
     } catch (error) {
       console.error("Error fetching drums:", error);
     }
   };
 
-  // Update fetchWasteReports to join inventory_items for item_name
   const fetchWasteReports = async () => {
     try {
       const { data, error } = await supabase
@@ -373,7 +416,6 @@ export default function InventoryPage() {
         .order("waste_date", { ascending: false })
         .limit(20);
       if (error) throw error;
-      // Map item_name from join
       const wasteWithName = (data || []).map((w: any) => ({
         ...w,
         item_name: w.inventory_items?.name || "",
@@ -386,7 +428,7 @@ export default function InventoryPage() {
   };
 
   const fetchInvoiceItems = async (invoiceId: string) => {
-    if (invoiceItems[invoiceId]) return; // Already fetched
+    if (invoiceItems[invoiceId]) return;
     try {
       const { data, error } = await supabase
         .from("inventory_invoice_items")
@@ -431,6 +473,12 @@ export default function InventoryPage() {
             Empty
           </Badge>
         );
+      case "inactive":
+        return (
+          <Badge variant='outline' className='bg-orange-100 text-orange-800'>
+            Inactive
+          </Badge>
+        );
       default:
         return <Badge variant='secondary'>{status}</Badge>;
     }
@@ -468,6 +516,45 @@ export default function InventoryPage() {
 
   const handleSuccess = () => {
     setRefreshTrigger((prev) => prev + 1);
+  };
+
+  const syncDrumQuantity = async (drum: DrumTracking) => {
+    try {
+      const calculatedQuantity =
+        drum.calculated_current_quantity ?? drum.current_quantity;
+      const calculatedStatus = drum.calculated_status ?? drum.status;
+
+      const { error } = await supabase
+        .from("drum_tracking")
+        .update({
+          current_quantity: calculatedQuantity,
+          status: calculatedStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", drum.id);
+
+      if (error) throw error;
+
+      addNotification({
+        title: "Success",
+        message: `Drum ${
+          drum.drum_number
+        } quantity synced successfully (${calculatedQuantity.toFixed(
+          1
+        )}m remaining)`,
+        type: "success",
+        category: "system",
+      });
+
+      handleSuccess();
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message: "Failed to sync drum quantity",
+        type: "error",
+        category: "system",
+      });
+    }
   };
 
   return (
@@ -666,7 +753,6 @@ export default function InventoryPage() {
                                       size='sm'
                                       variant='secondary'
                                       onClick={async () => {
-                                        // Ensure invoice items are fetched before opening modal
                                         if (!invoiceItems[invoice.id]) {
                                           await fetchInvoiceItems(invoice.id);
                                         }
@@ -795,7 +881,6 @@ export default function InventoryPage() {
                             <TableCell className='font-medium'>
                               {item.name}
                             </TableCell>
-
                             <TableCell>{item.current_stock}</TableCell>
                             <TableCell>{item.unit}</TableCell>
                             <TableCell>{item.reorder_level || 0}</TableCell>
@@ -850,7 +935,8 @@ export default function InventoryPage() {
                 <CardHeader>
                   <CardTitle>Drum Tracking</CardTitle>
                   <CardDescription>
-                    Cable drum usage and remaining quantities
+                    Cable drum usage and remaining quantities with detailed
+                    tracking
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -872,55 +958,164 @@ export default function InventoryPage() {
                           <TableHead>Usage %</TableHead>
                           <TableHead>Received Date</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead className='w-20 text-center'>
-                            <span className='sr-only'>Actions</span>
+                          <TableHead className='w-32 text-center'>
+                            Actions
                           </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {drums.map((drum) => {
+                          const displayQuantity =
+                            drum.calculated_current_quantity ??
+                            drum.current_quantity;
+                          const displayStatus =
+                            drum.calculated_status ?? drum.status;
+                          const totalUsed =
+                            drum.initial_quantity - displayQuantity;
                           const usagePercentage =
                             drum.initial_quantity > 0
                               ? (
-                                  ((drum.initial_quantity -
-                                    drum.current_quantity) /
-                                    drum.initial_quantity) *
+                                  (totalUsed / drum.initial_quantity) *
                                   100
                                 ).toFixed(1)
                               : "0.0";
+
                           return (
                             <TableRow key={drum.id}>
-                              <TableCell>{drum.drum_number}</TableCell>
+                              <TableCell className='font-mono'>
+                                {drum.drum_number}
+                              </TableCell>
                               <TableCell>{drum.item_name || "-"}</TableCell>
-                              <TableCell>{drum.initial_quantity}</TableCell>
-                              <TableCell>{drum.current_quantity}</TableCell>
-                              <TableCell>{usagePercentage}%</TableCell>
+                              <TableCell>{drum.initial_quantity}m</TableCell>
                               <TableCell>
-                                {drum.received_date
-                                  ? new Date(
-                                      drum.received_date
-                                    ).toLocaleDateString()
-                                  : "N/A"}
+                                <div className='flex flex-col'>
+                                  <span
+                                    className={
+                                      displayQuantity !== drum.current_quantity
+                                        ? "text-blue-600 font-medium"
+                                        : ""
+                                    }
+                                  >
+                                    {displayQuantity.toFixed(1)}m
+                                  </span>
+                                  {displayQuantity !==
+                                    drum.current_quantity && (
+                                    <span className='text-xs text-muted-foreground'>
+                                      (DB: {drum.current_quantity}m)
+                                    </span>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell>
-                                {getStatusBadge(drum.status)}
+                                <div className='flex items-center gap-2'>
+                                  <span>{usagePercentage}%</span>
+                                  <div className='w-16 h-2 bg-gray-200 rounded-full overflow-hidden'>
+                                    <div
+                                      className={`h-full transition-all ${
+                                        Number(usagePercentage) > 80
+                                          ? "bg-red-500"
+                                          : Number(usagePercentage) > 60
+                                          ? "bg-orange-500"
+                                          : "bg-green-500"
+                                      }`}
+                                      style={{
+                                        width: `${Math.min(
+                                          100,
+                                          Number(usagePercentage)
+                                        )}%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                                {drum.usage_count && drum.usage_count > 0 && (
+                                  <div className='text-xs text-muted-foreground mt-1'>
+                                    {drum.usage_count} installation
+                                    {drum.usage_count !== 1 ? "s" : ""}
+                                    {drum.total_wastage &&
+                                      drum.total_wastage > 0 && (
+                                        <span className='text-orange-600'>
+                                          {" "}
+                                          • {drum.total_wastage.toFixed(1)}m
+                                          waste
+                                        </span>
+                                      )}
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className='flex flex-col'>
+                                  <span>
+                                    {drum.received_date
+                                      ? new Date(
+                                          drum.received_date
+                                        ).toLocaleDateString()
+                                      : "N/A"}
+                                  </span>
+                                  {drum.last_usage_date && (
+                                    <span className='text-xs text-muted-foreground'>
+                                      Last used:{" "}
+                                      {new Date(
+                                        drum.last_usage_date
+                                      ).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className='flex flex-col gap-1'>
+                                  {getStatusBadge(displayStatus)}
+                                  {displayStatus !== drum.status && (
+                                    <Badge
+                                      variant='outline'
+                                      className='text-xs'
+                                    >
+                                      DB: {drum.status}
+                                    </Badge>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className='text-center align-middle'>
                                 <div className='flex gap-1 justify-center items-center min-h-[32px]'>
+                                  <Button
+                                    size='icon'
+                                    variant='outline'
+                                    aria-label='View Usage Details'
+                                    className='p-1 h-7 w-7 bg-transparent'
+                                    onClick={() => {
+                                      setSelectedDrumForUsage(drum);
+                                      setDrumUsageModalOpen(true);
+                                    }}
+                                  >
+                                    <Cable className='h-4 w-4' />
+                                  </Button>
                                   {(role === "admin" ||
                                     role === "moderator") && (
-                                    <Button
-                                      size='icon'
-                                      variant='ghost'
-                                      aria-label='Edit Drum'
-                                      className='p-1 h-7 w-7'
-                                      onClick={() => {
-                                        setSelectedDrum(drum);
-                                        setEditDrumModalOpen(true);
-                                      }}
-                                    >
-                                      <Pencil className='h-4 w-4' />
-                                    </Button>
+                                    <>
+                                      <Button
+                                        size='icon'
+                                        variant='ghost'
+                                        aria-label='Edit Drum'
+                                        className='p-1 h-7 w-7'
+                                        onClick={() => {
+                                          setSelectedDrum(drum);
+                                          setEditDrumModalOpen(true);
+                                        }}
+                                      >
+                                        <Pencil className='h-4 w-4' />
+                                      </Button>
+                                      {displayQuantity !==
+                                        drum.current_quantity && (
+                                        <Button
+                                          size='icon'
+                                          variant='secondary'
+                                          aria-label='Sync Database'
+                                          className='p-1 h-7 w-7'
+                                          onClick={() => syncDrumQuantity(drum)}
+                                        >
+                                          <Package className='h-4 w-4' />
+                                        </Button>
+                                      )}
+                                    </>
                                   )}
                                   {role === "admin" && (
                                     <Button
@@ -1036,6 +1231,7 @@ export default function InventoryPage() {
             </TabsContent>
           </Tabs>
         </main>
+
         {/* Modals */}
         <AddInventoryInvoiceModal
           open={addInvoiceModalOpen}
@@ -1063,7 +1259,31 @@ export default function InventoryPage() {
           onOpenChange={setManageItemsModalOpen}
           userRole={role ?? ""}
         />
-        {/* Delete Confirmation Dialog */}
+        <EditDrumModal
+          open={editDrumModalOpen}
+          drum={selectedDrum}
+          onClose={() => {
+            setEditDrumModalOpen(false);
+            setSelectedDrum(null);
+          }}
+          onSuccess={handleSuccess}
+          supabase={supabase}
+          addNotification={addNotification}
+        />
+        <EditInventoryItemModal
+          open={editItemModalOpen}
+          onOpenChange={setEditItemModalOpen}
+          item={selectedItem}
+          onSuccess={handleSuccess}
+        />
+        <DrumUsageDetailsModal
+          open={drumUsageModalOpen}
+          onOpenChange={setDrumUsageModalOpen}
+          drumId={selectedDrumForUsage?.id || null}
+          drumNumber={selectedDrumForUsage?.drum_number || ""}
+        />
+
+        {/* Delete Confirmation Dialogs */}
         <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
           <DialogContent>
             <DialogHeader>
@@ -1112,19 +1332,7 @@ export default function InventoryPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* Edit Drum Modal */}
-        <EditDrumModal
-          open={editDrumModalOpen}
-          drum={selectedDrum}
-          onClose={() => {
-            setEditDrumModalOpen(false);
-            setSelectedDrum(null);
-          }}
-          onSuccess={handleSuccess}
-          supabase={supabase}
-          addNotification={addNotification}
-        />
-        {/* Delete Drum Confirmation Dialog */}
+
         <Dialog
           open={deleteDrumConfirmOpen}
           onOpenChange={setDeleteDrumConfirmOpen}
@@ -1176,13 +1384,7 @@ export default function InventoryPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        <EditInventoryItemModal
-          open={editItemModalOpen}
-          onOpenChange={setEditItemModalOpen}
-          item={selectedItem}
-          onSuccess={handleSuccess}
-        />
-        {/* Waste Delete Confirmation Dialog */}
+
         <Dialog
           open={deleteWasteConfirmOpen}
           onOpenChange={setDeleteWasteConfirmOpen}
@@ -1204,13 +1406,11 @@ export default function InventoryPage() {
                 onClick={async () => {
                   if (wasteToDelete) {
                     try {
-                      // Delete waste record
                       const { error: deleteError } = await supabase
                         .from("waste_tracking")
                         .delete()
                         .eq("id", wasteToDelete.id);
                       if (deleteError) throw deleteError;
-                      // Add quantity back to inventory_items (manual fetch and update)
                       const { data: itemData, error: fetchError } =
                         await supabase
                           .from("inventory_items")
