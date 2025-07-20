@@ -326,7 +326,7 @@ export function EditTelephoneLineModal({ open, onOpenChange, onSuccess, lineData
       if (updateError) throw updateError
 
       // Handle drum usage changes
-      if (originalDrumUsage || (newDrumId && newTotalCable > 0)) {
+      if (newDrumId && newTotalCable > 0) {
         // Step 1: Restore original drum quantity if there was previous usage
         if (originalDrumUsage && originalDrumId) {
           const { data: originalDrum, error: originalDrumError } = await supabase
@@ -372,65 +372,104 @@ export function EditTelephoneLineModal({ open, onOpenChange, onSuccess, lineData
           await supabase.from("drum_usage").delete().eq("id", originalDrumUsage.id)
         }
 
-        // Step 2: Apply new drum usage if a drum is selected
-        if (newDrumId && newTotalCable > 0) {
-          // Get current drum data
-          const { data: newDrum, error: newDrumError } = await supabase
-            .from("drum_tracking")
-            .select("current_quantity, initial_quantity")
-            .eq("id", newDrumId)
-            .single()
+        // Step 2: Apply new drum usage (this runs whether there was original usage or not)
+        // Get current drum data
+        const { data: newDrum, error: newDrumError } = await supabase
+          .from("drum_tracking")
+          .select("current_quantity, initial_quantity")
+          .eq("id", newDrumId)
+          .single()
 
-          if (newDrumError) throw newDrumError
+        if (newDrumError) throw newDrumError
 
-          // Create new drum usage record
-          await supabase.from("drum_usage").insert([
-            {
-              drum_id: newDrumId,
-              line_details_id: lineData.id,
-              quantity_used: newTotalCable,
-              usage_date: formData.date,
-              cable_start_point: Number.parseFloat(formData.cable_start),
-              cable_end_point: Number.parseFloat(formData.cable_end),
-              wastage_calculated: calculatedWastage,
-            },
-          ])
+        // Calculate wastage for the new drum
+        let finalWastage = Number.parseFloat(formData.wastage_input) || 0
+        let previousLineId = null
 
-          // Update new drum current quantity
-          const newQuantity = newDrum.current_quantity - newTotalCable
-          const newStatus = newQuantity <= 10 ? "inactive" : newQuantity <= 0 ? "empty" : "active"
+        // Get the last usage of the new drum (excluding current line)
+        const { data: lastUsage, error: lastUsageError } = await supabase
+          .from("drum_usage")
+          .select("*, line_details(id, cable_end)")
+          .eq("drum_id", newDrumId)
+          .neq("line_details_id", lineData.id) // Exclude current line
+          .order("usage_date", { ascending: false })
+          .limit(1)
 
-          await supabase
-            .from("drum_tracking")
-            .update({
-              current_quantity: Math.max(0, newQuantity),
-              status: newStatus,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", newDrumId)
+        if (lastUsageError) throw lastUsageError
 
-          // Update inventory_items - subtract the new cable usage
-          const { data: dropWireItem } = await supabase
-            .from("inventory_items")
-            .select("id,current_stock")
-            .eq("name", "Drop Wire Cable")
-            .single()
+        if (lastUsage && lastUsage.length > 0) {
+          const previousEndPoint = lastUsage[0].cable_end_point || 0
+          const currentStartPoint = Number.parseFloat(formData.cable_start)
+          previousLineId = lastUsage[0].line_details?.id
 
-          if (dropWireItem) {
-            const newStock = dropWireItem.current_stock - newTotalCable
-            await supabase
-              .from("inventory_items")
-              .update({
-                current_stock: Math.max(0, newStock),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", dropWireItem.id)
+          // If current start is less than previous end, there's wastage
+          if (currentStartPoint < previousEndPoint) {
+            finalWastage += previousEndPoint - currentStartPoint
           }
         }
 
+        // Create new drum usage record
+        const { error: usageInsertError } = await supabase.from("drum_usage").insert([
+          {
+            drum_id: newDrumId,
+            line_details_id: lineData.id,
+            quantity_used: newTotalCable,
+            usage_date: formData.date,
+            cable_start_point: Number.parseFloat(formData.cable_start),
+            cable_end_point: Number.parseFloat(formData.cable_end),
+            wastage_calculated: finalWastage,
+          },
+        ])
+
+        if (usageInsertError) throw usageInsertError
+
+        // Update new drum current quantity
+        const newQuantity = newDrum.current_quantity - newTotalCable
+        const newStatus = newQuantity <= 10 ? "inactive" : newQuantity <= 0 ? "empty" : "active"
+
+        const { error: drumUpdateError } = await supabase
+          .from("drum_tracking")
+          .update({
+            current_quantity: Math.max(0, newQuantity),
+            status: newStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", newDrumId)
+
+        if (drumUpdateError) throw drumUpdateError
+
+        // Update inventory_items - subtract the new cable usage
+        const { data: dropWireItem } = await supabase
+          .from("inventory_items")
+          .select("id,current_stock")
+          .eq("name", "Drop Wire Cable")
+          .single()
+
+        if (dropWireItem) {
+          const newStock = dropWireItem.current_stock - newTotalCable
+          const { error: inventoryUpdateError } = await supabase
+            .from("inventory_items")
+            .update({
+              current_stock: Math.max(0, newStock),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", dropWireItem.id)
+
+          if (inventoryUpdateError) throw inventoryUpdateError
+        }
+
+        // Update the line details with final wastage
+        await supabase
+          .from("line_details")
+          .update({
+            wastage: finalWastage,
+            wastage_input: finalWastage,
+          })
+          .eq("id", lineData.id)
+
         // Step 3: Update previous line's wastage if there was wastage calculated
-        if (previousLineId && calculatedWastage > Number.parseFloat(formData.wastage_input || "0")) {
-          const additionalWastage = calculatedWastage - Number.parseFloat(formData.wastage_input || "0")
+        if (previousLineId && finalWastage > Number.parseFloat(formData.wastage_input || "0")) {
+          const additionalWastage = finalWastage - Number.parseFloat(formData.wastage_input || "0")
           await supabase
             .from("line_details")
             .update({
@@ -439,6 +478,49 @@ export function EditTelephoneLineModal({ open, onOpenChange, onSuccess, lineData
             })
             .eq("id", previousLineId)
         }
+      } else if (originalDrumUsage && originalDrumId) {
+        // Case: Removing drum usage (no new drum selected but there was original usage)
+        const { data: originalDrum, error: originalDrumError } = await supabase
+          .from("drum_tracking")
+          .select("current_quantity, initial_quantity")
+          .eq("id", originalDrumId)
+          .single()
+
+        if (originalDrumError) throw originalDrumError
+
+        // Restore the quantity that was previously used
+        const restoredQuantity = originalDrum.current_quantity + originalDrumUsage.quantity_used
+        const restoredStatus = restoredQuantity <= 10 ? "inactive" : restoredQuantity <= 0 ? "empty" : "active"
+
+        await supabase
+          .from("drum_tracking")
+          .update({
+            current_quantity: Math.min(restoredQuantity, originalDrum.initial_quantity),
+            status: restoredStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", originalDrumId)
+
+        // Update inventory_items - restore the cable stock
+        const { data: dropWireItem } = await supabase
+          .from("inventory_items")
+          .select("id,current_stock")
+          .eq("name", "Drop Wire Cable")
+          .single()
+
+        if (dropWireItem) {
+          const restoredStock = dropWireItem.current_stock + originalDrumUsage.quantity_used
+          await supabase
+            .from("inventory_items")
+            .update({
+              current_stock: restoredStock,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", dropWireItem.id)
+        }
+
+        // Delete the old drum usage record
+        await supabase.from("drum_usage").delete().eq("id", originalDrumUsage.id)
       }
 
       addNotification({
