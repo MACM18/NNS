@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+"use client"
+
+import type React from "react"
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -10,178 +13,281 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { getSupabaseClient } from "@/lib/supabase";
-import { useNotification } from "@/contexts/notification-context";
-import { Package, Calculator, AlertTriangle } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+} from "@/components/ui/dialog"
+import { Separator } from "@/components/ui/separator"
+import { getSupabaseClient } from "@/lib/supabase"
+import { useNotification } from "@/contexts/notification-context"
+import { Package, Calculator, AlertTriangle } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Check, ChevronsUpDown } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface EditTelephoneLineModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
-  lineData: any;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSuccess: () => void
+  lineData: any
 }
 
 interface DrumOption {
-  id: string;
-  drum_number: string;
-  current_quantity: number;
-  item_name: string;
+  id: string
+  drum_number: string
+  current_quantity: number
+  item_name: string
 }
 
-export function EditTelephoneLineModal({
-  open,
-  onOpenChange,
-  onSuccess,
-  lineData,
-}: EditTelephoneLineModalProps) {
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({ ...lineData });
-  const [dpValidationError, setDpValidationError] = useState("");
-  const [drumOptions, setDrumOptions] = useState<DrumOption[]>([]);
-  const [drumOpen, setDrumOpen] = useState(false);
-  const supabase = getSupabaseClient();
-  const { addNotification } = useNotification();
+interface DrumUsageRecord {
+  id: string
+  drum_id: string
+  quantity_used: number
+  cable_start_point: number
+  cable_end_point: number
+  wastage_calculated: number
+}
+
+export function EditTelephoneLineModal({ open, onOpenChange, onSuccess, lineData }: EditTelephoneLineModalProps) {
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({ ...lineData })
+  const [dpValidationError, setDpValidationError] = useState("")
+  const [drumOptions, setDrumOptions] = useState<DrumOption[]>([])
+  const [drumOpen, setDrumOpen] = useState(false)
+  const [originalDrumUsage, setOriginalDrumUsage] = useState<DrumUsageRecord | null>(null)
+  const [originalTotalCable, setOriginalTotalCable] = useState(0)
+  const supabase = getSupabaseClient()
+  const { addNotification } = useNotification()
 
   useEffect(() => {
     if (lineData) {
       // Support both possible field names for phone number
-      setFormData({
+      const initialFormData = {
         ...lineData,
         phone_number: lineData.phone_number || lineData.telephone_no || "",
-      });
+      }
+      setFormData(initialFormData)
+
+      // Calculate original total cable
+      const start = Number.parseFloat(lineData.cable_start) || 0
+      const middle = Number.parseFloat(lineData.cable_middle) || 0
+      const end = Number.parseFloat(lineData.cable_end) || 0
+      const f1 = Math.abs(start - middle)
+      const g1 = Math.abs(middle - end)
+      const originalTotal = f1 + g1
+      setOriginalTotalCable(originalTotal)
+
+      // Fetch original drum usage record
+      fetchOriginalDrumUsage(lineData.id)
     }
-  }, [lineData]);
+  }, [lineData])
 
   // Auto-calculate F1, G1, and Total when cable values change
   useEffect(() => {
-    const start = Number.parseFloat(formData.cable_start) || 0;
-    const middle = Number.parseFloat(formData.cable_middle) || 0;
-    const end = Number.parseFloat(formData.cable_end) || 0;
-    const f1 = Math.abs(start - middle);
-    const g1 = Math.abs(middle - end);
-    const total_cable = f1 + g1;
+    const start = Number.parseFloat(formData.cable_start) || 0
+    const middle = Number.parseFloat(formData.cable_middle) || 0
+    const end = Number.parseFloat(formData.cable_end) || 0
+    const f1 = Math.abs(start - middle)
+    const g1 = Math.abs(middle - end)
+    const total_cable = f1 + g1
     setFormData((prev: any) => ({
       ...prev,
       f1: f1.toFixed(2),
       g1: g1.toFixed(2),
       total_cable: total_cable.toFixed(2),
-    }));
-  }, [formData.cable_start, formData.cable_middle, formData.cable_end]);
+    }))
+  }, [formData.cable_start, formData.cable_middle, formData.cable_end])
 
   // Auto-calculate Nut & Bolt (½ of L-Hook)
   useEffect(() => {
-    const lHook = Number(formData.l_hook) || 0;
-    const nutBolt = Math.ceil(lHook / 2);
+    const lHook = Number(formData.l_hook) || 0
+    const nutBolt = Math.ceil(lHook / 2)
     setFormData((prev: any) => ({
       ...prev,
       nut_bolt: String(nutBolt),
-    }));
-  }, [formData.l_hook]);
+    }))
+  }, [formData.l_hook])
 
   // Auto-sync Screw Nail with Roll Plug
   useEffect(() => {
-    const rollPlug = Number(formData.roll_plug) || 0;
+    const rollPlug = Number(formData.roll_plug) || 0
     setFormData((prev: any) => ({
       ...prev,
       screw_nail: String(rollPlug),
-    }));
-  }, [formData.roll_plug]);
+    }))
+  }, [formData.roll_plug])
 
   useEffect(() => {
     if (open) {
-      fetchDrumOptions();
+      fetchDrumOptions()
     }
-  }, [open]);
+  }, [open])
+
+  const fetchOriginalDrumUsage = async (lineDetailsId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("drum_usage")
+        .select("*")
+        .eq("line_details_id", lineDetailsId)
+        .single()
+
+      if (error && error.code !== "PGRST116") {
+        // PGRST116 is "not found"
+        throw error
+      }
+
+      setOriginalDrumUsage(data || null)
+    } catch (error) {
+      console.error("Error fetching original drum usage:", error)
+    }
+  }
 
   const fetchDrumOptions = async () => {
     try {
       const { data, error } = await supabase
         .from("drum_tracking")
         .select(`id, drum_number, current_quantity, inventory_items(name)`)
-        .eq("status", "active")
-        .gt("current_quantity", 0)
-        .order("drum_number");
-      if (error) throw error;
+        .in("status", ["active", "inactive"]) // Include both active and inactive drums for editing
+        .order("drum_number")
+      if (error) throw error
       const drums = data.map((drum: any) => ({
         id: drum.id,
         drum_number: drum.drum_number,
         current_quantity: drum.current_quantity,
         item_name: drum.inventory_items?.name || "Unknown",
-      }));
-      setDrumOptions(drums);
+      }))
+      setDrumOptions(drums)
     } catch (error) {
-      console.error("Error fetching drum options:", error);
+      console.error("Error fetching drum options:", error)
     }
-  };
+  }
 
   const validateDP = (dp: string): boolean => {
-    const dpPattern = /^[A-Z]{1,4}-[A-Z]{1,4}-\d{4}-\d{3}-0[1-8]$/;
+    const dpPattern = /^[A-Z]{1,4}-[A-Z]{1,4}-\d{4}-\d{3}-0[1-8]$/
     if (!dpPattern.test(dp)) {
-      setDpValidationError(
-        "DP format should be: XX-XXXX-XXXX-XXX-0X (e.g., HR-PKJ-0536-021-05)"
-      );
-      return false;
+      setDpValidationError("DP format should be: XX-XXXX-XXXX-XXX-0X (e.g., HR-PKJ-0536-021-05)")
+      return false
     }
-    setDpValidationError("");
-    return true;
-  };
+    setDpValidationError("")
+    return true
+  }
 
   const isPowerInvalid = (value: string) => {
-    const num = Number.parseFloat(value);
-    return !isNaN(num) && num >= 30;
-  };
+    const num = Number.parseFloat(value)
+    return !isNaN(num) && num >= 30
+  }
 
   const handleInputChange = (field: string, value: string | number) => {
-    setFormData((prev: any) => ({ ...prev, [field]: value }));
+    setFormData((prev: any) => ({ ...prev, [field]: value }))
     if (field === "dp" && typeof value === "string") {
-      validateDP(value);
+      validateDP(value)
     }
     // Auto-fill drum number when drum is selected
     if (field === "selected_drum_id" && value) {
-      const selectedDrum = drumOptions.find((drum) => drum.id === value);
+      const selectedDrum = drumOptions.find((drum) => drum.id === value)
       if (selectedDrum) {
         setFormData((prev: any) => ({
           ...prev,
           drum_number: selectedDrum.drum_number,
-        }));
+        }))
       }
     }
-  };
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+    e.preventDefault()
+    setLoading(true)
+
     try {
-      // Prepare update data
+      // Validate DP format
+      if (!validateDP(formData.dp)) {
+        setLoading(false)
+        return
+      }
+
+      // Validate power values
+      const powerDP = Number.parseFloat(formData.power_dp)
+      const powerInbox = Number.parseFloat(formData.power_inbox)
+
+      if (powerDP >= 30 || powerInbox >= 30) {
+        addNotification({
+          title: "Validation Error",
+          message: "Power values must be less than 30",
+          type: "error",
+          category: "system",
+        })
+        setLoading(false)
+        return
+      }
+
+      const newTotalCable = Number.parseFloat(formData.total_cable)
+      const originalDrumId = originalDrumUsage?.drum_id
+      const newDrumId = formData.selected_drum_id
+
+      // Check if selected drum has enough cable (if drum changed or cable amount increased)
+      if (newDrumId && newTotalCable > 0) {
+        const selectedDrum = drumOptions.find((drum) => drum.id === newDrumId)
+        if (selectedDrum) {
+          let availableQuantity = selectedDrum.current_quantity
+
+          // If it's the same drum, add back the original usage to check availability
+          if (originalDrumId === newDrumId && originalDrumUsage) {
+            availableQuantity += originalDrumUsage.quantity_used
+          }
+
+          if (newTotalCable > availableQuantity) {
+            addNotification({
+              title: "Insufficient Cable",
+              message: `Selected drum only has ${availableQuantity}m available, but ${newTotalCable}m is required`,
+              type: "error",
+              category: "system",
+            })
+            setLoading(false)
+            return
+          }
+        }
+      }
+
+      // Calculate wastage for the new configuration
+      let calculatedWastage = Number.parseFloat(formData.wastage_input) || 0
+      let previousLineId = null
+
+      if (newDrumId && newTotalCable > 0) {
+        // Get the last usage of the new drum (excluding current line)
+        const { data: lastUsage, error: lastUsageError } = await supabase
+          .from("drum_usage")
+          .select("*, line_details(id, cable_end)")
+          .eq("drum_id", newDrumId)
+          .neq("line_details_id", lineData.id) // Exclude current line
+          .order("usage_date", { ascending: false })
+          .limit(1)
+
+        if (lastUsageError) throw lastUsageError
+
+        if (lastUsage && lastUsage.length > 0) {
+          const previousEndPoint = lastUsage[0].cable_end_point || 0
+          const currentStartPoint = Number.parseFloat(formData.cable_start)
+          previousLineId = lastUsage[0].line_details?.id
+
+          // If current start is less than previous end, there's wastage
+          if (currentStartPoint < previousEndPoint) {
+            calculatedWastage += previousEndPoint - currentStartPoint
+          }
+        }
+      }
+
+      // Prepare data for update
       const updateData = {
         date: formData.date,
         telephone_no: formData.phone_number,
         dp: formData.dp,
-        power_dp: Number.parseFloat(formData.power_dp),
-        power_inbox: Number.parseFloat(formData.power_inbox),
+        power_dp: powerDP,
+        power_inbox: powerInbox,
         name: formData.name,
         address: formData.address,
         cable_start: Number.parseFloat(formData.cable_start),
         cable_middle: Number.parseFloat(formData.cable_middle),
-        cable_end: Number.parseFloat(formData.cable_end),  
-        wastage_input: Number.parseFloat(formData.wastage_input) || 0,
+        cable_end: Number.parseFloat(formData.cable_end),
+        wastage_input: calculatedWastage,
+        wastage: calculatedWastage,
         drum_number: formData.drum_number,
         retainers: Number(formData.retainers) || 0,
         l_hook: Number(formData.l_hook) || 0,
@@ -213,196 +319,262 @@ export function EditTelephoneLineModal({
         bend: Number(formData.bend) || 0,
         rj11: Number(formData.rj11) || 0,
         rj12: Number(formData.rj12) || 0,
-      };
-      const { error } = await supabase
-        .from("line_details")
-        .update(updateData)
-        .eq("id", lineData.id);
-      if (error) throw error;
-      // Update drum and inventory if drum or total_cable changed
-      if (formData.selected_drum_id && Number(formData.total_cable) > 0) {
-        // Update drum current quantity
-        const selectedDrum = drumOptions.find(
-          (drum) => drum.id === formData.selected_drum_id
-        );
-        if (selectedDrum) {
-          const newQuantity =
-            selectedDrum.current_quantity - Number(formData.total_cable);
+      }
+
+      // Update line details
+      const { error: updateError } = await supabase.from("line_details").update(updateData).eq("id", lineData.id)
+      if (updateError) throw updateError
+
+      // Handle drum usage changes
+      if (originalDrumUsage || (newDrumId && newTotalCable > 0)) {
+        // Step 1: Restore original drum quantity if there was previous usage
+        if (originalDrumUsage && originalDrumId) {
+          const { data: originalDrum, error: originalDrumError } = await supabase
+            .from("drum_tracking")
+            .select("current_quantity, initial_quantity")
+            .eq("id", originalDrumId)
+            .single()
+
+          if (originalDrumError) throw originalDrumError
+
+          // Restore the quantity that was previously used
+          const restoredQuantity = originalDrum.current_quantity + originalDrumUsage.quantity_used
+          const restoredStatus = restoredQuantity <= 10 ? "inactive" : restoredQuantity <= 0 ? "empty" : "active"
+
           await supabase
             .from("drum_tracking")
             .update({
-              current_quantity: newQuantity,
-              status: newQuantity <= 0 ? "empty" : "active",
+              current_quantity: Math.min(restoredQuantity, originalDrum.initial_quantity),
+              status: restoredStatus,
               updated_at: new Date().toISOString(),
             })
-            .eq("id", formData.selected_drum_id);
-        }
-        // Update inventory_items current_stock for Drop wire cable
-        const { data: dropWireItem } = await supabase
-          .from("inventory_items")
-          .select("id,current_stock")
-          .eq("name", "Drop Wire Cable")
-          .single();
-        if (dropWireItem) {
-          const newStock = dropWireItem.current_stock - Number(formData.total_cable);
-          await supabase
+            .eq("id", originalDrumId)
+
+          // Update inventory_items - restore the cable stock
+          const { data: dropWireItem } = await supabase
             .from("inventory_items")
+            .select("id,current_stock")
+            .eq("name", "Drop Wire Cable")
+            .single()
+
+          if (dropWireItem) {
+            const restoredStock = dropWireItem.current_stock + originalDrumUsage.quantity_used
+            await supabase
+              .from("inventory_items")
+              .update({
+                current_stock: restoredStock,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", dropWireItem.id)
+          }
+
+          // Delete the old drum usage record
+          await supabase.from("drum_usage").delete().eq("id", originalDrumUsage.id)
+        }
+
+        // Step 2: Apply new drum usage if a drum is selected
+        if (newDrumId && newTotalCable > 0) {
+          // Get current drum data
+          const { data: newDrum, error: newDrumError } = await supabase
+            .from("drum_tracking")
+            .select("current_quantity, initial_quantity")
+            .eq("id", newDrumId)
+            .single()
+
+          if (newDrumError) throw newDrumError
+
+          // Create new drum usage record
+          await supabase.from("drum_usage").insert([
+            {
+              drum_id: newDrumId,
+              line_details_id: lineData.id,
+              quantity_used: newTotalCable,
+              usage_date: formData.date,
+              cable_start_point: Number.parseFloat(formData.cable_start),
+              cable_end_point: Number.parseFloat(formData.cable_end),
+              wastage_calculated: calculatedWastage,
+            },
+          ])
+
+          // Update new drum current quantity
+          const newQuantity = newDrum.current_quantity - newTotalCable
+          const newStatus = newQuantity <= 10 ? "inactive" : newQuantity <= 0 ? "empty" : "active"
+
+          await supabase
+            .from("drum_tracking")
             .update({
-              current_stock: newStock,
+              current_quantity: Math.max(0, newQuantity),
+              status: newStatus,
               updated_at: new Date().toISOString(),
             })
-            .eq("id", dropWireItem.id);
+            .eq("id", newDrumId)
+
+          // Update inventory_items - subtract the new cable usage
+          const { data: dropWireItem } = await supabase
+            .from("inventory_items")
+            .select("id,current_stock")
+            .eq("name", "Drop Wire Cable")
+            .single()
+
+          if (dropWireItem) {
+            const newStock = dropWireItem.current_stock - newTotalCable
+            await supabase
+              .from("inventory_items")
+              .update({
+                current_stock: Math.max(0, newStock),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", dropWireItem.id)
+          }
+        }
+
+        // Step 3: Update previous line's wastage if there was wastage calculated
+        if (previousLineId && calculatedWastage > Number.parseFloat(formData.wastage_input || "0")) {
+          const additionalWastage = calculatedWastage - Number.parseFloat(formData.wastage_input || "0")
+          await supabase
+            .from("line_details")
+            .update({
+              wastage: additionalWastage,
+              wastage_input: additionalWastage,
+            })
+            .eq("id", previousLineId)
         }
       }
+
       addNotification({
         title: "Success",
-        message: "Line details updated successfully",
+        message: `Line details updated successfully. ${calculatedWastage > 0 ? `Wastage: ${calculatedWastage.toFixed(2)}m` : ""}`,
         type: "success",
         category: "system",
-      });
-      onSuccess();
-      onOpenChange(false);
+      })
+
+      onSuccess()
+      onOpenChange(false)
     } catch (error: any) {
       addNotification({
         title: "Error",
         message: error.message,
         type: "error",
         category: "system",
-      });
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto'>
+      <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Telephone Line Details</DialogTitle>
           <DialogDescription>
-            Update the details for this telephone line.
+            Update the details for this telephone line. Drum usage will be properly tracked.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className='space-y-6'>
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Basic Information</h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Basic Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor='date'>Date</Label>
+                <Label htmlFor="date">Date</Label>
                 <Input
-                  id='date'
-                  type='date'
+                  id="date"
+                  type="date"
                   value={formData.date || ""}
                   onChange={(e) => handleInputChange("date", e.target.value)}
                   required
                 />
               </div>
               <div>
-                <Label htmlFor='phone_number'>Phone Number</Label>
+                <Label htmlFor="phone_number">Phone Number</Label>
                 <Input
-                  id='phone_number'
+                  id="phone_number"
                   value={formData.phone_number || ""}
-                  onChange={(e) =>
-                    handleInputChange("phone_number", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("phone_number", e.target.value)}
                   required
                 />
               </div>
             </div>
           </div>
+
           {/* DP Configuration */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>DP Configuration</h3>
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">DP Configuration</h3>
             <div>
-              <Label htmlFor='dp'>DP</Label>
+              <Label htmlFor="dp">DP</Label>
               <Input
-                id='dp'
+                id="dp"
                 value={formData.dp || ""}
                 onChange={(e) => handleInputChange("dp", e.target.value)}
                 required
               />
               {dpValidationError && (
-                <div className='flex items-center gap-2 mt-2 text-red-600 text-sm'>
-                  <AlertTriangle className='h-4 w-4' />
+                <div className="flex items-center gap-2 mt-2 text-red-600 text-sm">
+                  <AlertTriangle className="h-4 w-4" />
                   {dpValidationError}
                 </div>
               )}
-              <p className='text-xs text-muted-foreground mt-1'>
-                Format: XX-XXXX-XXXX-XXX-0X (2 uppercase strings, 2 numbers,
-                last value 01-08)
+              <p className="text-xs text-muted-foreground mt-1">
+                Format: XX-XXXX-XXXX-XXX-0X (2 uppercase strings, 2 numbers, last value 01-08)
               </p>
             </div>
           </div>
+
           {/* Power Values */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Power Measurements</h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Power Measurements</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor='power_dp'>Power (DP)</Label>
+                <Label htmlFor="power_dp">Power (DP)</Label>
                 <Input
-                  id='power_dp'
-                  type='number'
-                  step='0.01'
+                  id="power_dp"
+                  type="number"
+                  step="0.01"
                   value={formData.power_dp || ""}
-                  onChange={(e) =>
-                    handleInputChange("power_dp", e.target.value)
-                  }
-                  className={
-                    isPowerInvalid(formData.power_dp)
-                      ? "border-red-500 text-red-600"
-                      : ""
-                  }
+                  onChange={(e) => handleInputChange("power_dp", e.target.value)}
+                  className={isPowerInvalid(formData.power_dp) ? "border-red-500 text-red-600" : ""}
                   required
                 />
                 {isPowerInvalid(formData.power_dp) && (
-                  <p className='text-red-600 text-xs mt-1'>
-                    ⚠️ Value must be less than 30
-                  </p>
+                  <p className="text-red-600 text-xs mt-1">⚠️ Value must be less than 30</p>
                 )}
               </div>
               <div>
-                <Label htmlFor='power_inbox'>Power (Inbox)</Label>
+                <Label htmlFor="power_inbox">Power (Inbox)</Label>
                 <Input
-                  id='power_inbox'
-                  type='number'
-                  step='0.01'
+                  id="power_inbox"
+                  type="number"
+                  step="0.01"
                   value={formData.power_inbox || ""}
-                  onChange={(e) =>
-                    handleInputChange("power_inbox", e.target.value)
-                  }
-                  className={
-                    isPowerInvalid(formData.power_inbox)
-                      ? "border-red-500 text-red-600"
-                      : ""
-                  }
+                  onChange={(e) => handleInputChange("power_inbox", e.target.value)}
+                  className={isPowerInvalid(formData.power_inbox) ? "border-red-500 text-red-600" : ""}
                   required
                 />
                 {isPowerInvalid(formData.power_inbox) && (
-                  <p className='text-red-600 text-xs mt-1'>
-                    ⚠️ Value must be less than 30
-                  </p>
+                  <p className="text-red-600 text-xs mt-1">⚠️ Value must be less than 30</p>
                 )}
               </div>
             </div>
           </div>
+
           {/* Customer Information */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Customer Information</h3>
-            <div className='grid grid-cols-1 gap-4'>
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Customer Information</h3>
+            <div className="grid grid-cols-1 gap-4">
               <div>
-                <Label htmlFor='name'>Name</Label>
+                <Label htmlFor="name">Name</Label>
                 <Input
-                  id='name'
+                  id="name"
                   value={formData.name || ""}
                   onChange={(e) => handleInputChange("name", e.target.value)}
                   required
                 />
               </div>
               <div>
-                <Label htmlFor='address'>Address</Label>
+                <Label htmlFor="address">Address</Label>
                 <Textarea
-                  id='address'
+                  id="address"
                   value={formData.address || ""}
                   onChange={(e) => handleInputChange("address", e.target.value)}
                   required
@@ -410,30 +582,44 @@ export function EditTelephoneLineModal({
               </div>
             </div>
           </div>
+
           {/* Cable Measurements with Drum Selection */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium flex items-center gap-2'>
-              <Calculator className='h-5 w-5' />
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium flex items-center gap-2">
+              <Calculator className="h-5 w-5" />
               Cable Measurements & Drum Tracking
             </h3>
+
+            {/* Show original drum usage info */}
+            {originalDrumUsage && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <strong>Current Usage:</strong> Drum {formData.drum_number} - {originalTotalCable.toFixed(2)}m used
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                  Changing the drum or cable measurements will update usage tracking accordingly.
+                </p>
+              </div>
+            )}
+
             {/* Drum Selection */}
             <div>
-              <Label htmlFor='drum_selection'>Select Cable Drum</Label>
+              <Label htmlFor="drum_selection">Select Cable Drum</Label>
               <Popover open={drumOpen} onOpenChange={setDrumOpen}>
                 <PopoverTrigger asChild>
                   <Button
-                    variant='outline'
-                    role='combobox'
+                    variant="outline"
+                    role="combobox"
                     aria-expanded={drumOpen}
-                    className='w-full justify-between'
+                    className="w-full justify-between bg-transparent"
                   >
                     {formData.drum_number || "Select available drum"}
-                    <ChevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className='w-full p-0'>
+                <PopoverContent className="w-full p-0">
                   <Command>
-                    <CommandInput placeholder='Search drums...' />
+                    <CommandInput placeholder="Search drums..." />
                     <CommandList>
                       <CommandEmpty>No available drums found.</CommandEmpty>
                       <CommandGroup>
@@ -442,26 +628,22 @@ export function EditTelephoneLineModal({
                             key={drum.id}
                             value={drum.id}
                             onSelect={(currentValue) => {
-                              handleInputChange(
-                                "selected_drum_id",
-                                currentValue
-                              );
-                              setDrumOpen(false);
+                              handleInputChange("selected_drum_id", currentValue)
+                              setDrumOpen(false)
                             }}
                           >
                             <Check
                               className={cn(
                                 "mr-2 h-4 w-4",
-                                formData.selected_drum_id === drum.id
-                                  ? "opacity-100"
-                                  : "opacity-0"
+                                formData.selected_drum_id === drum.id ? "opacity-100" : "opacity-0",
                               )}
                             />
-                            <div className='flex flex-col'>
+                            <div className="flex flex-col">
                               <span>{drum.drum_number}</span>
-                              <span className='text-xs text-muted-foreground'>
-                                {drum.item_name} - {drum.current_quantity}m
-                                available
+                              <span className="text-xs text-muted-foreground">
+                                {drum.item_name} - {drum.current_quantity}m available
+                                {originalDrumUsage?.drum_id === drum.id &&
+                                  ` (+${originalDrumUsage.quantity_used}m if restored)`}
                               </span>
                             </div>
                           </CommandItem>
@@ -471,542 +653,495 @@ export function EditTelephoneLineModal({
                   </Command>
                 </PopoverContent>
               </Popover>
-              <p className='text-xs text-muted-foreground mt-1'>
-                Select a drum to track cable usage. Drums contain 2000m of
-                cable.
+              <p className="text-xs text-muted-foreground mt-1">
+                Select a drum to track cable usage. Current usage will be properly transferred.
               </p>
             </div>
-            <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label htmlFor='cable_start'>Cable Start</Label>
+                <Label htmlFor="cable_start">Cable Start (m)</Label>
                 <Input
-                  id='cable_start'
-                  type='number'
-                  step='0.01'
+                  id="cable_start"
+                  type="number"
+                  step="0.01"
                   value={formData.cable_start || ""}
-                  onChange={(e) =>
-                    handleInputChange("cable_start", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("cable_start", e.target.value)}
                   required
                 />
               </div>
               <div>
-                <Label htmlFor='cable_middle'>Cable Middle</Label>
+                <Label htmlFor="cable_middle">Cable Middle (m)</Label>
                 <Input
-                  id='cable_middle'
-                  type='number'
-                  step='0.01'
+                  id="cable_middle"
+                  type="number"
+                  step="0.01"
                   value={formData.cable_middle || ""}
-                  onChange={(e) =>
-                    handleInputChange("cable_middle", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("cable_middle", e.target.value)}
                   required
                 />
               </div>
               <div>
-                <Label htmlFor='cable_end'>Cable End</Label>
+                <Label htmlFor="cable_end">Cable End (m)</Label>
                 <Input
-                  id='cable_end'
-                  type='number'
-                  step='0.01'
+                  id="cable_end"
+                  type="number"
+                  step="0.01"
                   value={formData.cable_end || ""}
-                  onChange={(e) =>
-                    handleInputChange("cable_end", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("cable_end", e.target.value)}
                   required
                 />
               </div>
             </div>
+
             {/* Auto-calculated values */}
-            <div className='grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg'>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
               <div>
-                <Label className='text-sm font-medium'>
-                  F1 (|Start - Middle|)
-                </Label>
-                <div className='text-lg font-bold text-blue-600'>
-                  {Number(formData.f1).toFixed(2)}m
-                </div>
+                <Label className="text-sm font-medium">F1 (|Start - Middle|)</Label>
+                <div className="text-lg font-bold text-blue-600">{Number(formData.f1 || 0).toFixed(2)}m</div>
               </div>
               <div>
-                <Label className='text-sm font-medium'>
-                  G1 (|Middle - End|)
-                </Label>
-                <div className='text-lg font-bold text-blue-600'>
-                  {Number(formData.g1).toFixed(2)}m
-                </div>
+                <Label className="text-sm font-medium">G1 (|Middle - End|)</Label>
+                <div className="text-lg font-bold text-blue-600">{Number(formData.g1 || 0).toFixed(2)}m</div>
               </div>
               <div>
-                <Label className='text-sm font-medium'>Total (F1 + G1)</Label>
-                <div className='text-lg font-bold text-green-600'>
-                  {Number(formData.total_cable).toFixed(2)}m
-                </div>
+                <Label className="text-sm font-medium">Total Cable Used (F1 + G1)</Label>
+                <div className="text-lg font-bold text-green-600">{Number(formData.total_cable || 0).toFixed(2)}m</div>
+                {originalTotalCable !== Number(formData.total_cable || 0) && (
+                  <p className="text-xs text-orange-600 mt-1">Changed from {originalTotalCable.toFixed(2)}m</p>
+                )}
               </div>
               <div>
-                <Label htmlFor='wastage_input'>Wastage</Label>
+                <Label htmlFor="wastage_input">Manual Wastage</Label>
                 <Input
-                  id='wastage_input'
-                  type='number'
-                  step='0.01'
+                  id="wastage_input"
+                  type="number"
+                  step="0.01"
                   value={formData.wastage_input || ""}
-                  onChange={(e) =>
-                    handleInputChange("wastage_input", e.target.value)
-                  }
-                  placeholder='0.00'
+                  onChange={(e) => handleInputChange("wastage_input", e.target.value)}
+                  placeholder="0.00"
                 />
               </div>
             </div>
+
+            {/* Drum availability check */}
+            {formData.selected_drum_id && formData.total_cable > 0 && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium">Drum Usage Check</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Required: {formData.total_cable}m | Available: {(() => {
+                    const selectedDrum = drumOptions.find((d) => d.id === formData.selected_drum_id)
+                    if (!selectedDrum) return "0"
+                    let available = selectedDrum.current_quantity
+                    // If it's the same drum as original, add back the original usage
+                    if (originalDrumUsage?.drum_id === selectedDrum.id) {
+                      available += originalDrumUsage.quantity_used
+                    }
+                    return available.toFixed(2)
+                  })()}m
+                </p>
+                {(() => {
+                  const selectedDrum = drumOptions.find((d) => d.id === formData.selected_drum_id)
+                  if (!selectedDrum) return null
+                  let available = selectedDrum.current_quantity
+                  if (originalDrumUsage?.drum_id === selectedDrum.id) {
+                    available += originalDrumUsage.quantity_used
+                  }
+                  return (
+                    Number.parseFloat(formData.total_cable) > available && (
+                      <p className="text-sm text-red-600 mt-1">⚠️ Insufficient cable in selected drum</p>
+                    )
+                  )
+                })()}
+              </div>
+            )}
           </div>
+
           <Separator />
+
           {/* Inventory Section */}
-          <div className='space-y-6'>
-            <h3 className='text-lg font-medium flex items-center gap-2'>
-              <Package className='h-5 w-5' />
+          <div className="space-y-6">
+            <h3 className="text-lg font-medium flex items-center gap-2">
+              <Package className="h-5 w-5" />
               Inventory & Materials Used
             </h3>
+
             {/* Hardware Components */}
-            <div className='space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Hardware Components
-              </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+            <div className="space-y-4">
+              <h4 className="text-md font-medium text-muted-foreground">Hardware Components</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <Label htmlFor='retainers'>Retainers</Label>
+                  <Label htmlFor="retainers">Retainers</Label>
                   <Input
-                    id='retainers'
-                    type='number'
-                    min='0'
+                    id="retainers"
+                    type="number"
+                    min="0"
                     value={formData.retainers || ""}
-                    onChange={(e) =>
-                      handleInputChange("retainers", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("retainers", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='l_hook'>L-Hook</Label>
+                  <Label htmlFor="l_hook">L-Hook</Label>
                   <Input
-                    id='l_hook'
-                    type='number'
-                    min='0'
+                    id="l_hook"
+                    type="number"
+                    min="0"
                     value={formData.l_hook || ""}
-                    onChange={(e) =>
-                      handleInputChange("l_hook", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("l_hook", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='nut_bolt' className='flex items-center gap-1'>
+                  <Label htmlFor="nut_bolt" className="flex items-center gap-1">
                     Nut & Bolt
-                    <Calculator className='h-3 w-3 text-blue-500' />
+                    <Calculator className="h-3 w-3 text-blue-500" />
                   </Label>
                   <Input
-                    id='nut_bolt'
-                    type='number'
-                    min='0'
+                    id="nut_bolt"
+                    type="number"
+                    min="0"
                     value={formData.nut_bolt || ""}
-                    onChange={(e) =>
-                      handleInputChange("nut_bolt", e.target.value)
-                    }
-                    className='bg-blue-50 dark:bg-blue-950'
+                    onChange={(e) => handleInputChange("nut_bolt", e.target.value)}
+                    className="bg-blue-50 dark:bg-blue-950"
                   />
-                  <p className='text-xs text-blue-600 mt-1'>
-                    Auto: ½ of L-Hook (
-                    {Math.ceil(
-                      Number.parseInt(formData.l_hook?.toString() || "0") / 2
-                    )}
-                    )
+                  <p className="text-xs text-blue-600 mt-1">
+                    Auto: ½ of L-Hook ({Math.ceil(Number.parseInt(formData.l_hook?.toString() || "0") / 2)})
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor='top_bolt'>Top-Bolt</Label>
+                  <Label htmlFor="top_bolt">Top-Bolt</Label>
                   <Input
-                    id='top_bolt'
-                    type='number'
-                    min='0'
+                    id="top_bolt"
+                    type="number"
+                    min="0"
                     value={formData.top_bolt || ""}
-                    onChange={(e) =>
-                      handleInputChange("top_bolt", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("top_bolt", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='c_hook'>C-Hook (Default: 1)</Label>
+                  <Label htmlFor="c_hook">C-Hook (Default: 1)</Label>
                   <Input
-                    id='c_hook'
-                    type='number'
-                    min='0'
+                    id="c_hook"
+                    type="number"
+                    min="0"
                     value={formData.c_hook || ""}
-                    onChange={(e) =>
-                      handleInputChange("c_hook", e.target.value)
-                    }
-                    className='bg-green-50 dark:bg-green-950'
+                    onChange={(e) => handleInputChange("c_hook", e.target.value)}
+                    className="bg-green-50 dark:bg-green-950"
                   />
                 </div>
                 <div>
-                  <Label htmlFor='u_clip'>U-clip</Label>
+                  <Label htmlFor="u_clip">U-clip</Label>
                   <Input
-                    id='u_clip'
-                    type='number'
-                    min='0'
+                    id="u_clip"
+                    type="number"
+                    min="0"
                     value={formData.u_clip || ""}
-                    onChange={(e) =>
-                      handleInputChange("u_clip", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("u_clip", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='concrete_nail'>Concrete Nail</Label>
+                  <Label htmlFor="concrete_nail">Concrete Nail</Label>
                   <Input
-                    id='concrete_nail'
-                    type='number'
-                    min='0'
+                    id="concrete_nail"
+                    type="number"
+                    min="0"
                     value={formData.concrete_nail || ""}
-                    onChange={(e) =>
-                      handleInputChange("concrete_nail", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("concrete_nail", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='roll_plug'>Roll Plug</Label>
+                  <Label htmlFor="roll_plug">Roll Plug</Label>
                   <Input
-                    id='roll_plug'
-                    type='number'
-                    min='0'
+                    id="roll_plug"
+                    type="number"
+                    min="0"
                     value={formData.roll_plug || ""}
-                    onChange={(e) =>
-                      handleInputChange("roll_plug", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("roll_plug", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label
-                    htmlFor='screw_nail'
-                    className='flex items-center gap-1'
-                  >
+                  <Label htmlFor="screw_nail" className="flex items-center gap-1">
                     Screw Nail
-                    <Calculator className='h-3 w-3 text-blue-500' />
+                    <Calculator className="h-3 w-3 text-blue-500" />
                   </Label>
                   <Input
-                    id='screw_nail'
-                    type='number'
-                    min='0'
+                    id="screw_nail"
+                    type="number"
+                    min="0"
                     value={formData.screw_nail || ""}
-                    onChange={(e) =>
-                      handleInputChange("screw_nail", e.target.value)
-                    }
-                    className='bg-blue-50 dark:bg-blue-950'
+                    onChange={(e) => handleInputChange("screw_nail", e.target.value)}
+                    className="bg-blue-50 dark:bg-blue-950"
                   />
-                  <p className='text-xs text-blue-600 mt-1'>
-                    Auto: Same as Roll Plug ({formData.roll_plug})
-                  </p>
+                  <p className="text-xs text-blue-600 mt-1">Auto: Same as Roll Plug ({formData.roll_plug || 0})</p>
                 </div>
               </div>
             </div>
+
             {/* Fiber & Network Components */}
-            <div className='space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Fiber & Network Components
-              </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+            <div className="space-y-4">
+              <h4 className="text-md font-medium text-muted-foreground">Fiber & Network Components</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <Label htmlFor='fiber_rosette'>
-                    Fiber-Rosette (Default: 1)
-                  </Label>
+                  <Label htmlFor="fiber_rosette">Fiber-Rosette (Default: 1)</Label>
                   <Input
-                    id='fiber_rosette'
-                    type='number'
-                    min='0'
+                    id="fiber_rosette"
+                    type="number"
+                    min="0"
                     value={formData.fiber_rosette || ""}
-                    onChange={(e) =>
-                      handleInputChange("fiber_rosette", e.target.value)
-                    }
-                    className='bg-green-50 dark:bg-green-950'
+                    onChange={(e) => handleInputChange("fiber_rosette", e.target.value)}
+                    className="bg-green-50 dark:bg-green-950"
                   />
                 </div>
                 <div>
-                  <Label htmlFor='s_rosette'>S-Rosette</Label>
+                  <Label htmlFor="s_rosette">S-Rosette</Label>
                   <Input
-                    id='s_rosette'
-                    type='number'
-                    min='0'
+                    id="s_rosette"
+                    type="number"
+                    min="0"
                     value={formData.s_rosette || ""}
-                    onChange={(e) =>
-                      handleInputChange("s_rosette", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("s_rosette", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='fac'>FAC (Default: 2)</Label>
+                  <Label htmlFor="fac">FAC (Default: 2)</Label>
                   <Input
-                    id='fac'
-                    type='number'
-                    min='0'
+                    id="fac"
+                    type="number"
+                    min="0"
                     value={formData.fac || ""}
                     onChange={(e) => handleInputChange("fac", e.target.value)}
-                    className='bg-green-50 dark:bg-green-950'
+                    className="bg-green-50 dark:bg-green-950"
                   />
                 </div>
                 <div>
-                  <Label htmlFor='rj45'>RJ45</Label>
+                  <Label htmlFor="rj45">RJ45</Label>
                   <Input
-                    id='rj45'
-                    type='number'
-                    min='0'
+                    id="rj45"
+                    type="number"
+                    min="0"
                     value={formData.rj45 || ""}
                     onChange={(e) => handleInputChange("rj45", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='rj11'>RJ11</Label>
+                  <Label htmlFor="rj11">RJ11</Label>
                   <Input
-                    id='rj11'
-                    type='number'
-                    min='0'
+                    id="rj11"
+                    type="number"
+                    min="0"
                     value={formData.rj11 || ""}
                     onChange={(e) => handleInputChange("rj11", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='rj12'>RJ12</Label>
+                  <Label htmlFor="rj12">RJ12</Label>
                   <Input
-                    id='rj12'
-                    type='number'
-                    min='0'
+                    id="rj12"
+                    type="number"
+                    min="0"
                     value={formData.rj12 || ""}
                     onChange={(e) => handleInputChange("rj12", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='socket'>Socket</Label>
+                  <Label htmlFor="socket">Socket</Label>
                   <Input
-                    id='socket'
-                    type='number'
-                    min='0'
+                    id="socket"
+                    type="number"
+                    min="0"
                     value={formData.socket || ""}
-                    onChange={(e) =>
-                      handleInputChange("socket", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("socket", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='bend'>Bend</Label>
+                  <Label htmlFor="bend">Bend</Label>
                   <Input
-                    id='bend'
-                    type='number'
-                    min='0'
+                    id="bend"
+                    type="number"
+                    min="0"
                     value={formData.bend || ""}
                     onChange={(e) => handleInputChange("bend", e.target.value)}
                   />
                 </div>
               </div>
             </div>
+
             {/* Cables & Wiring */}
-            <div className='space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Cables & Wiring (meters)
-              </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+            <div className="space-y-4">
+              <h4 className="text-md font-medium text-muted-foreground">Cables & Wiring (meters)</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <Label htmlFor='internal_wire'>Internal Wire</Label>
+                  <Label htmlFor="internal_wire">Internal Wire</Label>
                   <Input
-                    id='internal_wire'
-                    type='number'
-                    step='0.01'
-                    min='0'
+                    id="internal_wire"
+                    type="number"
+                    step="0.01"
+                    min="0"
                     value={formData.internal_wire || ""}
-                    onChange={(e) =>
-                      handleInputChange("internal_wire", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("internal_wire", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='cat5'>Cat 5</Label>
+                  <Label htmlFor="cat5">Cat 5</Label>
                   <Input
-                    id='cat5'
-                    type='number'
-                    step='0.01'
-                    min='0'
+                    id="cat5"
+                    type="number"
+                    step="0.01"
+                    min="0"
                     value={formData.cat5 || ""}
                     onChange={(e) => handleInputChange("cat5", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='casing'>Casing</Label>
+                  <Label htmlFor="casing">Casing</Label>
                   <Input
-                    id='casing'
-                    type='number'
-                    step='0.01'
-                    min='0'
+                    id="casing"
+                    type="number"
+                    step="0.01"
+                    min="0"
                     value={formData.casing || ""}
-                    onChange={(e) =>
-                      handleInputChange("casing", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("casing", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='conduit'>Conduit</Label>
+                  <Label htmlFor="conduit">Conduit</Label>
                   <Input
-                    id='conduit'
-                    type='number'
-                    step='0.01'
-                    min='0'
+                    id="conduit"
+                    type="number"
+                    step="0.01"
+                    min="0"
                     value={formData.conduit || ""}
-                    onChange={(e) =>
-                      handleInputChange("conduit", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("conduit", e.target.value)}
                   />
                 </div>
               </div>
             </div>
+
             {/* Accessories & Ties */}
-            <div className='space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Accessories & Ties
-              </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+            <div className="space-y-4">
+              <h4 className="text-md font-medium text-muted-foreground">Accessories & Ties</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <Label htmlFor='c_tie'>C-tie</Label>
+                  <Label htmlFor="c_tie">C-tie</Label>
                   <Input
-                    id='c_tie'
-                    type='number'
-                    min='0'
+                    id="c_tie"
+                    type="number"
+                    min="0"
                     value={formData.c_tie || ""}
                     onChange={(e) => handleInputChange("c_tie", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='c_clip'>C-clip</Label>
+                  <Label htmlFor="c_clip">C-clip</Label>
                   <Input
-                    id='c_clip'
-                    type='number'
-                    min='0'
+                    id="c_clip"
+                    type="number"
+                    min="0"
                     value={formData.c_clip || ""}
-                    onChange={(e) =>
-                      handleInputChange("c_clip", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("c_clip", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='tag_tie'>Tag tie (Default: 1)</Label>
+                  <Label htmlFor="tag_tie">Tag tie (Default: 1)</Label>
                   <Input
-                    id='tag_tie'
-                    type='number'
-                    min='0'
+                    id="tag_tie"
+                    type="number"
+                    min="0"
                     value={formData.tag_tie || ""}
-                    onChange={(e) =>
-                      handleInputChange("tag_tie", e.target.value)
-                    }
-                    className='bg-green-50 dark:bg-green-950'
+                    onChange={(e) => handleInputChange("tag_tie", e.target.value)}
+                    className="bg-green-50 dark:bg-green-950"
                   />
                 </div>
                 <div>
-                  <Label htmlFor='flexible'>Flexible (Default: 2)</Label>
+                  <Label htmlFor="flexible">Flexible (Default: 2)</Label>
                   <Input
-                    id='flexible'
-                    type='number'
-                    min='0'
+                    id="flexible"
+                    type="number"
+                    min="0"
                     value={formData.flexible || ""}
-                    onChange={(e) =>
-                      handleInputChange("flexible", e.target.value)
-                    }
-                    className='bg-green-50 dark:bg-green-950'
+                    onChange={(e) => handleInputChange("flexible", e.target.value)}
+                    className="bg-green-50 dark:bg-green-950"
                   />
                 </div>
               </div>
             </div>
+
             {/* Infrastructure */}
-            <div className='space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Infrastructure
-              </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+            <div className="space-y-4">
+              <h4 className="text-md font-medium text-muted-foreground">Infrastructure</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <Label htmlFor='pole_67'>Pole 6.7</Label>
+                  <Label htmlFor="pole_67">Pole 6.7</Label>
                   <Input
-                    id='pole_67'
-                    type='number'
-                    min='0'
+                    id="pole_67"
+                    type="number"
+                    min="0"
                     value={formData.pole_67 || ""}
-                    onChange={(e) =>
-                      handleInputChange("pole_67", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("pole_67", e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor='pole'>Pole 5.6</Label>
+                  <Label htmlFor="pole">Pole 5.6</Label>
                   <Input
-                    id='pole'
-                    type='number'
-                    min='0'
+                    id="pole"
+                    type="number"
+                    min="0"
                     value={formData.pole || ""}
                     onChange={(e) => handleInputChange("pole", e.target.value)}
                   />
                 </div>
               </div>
             </div>
+
             {/* Device Serials */}
-            <div className='space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Device Information
-              </h4>
-              <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+            <div className="space-y-4">
+              <h4 className="text-md font-medium text-muted-foreground">Device Information</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor='ont_serial'>ONT (Hexadecimal Serial)</Label>
+                  <Label htmlFor="ont_serial">ONT (Hexadecimal Serial)</Label>
                   <Input
-                    id='ont_serial'
+                    id="ont_serial"
                     value={formData.ont_serial || ""}
-                    onChange={(e) =>
-                      handleInputChange(
-                        "ont_serial",
-                        e.target.value.toUpperCase()
-                      )
-                    }
-                    placeholder='e.g., 48575443A1B2C3D4'
-                    className='font-mono'
+                    onChange={(e) => handleInputChange("ont_serial", e.target.value.toUpperCase())}
+                    placeholder="e.g., 48575443A1B2C3D4"
+                    className="font-mono"
                   />
                 </div>
                 <div>
-                  <Label htmlFor='voice_test_no'>Voice Test No</Label>
+                  <Label htmlFor="voice_test_no">Voice Test No</Label>
                   <Input
-                    id='voice_test_no'
+                    id="voice_test_no"
                     value={formData.voice_test_no || ""}
-                    onChange={(e) =>
-                      handleInputChange("voice_test_no", e.target.value)
-                    }
-                    placeholder='Voice test number'
+                    onChange={(e) => handleInputChange("voice_test_no", e.target.value)}
+                    placeholder="Voice test number"
                   />
                 </div>
                 <div>
-                  <Label htmlFor='stb_serial'>STB (Hexadecimal Serial)</Label>
+                  <Label htmlFor="stb_serial">STB (Hexadecimal Serial)</Label>
                   <Input
-                    id='stb_serial'
+                    id="stb_serial"
                     value={formData.stb_serial || ""}
-                    onChange={(e) =>
-                      handleInputChange(
-                        "stb_serial",
-                        e.target.value.toUpperCase()
-                      )
-                    }
-                    placeholder='e.g., 12345ABCDEF67890'
-                    className='font-mono'
+                    onChange={(e) => handleInputChange("stb_serial", e.target.value.toUpperCase())}
+                    placeholder="e.g., 12345ABCDEF67890"
+                    className="font-mono"
                   />
                 </div>
               </div>
             </div>
           </div>
+
           <DialogFooter>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type='submit' disabled={loading || !!dpValidationError}>
+            <Button type="submit" disabled={loading || !!dpValidationError}>
               {loading ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
