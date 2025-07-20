@@ -76,7 +76,7 @@ export class AIService {
     try {
       const { data: lines } = await this.supabase
         .from("line_details")
-        .select("id, dp, address, total_calc, created_at")
+        .select("id, dp, address, total_cable, created_at")
         .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
 
       if (!lines) return []
@@ -96,7 +96,7 @@ export class AIService {
       // Generate suggestions for groups with multiple lines
       Object.entries(addressGroups).forEach(([address, groupLines]) => {
         if (groupLines.length >= 2) {
-          const totalCable = groupLines.reduce((sum, line) => sum + (line.total_calc || 0), 0)
+          const totalCable = groupLines.reduce((sum, line) => sum + (line.total_cable || 0), 0)
           const estimatedSavings = Math.floor(totalCable * 0.1) * 50 // Estimate 10% cable savings
 
           suggestions.push({
@@ -119,7 +119,7 @@ export class AIService {
     try {
       const { data: lines } = await this.supabase
         .from("line_details")
-        .select("id, dp, power_dp_new, power_inbox_new, total_calc, wastage_input, phone_number")
+        .select("id, dp, power_dp_new, power_inbox_new, total_cable, wastage_input, phone_number")
         .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
 
       if (!lines) return []
@@ -139,11 +139,11 @@ export class AIService {
         }
 
         // Check for excessive wastage
-        if (line.wastage_input && line.total_calc && line.wastage_input > line.total_calc * 0.2) {
+        if (line.wastage_input && line.total_cable && line.wastage_input > line.total_cable * 0.2) {
           suggestions.push({
             line_id: line.id,
             error_type: "high_wastage",
-            description: `Wastage (${line.wastage_input}m) exceeds 20% of total cable (${line.total_calc}m)`,
+            description: `Wastage (${line.wastage_input}m) exceeds 20% of total cable (${line.total_cable}m)`,
             severity: "medium",
             suggested_fix: "Review installation process and cable handling",
           })

@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,123 +9,133 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Download } from "lucide-react"
-import { getSupabaseClient } from "@/lib/supabase"
-import { useNotification } from "@/contexts/notification-context"
+} from "@/components/ui/dialog";
+import { Download } from "lucide-react";
+import { getSupabaseClient } from "@/lib/supabase";
+import { useNotification } from "@/contexts/notification-context";
 
 interface GeneratedInvoice {
-  id: string
-  invoice_number: string
-  invoice_type: "A" | "B" | "C"
-  month: number
-  year: number
-  job_month: string
-  invoice_date: string
-  total_amount: number
-  line_count: number
-  line_details_ids: string[]
-  status: string
-  created_at: string
+  id: string;
+  invoice_number: string;
+  invoice_type: "A" | "B" | "C";
+  month: number;
+  year: number;
+  job_month: string;
+  invoice_date: string;
+  total_amount: number;
+  line_count: number;
+  line_details_ids: string[];
+  status: string;
+  created_at: string;
 }
 
 interface InvoicePDFModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  invoice: GeneratedInvoice | null
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  invoice: GeneratedInvoice | null;
 }
 
 interface LineDetail {
-  id: string
-  name: string
-  phone_number: string
-  total_calc: number
-  date: string
-  address: string
+  id: string;
+  name: string;
+  phone_number: string;
+  total_cable: number;
+  date: string;
+  address: string;
 }
 
 interface CompanySettings {
-  company_name: string
-  address: string
-  contact_numbers: string[]
-  website: string
-  registered_number: string
+  company_name: string;
+  address: string;
+  contact_numbers: string[];
+  website: string;
+  registered_number: string;
   bank_details: {
-    bank_name: string
-    account_title: string
-    account_number: string
-    branch_code: string
-  }
+    bank_name: string;
+    account_title: string;
+    account_number: string;
+    branch_code: string;
+  };
   pricing_tiers: Array<{
-    min_length: number
-    max_length: number
-    rate: number
-  }>
+    min_length: number;
+    max_length: number;
+    rate: number;
+  }>;
 }
 
-export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModalProps) {
-  const [loading, setLoading] = useState(false)
-  const [lineDetails, setLineDetails] = useState<LineDetail[]>([])
-  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null)
-  const [pricingTiers, setPricingTiers] = useState<any[]>([])
+export function InvoicePDFModal({
+  open,
+  onOpenChange,
+  invoice,
+}: InvoicePDFModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [lineDetails, setLineDetails] = useState<LineDetail[]>([]);
+  const [companySettings, setCompanySettings] =
+    useState<CompanySettings | null>(null);
+  const [pricingTiers, setPricingTiers] = useState<any[]>([]);
 
-  const supabase = getSupabaseClient()
-  const { addNotification } = useNotification()
+  const supabase = getSupabaseClient();
+  const { addNotification } = useNotification();
 
   useEffect(() => {
     if (open && invoice) {
-      fetchInvoiceData()
+      fetchInvoiceData();
     }
-  }, [open, invoice])
+  }, [open, invoice]);
 
   const fetchInvoiceData = async () => {
-    if (!invoice) return
+    if (!invoice) return;
 
-    setLoading(true)
+    setLoading(true);
     try {
       // Fetch line details
       const { data: lines, error: linesError } = await supabase
         .from("line_details")
-        .select("id, name, phone_number, total_calc, date, address")
-        .in("id", invoice.line_details_ids)
+        .select("id, name, phone_number, total_cable, date, address")
+        .in("id", invoice.line_details_ids);
 
-      if (linesError) throw linesError
+      if (linesError) throw linesError;
 
       // Fetch company settings
-      const { data: settings, error: settingsError } = await supabase.from("company_settings").select("*").single()
+      const { data: settings, error: settingsError } = await supabase
+        .from("company_settings")
+        .select("*")
+        .single();
 
       if (settingsError && settingsError.code !== "PGRST116") {
-        throw settingsError
+        throw settingsError;
       }
 
-      setLineDetails(lines || [])
+      setLineDetails(lines || []);
 
       if (settings) {
-        const parsedSettings = settings
+        const parsedSettings = settings;
         if (typeof settings.pricing_tiers === "string") {
           try {
-            parsedSettings.pricing_tiers = JSON.parse(settings.pricing_tiers)
+            parsedSettings.pricing_tiers = JSON.parse(settings.pricing_tiers);
           } catch {
-            parsedSettings.pricing_tiers = getDefaultPricingTiers()
+            parsedSettings.pricing_tiers = getDefaultPricingTiers();
           }
         }
-        setCompanySettings(parsedSettings)
-        setPricingTiers(parsedSettings.pricing_tiers || getDefaultPricingTiers())
+        setCompanySettings(parsedSettings);
+        setPricingTiers(
+          parsedSettings.pricing_tiers || getDefaultPricingTiers()
+        );
       } else {
-        setCompanySettings(getDefaultCompanySettings())
-        setPricingTiers(getDefaultPricingTiers())
+        setCompanySettings(getDefaultCompanySettings());
+        setPricingTiers(getDefaultPricingTiers());
       }
     } catch (error: any) {
-      console.error("Error fetching invoice data:", error)
+      console.error("Error fetching invoice data:", error);
       addNotification({
         title: "Error",
         message: "Failed to load invoice data",
         type: "error",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const getDefaultCompanySettings = (): CompanySettings => ({
     company_name: "NNS Enterprise",
@@ -140,7 +150,7 @@ export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModal
       branch_code: "Horana",
     },
     pricing_tiers: getDefaultPricingTiers(),
-  })
+  });
 
   const getDefaultPricingTiers = () => [
     { min_length: 0, max_length: 100, rate: 6000 },
@@ -149,66 +159,73 @@ export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModal
     { min_length: 301, max_length: 400, rate: 7800 },
     { min_length: 401, max_length: 500, rate: 8200 },
     { min_length: 501, max_length: 999999, rate: 8400 },
-  ]
+  ];
 
   const calculateRate = (cableLength: number): number => {
-    const tier = pricingTiers.find((t) => cableLength >= t.min_length && cableLength <= t.max_length)
-    return tier ? tier.rate : 8400
-  }
+    const tier = pricingTiers.find(
+      (t) => cableLength >= t.min_length && cableLength <= t.max_length
+    );
+    return tier ? tier.rate : 8400;
+  };
 
   const groupLinesByRate = () => {
-    const groups: { [key: string]: { count: number; rate: number; amount: number } } = {}
+    const groups: {
+      [key: string]: { count: number; rate: number; amount: number };
+    } = {};
 
     lineDetails.forEach((line) => {
-      const rate = calculateRate(line.total_calc)
-      let rangeKey = ""
+      const rate = calculateRate(line.total_cable);
+      let rangeKey = "";
 
-      if (line.total_calc <= 100) rangeKey = "0-100"
-      else if (line.total_calc <= 200) rangeKey = "101-200"
-      else if (line.total_calc <= 300) rangeKey = "201-300"
-      else if (line.total_calc <= 400) rangeKey = "301-400"
-      else if (line.total_calc <= 500) rangeKey = "401-500"
-      else rangeKey = "Over 500"
+      if (line.total_cable <= 100) rangeKey = "0-100";
+      else if (line.total_cable <= 200) rangeKey = "101-200";
+      else if (line.total_cable <= 300) rangeKey = "201-300";
+      else if (line.total_cable <= 400) rangeKey = "301-400";
+      else if (line.total_cable <= 500) rangeKey = "401-500";
+      else rangeKey = "Over 500";
 
       if (!groups[rangeKey]) {
-        groups[rangeKey] = { count: 0, rate, amount: 0 }
+        groups[rangeKey] = { count: 0, rate, amount: 0 };
       }
 
-      groups[rangeKey].count += 1
-      groups[rangeKey].amount += rate
-    })
+      groups[rangeKey].count += 1;
+      groups[rangeKey].amount += rate;
+    });
 
-    return groups
-  }
+    return groups;
+  };
 
   const handleDownload = () => {
-    if (!invoice || !companySettings) return
+    if (!invoice || !companySettings) return;
 
     // Generate PDF content
-    const pdfContent = generatePDFContent()
+    const pdfContent = generatePDFContent();
 
     // Create and download PDF
-    const element = document.createElement("a")
-    const file = new Blob([pdfContent], { type: "text/html" })
-    element.href = URL.createObjectURL(file)
-    element.download = `${invoice.invoice_number.replace(/\//g, "_")}.html`
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
+    const element = document.createElement("a");
+    const file = new Blob([pdfContent], { type: "text/html" });
+    element.href = URL.createObjectURL(file);
+    element.download = `${invoice.invoice_number.replace(/\//g, "_")}.html`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
 
     addNotification({
       title: "Download Started",
       message: `Invoice ${invoice.invoice_number} downloaded`,
       type: "success",
-    })
-  }
+    });
+  };
 
   const generatePDFContent = () => {
-    if (!invoice || !companySettings) return ""
+    if (!invoice || !companySettings) return "";
 
-    const groupedLines = groupLinesByRate()
-    const totalAmount = invoice.total_amount
-    const adjustedAmount = invoice.invoice_type === "A" ? Math.round(totalAmount * 0.9) : totalAmount
+    const groupedLines = groupLinesByRate();
+    const totalAmount = invoice.total_amount;
+    const adjustedAmount =
+      invoice.invoice_type === "A"
+        ? Math.round(totalAmount * 0.9)
+        : totalAmount;
 
     return `
 <!DOCTYPE html>
@@ -241,8 +258,12 @@ export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModal
     <div class="invoice-details">
         <div>
             <strong>Invoice Number:</strong> ${invoice.invoice_number}<br>
-            <strong>Registered Number:</strong> ${companySettings.registered_number}<br>
-            <strong>Invoice Date:</strong> ${new Date(invoice.invoice_date).toLocaleDateString()}<br>
+            <strong>Registered Number:</strong> ${
+              companySettings.registered_number
+            }<br>
+            <strong>Invoice Date:</strong> ${new Date(
+              invoice.invoice_date
+            ).toLocaleDateString()}<br>
             <strong>Job Related Month:</strong> ${invoice.job_month}<br>
             <strong>Invoice:</strong> ${invoice.invoice_type}
         </div>
@@ -273,7 +294,7 @@ export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModal
                     <td>${data.rate.toLocaleString()}.00</td>
                     <td class="amount">${data.amount.toLocaleString()}.00</td>
                 </tr>
-            `,
+            `
               )
               .join("")}
             <tr>
@@ -346,7 +367,9 @@ export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModal
     </div>
 
     <div class="company-info">
-        <p><strong>Cheque should be drawn in favour of "${companySettings.bank_details.account_title}"</strong></p>
+        <p><strong>Cheque should be drawn in favour of "${
+          companySettings.bank_details.account_title
+        }"</strong></p>
         <p><strong>${companySettings.company_name}</strong><br>
         ${companySettings.address}<br>
         Contact Number: ${companySettings.contact_numbers.join(" - ")}</p>
@@ -355,44 +378,50 @@ export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModal
     </div>
 </body>
 </html>
-    `
-  }
+    `;
+  };
 
-  if (!invoice) return null
+  if (!invoice) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className='max-w-4xl max-h-[90vh] overflow-y-auto'>
         <DialogHeader>
           <DialogTitle>Invoice Preview</DialogTitle>
-          <DialogDescription>Preview and download invoice {invoice.invoice_number}</DialogDescription>
+          <DialogDescription>
+            Preview and download invoice {invoice.invoice_number}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className='space-y-4'>
           {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="mt-2 text-sm text-muted-foreground">Loading invoice data...</p>
+            <div className='text-center py-8'>
+              <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+              <p className='mt-2 text-sm text-muted-foreground'>
+                Loading invoice data...
+              </p>
             </div>
           ) : (
-            <div className="border rounded-lg p-6 bg-white">
-              <div className="space-y-4">
-                <div className="flex justify-between items-start">
+            <div className='border rounded-lg p-6 bg-white'>
+              <div className='space-y-4'>
+                <div className='flex justify-between items-start'>
                   <div>
-                    <h3 className="font-bold text-lg">Bill to:</h3>
+                    <h3 className='font-bold text-lg'>Bill to:</h3>
                     <p>Sri Lanka Telecom (Services) Limited</p>
                     <p>OSP Division, 50/21, Gamunupura.</p>
                     <p>Kothalawala, Kaduwela.</p>
                   </div>
-                  <div className="text-right">
+                  <div className='text-right'>
                     <p>
                       <strong>Invoice Number:</strong> {invoice.invoice_number}
                     </p>
                     <p>
-                      <strong>Registered Number:</strong> {companySettings?.registered_number}
+                      <strong>Registered Number:</strong>{" "}
+                      {companySettings?.registered_number}
                     </p>
                     <p>
-                      <strong>Invoice Date:</strong> {new Date(invoice.invoice_date).toLocaleDateString()}
+                      <strong>Invoice Date:</strong>{" "}
+                      {new Date(invoice.invoice_date).toLocaleDateString()}
                     </p>
                     <p>
                       <strong>Job Related Month:</strong> {invoice.job_month}
@@ -403,42 +432,64 @@ export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModal
                   </div>
                 </div>
 
-                <div className="mt-6">
-                  <table className="w-full border-collapse border border-gray-300">
+                <div className='mt-6'>
+                  <table className='w-full border-collapse border border-gray-300'>
                     <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border border-gray-300 p-2">Ser.No</th>
-                        <th className="border border-gray-300 p-2">Description</th>
-                        <th className="border border-gray-300 p-2">Qty</th>
-                        <th className="border border-gray-300 p-2">Unit Rate</th>
-                        <th className="border border-gray-300 p-2">Amount</th>
+                      <tr className='bg-gray-100'>
+                        <th className='border border-gray-300 p-2'>Ser.No</th>
+                        <th className='border border-gray-300 p-2'>
+                          Description
+                        </th>
+                        <th className='border border-gray-300 p-2'>Qty</th>
+                        <th className='border border-gray-300 p-2'>
+                          Unit Rate
+                        </th>
+                        <th className='border border-gray-300 p-2'>Amount</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(groupLinesByRate()).map(([range, data], index) => (
-                        <tr key={range}>
-                          <td className="border border-gray-300 p-2">{index + 1}</td>
-                          <td className="border border-gray-300 p-2">FTTH Wirings-DW Length- ({range})</td>
-                          <td className="border border-gray-300 p-2">{data.count}</td>
-                          <td className="border border-gray-300 p-2">{data.rate.toLocaleString()}.00</td>
-                          <td className="border border-gray-300 p-2 text-right">{data.amount.toLocaleString()}.00</td>
-                        </tr>
-                      ))}
-                      <tr className="font-bold">
-                        <td className="border border-gray-300 p-2" colSpan={4}>
+                      {Object.entries(groupLinesByRate()).map(
+                        ([range, data], index) => (
+                          <tr key={range}>
+                            <td className='border border-gray-300 p-2'>
+                              {index + 1}
+                            </td>
+                            <td className='border border-gray-300 p-2'>
+                              FTTH Wirings-DW Length- ({range})
+                            </td>
+                            <td className='border border-gray-300 p-2'>
+                              {data.count}
+                            </td>
+                            <td className='border border-gray-300 p-2'>
+                              {data.rate.toLocaleString()}.00
+                            </td>
+                            <td className='border border-gray-300 p-2 text-right'>
+                              {data.amount.toLocaleString()}.00
+                            </td>
+                          </tr>
+                        )
+                      )}
+                      <tr className='font-bold'>
+                        <td className='border border-gray-300 p-2' colSpan={4}>
                           Grand Total (Rs.)
                         </td>
-                        <td className="border border-gray-300 p-2 text-right">
+                        <td className='border border-gray-300 p-2 text-right'>
                           {invoice.total_amount.toLocaleString()}.00
                         </td>
                       </tr>
                       {invoice.invoice_type === "A" && (
-                        <tr className="font-bold">
-                          <td className="border border-gray-300 p-2" colSpan={4}>
+                        <tr className='font-bold'>
+                          <td
+                            className='border border-gray-300 p-2'
+                            colSpan={4}
+                          >
                             90%
                           </td>
-                          <td className="border border-gray-300 p-2 text-right">
-                            {Math.round(invoice.total_amount * 0.9).toLocaleString()}.00
+                          <td className='border border-gray-300 p-2 text-right'>
+                            {Math.round(
+                              invoice.total_amount * 0.9
+                            ).toLocaleString()}
+                            .00
                           </td>
                         </tr>
                       )}
@@ -446,16 +497,22 @@ export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModal
                   </table>
                 </div>
 
-                <div className="mt-6 text-sm">
-                  <p className="italic">I do hereby certify that the above details are true and correct</p>
+                <div className='mt-6 text-sm'>
+                  <p className='italic'>
+                    I do hereby certify that the above details are true and
+                    correct
+                  </p>
 
-                  <div className="mt-4 grid grid-cols-2 gap-8">
+                  <div className='mt-4 grid grid-cols-2 gap-8'>
                     <div>
                       <p>
                         <strong>Prepared By:</strong>
                       </p>
                       <p>{companySettings?.company_name}</p>
-                      <p>Account No: {companySettings?.bank_details.account_number}</p>
+                      <p>
+                        Account No:{" "}
+                        {companySettings?.bank_details.account_number}
+                      </p>
                       <p>Bank: {companySettings?.bank_details.bank_name}</p>
                       <p>Branch: {companySettings?.bank_details.branch_code}</p>
                     </div>
@@ -473,15 +530,19 @@ export function InvoicePDFModal({ open, onOpenChange, invoice }: InvoicePDFModal
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() => onOpenChange(false)}
+          >
             Close
           </Button>
-          <Button onClick={handleDownload} disabled={loading} className="gap-2">
-            <Download className="h-4 w-4" />
+          <Button onClick={handleDownload} disabled={loading} className='gap-2'>
+            <Download className='h-4 w-4' />
             Download PDF
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

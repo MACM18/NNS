@@ -20,7 +20,7 @@ interface InvoiceData {
     name: string;
     phone_number: string;
     address: string;
-    total_calc: number;
+    total_cable: number;
     date: string;
   }>;
   totalAmount: number;
@@ -154,7 +154,7 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
           </TableHeader>
           <TableBody>
             {data.lines.map((line, index) => {
-              const rate = calculateRate(line.total_calc);
+              const rate = calculateRate(line.total_cable);
               return (
                 <TableRow key={line.id}>
                   <TableCell>{index + 1}</TableCell>
@@ -164,7 +164,7 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
                     {new Date(line.date).toLocaleDateString()}
                   </TableCell>
                   <TableCell className='text-right'>
-                    {line.total_calc.toFixed(2)}
+                    {line.total_cable.toFixed(2)}
                   </TableCell>
                   <TableCell className='text-right'>
                     {rate.toLocaleString()}
