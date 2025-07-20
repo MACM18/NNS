@@ -1,157 +1,196 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from "react"
-import { Plus, Package, TrendingDown, AlertTriangle, BarChart3, Eye, Pencil, Trash } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/layout/app-sidebar"
-import { Header } from "@/components/layout/header"
-import { AddInventoryInvoiceModal } from "@/components/modals/add-inventory-invoice-modal"
-import { AddWasteModal } from "@/components/modals/add-waste-modal"
-import { ManageInventoryItemsModal } from "@/components/modals/manage-inventory-items-modal"
-import { EditInventoryInvoiceModal } from "@/components/modals/edit-inventory-invoice-modal"
-import { EditInventoryItemModal } from "@/components/modals/edit-inventory-item-modal"
-import { EditDrumModal } from "@/components/modals/edit-drum-modal"
-import { useAuth } from "@/contexts/auth-context"
-import { AuthWrapper } from "@/components/auth/auth-wrapper"
-import { getSupabaseClient } from "@/lib/supabase"
-import { useNotification } from "@/contexts/notification-context"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { DrumUsageDetailsModal } from "@/components/modals/drum-usage-details-modal"
+import React, { useState, useEffect } from "react";
+import {
+  Plus,
+  Package,
+  TrendingDown,
+  AlertTriangle,
+  BarChart3,
+  Eye,
+  ChevronDown,
+  Pencil,
+  Trash,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { Header } from "@/components/layout/header";
+import { AddInventoryInvoiceModal } from "@/components/modals/add-inventory-invoice-modal";
+import { AddWasteModal } from "@/components/modals/add-waste-modal";
+import { ManageInventoryItemsModal } from "@/components/modals/manage-inventory-items-modal";
+import { EditInventoryInvoiceModal } from "@/components/modals/edit-inventory-invoice-modal";
+import { EditInventoryItemModal } from "@/components/modals/edit-inventory-item-modal";
+import { EditDrumModal } from "@/components/modals/edit-drum-modal";
+import { useAuth } from "@/contexts/auth-context";
+import { AuthWrapper } from "@/components/auth/auth-wrapper";
+import { getSupabaseClient } from "@/lib/supabase";
+import { useNotification } from "@/contexts/notification-context";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface InventoryStats {
-  totalItems: number
-  lowStockAlerts: number
-  activeDrums: number
-  monthlyWastePercentage: number
+  totalItems: number;
+  lowStockAlerts: number;
+  activeDrums: number;
+  monthlyWastePercentage: number;
 }
 
 interface InventoryInvoice {
-  id: string
-  invoice_number: string
-  warehouse: string
-  date: string
-  issued_by: string
-  drawn_by: string
-  total_items: number
-  status: string
-  created_at: string
+  id: string;
+  invoice_number: string;
+  warehouse: string;
+  date: string;
+  issued_by: string;
+  drawn_by: string;
+  total_items: number;
+  status: string;
+  created_at: string;
 }
 
 interface InventoryItem {
-  id: string
-  name: string
-  unit: string
-  current_stock: number
-  reorder_level: number
-  last_updated: string
+  id: string;
+  name: string;
+  unit: string;
+  current_stock: number;
+  reorder_level: number;
+  last_updated: string;
 }
 
 // Fix DrumTracking and WasteReport interfaces to use item_id, and join to inventory_items for name
 interface DrumTracking {
-  id: string
-  drum_number: string
-  item_id: string
-  initial_quantity: number
-  current_quantity: number
-  received_date: string
-  status: string
-  item_name?: string // populated via join
+  id: string;
+  drum_number: string;
+  item_id: string;
+  initial_quantity: number;
+  current_quantity: number;
+  received_date: string;
+  status: string;
+  item_name?: string; // populated via join
 }
 
 interface WasteReport {
-  id: string
-  item_id: string
-  quantity: number
-  waste_reason: string
-  waste_date: string
-  full_name: string
-  created_at: string
-  item_name?: string // populated via join
+  id: string;
+  item_id: string;
+  quantity: number;
+  waste_reason: string;
+  waste_date: string;
+  full_name: string;
+  created_at: string;
+  item_name?: string; // populated via join
 }
 
 // Update the interface to match your DB columns
 interface InventoryInvoiceItem {
-  id: string
-  invoice_id: string
-  item_id: string
-  description: string
-  unit: string
-  quantity_requested: number
-  quantity_issued: number
+  id: string;
+  invoice_id: string;
+  item_id: string;
+  description: string;
+  unit: string;
+  quantity_requested: number;
+  quantity_issued: number;
 }
 
 export default function InventoryPage() {
-  const { user, loading, role } = useAuth()
-  const [addInvoiceModalOpen, setAddInvoiceModalOpen] = useState(false)
-  const [addWasteModalOpen, setAddWasteModalOpen] = useState(false)
-  const [manageItemsModalOpen, setManageItemsModalOpen] = useState(false)
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const { user, loading, role } = useAuth();
+  const [addInvoiceModalOpen, setAddInvoiceModalOpen] = useState(false);
+  const [addWasteModalOpen, setAddWasteModalOpen] = useState(false);
+  const [manageItemsModalOpen, setManageItemsModalOpen] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [stats, setStats] = useState<InventoryStats>({
     totalItems: 0,
     lowStockAlerts: 0,
     activeDrums: 0,
     monthlyWastePercentage: 0,
-  })
-  const [invoices, setInvoices] = useState<InventoryInvoice[]>([])
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
-  const [drums, setDrums] = useState<DrumTracking[]>([])
-  const [wasteReports, setWasteReports] = useState<WasteReport[]>([])
-  const [loadingData, setLoadingData] = useState(true)
-  const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null)
-  const [invoiceItems, setInvoiceItems] = useState<Record<string, InventoryInvoiceItem[]>>({})
-  const [editInvoiceModalOpen, setEditInvoiceModalOpen] = useState(false)
-  const [selectedInvoice, setSelectedInvoice] = useState<InventoryInvoice | null>(null)
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const [invoiceToDelete, setInvoiceToDelete] = useState<InventoryInvoice | null>(null)
-  const [editDrumModalOpen, setEditDrumModalOpen] = useState(false)
-  const [selectedDrum, setSelectedDrum] = useState<DrumTracking | null>(null)
-  const [deleteDrumConfirmOpen, setDeleteDrumConfirmOpen] = useState(false)
-  const [drumToDelete, setDrumToDelete] = useState<DrumTracking | null>(null)
+  });
+  const [invoices, setInvoices] = useState<InventoryInvoice[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [drums, setDrums] = useState<DrumTracking[]>([]);
+  const [wasteReports, setWasteReports] = useState<WasteReport[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(
+    null
+  );
+  const [invoiceItems, setInvoiceItems] = useState<
+    Record<string, InventoryInvoiceItem[]>
+  >({});
+  const [editInvoiceModalOpen, setEditInvoiceModalOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] =
+    useState<InventoryInvoice | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] =
+    useState<InventoryInvoice | null>(null);
+  const [editDrumModalOpen, setEditDrumModalOpen] = useState(false);
+  const [selectedDrum, setSelectedDrum] = useState<DrumTracking | null>(null);
+  const [deleteDrumConfirmOpen, setDeleteDrumConfirmOpen] = useState(false);
+  const [drumToDelete, setDrumToDelete] = useState<DrumTracking | null>(null);
 
-  const [editItemModalOpen, setEditItemModalOpen] = useState(false)
-  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
+  const [editItemModalOpen, setEditItemModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
 
-  const [deleteWasteConfirmOpen, setDeleteWasteConfirmOpen] = useState(false)
-  const [wasteToDelete, setWasteToDelete] = useState<WasteReport | null>(null)
+  const [deleteWasteConfirmOpen, setDeleteWasteConfirmOpen] = useState(false);
+  const [wasteToDelete, setWasteToDelete] = useState<WasteReport | null>(null);
 
-  const [drumUsageModalOpen, setDrumUsageModalOpen] = useState(false)
-  const [selectedDrumForUsage, setSelectedDrumForUsage] = useState<{ id: string; number: string } | null>(null)
-
-  const supabase = getSupabaseClient()
-  const { addNotification } = useNotification()
+  const supabase = getSupabaseClient();
+  const { addNotification } = useNotification();
 
   useEffect(() => {
     if (user) {
-      fetchAllData()
+      fetchAllData();
     }
-  }, [user, refreshTrigger])
+  }, [user, refreshTrigger]);
 
   const fetchAllData = async () => {
-    setLoadingData(true)
+    setLoadingData(true);
     try {
-      await Promise.all([fetchStats(), fetchInvoices(), fetchInventoryItems(), fetchDrums(), fetchWasteReports()])
+      await Promise.all([
+        fetchStats(),
+        fetchInvoices(),
+        fetchInventoryItems(),
+        fetchDrums(),
+        fetchWasteReports(),
+      ]);
     } catch (error) {
-      console.error("Error fetching inventory data:", error)
+      console.error("Error fetching inventory data:", error);
       addNotification({
         title: "Error",
         message: "Failed to fetch inventory data",
         type: "error",
         category: "system",
-      })
+      });
     } finally {
-      setLoadingData(false)
+      setLoadingData(false);
     }
-  }
+  };
 
   const fetchStats = async () => {
     try {
       // Get total items
-      const { count: totalItems } = await supabase.from("inventory_items").select("*", { count: "exact", head: true })
+      const { count: totalItems } = await supabase
+        .from("inventory_items")
+        .select("*", { count: "exact", head: true });
 
       // // Get low stock alerts
       // const { count: lowStockAlerts } = await supabase
@@ -160,49 +199,62 @@ export default function InventoryPage() {
       //   .lt("current_stock", "reorder_level");
       // // ...existing code...
       // Get low stock alerts
-      const { data: lowStockData, error: lowStockError } = await supabase.rpc("low_stock_alert_count")
-      const lowStockAlerts = lowStockData ?? 0
+      const { data: lowStockData, error: lowStockError } = await supabase.rpc(
+        "low_stock_alert_count"
+      );
+      const lowStockAlerts = lowStockData ?? 0;
       // ...existing code...
       // Get active drums
       const { count: activeDrums } = await supabase
         .from("drum_tracking")
         .select("*", { count: "exact", head: true })
-        .eq("status", "active")
+        .eq("status", "active");
 
       // Calculate monthly waste percentage
-      const now = new Date()
-      const currentMonth = now.toISOString().slice(0, 7) // YYYY-MM format
-      const year = now.getFullYear()
-      const month = now.getMonth() + 1 // getMonth() is zero-based
+      const now = new Date();
+      const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM format
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1; // getMonth() is zero-based
 
       // Calculate the last day of the current month
-      const lastDay = new Date(year, month, 0).getDate()
-      const endDate = `${currentMonth}-${lastDay.toString().padStart(2, "0")}`
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${currentMonth}-${lastDay.toString().padStart(2, "0")}`;
 
       const { data: wasteData } = await supabase
         .from("waste_tracking")
         .select("quantity")
         .gte("waste_date", `${currentMonth}-01`)
-        .lte("waste_date", endDate)
+        .lte("waste_date", endDate);
 
-      const { data: totalStock } = await supabase.from("inventory_items").select("current_stock")
+      const { data: totalStock } = await supabase
+        .from("inventory_items")
+        .select("current_stock");
 
-      const totalWaste = wasteData?.reduce((sum, item) => sum + ((item as { quantity: number }).quantity || 0), 0) || 0
+      const totalWaste =
+        wasteData?.reduce(
+          (sum, item) => sum + ((item as { quantity: number }).quantity || 0),
+          0
+        ) || 0;
       const totalStockValue =
-        totalStock?.reduce((sum, item) => sum + (typeof item.current_stock === "number" ? item.current_stock : 0), 0) ||
-        1
-      const wastePercentage = totalStockValue > 0 ? (totalWaste / totalStockValue) * 100 : 0
+        totalStock?.reduce(
+          (sum, item) =>
+            sum +
+            (typeof item.current_stock === "number" ? item.current_stock : 0),
+          0
+        ) || 1;
+      const wastePercentage =
+        totalStockValue > 0 ? (totalWaste / totalStockValue) * 100 : 0;
 
       setStats({
         totalItems: typeof totalItems === "number" ? totalItems : 0,
         lowStockAlerts: typeof lowStockAlerts === "number" ? lowStockAlerts : 0,
         activeDrums: typeof activeDrums === "number" ? activeDrums : 0,
         monthlyWastePercentage: Number(wastePercentage.toFixed(1)),
-      })
+      });
     } catch (error) {
-      console.error("Error fetching stats:", error)
+      console.error("Error fetching stats:", error);
     }
-  }
+  };
 
   const fetchInvoices = async () => {
     try {
@@ -210,9 +262,9 @@ export default function InventoryPage() {
         .from("inventory_invoices")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(10)
+        .limit(10);
 
-      if (error) throw error
+      if (error) throw error;
       setInvoices(
         Array.isArray(data)
           ? data
@@ -227,7 +279,7 @@ export default function InventoryPage() {
                   typeof d.drawn_by === "string" &&
                   typeof d.total_items === "number" &&
                   typeof d.status === "string" &&
-                  typeof d.created_at === "string",
+                  typeof d.created_at === "string"
               )
               .map(
                 (d) =>
@@ -241,20 +293,23 @@ export default function InventoryPage() {
                     total_items: d.total_items,
                     status: d.status,
                     created_at: d.created_at,
-                  }) as InventoryInvoice,
+                  } as InventoryInvoice)
               )
-          : [],
-      )
+          : []
+      );
     } catch (error) {
-      console.error("Error fetching invoices:", error)
+      console.error("Error fetching invoices:", error);
     }
-  }
+  };
 
   const fetchInventoryItems = async () => {
     try {
-      const { data, error } = await supabase.from("inventory_items").select("*").order("name")
+      const { data, error } = await supabase
+        .from("inventory_items")
+        .select("*")
+        .order("name");
 
-      if (error) throw error
+      if (error) throw error;
       setInventoryItems(
         Array.isArray(data)
           ? data
@@ -266,7 +321,7 @@ export default function InventoryPage() {
                   typeof d.unit === "string" &&
                   typeof d.current_stock === "number" &&
                   typeof d.reorder_level === "number" &&
-                  typeof d.updated_at === "string",
+                  typeof d.updated_at === "string"
               )
               .map(
                 (d) =>
@@ -277,14 +332,14 @@ export default function InventoryPage() {
                     current_stock: d.current_stock,
                     reorder_level: d.reorder_level,
                     last_updated: d.updated_at,
-                  }) as InventoryItem,
+                  } as InventoryItem)
               )
-          : [],
-      )
+          : []
+      );
     } catch (error) {
-      console.error("Error fetching inventory items:", error)
+      console.error("Error fetching inventory items:", error);
     }
-  }
+  };
 
   // Fix: Remove broken left join select for drum_tracking and waste_tracking
   const fetchDrums = async () => {
@@ -292,20 +347,20 @@ export default function InventoryPage() {
       const { data, error } = await supabase
         .from("drum_tracking")
         .select(
-          `id, drum_number, item_id, initial_quantity, current_quantity, received_date, status, inventory_items(name)`,
+          `id, drum_number, item_id, initial_quantity, current_quantity, received_date, status, inventory_items(name)`
         )
-        .order("received_date", { ascending: false })
-      if (error) throw error
+        .order("received_date", { ascending: false });
+      if (error) throw error;
       // Map item_name from join
       const drumsWithName = (data || []).map((drum: any) => ({
         ...drum,
         item_name: drum.inventory_items?.name || "",
-      }))
-      setDrums(drumsWithName as DrumTracking[])
+      }));
+      setDrums(drumsWithName as DrumTracking[]);
     } catch (error) {
-      console.error("Error fetching drums:", error)
+      console.error("Error fetching drums:", error);
     }
-  }
+  };
 
   // Update fetchWasteReports to join inventory_items for item_name
   const fetchWasteReports = async () => {
@@ -313,130 +368,145 @@ export default function InventoryPage() {
       const { data, error } = await supabase
         .from("waste_tracking")
         .select(
-          `id, item_id, quantity, waste_reason, waste_date, profiles(full_name), created_at, inventory_items(name)`,
+          `id, item_id, quantity, waste_reason, waste_date, profiles(full_name), created_at, inventory_items(name)`
         )
         .order("waste_date", { ascending: false })
-        .limit(20)
-      if (error) throw error
+        .limit(20);
+      if (error) throw error;
       // Map item_name from join
       const wasteWithName = (data || []).map((w: any) => ({
         ...w,
         item_name: w.inventory_items?.name || "",
         full_name: w.profiles?.full_name || "",
-      }))
-      setWasteReports(wasteWithName as WasteReport[])
+      }));
+      setWasteReports(wasteWithName as WasteReport[]);
     } catch (error) {
-      console.error("Error fetching waste reports:", error)
+      console.error("Error fetching waste reports:", error);
     }
-  }
+  };
 
   const fetchInvoiceItems = async (invoiceId: string) => {
-    if (invoiceItems[invoiceId]) return // Already fetched
+    if (invoiceItems[invoiceId]) return; // Already fetched
     try {
       const { data, error } = await supabase
         .from("inventory_invoice_items")
-        .select("id, invoice_id, item_id, description, unit, quantity_requested, quantity_issued")
-        .eq("invoice_id", invoiceId)
-      if (error) throw error
+        .select(
+          "id, invoice_id, item_id, description, unit, quantity_requested, quantity_issued"
+        )
+        .eq("invoice_id", invoiceId);
+      if (error) throw error;
       setInvoiceItems((prev) => ({
         ...prev,
         [invoiceId]: (data || []) as InventoryInvoiceItem[],
-      }))
+      }));
     } catch (error) {
       addNotification({
         title: "Error",
         message: "Failed to fetch invoice items",
         type: "error",
         category: "system",
-      })
+      });
     }
-  }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
         return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
+          <Badge variant='default' className='bg-green-100 text-green-800'>
             Completed
           </Badge>
-        )
+        );
       case "pending":
-        return <Badge variant="secondary">Pending</Badge>
+        return <Badge variant='secondary'>Pending</Badge>;
       case "active":
         return (
-          <Badge variant="default" className="bg-blue-100 text-blue-800">
+          <Badge variant='default' className='bg-blue-100 text-blue-800'>
             Active
           </Badge>
-        )
+        );
       case "empty":
         return (
-          <Badge variant="outline" className="bg-gray-100 text-gray-800">
+          <Badge variant='outline' className='bg-gray-100 text-gray-800'>
             Empty
           </Badge>
-        )
+        );
       default:
-        return <Badge variant="secondary">{status}</Badge>
+        return <Badge variant='secondary'>{status}</Badge>;
     }
-  }
+  };
 
   const getStockStatus = (currentStock: number, reorderLevel: number) => {
     if (currentStock <= 0) {
-      return <Badge variant="destructive">Out of Stock</Badge>
+      return <Badge variant='destructive'>Out of Stock</Badge>;
     } else if (currentStock <= reorderLevel) {
       return (
-        <Badge variant="outline" className="bg-orange-100 text-orange-800">
+        <Badge variant='outline' className='bg-orange-100 text-orange-800'>
           Low Stock
         </Badge>
-      )
+      );
     } else {
       return (
-        <Badge variant="default" className="bg-green-100 text-green-800">
+        <Badge variant='default' className='bg-green-100 text-green-800'>
           In Stock
         </Badge>
-      )
+      );
     }
-  }
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className='flex items-center justify-center min-h-screen'>
+        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary'></div>
       </div>
-    )
+    );
   }
 
   if (!user) {
-    return <AuthWrapper />
+    return <AuthWrapper />;
   }
 
   const handleSuccess = () => {
-    setRefreshTrigger((prev) => prev + 1)
-  }
+    setRefreshTrigger((prev) => prev + 1);
+  };
 
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
         <Header />
-        <main className="flex-1 space-y-6 p-6">
+        <main className='flex-1 space-y-6 p-6'>
           {/* Page Header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
             <div>
-              <h1 className="text-3xl font-bold">Inventory Management</h1>
-              <p className="text-muted-foreground">Manage stock receipts, drum tracking, and waste reporting</p>
+              <h1 className='text-3xl font-bold'>Inventory Management</h1>
+              <p className='text-muted-foreground'>
+                Manage stock receipts, drum tracking, and waste reporting
+              </p>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={() => setAddWasteModalOpen(true)} variant="outline" className="gap-2">
-                <TrendingDown className="h-4 w-4" />
+            <div className='flex gap-2'>
+              <Button
+                onClick={() => setAddWasteModalOpen(true)}
+                variant='outline'
+                className='gap-2'
+              >
+                <TrendingDown className='h-4 w-4' />
                 Record Waste
               </Button>
-              <Button onClick={() => setAddInvoiceModalOpen(true)} className="gap-2">
-                <Plus className="h-4 w-4" />
+              <Button
+                onClick={() => setAddInvoiceModalOpen(true)}
+                className='gap-2'
+              >
+                <Plus className='h-4 w-4' />
                 Add Invoice
               </Button>
               {(role === "admin" || role === "moderator") && (
-                <Button onClick={() => setManageItemsModalOpen(true)} variant="secondary" className="gap-2">
-                  <Package className="h-4 w-4" />
+                <Button
+                  onClick={() => setManageItemsModalOpen(true)}
+                  variant='secondary'
+                  className='gap-2'
+                >
+                  <Package className='h-4 w-4' />
                   Manage Item List
                 </Button>
               )}
@@ -444,74 +514,104 @@ export default function InventoryPage() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-                <Package className="h-4 w-4 text-muted-foreground" />
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>
+                  Total Items
+                </CardTitle>
+                <Package className='h-4 w-4 text-muted-foreground' />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loadingData ? "..." : stats.totalItems}</div>
-                <p className="text-xs text-muted-foreground">Active inventory items</p>
+                <div className='text-2xl font-bold'>
+                  {loadingData ? "..." : stats.totalItems}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Active inventory items
+                </p>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Low Stock Alerts</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>
+                  Low Stock Alerts
+                </CardTitle>
+                <AlertTriangle className='h-4 w-4 text-muted-foreground' />
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${stats.lowStockAlerts > 0 ? "text-orange-600" : ""}`}>
+                <div
+                  className={`text-2xl font-bold ${
+                    stats.lowStockAlerts > 0 ? "text-orange-600" : ""
+                  }`}
+                >
                   {loadingData ? "..." : stats.lowStockAlerts}
                 </div>
-                <p className="text-xs text-muted-foreground">Items below reorder level</p>
+                <p className='text-xs text-muted-foreground'>
+                  Items below reorder level
+                </p>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Drums</CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>
+                  Active Drums
+                </CardTitle>
+                <BarChart3 className='h-4 w-4 text-muted-foreground' />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loadingData ? "..." : stats.activeDrums}</div>
-                <p className="text-xs text-muted-foreground">Cable drums in use</p>
+                <div className='text-2xl font-bold'>
+                  {loadingData ? "..." : stats.activeDrums}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Cable drums in use
+                </p>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Monthly Waste</CardTitle>
-                <TrendingDown className="h-4 w-4 text-muted-foreground" />
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>
+                  Monthly Waste
+                </CardTitle>
+                <TrendingDown className='h-4 w-4 text-muted-foreground' />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loadingData ? "..." : `${stats.monthlyWastePercentage}%`}</div>
-                <p className="text-xs text-muted-foreground">Of total inventory</p>
+                <div className='text-2xl font-bold'>
+                  {loadingData ? "..." : `${stats.monthlyWastePercentage}%`}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Of total inventory
+                </p>
               </CardContent>
             </Card>
           </div>
 
           {/* Main Content Tabs */}
-          <Tabs defaultValue="invoices" className="space-y-6">
+          <Tabs defaultValue='invoices' className='space-y-6'>
             <TabsList>
-              <TabsTrigger value="invoices">Invoices</TabsTrigger>
-              <TabsTrigger value="stock">Stock Levels</TabsTrigger>
-              <TabsTrigger value="drums">Drum Tracking</TabsTrigger>
-              <TabsTrigger value="waste">Waste Reports</TabsTrigger>
+              <TabsTrigger value='invoices'>Invoices</TabsTrigger>
+              <TabsTrigger value='stock'>Stock Levels</TabsTrigger>
+              <TabsTrigger value='drums'>Drum Tracking</TabsTrigger>
+              <TabsTrigger value='waste'>Waste Reports</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="invoices">
+            <TabsContent value='invoices'>
               <Card>
                 <CardHeader>
                   <CardTitle>Recent Invoices</CardTitle>
-                  <CardDescription>Material receipts and stock updates</CardDescription>
+                  <CardDescription>
+                    Material receipts and stock updates
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingData ? (
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                      <p className="text-muted-foreground mt-2">Loading invoices...</p>
+                    <div className='text-center py-8'>
+                      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+                      <p className='text-muted-foreground mt-2'>
+                        Loading invoices...
+                      </p>
                     </div>
                   ) : invoices.length > 0 ? (
                     <Table>
@@ -523,8 +623,8 @@ export default function InventoryPage() {
                           <TableHead>Items</TableHead>
                           <TableHead>Issued By</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead className="w-20 text-center">
-                            <span className="sr-only">Actions</span>
+                          <TableHead className='w-20 text-center'>
+                            <span className='sr-only'>Actions</span>
                           </TableHead>
                         </TableRow>
                       </TableHeader>
@@ -532,39 +632,46 @@ export default function InventoryPage() {
                         {invoices.map((invoice) => (
                           <React.Fragment key={invoice.id}>
                             <TableRow>
-                              <TableCell className="font-mono text-sm">{invoice.invoice_number}</TableCell>
+                              <TableCell className='font-mono text-sm'>
+                                {invoice.invoice_number}
+                              </TableCell>
                               <TableCell>{invoice.warehouse}</TableCell>
-                              <TableCell>{new Date(invoice.date).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                {new Date(invoice.date).toLocaleDateString()}
+                              </TableCell>
                               <TableCell>{invoice.total_items}</TableCell>
                               <TableCell>{invoice.issued_by}</TableCell>
-                              <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                              <TableCell className="text-center align-middle">
-                                <div className="flex gap-1 justify-center items-center min-h-[32px]">
+                              <TableCell>
+                                {getStatusBadge(invoice.status)}
+                              </TableCell>
+                              <TableCell className='text-center align-middle'>
+                                <div className='flex gap-1 justify-center items-center min-h-[32px]'>
                                   <Button
-                                    size="sm"
-                                    variant="outline"
+                                    size='sm'
+                                    variant='outline'
                                     onClick={async () => {
                                       if (expandedInvoiceId === invoice.id) {
-                                        setExpandedInvoiceId(null)
+                                        setExpandedInvoiceId(null);
                                       } else {
-                                        setExpandedInvoiceId(invoice.id)
-                                        await fetchInvoiceItems(invoice.id)
+                                        setExpandedInvoiceId(invoice.id);
+                                        await fetchInvoiceItems(invoice.id);
                                       }
                                     }}
                                   >
-                                    <Eye className="h-4 w-4" />
+                                    <Eye className='h-4 w-4' />
                                   </Button>
-                                  {(role === "admin" || role === "moderator") && (
+                                  {(role === "admin" ||
+                                    role === "moderator") && (
                                     <Button
-                                      size="sm"
-                                      variant="secondary"
+                                      size='sm'
+                                      variant='secondary'
                                       onClick={async () => {
                                         // Ensure invoice items are fetched before opening modal
                                         if (!invoiceItems[invoice.id]) {
-                                          await fetchInvoiceItems(invoice.id)
+                                          await fetchInvoiceItems(invoice.id);
                                         }
-                                        setSelectedInvoice(invoice)
-                                        setEditInvoiceModalOpen(true)
+                                        setSelectedInvoice(invoice);
+                                        setEditInvoiceModalOpen(true);
                                       }}
                                     >
                                       Edit
@@ -572,11 +679,11 @@ export default function InventoryPage() {
                                   )}
                                   {role === "admin" && (
                                     <Button
-                                      size="sm"
-                                      variant="destructive"
+                                      size='sm'
+                                      variant='destructive'
                                       onClick={() => {
-                                        setInvoiceToDelete(invoice)
-                                        setDeleteConfirmOpen(true)
+                                        setInvoiceToDelete(invoice);
+                                        setDeleteConfirmOpen(true);
                                       }}
                                     >
                                       Delete
@@ -587,10 +694,16 @@ export default function InventoryPage() {
                             </TableRow>
                             {expandedInvoiceId === invoice.id && (
                               <TableRow>
-                                <TableCell colSpan={7} className="bg-muted/30 p-0">
-                                  <div className="p-6">
-                                    <h4 className="font-semibold mb-2">Invoice Items</h4>
-                                    {invoiceItems[invoice.id] && invoiceItems[invoice.id].length > 0 ? (
+                                <TableCell
+                                  colSpan={7}
+                                  className='bg-muted/30 p-0'
+                                >
+                                  <div className='p-6'>
+                                    <h4 className='font-semibold mb-2'>
+                                      Invoice Items
+                                    </h4>
+                                    {invoiceItems[invoice.id] &&
+                                    invoiceItems[invoice.id].length > 0 ? (
                                       <Table>
                                         <TableHeader>
                                           <TableRow>
@@ -601,18 +714,30 @@ export default function InventoryPage() {
                                           </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                          {invoiceItems[invoice.id].map((item) => (
-                                            <TableRow key={item.id}>
-                                              <TableCell>{item.description}</TableCell>
-                                              <TableCell>{item.quantity_requested}</TableCell>
-                                              <TableCell>{item.quantity_issued}</TableCell>
-                                              <TableCell>{item.unit}</TableCell>
-                                            </TableRow>
-                                          ))}
+                                          {invoiceItems[invoice.id].map(
+                                            (item) => (
+                                              <TableRow key={item.id}>
+                                                <TableCell>
+                                                  {item.description}
+                                                </TableCell>
+                                                <TableCell>
+                                                  {item.quantity_requested}
+                                                </TableCell>
+                                                <TableCell>
+                                                  {item.quantity_issued}
+                                                </TableCell>
+                                                <TableCell>
+                                                  {item.unit}
+                                                </TableCell>
+                                              </TableRow>
+                                            )
+                                          )}
                                         </TableBody>
                                       </Table>
                                     ) : (
-                                      <div className="text-muted-foreground">No items found for this invoice.</div>
+                                      <div className='text-muted-foreground'>
+                                        No items found for this invoice.
+                                      </div>
                                     )}
                                   </div>
                                 </TableCell>
@@ -623,27 +748,33 @@ export default function InventoryPage() {
                       </TableBody>
                     </Table>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <div className='text-center py-8 text-muted-foreground'>
+                      <Package className='h-12 w-12 mx-auto mb-4 opacity-50' />
                       <p>No invoices found</p>
-                      <p className="text-sm">Create your first invoice to get started</p>
+                      <p className='text-sm'>
+                        Create your first invoice to get started
+                      </p>
                     </div>
                   )}
                 </CardContent>
               </Card>
             </TabsContent>
 
-            <TabsContent value="stock">
+            <TabsContent value='stock'>
               <Card>
                 <CardHeader>
                   <CardTitle>Current Stock Levels</CardTitle>
-                  <CardDescription>Real-time inventory status with reorder alerts</CardDescription>
+                  <CardDescription>
+                    Real-time inventory status with reorder alerts
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingData ? (
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                      <p className="text-muted-foreground mt-2">Loading stock levels...</p>
+                    <div className='text-center py-8'>
+                      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+                      <p className='text-muted-foreground mt-2'>
+                        Loading stock levels...
+                      </p>
                     </div>
                   ) : inventoryItems.length > 0 ? (
                     <Table>
@@ -655,34 +786,45 @@ export default function InventoryPage() {
                           <TableHead>Reorder Level</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Last Updated</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+                          <TableHead className='text-right'>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {inventoryItems.map((item) => (
                           <TableRow key={item.id}>
-                            <TableCell className="font-medium">{item.name}</TableCell>
+                            <TableCell className='font-medium'>
+                              {item.name}
+                            </TableCell>
 
                             <TableCell>{item.current_stock}</TableCell>
                             <TableCell>{item.unit}</TableCell>
                             <TableCell>{item.reorder_level || 0}</TableCell>
-                            <TableCell>{getStockStatus(item.current_stock, item.reorder_level || 0)}</TableCell>
                             <TableCell>
-                              {item.last_updated ? new Date(item.last_updated).toLocaleDateString() : "N/A"}
+                              {getStockStatus(
+                                item.current_stock,
+                                item.reorder_level || 0
+                              )}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell>
+                              {item.last_updated
+                                ? new Date(
+                                    item.last_updated
+                                  ).toLocaleDateString()
+                                : "N/A"}
+                            </TableCell>
+                            <TableCell className='text-right'>
                               {role === "admin" && (
                                 <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  aria-label="Edit Item"
-                                  className="p-1 h-7 w-7"
+                                  size='icon'
+                                  variant='ghost'
+                                  aria-label='Edit Item'
+                                  className='p-1 h-7 w-7'
                                   onClick={() => {
-                                    setSelectedItem(item)
-                                    setEditItemModalOpen(true)
+                                    setSelectedItem(item);
+                                    setEditItemModalOpen(true);
                                   }}
                                 >
-                                  <Pencil className="h-4 w-4" />
+                                  <Pencil className='h-4 w-4' />
                                 </Button>
                               )}
                             </TableCell>
@@ -691,27 +833,33 @@ export default function InventoryPage() {
                       </TableBody>
                     </Table>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <div className='text-center py-8 text-muted-foreground'>
+                      <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
                       <p>No inventory items found</p>
-                      <p className="text-sm">Add items through invoices to track stock levels</p>
+                      <p className='text-sm'>
+                        Add items through invoices to track stock levels
+                      </p>
                     </div>
                   )}
                 </CardContent>
               </Card>
             </TabsContent>
 
-            <TabsContent value="drums">
+            <TabsContent value='drums'>
               <Card>
                 <CardHeader>
                   <CardTitle>Drum Tracking</CardTitle>
-                  <CardDescription>Cable drum usage and remaining quantities</CardDescription>
+                  <CardDescription>
+                    Cable drum usage and remaining quantities
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingData ? (
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                      <p className="text-muted-foreground mt-2">Loading drum tracking...</p>
+                    <div className='text-center py-8'>
+                      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+                      <p className='text-muted-foreground mt-2'>
+                        Loading drum tracking...
+                      </p>
                     </div>
                   ) : drums.length > 0 ? (
                     <Table>
@@ -724,8 +872,8 @@ export default function InventoryPage() {
                           <TableHead>Usage %</TableHead>
                           <TableHead>Received Date</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead className="w-20 text-center">
-                            <span className="sr-only">Actions</span>
+                          <TableHead className='w-20 text-center'>
+                            <span className='sr-only'>Actions</span>
                           </TableHead>
                         </TableRow>
                       </TableHeader>
@@ -734,128 +882,95 @@ export default function InventoryPage() {
                           const usagePercentage =
                             drum.initial_quantity > 0
                               ? (
-                                  ((drum.initial_quantity - drum.current_quantity) / drum.initial_quantity) *
+                                  ((drum.initial_quantity -
+                                    drum.current_quantity) /
+                                    drum.initial_quantity) *
                                   100
                                 ).toFixed(1)
-                              : "0.0"
-
-                          const isLowQuantity = drum.current_quantity <= 50
-                          const isVeryLowQuantity = drum.current_quantity <= 10
-
+                              : "0.0";
                           return (
                             <TableRow key={drum.id}>
                               <TableCell>{drum.drum_number}</TableCell>
                               <TableCell>{drum.item_name || "-"}</TableCell>
-                              <TableCell>{drum.initial_quantity}m</TableCell>
+                              <TableCell>{drum.initial_quantity}</TableCell>
+                              <TableCell>{drum.current_quantity}</TableCell>
+                              <TableCell>{usagePercentage}%</TableCell>
                               <TableCell>
-                                <span
-                                  className={`font-medium ${
-                                    isVeryLowQuantity
-                                      ? "text-red-600"
-                                      : isLowQuantity
-                                        ? "text-orange-600"
-                                        : "text-green-600"
-                                  }`}
-                                >
-                                  {drum.current_quantity}m{isVeryLowQuantity && " ⚠️"}
-                                </span>
+                                {drum.received_date
+                                  ? new Date(
+                                      drum.received_date
+                                    ).toLocaleDateString()
+                                  : "N/A"}
                               </TableCell>
                               <TableCell>
-                                <span
-                                  className={`font-medium ${
-                                    Number(usagePercentage) > 90
-                                      ? "text-red-600"
-                                      : Number(usagePercentage) > 75
-                                        ? "text-orange-600"
-                                        : "text-blue-600"
-                                  }`}
-                                >
-                                  {usagePercentage}%
-                                </span>
+                                {getStatusBadge(drum.status)}
                               </TableCell>
-                              <TableCell>
-                                {drum.received_date ? new Date(drum.received_date).toLocaleDateString() : "N/A"}
-                              </TableCell>
-                              <TableCell>
-                                {drum.status === "inactive" ? (
-                                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                                    Low Stock
-                                  </Badge>
-                                ) : (
-                                  getStatusBadge(drum.status)
-                                )}
-                              </TableCell>
-                              <TableCell className="text-center align-middle">
-                                <div className="flex gap-1 justify-center items-center min-h-[32px]">
-                                  <Button
-                                    size="icon"
-                                    variant="outline"
-                                    aria-label="View Usage"
-                                    className="p-1 h-7 w-7 bg-transparent"
-                                    onClick={() => {
-                                      setSelectedDrumForUsage({ id: drum.id, number: drum.drum_number })
-                                      setDrumUsageModalOpen(true)
-                                    }}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                  {(role === "admin" || role === "moderator") && (
+                              <TableCell className='text-center align-middle'>
+                                <div className='flex gap-1 justify-center items-center min-h-[32px]'>
+                                  {(role === "admin" ||
+                                    role === "moderator") && (
                                     <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      aria-label="Edit Drum"
-                                      className="p-1 h-7 w-7"
+                                      size='icon'
+                                      variant='ghost'
+                                      aria-label='Edit Drum'
+                                      className='p-1 h-7 w-7'
                                       onClick={() => {
-                                        setSelectedDrum(drum)
-                                        setEditDrumModalOpen(true)
+                                        setSelectedDrum(drum);
+                                        setEditDrumModalOpen(true);
                                       }}
                                     >
-                                      <Pencil className="h-4 w-4" />
+                                      <Pencil className='h-4 w-4' />
                                     </Button>
                                   )}
                                   {role === "admin" && (
                                     <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      aria-label="Delete Drum"
-                                      className="p-1 h-7 w-7"
+                                      size='icon'
+                                      variant='ghost'
+                                      aria-label='Delete Drum'
+                                      className='p-1 h-7 w-7'
                                       onClick={() => {
-                                        setDrumToDelete(drum)
-                                        setDeleteDrumConfirmOpen(true)
+                                        setDrumToDelete(drum);
+                                        setDeleteDrumConfirmOpen(true);
                                       }}
                                     >
-                                      <Trash className="h-4 w-4 text-red-500" />
+                                      <Trash className='h-4 w-4 text-red-500' />
                                     </Button>
                                   )}
                                 </div>
                               </TableCell>
                             </TableRow>
-                          )
+                          );
                         })}
                       </TableBody>
                     </Table>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <div className='text-center py-8 text-muted-foreground'>
+                      <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
                       <p>No drums found</p>
-                      <p className="text-sm">Add cable drums through invoices to track usage</p>
+                      <p className='text-sm'>
+                        Add cable drums through invoices to track usage
+                      </p>
                     </div>
                   )}
                 </CardContent>
               </Card>
             </TabsContent>
 
-            <TabsContent value="waste">
+            <TabsContent value='waste'>
               <Card>
                 <CardHeader>
                   <CardTitle>Waste Reports</CardTitle>
-                  <CardDescription>Track reported waste and reasons</CardDescription>
+                  <CardDescription>
+                    Track reported waste and reasons
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingData ? (
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                      <p className="text-muted-foreground mt-2">Loading waste reports...</p>
+                    <div className='text-center py-8'>
+                      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+                      <p className='text-muted-foreground mt-2'>
+                        Loading waste reports...
+                      </p>
                     </div>
                   ) : wasteReports.length > 0 ? (
                     <Table>
@@ -866,7 +981,11 @@ export default function InventoryPage() {
                           <TableHead>Reason</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead>Reported By</TableHead>
-                          {role === "admin" && <TableHead className="w-20 text-center">Actions</TableHead>}
+                          {role === "admin" && (
+                            <TableHead className='w-20 text-center'>
+                              Actions
+                            </TableHead>
+                          )}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -876,22 +995,26 @@ export default function InventoryPage() {
                             <TableCell>{waste.quantity}</TableCell>
                             <TableCell>{waste.waste_reason}</TableCell>
                             <TableCell>
-                              {waste.waste_date ? new Date(waste.waste_date).toLocaleDateString() : "N/A"}
+                              {waste.waste_date
+                                ? new Date(
+                                    waste.waste_date
+                                  ).toLocaleDateString()
+                                : "N/A"}
                             </TableCell>
                             <TableCell>{waste.full_name}</TableCell>
                             {role === "admin" && (
-                              <TableCell className="text-center">
+                              <TableCell className='text-center'>
                                 <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  aria-label="Delete Waste"
-                                  className="p-1 h-7 w-7"
+                                  size='icon'
+                                  variant='ghost'
+                                  aria-label='Delete Waste'
+                                  className='p-1 h-7 w-7'
                                   onClick={() => {
-                                    setWasteToDelete(waste)
-                                    setDeleteWasteConfirmOpen(true)
+                                    setWasteToDelete(waste);
+                                    setDeleteWasteConfirmOpen(true);
                                   }}
                                 >
-                                  <Trash className="h-4 w-4 text-red-500" />
+                                  <Trash className='h-4 w-4 text-red-500' />
                                 </Button>
                               </TableCell>
                             )}
@@ -900,10 +1023,12 @@ export default function InventoryPage() {
                       </TableBody>
                     </Table>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <TrendingDown className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <div className='text-center py-8 text-muted-foreground'>
+                      <TrendingDown className='h-12 w-12 mx-auto mb-4 opacity-50' />
                       <p>No waste reports found</p>
-                      <p className="text-sm">Record waste to track inventory loss</p>
+                      <p className='text-sm'>
+                        Record waste to track inventory loss
+                      </p>
                     </div>
                   )}
                 </CardContent>
@@ -920,13 +1045,19 @@ export default function InventoryPage() {
         <EditInventoryInvoiceModal
           open={editInvoiceModalOpen}
           invoice={selectedInvoice}
-          invoiceItems={selectedInvoice ? invoiceItems[selectedInvoice.id] || [] : []}
+          invoiceItems={
+            selectedInvoice ? invoiceItems[selectedInvoice.id] || [] : []
+          }
           onClose={() => setEditInvoiceModalOpen(false)}
           onSuccess={handleSuccess}
           supabase={supabase}
           addNotification={addNotification}
         />
-        <AddWasteModal open={addWasteModalOpen} onOpenChange={setAddWasteModalOpen} onSuccess={handleSuccess} />
+        <AddWasteModal
+          open={addWasteModalOpen}
+          onOpenChange={setAddWasteModalOpen}
+          onSuccess={handleSuccess}
+        />
         <ManageInventoryItemsModal
           open={manageItemsModalOpen}
           onOpenChange={setManageItemsModalOpen}
@@ -940,32 +1071,38 @@ export default function InventoryPage() {
             </DialogHeader>
             <p>Are you sure you want to delete this invoice?</p>
             <DialogFooter>
-              <Button variant="secondary" onClick={() => setDeleteConfirmOpen(false)}>
+              <Button
+                variant='secondary'
+                onClick={() => setDeleteConfirmOpen(false)}
+              >
                 Cancel
               </Button>
               <Button
-                variant="destructive"
+                variant='destructive'
                 onClick={async () => {
                   if (invoiceToDelete) {
                     try {
-                      const { error } = await supabase.from("inventory_invoices").delete().eq("id", invoiceToDelete.id)
-                      if (error) throw error
+                      const { error } = await supabase
+                        .from("inventory_invoices")
+                        .delete()
+                        .eq("id", invoiceToDelete.id);
+                      if (error) throw error;
                       addNotification({
                         title: "Invoice Deleted",
                         message: `Invoice #${invoiceToDelete.invoice_number} deleted successfully`,
                         type: "success",
                         category: "system",
-                      })
-                      setDeleteConfirmOpen(false)
-                      setInvoiceToDelete(null)
-                      handleSuccess()
+                      });
+                      setDeleteConfirmOpen(false);
+                      setInvoiceToDelete(null);
+                      handleSuccess();
                     } catch (error) {
                       addNotification({
                         title: "Error",
                         message: "Failed to delete invoice",
                         type: "error",
                         category: "system",
-                      })
+                      });
                     }
                   }
                 }}
@@ -980,47 +1117,56 @@ export default function InventoryPage() {
           open={editDrumModalOpen}
           drum={selectedDrum}
           onClose={() => {
-            setEditDrumModalOpen(false)
-            setSelectedDrum(null)
+            setEditDrumModalOpen(false);
+            setSelectedDrum(null);
           }}
           onSuccess={handleSuccess}
           supabase={supabase}
           addNotification={addNotification}
         />
         {/* Delete Drum Confirmation Dialog */}
-        <Dialog open={deleteDrumConfirmOpen} onOpenChange={setDeleteDrumConfirmOpen}>
+        <Dialog
+          open={deleteDrumConfirmOpen}
+          onOpenChange={setDeleteDrumConfirmOpen}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Delete Drum</DialogTitle>
             </DialogHeader>
             <p>Are you sure you want to delete this drum?</p>
             <DialogFooter>
-              <Button variant="secondary" onClick={() => setDeleteDrumConfirmOpen(false)}>
+              <Button
+                variant='secondary'
+                onClick={() => setDeleteDrumConfirmOpen(false)}
+              >
                 Cancel
               </Button>
               <Button
-                variant="destructive"
+                variant='destructive'
                 onClick={async () => {
                   if (drumToDelete) {
                     try {
-                      const { error } = await supabase.from("drum_tracking").delete().eq("id", drumToDelete.id)
-                      if (error) throw error
+                      const { error } = await supabase
+                        .from("drum_tracking")
+                        .delete()
+                        .eq("id", drumToDelete.id);
+                      if (error) throw error;
                       addNotification({
                         title: "Drum Deleted",
                         message: `Drum #${drumToDelete.drum_number} deleted successfully`,
                         type: "success",
                         category: "system",
-                      })
-                      setDeleteDrumConfirmOpen(false)
-                      setDrumToDelete(null)
-                      handleSuccess()
+                      });
+                      setDeleteDrumConfirmOpen(false);
+                      setDrumToDelete(null);
+                      handleSuccess();
                     } catch (error) {
                       addNotification({
                         title: "Error",
                         message: "Failed to delete drum",
                         type: "error",
                         category: "system",
-                      })
+                      });
                     }
                   }
                 }}
@@ -1037,18 +1183,24 @@ export default function InventoryPage() {
           onSuccess={handleSuccess}
         />
         {/* Waste Delete Confirmation Dialog */}
-        <Dialog open={deleteWasteConfirmOpen} onOpenChange={setDeleteWasteConfirmOpen}>
+        <Dialog
+          open={deleteWasteConfirmOpen}
+          onOpenChange={setDeleteWasteConfirmOpen}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Delete Waste Record</DialogTitle>
             </DialogHeader>
             <p>Are you sure you want to delete this waste record?</p>
             <DialogFooter>
-              <Button variant="secondary" onClick={() => setDeleteWasteConfirmOpen(false)}>
+              <Button
+                variant='secondary'
+                onClick={() => setDeleteWasteConfirmOpen(false)}
+              >
                 Cancel
               </Button>
               <Button
-                variant="destructive"
+                variant='destructive'
                 onClick={async () => {
                   if (wasteToDelete) {
                     try {
@@ -1056,38 +1208,45 @@ export default function InventoryPage() {
                       const { error: deleteError } = await supabase
                         .from("waste_tracking")
                         .delete()
-                        .eq("id", wasteToDelete.id)
-                      if (deleteError) throw deleteError
+                        .eq("id", wasteToDelete.id);
+                      if (deleteError) throw deleteError;
                       // Add quantity back to inventory_items (manual fetch and update)
-                      const { data: itemData, error: fetchError } = await supabase
-                        .from("inventory_items")
-                        .select("current_stock")
-                        .eq("id", wasteToDelete.item_id)
-                        .single()
-                      if (fetchError) throw fetchError
-                      const currentStock = typeof itemData?.current_stock === "number" ? itemData.current_stock : 0
-                      const newStock = currentStock + wasteToDelete.quantity
+                      const { data: itemData, error: fetchError } =
+                        await supabase
+                          .from("inventory_items")
+                          .select("current_stock")
+                          .eq("id", wasteToDelete.item_id)
+                          .single();
+                      if (fetchError) throw fetchError;
+                      const currentStock =
+                        typeof itemData?.current_stock === "number"
+                          ? itemData.current_stock
+                          : 0;
+                      const newStock = currentStock + wasteToDelete.quantity;
                       const { error: updateError } = await supabase
                         .from("inventory_items")
                         .update({ current_stock: newStock })
-                        .eq("id", wasteToDelete.item_id)
-                      if (updateError) throw updateError
+                        .eq("id", wasteToDelete.item_id);
+                      if (updateError) throw updateError;
                       addNotification({
                         title: "Waste Record Deleted",
-                        message: `Waste record deleted and stock restored for ${wasteToDelete.item_name || "item"}`,
+                        message: `Waste record deleted and stock restored for ${
+                          wasteToDelete.item_name || "item"
+                        }`,
                         type: "success",
                         category: "system",
-                      })
-                      setDeleteWasteConfirmOpen(false)
-                      setWasteToDelete(null)
-                      handleSuccess()
+                      });
+                      setDeleteWasteConfirmOpen(false);
+                      setWasteToDelete(null);
+                      handleSuccess();
                     } catch (error) {
                       addNotification({
                         title: "Error",
-                        message: "Failed to delete waste record or restore stock",
+                        message:
+                          "Failed to delete waste record or restore stock",
                         type: "error",
                         category: "system",
-                      })
+                      });
                     }
                   }
                 }}
@@ -1097,14 +1256,7 @@ export default function InventoryPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* Drum Usage Details Modal */}
-        <DrumUsageDetailsModal
-          open={drumUsageModalOpen}
-          onOpenChange={setDrumUsageModalOpen}
-          drumId={selectedDrumForUsage?.id || null}
-          drumNumber={selectedDrumForUsage?.number || ""}
-        />
       </SidebarInset>
     </SidebarProvider>
-  )
+  );
 }
