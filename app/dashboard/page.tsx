@@ -135,7 +135,7 @@ export default function Dashboard() {
         .select("*")
         .eq("status", "pending")
         .gte("created_at", previousMonthStartDate)
-        .lte("created_at", previousMonthEndDate)
+        .lte("created_at", currentMonthEndDate)
       // Fetch monthly revenue for selected month
       const { data: currentInvoices } = await supabase
         .from("generated_invoices")
@@ -382,23 +382,35 @@ export default function Dashboard() {
                   <CardDescription>Common tasks and shortcuts</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Button className="w-full justify-between" variant="outline" onClick={() => router.push("/lines")}>
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/lines")}
+                  >
                     Add New Line Details
                     <ArrowRight className="h-4 w-4" />
                   </Button>
-                  <Button className="w-full justify-between" variant="outline" onClick={() => router.push("/reports")}>
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/reports")}
+                  >
                     Generate Monthly Report
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                   <Button
-                    className="w-full justify-between"
+                    className="w-full justify-between bg-transparent"
                     variant="outline"
                     onClick={() => router.push("/inventory")}
                   >
                     Update Inventory
                     <ArrowRight className="h-4 w-4" />
                   </Button>
-                  <Button className="w-full justify-between" variant="outline" onClick={() => router.push("/tasks")}>
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/tasks")}
+                  >
                     Review Pending Tasks
                     <ArrowRight className="h-4 w-4" />
                   </Button>

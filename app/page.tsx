@@ -218,7 +218,7 @@ export default function LandingPage() {
                 {user ? "Access Dashboard" : "Get Started"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <Button variant="outline" size="lg" asChild className="text-base">
+              <Button variant="outline" size="lg" asChild className="text-base bg-transparent">
                 <Link href="/welcome/contact">Schedule Demo</Link>
               </Button>
             </div>
@@ -505,7 +505,7 @@ export default function LandingPage() {
                 variant="outline"
                 size="lg"
                 asChild
-                className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary"
+                className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary bg-transparent"
               >
                 <Link href="/welcome/contact">Contact Sales</Link>
               </Button>
