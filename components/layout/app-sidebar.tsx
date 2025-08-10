@@ -1,154 +1,210 @@
 "use client"
 
-import type * as React from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { cn } from "@/lib/utils"
 import {
   Home,
-  Cable,
-  FileText,
   Users,
   Settings,
   Briefcase,
-  BookOpen,
+  FileText,
   Package,
-  ClipboardList,
-  Search,
+  Phone,
+  BarChart2,
+  Menu,
+  X,
   LogOut,
-  Building2,
+  Search,
+  Newspaper,
 } from "lucide-react"
-
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail,
-  SidebarSeparator,
-} from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/hooks/use-toast"
 
-// Menu items.
 const navItems = [
   {
-    title: "Dashboard",
-    url: "/dashboard",
+    name: "Dashboard",
+    href: "/dashboard",
     icon: Home,
+    description: "Overview of system metrics",
   },
   {
-    title: "Lines",
-    url: "/lines",
-    icon: Cable,
-  },
-  {
-    title: "Invoices",
-    url: "/invoices",
-    icon: FileText,
-  },
-  {
-    title: "Tasks",
-    url: "/tasks",
-    icon: ClipboardList,
-  },
-  {
-    title: "Inventory",
-    url: "/inventory",
-    icon: Package,
-  },
-  {
-    title: "Users",
-    url: "/users",
+    name: "Users",
+    href: "/users",
     icon: Users,
+    description: "Manage user accounts and roles",
   },
   {
-    title: "Content",
-    url: "/content",
-    icon: BookOpen,
+    name: "Lines",
+    href: "/lines",
+    icon: Phone,
+    description: "Manage telephone lines and services",
   },
   {
-    title: "Careers",
-    url: "/careers",
+    name: "Inventory",
+    href: "/inventory",
+    icon: Package,
+    description: "Track and manage equipment inventory",
+  },
+  {
+    name: "Invoices",
+    href: "/invoices",
+    icon: FileText,
+    description: "Handle billing and invoice generation",
+  },
+  {
+    name: "Tasks",
+    href: "/tasks",
     icon: Briefcase,
+    description: "Assign and track operational tasks",
   },
   {
-    title: "Search",
-    url: "/search",
+    name: "Reports",
+    href: "/reports",
+    icon: BarChart2,
+    description: "Generate and view system reports",
+  },
+  {
+    name: "Careers",
+    href: "/careers",
+    icon: Briefcase,
+    description: "Manage job vacancies",
+  },
+  {
+    name: "Content",
+    href: "/content",
+    icon: Newspaper,
+    description: "Manage posts and blogs",
+  },
+  {
+    name: "Search",
+    href: "/search",
     icon: Search,
+    description: "Advanced search functionality",
+  },
+  {
+    name: "Settings",
+    href: "/settings",
+    icon: Settings,
+    description: "Configure system settings",
   },
 ]
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar() {
   const pathname = usePathname()
+  const [isOpen, setIsOpen] = useState(false)
   const { signOut } = useAuth()
 
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out.",
+      })
+    } catch (error) {
+      console.error("Error signing out:", error)
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
-    <Sidebar {...props}>
-      <SidebarHeader>
-        <Link href="/dashboard" className="flex items-center space-x-2 p-2">
-          <Building2 className="h-6 w-6 text-primary" />
-          <span className="text-lg font-bold text-foreground">NNS Enterprise</span>
-        </Link>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
-                    <Link href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarSeparator />
-        <SidebarGroup>
-          <SidebarGroupLabel>Settings</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/profile"}>
-                  <Link href="/profile">
-                    <Users />
-                    <span>Profile</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/settings"}>
-                  <Link href="/settings">
-                    <Settings />
-                    <span>Settings</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={signOut}>
-              <LogOut />
-              <span>Sign Out</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
-      <SidebarRail />
-    </Sidebar>
+    <>
+      {/* Mobile Sidebar */}
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetTrigger asChild className="lg:hidden fixed top-4 left-4 z-[100]">
+          <Button variant="outline" size="icon">
+            <Menu className="h-6 w-6" />
+            <span className="sr-only">Toggle sidebar</span>
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="w-64 p-0 bg-sidebar-background text-sidebar-foreground flex flex-col">
+          <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
+            <Link className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground" href="/dashboard">
+              <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-6 w-auto" />
+              NNS Dashboard
+            </Link>
+            <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
+              <X className="h-6 w-6" />
+              <span className="sr-only">Close sidebar</span>
+            </Button>
+          </div>
+          <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
+              return (
+                <Link
+                  key={item.name}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
+                  )}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.name}
+                </Link>
+              )
+            })}
+          </nav>
+          <div className="mt-auto p-4 border-t border-sidebar-border">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              onClick={handleSignOut}
+            >
+              <LogOut className="mr-3 h-5 w-5" />
+              Sign Out
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex flex-col w-64 h-screen border-r border-sidebar-border bg-sidebar-background text-sidebar-foreground fixed top-0 left-0 z-40">
+        <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
+          <Link className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground" href="/dashboard">
+            <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-7 w-auto" />
+            NNS Dashboard
+          </Link>
+        </div>
+        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
+            return (
+              <Link
+                key={item.name}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
+                )}
+                href={item.href}
+              >
+                <item.icon className="h-5 w-5" />
+                {item.name}
+              </Link>
+            )
+          })}
+        </nav>
+        <div className="mt-auto p-4 border-t border-sidebar-border">
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            onClick={handleSignOut}
+          >
+            <LogOut className="mr-3 h-5 w-5" />
+            Sign Out
+          </Button>
+        </div>
+      </aside>
+    </>
   )
 }

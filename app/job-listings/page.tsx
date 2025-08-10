@@ -1,125 +1,86 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { MapPin, Calendar, Search, ArrowRight } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { PublicLayout } from "@/components/layout/public-layout"
+import { MapPin, Briefcase, CalendarDays } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { JobVacancy } from "@/types/content"
+import Link from "next/link"
 
-export default function JobListingsPage() {
-  const [jobVacancies, setJobVacancies] = useState<JobVacancy[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
+export const revalidate = 0 // Ensure data is fresh on every request
 
-  useEffect(() => {
-    fetchJobVacancies()
-  }, [])
+export default async function JobListingsPage() {
+  const { data: jobVacancies, error } = await supabase
+    .from("job_vacancies")
+    .select("*")
+    .eq("status", "active") // Only show active jobs
+    .order("created_at", { ascending: false })
 
-  const fetchJobVacancies = async () => {
-    try {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from("job_vacancies")
-        .select("*")
-        .eq("status", "active") // Only show active jobs
-        .order("created_at", { ascending: false })
-
-      if (error) throw error
-      setJobVacancies(data || [])
-    } catch (error) {
-      console.error("Error fetching job vacancies:", error)
-      // Optionally show a toast or error message to the user
-    } finally {
-      setLoading(false)
-    }
+  if (error) {
+    console.error("Error fetching job vacancies:", error)
+    return (
+      <div className="container mx-auto py-12 px-4 md:px-6">
+        <h1 className="text-4xl font-bold text-center mb-8">Job Opportunities</h1>
+        <p className="text-center text-red-500">Failed to load job listings. Please try again later.</p>
+      </div>
+    )
   }
 
-  const filteredJobs = jobVacancies.filter((job) => {
-    const matchesSearch =
-      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (job.department && job.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (job.location && job.location.toLowerCase().includes(searchTerm.toLowerCase()))
-    return matchesSearch
-  })
-
-  const isJobExpired = (endDate: string) => {
-    return new Date(endDate) < new Date()
-  }
+  const activeJobVacancies: JobVacancy[] = jobVacancies || []
 
   return (
-    <PublicLayout>
-      <section className="py-12 md:py-24 lg:py-32 bg-background">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Join Our Team</h1>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Explore exciting career opportunities at NNS Enterprise and become a part of our growing team.
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 py-12 px-4 md:px-6">
+      <div className="container mx-auto">
+        <h1 className="text-4xl md:text-5xl font-extrabold text-center text-gray-900 dark:text-gray-50 mb-6">
+          Join Our Team
+        </h1>
+        <p className="text-xl text-center text-gray-600 dark:text-gray-400 mb-12 max-w-3xl mx-auto">
+          Explore exciting career opportunities at NNS Enterprise and become a part of our mission to build the future
+          of connectivity.
+        </p>
+
+        {activeJobVacancies.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-2xl text-gray-700 dark:text-gray-300">
+              No active job vacancies at the moment. Please check back later!
             </p>
           </div>
-
-          <div className="mt-12 flex justify-center">
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <Input
-                placeholder="Search job titles, locations, or departments..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 rounded-md border border-input focus:ring-primary focus:border-primary w-full"
-              />
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="text-center py-16 text-muted-foreground">Loading job listings...</div>
-          ) : filteredJobs.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">
-              No active job vacancies found at this time. Please check back later!
-            </div>
-          ) : (
-            <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredJobs.map((job) => (
-                <Card
-                  key={job.id}
-                  className="flex flex-col justify-between hover:shadow-lg transition-shadow duration-300"
-                >
-                  <CardHeader>
-                    <CardTitle className="text-xl font-semibold">{job.title}</CardTitle>
-                    <CardDescription className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      {job.location || "Remote"}
-                    </CardDescription>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <Badge variant="outline">{job.employment_type}</Badge>
-                      {job.department && <Badge variant="secondary">{job.department}</Badge>}
-                      {isJobExpired(job.end_date) && <Badge variant="destructive">Expired</Badge>}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex-grow">
-                    <p className="text-sm text-muted-foreground line-clamp-3">{job.description}</p>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-4">
-                      <Calendar className="h-4 w-4" />
-                      <span>Apply by: {new Date(job.end_date).toLocaleDateString()}</span>
-                    </div>
-                  </CardContent>
-                  <div className="p-6 pt-0">
-                    <Link href={`/job-listings/${job.id}`} passHref>
-                      <Button variant="outline" className="w-full bg-transparent">
-                        View Details <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </Link>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {activeJobVacancies.map((job) => (
+              <Card key={job.id} className="flex flex-col h-full hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <CardTitle className="text-2xl font-bold text-gray-900 dark:text-gray-50">{job.title}</CardTitle>
+                  <CardDescription className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                    <MapPin className="h-4 w-4" />
+                    {job.location || "Remote"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <Briefcase className="h-3 w-3" />
+                      {job.employment_type}
+                    </Badge>
+                    {job.department && <Badge variant="outline">{job.department}</Badge>}
+                    {job.salary_range && <Badge variant="outline">{job.salary_range}</Badge>}
                   </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-    </PublicLayout>
+                  <p className="text-gray-700 dark:text-gray-300 line-clamp-3">{job.description}</p>
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <CalendarDays className="h-4 w-4" />
+                    Application Deadline: {new Date(job.end_date).toLocaleDateString()}
+                  </div>
+                </CardContent>
+                {/* Placeholder for actual job detail page */}
+                <div className="p-6 pt-0">
+                  <Link href={`/job-listings/${job.id}`} passHref>
+                    <Button className="w-full">View Details</Button>
+                  </Link>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

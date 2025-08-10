@@ -1,484 +1,199 @@
-"use client";
+"use client"
 
-import type React from "react";
+import type React from "react"
 
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { getSupabaseClient } from "@/lib/supabase";
-import { useNotification } from "@/contexts/notification-context";
-import { useAuth } from "@/contexts/auth-context";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { AlertTriangle, Check, ChevronsUpDown } from "lucide-react";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-
-import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { supabase } from "@/lib/supabase"
+import { toast } from "@/hooks/use-toast"
+import { Loader2 } from "lucide-react"
 
 interface AddTaskModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
-}
-interface DPSuggestion {
-  dp: string;
-  count: number;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSuccess: () => void
 }
 
-const connectionServices = [
-  { id: "internet", label: "Internet" },
-  { id: "voice", label: "Voice" },
-  { id: "peo_tv", label: "Peo TV" },
-];
+interface LineDetails {
+  telephone_no: string
+}
 
-export function AddTaskModal({
-  open,
-  onOpenChange,
-  onSuccess,
-}: AddTaskModalProps) {
-  const [loading, setLoading] = useState(false);
-  const [dpSuggestions, setDpSuggestions] = useState<DPSuggestion[]>([]);
-  const [dpOpen, setDpOpen] = useState(false);
+interface UserProfile {
+  id: string
+  full_name: string | null
+}
 
-  const [dpValidationError, setDpValidationError] = useState("");
+export function AddTaskModal({ open, onOpenChange, onSuccess }: AddTaskModalProps) {
+  const [telephoneNo, setTelephoneNo] = useState("")
+  const [description, setDescription] = useState("")
+  const [status, setStatus] = useState("pending")
+  const [priority, setPriority] = useState("low")
+  const [assignedTo, setAssignedTo] = useState<string | null>(null)
+  const [dueDate, setDueDate] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [lines, setLines] = useState<LineDetails[]>([])
+  const [users, setUsers] = useState<UserProfile[]>([])
 
-  const [formData, setFormData] = useState({
-    task_date: new Date().toISOString().split("T")[0],
-    telephone_no: "",
-    dp: "",
-    contact_no: "",
-    customer_name: "",
-    address: "",
-    connection_type_new: "New",
-    connection_services: [] as string[],
-    notes: "",
-  });
-
-  const supabase = getSupabaseClient();
-  const { addNotification } = useNotification();
-  const { user } = useAuth();
-
-  const handleInputChange = (field: string, value: string | string[]) => {
-    if (field === "dp" && typeof value === "string") {
-      validateDP(value);
+  useEffect(() => {
+    if (open) {
+      fetchLinesAndUsers()
     }
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  }, [open])
 
-  const handleServiceChange = (serviceId: string, checked: boolean) => {
-    setFormData((prev) => ({
-      ...prev,
-      connection_services: checked
-        ? [...prev.connection_services, serviceId]
-        : prev.connection_services.filter((s) => s !== serviceId),
-    }));
-  };
+  const fetchLinesAndUsers = async () => {
+    // Fetch telephone numbers
+    const { data: linesData, error: linesError } = await supabase.from("line_details").select("telephone_no")
+    if (linesError) {
+      console.error("Error fetching telephone numbers:", linesError)
+      toast({
+        title: "Error",
+        description: "Failed to load telephone numbers for tasks.",
+        variant: "destructive",
+      })
+    } else {
+      setLines(linesData || [])
+    }
+
+    // Fetch users for assignment
+    const { data: usersData, error: usersError } = await supabase.from("profiles").select("id, full_name")
+    if (usersError) {
+      console.error("Error fetching users:", usersError)
+      toast({
+        title: "Error",
+        description: "Failed to load users for task assignment.",
+        variant: "destructive",
+      })
+    } else {
+      setUsers(usersData || [])
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+    e.preventDefault()
+    setLoading(true)
 
-    try {
-      if (formData.connection_services.length === 0) {
-        addNotification({
-          title: "Validation Error",
-          message: "Please select at least one connection service",
-          type: "error",
-          category: "system",
-        });
-        setLoading(false);
-        return;
-      }
-      if (!validateDP(formData.dp)) {
-        setLoading(false);
-        return;
-      }
+    const { error } = await supabase.from("tasks").insert({
+      telephone_no: telephoneNo,
+      description,
+      status,
+      priority,
+      assigned_to: assignedTo,
+      due_date: dueDate || null,
+    })
 
-      // Check DP uniqueness
-      const isUnique = await checkDPUniqueness(formData.dp);
-      if (!isUnique) {
-        setLoading(false);
-        return;
-      }
-      const insertData = {
-        task_date: formData.task_date,
-        telephone_no: formData.telephone_no,
-        dp: formData.dp,
-        contact_no: formData.contact_no,
-        customer_name: formData.customer_name,
-        address: formData.address,
-        connection_type_new: formData.connection_type_new,
-        connection_services: formData.connection_services,
-        status: "pending",
-        created_by: user?.id,
-        notes: formData.notes || null,
-      };
-
-      const { error } = await supabase.from("tasks").insert([insertData]);
-
-      if (error) throw error;
-
-      addNotification({
-        title: "Success",
-        message: "Task added successfully",
-        type: "success",
-        category: "system",
-      });
-
-      onSuccess();
-      onOpenChange(false);
-
-      // Reset form
-      setFormData({
-        task_date: new Date().toISOString().split("T")[0],
-        telephone_no: "",
-        dp: "",
-        contact_no: "",
-        customer_name: "",
-        address: "",
-        connection_type_new: "New",
-        connection_services: [],
-        notes: "",
-      });
-    } catch (error: any) {
-      addNotification({
+    if (error) {
+      console.error("Error adding task:", error)
+      toast({
         title: "Error",
-        message: error.message,
-        type: "error",
-        category: "system",
-      });
-    } finally {
-      setLoading(false);
+        description: "Failed to add task. Please try again.",
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Success",
+        description: "Task added successfully.",
+      })
+      onSuccess()
+      setTelephoneNo("")
+      setDescription("")
+      setStatus("pending")
+      setPriority("low")
+      setAssignedTo(null)
+      setDueDate("")
     }
-  };
-  useEffect(() => {
-    if (formData.dp.length >= 3) {
-      fetchDPSuggestions();
-    }
-  }, [formData.dp]);
-  const fetchDPSuggestions = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("line_details")
-        .select("dp")
-        .ilike("dp", `${formData.dp}%`)
-        .limit(10);
+    setLoading(false)
+  }
 
-      if (error) throw error;
-
-      const suggestions = (data as { dp: string }[]).reduce(
-        (acc: Record<string, number>, item) => {
-          if (item.dp) {
-            acc[item.dp] = (acc[item.dp] || 0) + 1;
-          }
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-
-      setDpSuggestions(
-        Object.entries(suggestions).map(([dp, count]) => ({ dp, count }))
-      );
-    } catch (error) {
-      console.error("Error fetching DP suggestions:", error);
-    }
-  };
-
-  const validateDP = (dp: string): boolean => {
-    const dpPattern = /^[A-Z]{1,4}-[A-Z]{1,4}-\d{4}-\d{3}-0[1-8]$/;
-
-    if (!dpPattern.test(dp)) {
-      setDpValidationError(
-        "DP format should be: XX-XXXX-XXXX-XXX-0X (e.g., HR-PKJ-0536-021-05)"
-      );
-      return false;
-    }
-
-    setDpValidationError("");
-    return true;
-  };
-  const checkDPUniqueness = async (dp: string): Promise<boolean> => {
-    const parts = dp.split("-");
-    if (parts.length !== 5) return false;
-
-    const baseDP = parts.slice(0, 4).join("-");
-    const lastValue = parts[4];
-
-    try {
-      const { data, error } = await supabase
-        .from("line_details")
-        .select("dp")
-        .ilike("dp", `${baseDP}-${lastValue}`);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        setDpValidationError(
-          `DP ${dp} already exists. Please use a different last value (01-08).`
-        );
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Error checking DP uniqueness:", error);
-      return false;
-    }
-  };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-2xl max-h-[90vh] overflow-y-auto'>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Add New Task</DialogTitle>
-          <DialogDescription>
-            Enter the details for a new telecom installation task.
-          </DialogDescription>
+          <DialogDescription>Fill in the details for the new operational task.</DialogDescription>
         </DialogHeader>
-
-        <form onSubmit={handleSubmit} className='space-y-6'>
-          {/* Basic Information */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Task Information</h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-              <div>
-                <Label htmlFor='task_date'>Date</Label>
-                <Input
-                  id='task_date'
-                  type='date'
-                  value={formData.task_date}
-                  onChange={(e) =>
-                    handleInputChange("task_date", e.target.value)
-                  }
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor='telephone_no'>Telephone No</Label>
-                <Input
-                  id='telephone_no'
-                  value={formData.telephone_no}
-                  onChange={(e) =>
-                    handleInputChange("telephone_no", e.target.value)
-                  }
-                  placeholder='e.g., 0342217442'
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor='dp'>DP</Label>
-                <Popover open={dpOpen} onOpenChange={setDpOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant='outline'
-                      role='combobox'
-                      aria-expanded={dpOpen}
-                      className='w-full justify-between'
-                    >
-                      {formData.dp || "Enter DP (e.g., HR-PKJ-0536-021-05)"}
-                      <ChevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className='w-full p-0'>
-                    <Command>
-                      <CommandInput
-                        placeholder='Type DP...'
-                        value={formData.dp}
-                        onValueChange={(value) =>
-                          handleInputChange("dp", value)
-                        }
-                      />
-                      <CommandList>
-                        <CommandEmpty>No DP suggestions found.</CommandEmpty>
-                        <CommandGroup>
-                          {dpSuggestions.map((suggestion) => (
-                            <CommandItem
-                              key={suggestion.dp}
-                              value={suggestion.dp}
-                              onSelect={(currentValue) => {
-                                handleInputChange("dp", currentValue);
-                                setDpOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  formData.dp === suggestion.dp
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                )}
-                              />
-                              {suggestion.dp}
-                              <Badge variant='secondary' className='ml-auto'>
-                                {suggestion.count}
-                              </Badge>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                {dpValidationError && (
-                  <div className='flex items-center gap-2 mt-2 text-red-600 text-sm'>
-                    <AlertTriangle className='h-4 w-4' />
-                    {dpValidationError}
-                  </div>
-                )}
-                <p className='text-xs text-muted-foreground mt-1'>
-                  Format: XX-XXXX-XXXX-XXX-0X (2 uppercase strings, 2 numbers,
-                  last value 01-08)
-                </p>
-              </div>
-              <div>
-                <Label htmlFor='contact_no'>Contact No</Label>
-                <Input
-                  id='contact_no'
-                  value={formData.contact_no}
-                  onChange={(e) =>
-                    handleInputChange("contact_no", e.target.value)
-                  }
-                  placeholder='Customer contact number'
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Customer Information */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Customer Information</h3>
-            <div className='grid grid-cols-1 gap-4'>
-              <div>
-                <Label htmlFor='customer_name'>Customer Name</Label>
-                <Input
-                  id='customer_name'
-                  value={formData.customer_name}
-                  onChange={(e) =>
-                    handleInputChange("customer_name", e.target.value)
-                  }
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor='address'>Address</Label>
-                <Textarea
-                  id='address'
-                  value={formData.address}
-                  onChange={(e) => handleInputChange("address", e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Service Configuration */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Service Configuration</h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-              <div>
-                <Label htmlFor='connection_type_new'>Type</Label>
-                <Select
-                  value={formData.connection_type_new}
-                  onValueChange={(value) =>
-                    handleInputChange("connection_type_new", value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder='Select connection type' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value='New'>New</SelectItem>
-                    <SelectItem value='Upgrade'>Upgrade</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div>
-              <Label>Connection Services</Label>
-              <div className='grid grid-cols-3 gap-4 mt-2'>
-                {connectionServices.map((service) => (
-                  <div key={service.id} className='flex items-center space-x-2'>
-                    <Checkbox
-                      id={service.id}
-                      checked={formData.connection_services.includes(
-                        service.id
-                      )}
-                      onCheckedChange={(checked) =>
-                        handleServiceChange(service.id, checked as boolean)
-                      }
-                    />
-                    <Label htmlFor={service.id} className='text-sm font-normal'>
-                      {service.label}
-                    </Label>
-                  </div>
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="telephoneNo">Telephone Number</Label>
+            <Select value={telephoneNo} onValueChange={setTelephoneNo} required>
+              <SelectTrigger id="telephoneNo">
+                <SelectValue placeholder="Select telephone number" />
+              </SelectTrigger>
+              <SelectContent>
+                {lines.map((line) => (
+                  <SelectItem key={line.telephone_no} value={line.telephone_no}>
+                    {line.telephone_no}
+                  </SelectItem>
                 ))}
-              </div>
-              {formData.connection_services.length > 0 && (
-                <div className='flex gap-2 mt-2'>
-                  {formData.connection_services.map((service) => (
-                    <Badge key={service} variant='secondary'>
-                      {connectionServices.find((s) => s.id === service)?.label}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
+              </SelectContent>
+            </Select>
           </div>
-
-          {/* Notes */}
-          <div>
-            <Label htmlFor='notes'>Notes (Optional)</Label>
-            <Textarea
-              id='notes'
-              value={formData.notes}
-              onChange={(e) => handleInputChange("notes", e.target.value)}
-              placeholder='Additional notes or requirements...'
-            />
+          <div className="grid gap-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} required />
           </div>
-
-          <DialogFooter>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type='submit' disabled={loading}>
-              {loading ? "Adding..." : "Add Task"}
-            </Button>
-          </DialogFooter>
+          <div className="grid gap-2">
+            <Label htmlFor="status">Status</Label>
+            <Select value={status} onValueChange={setStatus} required>
+              <SelectTrigger id="status">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="priority">Priority</Label>
+            <Select value={priority} onValueChange={setPriority} required>
+              <SelectTrigger id="priority">
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="assignedTo">Assigned To</Label>
+            <Select value={assignedTo || "unassigned"} onValueChange={setAssignedTo}>
+              <SelectTrigger id="assignedTo">
+                <SelectValue placeholder="Select assignee (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.full_name || user.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="dueDate">Due Date</Label>
+            <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+          <Button type="submit" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding Task...
+              </>
+            ) : (
+              "Add Task"
+            )}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

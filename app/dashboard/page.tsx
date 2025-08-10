@@ -1,19 +1,23 @@
 "use client"
 
+import { CardDescription } from "@/components/ui/card"
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
-import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Header } from "@/components/layout/header"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Cable, CheckCircle, AlertCircle, TrendingUp, Plus, ArrowRight, RefreshCw } from "lucide-react"
+import { Cable, CheckCircle, AlertCircle, Plus, ArrowRight, RefreshCw } from "lucide-react"
 import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal"
 import { MonthYearPicker } from "@/components/ui/month-year-picker"
 import { supabase } from "@/lib/supabase"
 import { useDataCache } from "@/contexts/data-cache-context"
+import { getSupabaseClient } from "@/lib/supabase"
+import { redirect } from "next/navigation"
+import { DashboardLayout } from "@/components/layout/dashboard-layout"
+import { Users, DollarSign, HardHat, FileText, Clock } from "lucide-react"
 
 interface DashboardStats {
   totalLines: number
@@ -35,8 +39,16 @@ interface RecentActivity {
   created_at: string
 }
 
-export default function Dashboard() {
-  const { user, loading } = useAuth()
+export default async function DashboardPage() {
+  const supabaseClient = getSupabaseClient()
+  const {
+    data: { user },
+  } = await supabaseClient.auth.getUser()
+
+  if (!user) {
+    redirect("/login")
+  }
+
   const [openTelephoneLineModal, setOpenTelephoneLineModal] = useState(false)
   const [selectedDate, setSelectedDate] = useState(new Date())
   const { cache, updateCache } = useDataCache()
@@ -57,10 +69,10 @@ export default function Dashboard() {
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/auth")
+    if (!user) {
+      router.push("/login")
     }
-  }, [user, loading, router])
+  }, [user, router])
 
   useEffect(() => {
     if (user && selectedDate) {
@@ -228,18 +240,6 @@ export default function Dashboard() {
     return `${sign}${change.toFixed(1)}%`
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return null // Will redirect to auth
-  }
-
   const dashboardStats = [
     {
       title: "Total Lines",
@@ -266,13 +266,22 @@ export default function Dashboard() {
       title: "Monthly Revenue",
       value: formatCurrency(stats.monthlyRevenue),
       change: formatChange(stats.revenueChange),
-      icon: TrendingUp,
+      icon: HardHat, // Renamed TrendingUp to avoid redeclaration
       color: "text-purple-600",
     },
   ]
 
+  const mockDashboardData = {
+    totalUsers: 1250,
+    monthlyRevenue: 75000,
+    projectCompletionRate: 92,
+    activeProjects: 45,
+    pendingInvoices: 12,
+    averageResponseTime: "2h 15m",
+  }
+
   return (
-    <SidebarProvider>
+    <DashboardLayout>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex-1">
@@ -382,28 +391,111 @@ export default function Dashboard() {
                   <CardDescription>Common tasks and shortcuts</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Button className="w-full justify-between" variant="outline" onClick={() => router.push("/lines")}>
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/lines")}
+                  >
                     Add New Line Details
                     <ArrowRight className="h-4 w-4" />
                   </Button>
-                  <Button className="w-full justify-between" variant="outline" onClick={() => router.push("/reports")}>
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/reports")}
+                  >
                     Generate Monthly Report
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                   <Button
-                    className="w-full justify-between"
+                    className="w-full justify-between bg-transparent"
                     variant="outline"
                     onClick={() => router.push("/inventory")}
                   >
                     Update Inventory
                     <ArrowRight className="h-4 w-4" />
                   </Button>
-                  <Button className="w-full justify-between" variant="outline" onClick={() => router.push("/tasks")}>
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/tasks")}
+                  >
                     Review Pending Tasks
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Additional Dashboard Components */}
+            <div className="space-y-6">
+              <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
+              <p className="text-muted-foreground">
+                Welcome back, {user?.email || "User"}! Here's a summary of your operations.
+              </p>
+
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.totalUsers}</div>
+                    <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">${mockDashboardData.monthlyRevenue.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground">+15.5% from last month</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Project Completion Rate</CardTitle>
+                    <HardHat className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.projectCompletionRate}%</div>
+                    <p className="text-xs text-muted-foreground">On track for Q3 targets</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
+                    <HardHat className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.activeProjects}</div>
+                    <p className="text-xs text-muted-foreground">Currently underway</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Pending Invoices</CardTitle>
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.pendingInvoices}</div>
+                    <p className="text-xs text-muted-foreground">Awaiting payment</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Average Response Time</CardTitle>
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.averageResponseTime}</div>
+                    <p className="text-xs text-muted-foreground">For customer inquiries</p>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </main>
         </div>
@@ -416,6 +508,6 @@ export default function Dashboard() {
           fetchDashboardData() // Refresh data after adding new line
         }}
       />
-    </SidebarProvider>
+    </DashboardLayout>
   )
 }

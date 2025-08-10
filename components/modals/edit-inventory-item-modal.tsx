@@ -1,203 +1,145 @@
-"use client";
+"use client"
 
-import React, { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { getSupabaseClient } from "@/lib/supabase";
-import { useNotification } from "@/contexts/notification-context";
+import type React from "react"
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { supabase } from "@/lib/supabase"
+import { toast } from "@/hooks/use-toast"
+import { Loader2 } from "lucide-react"
 
 interface InventoryItem {
-  id: string;
-  name: string;
-  unit: string;
-  current_stock: number;
-  reorder_level: number;
-  last_updated: string;
+  id: string
+  item_name: string
+  quantity: number
+  unit_price: number
+  supplier: string | null
+  last_restock: string | null
 }
 
 interface EditInventoryItemModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  item: InventoryItem | null;
-  onSuccess: () => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  item: InventoryItem | null
+  onSuccess: () => void
 }
 
-const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "Item name must be at least 2 characters.",
-  }),
-  reorder_level: z.coerce
-    .number({ invalid_type_error: "Reorder level must be a number." })
-    .min(0, { message: "Reorder level cannot be negative." }),
-  current_stock: z.coerce
-    .number({ invalid_type_error: "Current stock must be a number." })
-    .min(0, { message: "Current stock cannot be negative." }),
-});
-
-export function EditInventoryItemModal({
-  open,
-  onOpenChange,
-  item,
-  onSuccess,
-}: EditInventoryItemModalProps) {
-  const supabase = getSupabaseClient();
-  const { addNotification } = useNotification();
-  const [stockEditable, setStockEditable] = React.useState(false);
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: "",
-      reorder_level: 0,
-      current_stock: 0,
-    },
-  });
+export function EditInventoryItemModal({ open, onOpenChange, item, onSuccess }: EditInventoryItemModalProps) {
+  const [itemName, setItemName] = useState("")
+  const [quantity, setQuantity] = useState("")
+  const [unitPrice, setUnitPrice] = useState("")
+  const [supplier, setSupplier] = useState("")
+  const [lastRestock, setLastRestock] = useState("")
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (item) {
-      form.reset({
-        name: item.name,
-        reorder_level: item.reorder_level || 0,
-        current_stock: item.current_stock || 0,
-      });
-      setStockEditable(false);
+      setItemName(item.item_name)
+      setQuantity(item.quantity.toString())
+      setUnitPrice(item.unit_price.toString())
+      setSupplier(item.supplier || "")
+      setLastRestock(item.last_restock || "")
     }
-  }, [item, form]);
+  }, [item])
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!item) return;
-    try {
-      const updateData: any = {
-        name: values.name,
-        reorder_level: values.reorder_level,
-      };
-      if (stockEditable) {
-        updateData.current_stock = values.current_stock;
-      }
-      const { error } = await supabase
-        .from("inventory_items")
-        .update(updateData)
-        .eq("id", item.id);
-      if (error) throw error;
-      addNotification({
-        title: "Success",
-        message: "Inventory item updated successfully.",
-        type: "success",
-        category: "system",
-      });
-      onSuccess();
-      onOpenChange(false);
-    } catch (error: any) {
-      addNotification({
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    if (!item) {
+      toast({
         title: "Error",
-        message: error.message || "An error occurred while updating the item.",
-        type: "error",
-        category: "system",
-      });
+        description: "No item selected for editing.",
+        variant: "destructive",
+      })
+      setLoading(false)
+      return
     }
-  };
 
-  if (!item) return null;
+    const { error } = await supabase
+      .from("inventory")
+      .update({
+        item_name: itemName,
+        quantity: Number.parseInt(quantity),
+        unit_price: Number.parseFloat(unitPrice),
+        supplier: supplier || null,
+        last_restock: lastRestock || null,
+      })
+      .eq("id", item.id)
+
+    if (error) {
+      console.error("Error updating inventory item:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update inventory item. Please try again.",
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Success",
+        description: "Inventory item updated successfully.",
+      })
+      onSuccess()
+      onOpenChange(false)
+    }
+    setLoading(false)
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Edit Inventory Item</DialogTitle>
-          <DialogDescription>
-            Update the details for &quot;{item.name}&quot;.
-          </DialogDescription>
+          <DialogDescription>Make changes to the inventory item details.</DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
-            <FormField
-              control={form.control}
-              name='name'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Item Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder='e.g., Cat 6 Cable' {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="itemName">Item Name</Label>
+            <Input id="itemName" value={itemName} onChange={(e) => setItemName(e.target.value)} required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="quantity">Quantity</Label>
+            <Input
+              id="quantity"
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              required
             />
-            <FormField
-              control={form.control}
-              name='reorder_level'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reorder Level</FormLabel>
-                  <FormControl>
-                    <Input type='number' placeholder='e.g., 10' {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="unitPrice">Unit Price</Label>
+            <Input
+              id="unitPrice"
+              type="number"
+              step="0.01"
+              value={unitPrice}
+              onChange={(e) => setUnitPrice(e.target.value)}
+              required
             />
-            <FormField
-              control={form.control}
-              name='current_stock'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Current Stock</FormLabel>
-                  <div className='flex gap-2 items-center'>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        placeholder='e.g., 100'
-                        {...field}
-                        disabled={!stockEditable}
-                      />
-                    </FormControl>
-                    <Button
-                      type='button'
-                      variant={stockEditable ? "secondary" : "outline"}
-                      onClick={() => setStockEditable((v) => !v)}
-                      tabIndex={-1}
-                    >
-                      {stockEditable ? "Lock" : "Edit"}
-                    </Button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type='submit' disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="supplier">Supplier</Label>
+            <Input id="supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="lastRestock">Last Restock Date</Label>
+            <Input id="lastRestock" type="date" value={lastRestock} onChange={(e) => setLastRestock(e.target.value)} />
+          </div>
+          <Button type="submit" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving Changes...
+              </>
+            ) : (
+              "Save Changes"
+            )}
+          </Button>
+        </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

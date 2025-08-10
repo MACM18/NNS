@@ -1,126 +1,94 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { BookOpen, Calendar, Tag, Search, ArrowRight } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { PublicLayout } from "@/components/layout/public-layout"
+import { User, Tag, CalendarDays } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Post } from "@/types/content"
+import Link from "next/link"
 
-export default function ArticlesPage() {
-  const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
+export const revalidate = 0 // Ensure data is fresh on every request
 
-  useEffect(() => {
-    fetchPosts()
-  }, [])
+export default async function ArticlesPage() {
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("status", "active") // Only show active posts
+    .order("created_at", { ascending: false })
 
-  const fetchPosts = async () => {
-    try {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from("posts")
-        .select("*")
-        .eq("status", "active") // Only show active posts
-        .order("created_at", { ascending: false })
-
-      if (error) throw error
-      setPosts(data || [])
-    } catch (error) {
-      console.error("Error fetching posts:", error)
-      // Optionally show a toast or error message to the user
-    } finally {
-      setLoading(false)
-    }
+  if (error) {
+    console.error("Error fetching posts:", error)
+    return (
+      <div className="container mx-auto py-12 px-4 md:px-6">
+        <h1 className="text-4xl font-bold text-center mb-8">Our Articles</h1>
+        <p className="text-center text-red-500">Failed to load articles. Please try again later.</p>
+      </div>
+    )
   }
 
-  const filteredPosts = posts.filter((post) => {
-    const matchesSearch =
-      post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      post.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (post.category && post.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (post.tags && post.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase())))
-    return matchesSearch
-  })
+  const activePosts: Post[] = posts || []
 
   return (
-    <PublicLayout>
-      <section className="py-12 md:py-24 lg:py-32 bg-background">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Latest Articles</h1>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Stay informed with our insights and updates on the telecom industry, technology, and more.
-            </p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 py-12 px-4 md:px-6">
+      <div className="container mx-auto">
+        <h1 className="text-4xl md:text-5xl font-extrabold text-center text-gray-900 dark:text-gray-50 mb-6">
+          Latest Articles
+        </h1>
+        <p className="text-xl text-center text-gray-600 dark:text-gray-400 mb-12 max-w-3xl mx-auto">
+          Stay informed with our insights on fiber optics, telecommunications, and industry trends.
+        </p>
 
-          <div className="mt-12 flex justify-center">
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <Input
-                placeholder="Search articles..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 rounded-md border border-input focus:ring-primary focus:border-primary w-full"
-              />
-            </div>
+        {activePosts.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-2xl text-gray-700 dark:text-gray-300">No articles published yet. Check back soon!</p>
           </div>
-
-          {loading ? (
-            <div className="text-center py-16 text-muted-foreground">Loading articles...</div>
-          ) : filteredPosts.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">No articles found.</div>
-          ) : (
-            <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredPosts.map((post) => (
-                <Card
-                  key={post.id}
-                  className="flex flex-col justify-between hover:shadow-lg transition-shadow duration-300"
-                >
-                  <CardHeader>
-                    <CardTitle className="text-xl font-semibold line-clamp-2">{post.title}</CardTitle>
-                    <CardDescription className="flex items-center gap-2 text-muted-foreground">
-                      <BookOpen className="h-4 w-4" />
-                      <span>By {post.author}</span>
-                    </CardDescription>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {post.category && <Badge variant="secondary">{post.category}</Badge>}
-                      {post.tags &&
-                        post.tags.map((tag, index) => (
-                          <Badge key={index} variant="outline" className="flex items-center gap-1">
-                            <Tag className="h-3 w-3" /> {tag}
-                          </Badge>
-                        ))}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex-grow">
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {post.excerpt || post.content.substring(0, 150) + "..."}
-                    </p>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-4">
-                      <Calendar className="h-4 w-4" />
-                      <span>Published: {new Date(post.created_at).toLocaleDateString()}</span>
-                    </div>
-                  </CardContent>
-                  <div className="p-6 pt-0">
-                    <Link href={`/articles/${post.id}`} passHref>
-                      <Button variant="outline" className="w-full bg-transparent">
-                        Read Article <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </Link>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {activePosts.map((post) => (
+              <Card key={post.id} className="flex flex-col h-full hover:shadow-lg transition-shadow duration-300">
+                {post.featured_image_url && (
+                  <img
+                    src={post.featured_image_url || "/placeholder.svg"}
+                    alt={post.title}
+                    width={400}
+                    height={225}
+                    className="w-full h-48 object-cover rounded-t-lg"
+                  />
+                )}
+                <CardHeader>
+                  <CardTitle className="text-2xl font-bold text-gray-900 dark:text-gray-50 line-clamp-2">
+                    {post.title}
+                  </CardTitle>
+                  <CardDescription className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                    <User className="h-4 w-4" />
+                    {post.author}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    {post.category && (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <Tag className="h-3 w-3" />
+                        {post.category}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      <CalendarDays className="h-3 w-3" />
+                      {new Date(post.created_at).toLocaleDateString()}
+                    </Badge>
                   </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-    </PublicLayout>
+                  <p className="text-gray-700 dark:text-gray-300 line-clamp-3">{post.excerpt || post.content}</p>
+                </CardContent>
+                {/* Placeholder for actual post detail page */}
+                <div className="p-6 pt-0">
+                  <Link href={`/articles/${post.id}`} passHref>
+                    <Button className="w-full">Read More</Button>
+                  </Link>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
