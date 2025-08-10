@@ -15,8 +15,8 @@ interface JobVacancy {
   description: string
   location: string
   salary_range: string
-  posted_date: string
-  application_deadline: string
+  created_at: string // Corrected from posted_date
+  end_date: string // Corrected from application_deadline
 }
 
 export default function JobListingsPage() {
@@ -32,8 +32,8 @@ export default function JobListingsPage() {
       try {
         const { data, error } = await supabase
           .from("job_vacancies")
-          .select("id, title, description, location, salary_range, posted_date, application_deadline")
-          .order("posted_date", { ascending: false })
+          .select("id, title, description, location, salary_range, created_at, end_date") // Corrected column names
+          .order("created_at", { ascending: false }) // Corrected column name
 
         if (error) {
           throw error
@@ -106,12 +106,12 @@ export default function JobListingsPage() {
                         <DollarSign className="h-4 w-4" /> Salary: {job.salary_range || "Negotiable"}
                       </div>
                       <div className="flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4" /> Posted: {format(new Date(job.posted_date), "MMM dd, yyyy")}
+                        <CalendarDays className="h-4 w-4" /> Posted: {format(new Date(job.created_at), "MMM dd, yyyy")}
                       </div>
-                      {job.application_deadline && (
+                      {job.end_date && (
                         <div className="flex items-center gap-2">
                           <CalendarDays className="h-4 w-4" /> Apply by:{" "}
-                          {format(new Date(job.application_deadline), "MMM dd, yyyy")}
+                          {format(new Date(job.end_date), "MMM dd, yyyy")}
                         </div>
                       )}
                     </div>
