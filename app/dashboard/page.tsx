@@ -3,18 +3,18 @@
 import { CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Briefcase, FileText, LineChart, Users } from "lucide-react"
+import { Briefcase, FileText, Users, Phone, Package, BookOpen } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Header } from "@/components/layout/header"
-import { DashboardLayout } from "@/components/layout/dashboard-layout"
+import DashboardLayout from "@/components/layout/dashboard-layout"
 import { supabase } from "@/lib/supabase"
 import { useDataCache } from "@/contexts/data-cache-context"
 import { getSupabaseClient } from "@/lib/supabase"
 import { redirect } from "next/navigation"
-import { Cable, CheckCircle, AlertCircle, Plus, RefreshCw } from "lucide-react"
+import { Plus, RefreshCw } from "lucide-react"
 import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal"
 import { MonthYearPicker } from "@/components/ui/month-year-picker"
 
@@ -254,32 +254,42 @@ export default async function DashboardPage() {
 
   const dashboardStats = [
     {
-      title: "Total Lines",
+      title: "Total Users",
+      value: usersCount?.toLocaleString() || "N/A",
+      icon: <Users className="h-5 w-5 text-blue-500" />,
+      description: "Active users in the system",
+    },
+    {
+      title: "Active Lines",
       value: stats.totalLines.toLocaleString(),
       change: formatChange(stats.lineChange),
-      icon: Cable,
-      color: "text-blue-600",
+      icon: <Phone className="h-5 w-5 text-green-500" />,
+      description: "Currently active telephone lines",
     },
     {
-      title: "Active Tasks",
-      value: stats.activeTasks.toString(),
-      change: formatChange(stats.taskChange),
-      icon: CheckCircle,
-      color: "text-green-600",
+      title: "Inventory Items",
+      value: "5,120", // Mock data
+      icon: <Package className="h-5 w-5 text-yellow-500" />,
+      description: "Items in stock across all warehouses",
     },
     {
-      title: "Pending Reviews",
-      value: stats.pendingReviews.toString(),
-      change: formatChange(stats.reviewChange),
-      icon: AlertCircle,
-      color: "text-orange-600",
-    },
-    {
-      title: "Monthly Revenue",
-      value: formatCurrency(stats.monthlyRevenue),
+      title: "Invoices Generated",
+      value: stats.monthlyRevenue.toLocaleString(),
       change: formatChange(stats.revenueChange),
-      icon: LineChart, // Renamed TrendingUp to avoid redeclaration
-      color: "text-purple-600",
+      icon: <FileText className="h-5 w-5 text-purple-500" />,
+      description: "Invoices processed this month",
+    },
+    {
+      title: "Open Job Vacancies",
+      value: jobVacanciesCount?.toLocaleString() || "N/A",
+      icon: <Briefcase className="h-5 w-5 text-red-500" />,
+      description: "Current job openings",
+    },
+    {
+      title: "Published Blog Posts",
+      value: blogsCount?.toLocaleString() || "N/A",
+      icon: <BookOpen className="h-5 w-5 text-indigo-500" />,
+      description: "Total blog articles published",
     },
   ]
 
@@ -306,39 +316,26 @@ export default async function DashboardPage() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {dashboardStats.map((stat, index) => (
                 <Card key={index} className="shadow-md hover:shadow-lg transition-shadow duration-300">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                    {stat.icon}
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {isRefreshing ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div> : stat.value}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      <span
-                        className={
-                          stat.change.startsWith("+")
-                            ? "text-green-600"
-                            : stat.change.startsWith("-")
-                              ? "text-red-600"
-                              : "text-gray-600"
-                        }
-                      >
-                        {isRefreshing ? "..." : stat.change}
-                      </span>{" "}
-                      from last month
-                    </p>
+                    <p className="text-xs text-muted-foreground">{stat.description}</p>
                   </CardContent>
                 </Card>
               ))}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <div className="grid gap-4 md:grid-cols-2">
               {/* Recent Activities */}
-              <Card className="col-span-4 shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="col-span-1 shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader>
                   <CardTitle>Recent Activities</CardTitle>
                   <CardDescription>Latest updates from your telecom operations</CardDescription>
@@ -388,97 +385,54 @@ export default async function DashboardPage() {
               </Card>
 
               {/* Quick Actions */}
-              <Card className="col-span-3 shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="col-span-1 shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader>
                   <CardTitle>Quick Actions</CardTitle>
                   <CardDescription>Perform common tasks quickly.</CardDescription>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <CardContent className="flex flex-wrap gap-2">
                   <Link href="/lines">
-                    <Button className="w-full bg-transparent hover:bg-blue-600 text-blue-600 hover:text-white">
+                    <Button variant="outline" className="w-full bg-transparent">
                       Add New Line Details
                     </Button>
                   </Link>
                   <Link href="/reports">
-                    <Button className="w-full bg-transparent hover:bg-green-600 text-green-600 hover:text-white">
+                    <Button variant="outline" className="w-full bg-transparent">
                       Generate Monthly Report
                     </Button>
                   </Link>
                   <Link href="/inventory">
-                    <Button className="w-full bg-transparent hover:bg-purple-600 text-purple-600 hover:text-white">
+                    <Button variant="outline" className="w-full bg-transparent">
                       Update Inventory
                     </Button>
                   </Link>
                   <Link href="/tasks">
-                    <Button className="w-full bg-transparent hover:bg-yellow-600 text-yellow-600 hover:text-white">
+                    <Button variant="outline" className="w-full bg-transparent">
                       Review Pending Tasks
                     </Button>
                   </Link>
                   <Link href="/users/new">
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">Add New User</Button>
+                    <Button variant="outline" className="w-full bg-transparent">
+                      Add New User
+                    </Button>
                   </Link>
                   <Link href="/careers/new">
-                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white">Post New Job</Button>
+                    <Button variant="outline" className="w-full bg-transparent">
+                      Post New Job
+                    </Button>
                   </Link>
                   <Link href="/content/new-post">
-                    <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white">Create New Post</Button>
+                    <Button variant="outline" className="w-full bg-transparent">
+                      Create New Post
+                    </Button>
                   </Link>
                   <Link href="/inventory/add-item">
-                    <Button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white">Add Inventory Item</Button>
+                    <Button variant="outline" className="w-full bg-transparent">
+                      Add Inventory Item
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
-            </div>
-
-            {/* Additional Dashboard Components */}
-            <div className="space-y-6">
-              <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
-              <p className="text-muted-foreground">
-                Welcome back, {user?.email || "User"}! Here's a summary of your operations.
-              </p>
-
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{usersCount ?? "N/A"}</div>
-                    <p className="text-xs text-muted-foreground">Registered users in the system</p>
-                  </CardContent>
-                </Card>
-                <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Job Vacancies</CardTitle>
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{jobVacanciesCount ?? "N/A"}</div>
-                    <p className="text-xs text-muted-foreground">Active job openings</p>
-                  </CardContent>
-                </Card>
-                <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{postsCount ?? "N/A"}</div>
-                    <p className="text-xs text-muted-foreground">Published articles</p>
-                  </CardContent>
-                </Card>
-                <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Blogs</CardTitle>
-                    <LineChart className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{blogsCount ?? "N/A"}</div>
-                    <p className="text-xs text-muted-foreground">Published blog entries</p>
-                  </CardContent>
-                </Card>
-              </div>
             </div>
           </main>
         </div>

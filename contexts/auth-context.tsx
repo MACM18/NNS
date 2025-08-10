@@ -1,94 +1,63 @@
 "use client"
 
-import type React from "react"
-
-import { createContext, useContext, useState, useEffect, useCallback } from "react"
-import { supabase } from "@/lib/supabase"
-import type { User } from "@supabase/supabase-js"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
+import { getSupabaseClient } from "@/lib/supabase"
+import type { User } from "@supabase/supabase-js"
 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-
-  const fetchUser = useCallback(async () => {
-    const {
-      data: { user: fetchedUser },
-      error,
-    } = await supabase.auth.getUser()
-    if (error) {
-      console.error("Error fetching user:", error)
-      setUser(null)
-    } else {
-      setUser(fetchedUser)
-    }
-    setLoading(false)
-  }, [])
+  const supabase = getSupabaseClient()
 
   useEffect(() => {
-    fetchUser()
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN") {
-        setUser(session?.user || null)
-        // Only redirect if not already on dashboard or login page
-        if (window.location.pathname === "/login" || window.location.pathname === "/register") {
-          router.push("/dashboard")
-        }
+      setUser(session?.user || null)
+      setLoading(false)
+      if (event === "SIGNED_IN" && session?.user) {
+        router.push("/dashboard") // Redirect to dashboard on sign in
       } else if (event === "SIGNED_OUT") {
-        setUser(null)
-        // Only redirect if not already on landing page or login/register
-        if (
-          window.location.pathname !== "/" &&
-          window.location.pathname !== "/login" &&
-          window.location.pathname !== "/register"
-        ) {
-          router.push("/")
-        }
+        router.push("/login") // Redirect to login on sign out
       }
+    })
+
+    // Initial check
+    supabase.auth.getUser().then(({ data: { user: initialUser } }) => {
+      setUser(initialUser)
       setLoading(false)
     })
 
     return () => {
-      subscription.unsubscribe() // Correctly unsubscribe from the subscription object
+      if (subscription) {
+        subscription.unsubscribe() // Corrected: calling unsubscribe on the 'subscription' object
+      }
     }
-  }, [fetchUser, router])
-
-  const signIn = async (email: string, password: string) => {
-    setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (error) throw error
-  }
-
-  const signUp = async (email: string, password: string) => {
-    setLoading(true)
-    const { error } = await supabase.auth.signUp({ email, password })
-    setLoading(false)
-    if (error) throw error
-  }
+  }, [router, supabase])
 
   const signOut = async () => {
     setLoading(true)
     const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error("Error signing out:", error.message)
+    } else {
+      setUser(null)
+      router.push("/login") // Ensure redirect after successful sign out
+    }
     setLoading(false)
-    if (error) throw error
   }
 
-  return <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, loading, signOut }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

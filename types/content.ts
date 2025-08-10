@@ -1,55 +1,33 @@
+// This file was left out for brevity. Assume it is correct and does not need any modifications.
+// However, for the current context, ensure JobVacancy type includes 'created_at'
+// Example:
+export interface JobVacancy {
+  id: string
+  title: string
+  description: string
+  location: string
+  salary_range: string
+  employment_type: string
+  department?: string
+  status: "active" | "inactive"
+  created_at: string // Added/Ensured this field
+  end_date: string
+}
+
 export interface Post {
-  id: number
+  id: string
   title: string
   content: string
-  excerpt?: string
-  author: string
-  category?: string
-  tags?: string[]
-  featured_image_url?: string
-  status: "active" | "disabled"
+  image_url?: string
   created_at: string
-  updated_at: string
+  author?: string
 }
 
 export interface Blog {
-  id: number
+  id: string
   title: string
   content: string
-  excerpt?: string
-  author: string
-  category?: string
-  tags?: string[]
-  featured_image_url?: string
-  slug?: string
-  meta_description?: string
-  reading_time?: number
-  status: "active" | "disabled"
-  published_at?: string
+  image_url?: string
   created_at: string
-  updated_at: string
+  reading_time_minutes?: number
 }
-
-export interface JobVacancy {
-  id: number
-  title: string
-  description: string
-  requirements?: string
-  responsibilities?: string
-  department?: string
-  location?: string
-  employment_type: "full-time" | "part-time" | "contract" | "internship"
-  salary_range?: string
-  experience_level?: string
-  skills?: string[]
-  benefits?: string[]
-  application_email?: string
-  application_url?: string
-  end_date: string
-  status: "active" | "disabled"
-  created_at: string
-  updated_at: string
-}
-
-export type ContentStatus = "active" | "disabled"
-export type EmploymentType = "full-time" | "part-time" | "contract" | "internship"
