@@ -30,15 +30,92 @@ interface DrumUsageRecord {
   }
 }
 
+interface DrumInfo {
+  initial_quantity: number
+  current_quantity: number
+}
+
+// Enhanced calculation logic for drum usage details
+const calculateDetailedMetrics = (usageRecords: DrumUsageRecord[], initialQuantity: number) => {
+  if (usageRecords.length === 0) {
+    return {
+      totalUsed: 0,
+      totalWastage: 0,
+      remainingLength: initialQuantity,
+      usageCount: 0,
+      processedRecords: [],
+    }
+  }
+
+  // Sort records by date to process chronologically
+  const sortedRecords = [...usageRecords].sort(
+    (a, b) => new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime(),
+  )
+
+  let totalUsed = 0
+  let totalWastage = 0
+  let lastEndPoint = 0
+
+  const processedRecords = sortedRecords.map((record, index) => {
+    const startPoint = record.cable_start_point || 0
+    const endPoint = record.cable_end_point || 0
+
+    // Calculate actual usage (absolute difference)
+    const actualUsage = Math.abs(endPoint - startPoint)
+    totalUsed += actualUsage
+
+    // Calculate wastage based on gap from last usage
+    let calculatedWastage = 0
+    if (index > 0) {
+      const gap = Math.abs(startPoint - lastEndPoint)
+      if (gap > 0) {
+        calculatedWastage = gap
+        totalWastage += gap
+      }
+    }
+
+    // Update last end point (use the higher value to track cable progression)
+    lastEndPoint = Math.max(startPoint, endPoint)
+
+    return {
+      ...record,
+      actualUsage,
+      calculatedWastage,
+      cumulativeUsed: totalUsed,
+      cumulativeWastage: totalWastage,
+    }
+  })
+
+  // Ensure totals don't exceed initial drum length
+  const maxCapacity = initialQuantity
+  const totalDeducted = totalUsed + totalWastage
+
+  if (totalDeducted > maxCapacity) {
+    // Cap the wastage to fit within capacity
+    totalWastage = Math.max(0, maxCapacity - totalUsed)
+  }
+
+  const remainingLength = Math.max(0, maxCapacity - totalUsed - totalWastage)
+
+  return {
+    totalUsed,
+    totalWastage,
+    remainingLength,
+    usageCount: sortedRecords.length,
+    processedRecords,
+  }
+}
+
 export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }: DrumUsageDetailsModalProps) {
   const [usageRecords, setUsageRecords] = useState<DrumUsageRecord[]>([])
   const [loading, setLoading] = useState(false)
-  const [drumStats, setDrumStats] = useState({
+  const [drumInfo, setDrumInfo] = useState<DrumInfo>({ initial_quantity: 0, current_quantity: 0 })
+  const [calculatedMetrics, setCalculatedMetrics] = useState({
     totalUsed: 0,
     totalWastage: 0,
     remainingLength: 0,
     usageCount: 0,
-    totalDeducted: 0,
+    processedRecords: [] as any[],
   })
 
   const supabase = getSupabaseClient()
@@ -84,19 +161,11 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
       if (drumError) throw drumError
 
       setUsageRecords(usage || [])
+      setDrumInfo(drum)
 
-      // Calculate stats
-      const totalUsed = (usage || []).reduce((sum, record) => sum + record.quantity_used, 0)
-      const totalWastage = (usage || []).reduce((sum, record) => sum + (record.wastage_calculated || 0), 0)
-      const totalDeducted = totalUsed + totalWastage
-
-      setDrumStats({
-        totalUsed,
-        totalWastage,
-        remainingLength: drum.current_quantity, // Use actual current_quantity from drum_tracking
-        usageCount: (usage || []).length,
-        totalDeducted, // Add this new field
-      })
+      // Calculate metrics using enhanced logic
+      const metrics = calculateDetailedMetrics(usage || [], drum.initial_quantity)
+      setCalculatedMetrics(metrics)
     } catch (error: any) {
       addNotification({
         title: "Error",
@@ -111,23 +180,34 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Cable className="h-5 w-5" />
             Drum Usage Details - {drumNumber}
           </DialogTitle>
-          <DialogDescription>Detailed usage history and wastage tracking for this cable drum</DialogDescription>
+          <DialogDescription>
+            Enhanced usage history with improved wastage calculation based on cable point gaps
+          </DialogDescription>
         </DialogHeader>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Initial Length</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-gray-600">{drumInfo.initial_quantity.toFixed(1)}m</div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Total Used</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{drumStats.totalUsed.toFixed(1)}m</div>
+              <div className="text-2xl font-bold text-blue-600">{calculatedMetrics.totalUsed.toFixed(1)}m</div>
             </CardContent>
           </Card>
 
@@ -136,7 +216,7 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
               <CardTitle className="text-sm">Total Wastage</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{drumStats.totalWastage.toFixed(1)}m</div>
+              <div className="text-2xl font-bold text-orange-600">{calculatedMetrics.totalWastage.toFixed(1)}m</div>
             </CardContent>
           </Card>
 
@@ -145,27 +225,16 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
               <CardTitle className="text-sm">Remaining</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{drumStats.remainingLength.toFixed(1)}m</div>
+              <div className="text-2xl font-bold text-green-600">{calculatedMetrics.remainingLength.toFixed(1)}m</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Total Deducted</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                {(drumStats.totalUsed + drumStats.totalWastage).toFixed(1)}m
-              </div>
-              <div className="text-xs text-muted-foreground">Used + Wastage</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
               <CardTitle className="text-sm">Usage Count</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{drumStats.usageCount}</div>
+              <div className="text-2xl font-bold">{calculatedMetrics.usageCount}</div>
             </CardContent>
           </Card>
         </div>
@@ -182,18 +251,19 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
                 <TableHead>Cable Points</TableHead>
                 <TableHead>Used (m)</TableHead>
                 <TableHead>Wastage (m)</TableHead>
+                <TableHead>Cumulative</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                     <p className="mt-2 text-sm text-muted-foreground">Loading usage records...</p>
                   </TableCell>
                 </TableRow>
-              ) : usageRecords.length > 0 ? (
-                usageRecords.map((record, index) => (
+              ) : calculatedMetrics.processedRecords.length > 0 ? (
+                calculatedMetrics.processedRecords.map((record, index) => (
                   <TableRow key={record.id}>
                     <TableCell>{new Date(record.usage_date).toLocaleDateString()}</TableCell>
                     <TableCell className="font-mono text-sm">{record.line_details?.telephone_no || "N/A"}</TableCell>
@@ -210,23 +280,29 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="font-medium text-blue-600">{record.quantity_used.toFixed(1)}m</span>
+                      <span className="font-medium text-blue-600">{record.actualUsage.toFixed(1)}m</span>
                     </TableCell>
                     <TableCell>
-                      {record.wastage_calculated > 0 ? (
+                      {record.calculatedWastage > 0 ? (
                         <div className="flex items-center gap-1">
                           <AlertTriangle className="h-3 w-3 text-orange-500" />
-                          <span className="font-medium text-orange-600">{record.wastage_calculated.toFixed(1)}m</span>
+                          <span className="font-medium text-orange-600">{record.calculatedWastage.toFixed(1)}m</span>
                         </div>
                       ) : (
                         <span className="text-muted-foreground">0m</span>
                       )}
                     </TableCell>
+                    <TableCell>
+                      <div className="text-xs">
+                        <div>Used: {record.cumulativeUsed.toFixed(1)}m</div>
+                        <div className="text-orange-600">Waste: {record.cumulativeWastage.toFixed(1)}m</div>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     <TrendingDown className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No usage records found for this drum</p>
                   </TableCell>
@@ -236,19 +312,56 @@ export function DrumUsageDetailsModal({ open, onOpenChange, drumId, drumNumber }
           </Table>
         </div>
 
-        {/* Wastage Alert */}
-        {drumStats.totalWastage > 0 && (
+        {/* Enhanced Wastage Analysis */}
+        {calculatedMetrics.totalWastage > 0 && (
           <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4 text-orange-600" />
-              <span className="font-medium text-orange-800 dark:text-orange-200">Wastage Alert</span>
+              <span className="font-medium text-orange-800 dark:text-orange-200">Enhanced Wastage Analysis</span>
             </div>
-            <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-              This drum has {drumStats.totalWastage.toFixed(1)}m of wastage across {drumStats.usageCount} installations.
-              Consider reviewing installation procedures to minimize waste.
-            </p>
+            <div className="text-sm text-orange-700 dark:text-orange-300 space-y-1">
+              <p>
+                This drum has {calculatedMetrics.totalWastage.toFixed(1)}m of calculated wastage across{" "}
+                {calculatedMetrics.usageCount} installations.
+              </p>
+              <p>
+                Wastage is calculated based on gaps between cable usage points, accounting for bidirectional cable
+                usage.
+              </p>
+              <p>
+                Total deducted: {(calculatedMetrics.totalUsed + calculatedMetrics.totalWastage).toFixed(1)}m (
+                {(
+                  ((calculatedMetrics.totalUsed + calculatedMetrics.totalWastage) / drumInfo.initial_quantity) *
+                  100
+                ).toFixed(1)}
+                % of initial length)
+              </p>
+            </div>
           </div>
         )}
+
+        {/* Calculation Method Info */}
+        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200">
+          <div className="flex items-center gap-2 mb-2">
+            <Cable className="h-4 w-4 text-blue-600" />
+            <span className="font-medium text-blue-800 dark:text-blue-200">Enhanced Calculation Method</span>
+          </div>
+          <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+            <p>
+              • <strong>Usage:</strong> Calculated as absolute difference between start and end points (supports
+              bidirectional usage)
+            </p>
+            <p>
+              • <strong>Wastage:</strong> Calculated as gaps between consecutive usage end points and start points
+            </p>
+            <p>
+              • <strong>Validation:</strong> Total usage + wastage cannot exceed initial drum length
+            </p>
+            <p>
+              • <strong>Remaining:</strong> Initial length - total used - total wastage
+            </p>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )
