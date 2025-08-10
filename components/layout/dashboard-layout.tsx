@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import AppSidebar from "@/components/layout/app-sidebar" // Corrected import
+import AppSidebar from "@/components/layout/app-sidebar" // Corrected import to default
 import { Header } from "@/components/layout/header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
