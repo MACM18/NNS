@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase-server"
+import { supabaseServer } from "@/lib/supabase-server" // Corrected import
 import { PublicLayout } from "@/components/layout/public-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +16,7 @@ interface Post {
 }
 
 async function fetchPosts(): Promise<Post[]> {
-  const supabase = createClient()
+  const supabase = supabaseServer // Corrected usage
   const { data, error } = await supabase
     .from("posts")
     .select("id, title, content, author, category, created_at")

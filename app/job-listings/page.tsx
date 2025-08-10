@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase-server"
+import { supabaseServer } from "@/lib/supabase-server" // Corrected import
 import { PublicLayout } from "@/components/layout/public-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -12,12 +12,12 @@ interface JobVacancy {
   description: string
   location: string
   employment_type: string
-  created_at: string // Corrected column name
-  end_date: string // Corrected column name for application deadline
+  created_at: string
+  end_date: string
 }
 
 async function fetchJobVacancies(): Promise<JobVacancy[]> {
-  const supabase = createClient()
+  const supabase = supabaseServer // Corrected usage
   const { data, error } = await supabase
     .from("job_vacancies")
     .select("id, title, description, location, employment_type, created_at, end_date")
@@ -25,7 +25,6 @@ async function fetchJobVacancies(): Promise<JobVacancy[]> {
 
   if (error) {
     console.error("Error fetching job vacancies:", error.message)
-    // In a real application, you might want to throw an error or return an empty array
     return []
   }
   return data as JobVacancy[]

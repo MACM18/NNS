@@ -1,206 +1,151 @@
 "use client"
 
 import type React from "react"
+
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
-import { ArrowRight, Building2, Menu } from "lucide-react"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { MenuIcon } from "lucide-react"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
-  const router = useRouter()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const pathname = usePathname()
 
-  const handleAuthAction = () => {
-    if (user) {
-      router.push("/dashboard")
-    } else {
-      router.push("/login")
-    }
+  const navLinks = [
+    { href: "/services", label: "Services" },
+    { href: "/why-us", label: "Why Us" },
+    { href: "/job-listings", label: "Careers" },
+    { href: "/welcome/contact", label: "Contact" },
+  ]
+
+  const footerLinks = {
+    company: [
+      { href: "/welcome/about", label: "About Us" },
+      { href: "/job-listings", label: "Careers" },
+      { href: "/welcome/contact", label: "Contact" },
+    ],
+    resources: [
+      { href: "/articles", label: "Articles" },
+      { href: "/insights", label: "Insights" },
+      { href: "#", label: "Support" }, // Placeholder
+    ],
+    legal: [
+      { href: "#", label: "Privacy Policy" }, // Placeholder
+      { href: "#", label: "Terms of Service" }, // Placeholder
+    ],
   }
 
-  const headerNavigation = [
-    { name: "About Us", href: "/welcome/about" },
-    { name: "Careers", href: "/job-listings" },
-    { name: "Articles", href: "/articles" },
-    { name: "Insights", href: "/insights" },
-    { name: "Contact", href: "/welcome/contact" },
-  ]
-
-  const footerCompanyLinks = [
-    { name: "About Us", href: "/welcome/about" },
-    { name: "Careers", href: "/job-listings" },
-    { name: "Contact", href: "/welcome/contact" },
-  ]
-
-  const footerResourcesLinks = [
-    { name: "Articles", href: "/articles" },
-    { name: "Insights", href: "/insights" },
-    { name: "Services", href: "/#services" }, // Anchor link for landing page section
-    { name: "Why Partner", href: "/#why-partner" }, // Anchor link for landing page section
-    { name: "Future Vision", href: "/#future-vision" }, // Anchor link for landing page section
-  ]
-
-  const footerSupportLinks = [
-    { name: "FAQs", href: "#" }, // Placeholder for FAQs
-  ]
-
-  const footerLegalLinks = [
-    { name: "Privacy Policy", href: "#" }, // Placeholder for Privacy Policy
-    { name: "Terms of Service", href: "#" }, // Placeholder for Terms of Service
-  ]
-
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-gray-50">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between p-6 lg:px-8" aria-label="Global">
-          <div className="flex lg:flex-1">
-            <Link href="/" className="-m-1.5 p-1.5 flex items-center space-x-2">
-              <Building2 className="h-8 w-8 text-primary" />
-              <span className="text-xl font-bold text-foreground">NNS Enterprise</span>
-            </Link>
-          </div>
-          <div className="flex lg:hidden">
-            <Button
-              variant="ghost"
-              className="-m-2.5 inline-flex items-center justify-center rounded-md p-2.5 text-foreground"
-              onClick={() => setMobileMenuOpen(true)}
-            >
-              <span className="sr-only">Open main menu</span>
-              <Menu className="h-6 w-6" aria-hidden="true" />
-            </Button>
-          </div>
-          <div className="hidden lg:flex lg:gap-x-8">
-            {headerNavigation.map((item) => (
+    <div className="flex flex-col min-h-screen">
+      <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-lg">
+        <div className="container flex h-16 items-center justify-between px-4 md:px-6">
+          <Link href="/" className="flex items-center gap-2 font-semibold" prefetch={false}>
+            <span className="sr-only">NNS Enterprise</span>
+            <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-8 w-auto" />
+          </Link>
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+            {navLinks.map((link) => (
               <Link
-                key={item.name}
-                href={item.href}
-                className="text-sm font-semibold leading-6 text-foreground hover:text-primary transition-colors"
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "transition-colors hover:text-foreground/80",
+                  pathname === link.href ? "text-foreground" : "text-foreground/60",
+                )}
+                prefetch={false}
               >
-                {item.name}
+                {link.label}
               </Link>
             ))}
+          </nav>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" className="md:hidden bg-transparent">
+                <MenuIcon className="h-6 w-6" />
+                <span className="sr-only">Toggle navigation menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <Link href="/" className="flex items-center gap-2 font-semibold py-4" prefetch={false}>
+                <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-8 w-auto" />
+                <span className="sr-only">NNS Enterprise</span>
+              </Link>
+              <div className="grid gap-2 py-6">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={cn(
+                      "flex w-full items-center py-2 text-lg font-semibold",
+                      pathname === link.href ? "text-foreground" : "text-foreground/60",
+                    )}
+                    prefetch={false}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      </header>
+      <div className="flex-1">{children}</div>
+      <footer className="bg-muted py-12 md:py-16">
+        <div className="container grid grid-cols-1 gap-8 px-4 md:grid-cols-4 md:px-6">
+          <div className="space-y-4">
+            <Link href="/" className="flex items-center gap-2 font-semibold" prefetch={false}>
+              <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-8 w-auto" />
+              <span className="sr-only">NNS Enterprise</span>
+            </Link>
+            <p className="text-sm text-muted-foreground">
+              &copy; {new Date().getFullYear()} NNS Enterprise. All rights reserved.
+            </p>
           </div>
-          <div className="hidden lg:flex lg:flex-1 lg:justify-end">
-            <Button onClick={handleAuthAction} disabled={loading}>
-              {loading ? (
-                "Loading..."
-              ) : user ? (
-                <>
-                  Go to Dashboard
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </>
-              ) : (
-                "Sign In"
-              )}
-            </Button>
-          </div>
-        </nav>
-
-        {/* Mobile menu */}
-        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <SheetContent side="right" className="lg:hidden">
-            <div className="flex flex-col gap-4 py-6">
-              {headerNavigation.map((item) => (
+          <div className="grid gap-2">
+            <h3 className="font-semibold text-foreground">Company</h3>
+            <nav className="grid gap-1 text-sm">
+              {footerLinks.company.map((link) => (
                 <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    "-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 transition-colors hover:bg-muted",
-                  )}
-                  onClick={() => setMobileMenuOpen(false)}
+                  key={link.href}
+                  href={link.href}
+                  className="text-muted-foreground hover:text-foreground"
+                  prefetch={false}
                 >
-                  {item.name}
+                  {link.label}
                 </Link>
               ))}
-              <div className="py-6">
-                <Button onClick={handleAuthAction} disabled={loading} className="w-full">
-                  {loading ? (
-                    "Loading..."
-                  ) : user ? (
-                    <>
-                      Go to Dashboard
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
-                  ) : (
-                    "Sign In"
-                  )}
-                </Button>
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-      </header>
-
-      <main className="flex-1 pt-16">{children}</main>
-
-      {/* Footer */}
-      <footer className="bg-muted py-12">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <div className="flex items-center space-x-2">
-                <Building2 className="h-6 w-6 text-primary" />
-                <span className="text-lg font-bold">NNS Enterprise</span>
-              </div>
-              <p className="mt-4 text-sm text-muted-foreground">
-                Specialized in FTTH establishment and expanding into comprehensive telecom services.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">Company</h3>
-              <ul className="mt-4 space-y-2">
-                {footerCompanyLinks.map((item) => (
-                  <li key={item.name}>
-                    <Link href={item.href} className="text-sm text-muted-foreground hover:text-foreground">
-                      {item.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">Resources</h3>
-              <ul className="mt-4 space-y-2">
-                {footerResourcesLinks.map((item) => (
-                  <li key={item.name}>
-                    <Link href={item.href} className="text-sm text-muted-foreground hover:text-foreground">
-                      {item.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">Support</h3>
-              <ul className="mt-4 space-y-2">
-                {footerSupportLinks.map((item) => (
-                  <li key={item.name}>
-                    <Link href={item.href} className="text-sm text-muted-foreground hover:text-foreground">
-                      {item.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <h3 className="text-sm font-semibold mt-6">Legal</h3>
-              <ul className="mt-4 space-y-2">
-                {footerLegalLinks.map((item) => (
-                  <li key={item.name}>
-                    <Link href={item.href} className="text-sm text-muted-foreground hover:text-foreground">
-                      {item.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            </nav>
           </div>
-          <div className="mt-8 border-t pt-8 text-center">
-            <p className="text-sm text-muted-foreground">© 2024 NNS Enterprise. All rights reserved.</p>
+          <div className="grid gap-2">
+            <h3 className="font-semibold text-foreground">Resources</h3>
+            <nav className="grid gap-1 text-sm">
+              {footerLinks.resources.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-muted-foreground hover:text-foreground"
+                  prefetch={false}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+          <div className="grid gap-2">
+            <h3 className="font-semibold text-foreground">Legal</h3>
+            <nav className="grid gap-1 text-sm">
+              {footerLinks.legal.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-muted-foreground hover:text-foreground"
+                  prefetch={false}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
           </div>
         </div>
       </footer>
