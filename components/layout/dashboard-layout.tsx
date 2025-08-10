@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { AppSidebar } from "@/components/layout/app-sidebar"
+import AppSidebar from "@/components/layout/app-sidebar" // Corrected import
 import { Header } from "@/components/layout/header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
@@ -10,7 +10,7 @@ interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
-export function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
       <AppSidebar />

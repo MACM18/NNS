@@ -1,250 +1,353 @@
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { getSupabaseClient } from "@/lib/supabase"
-import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, HardHat, Lightbulb, Wrench, TrendingUp, ShieldCheck } from "lucide-react"
+import {
+  Cable,
+  CheckCircle,
+  Lightbulb,
+  ShieldCheck,
+  Zap,
+  Users,
+  Briefcase,
+  BookOpen,
+  ArrowRight,
+  Menu,
+} from "lucide-react"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import Image from "next/image"
 
-export default async function LandingPage() {
-  const supabase = getSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export default function LandingPage() {
+  const { user, loading } = useAuth()
+  const router = useRouter()
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
-  const handleAuthRedirect = async () => {
-    "use server"
+  const handleAuthRedirect = () => {
     if (user) {
-      redirect("/dashboard")
+      router.push("/dashboard")
     } else {
-      redirect("/login")
+      router.push("/login")
     }
   }
 
+  const navLinks = [
+    { name: "Home", href: "/" },
+    { name: "Services", href: "#services" },
+    { name: "Our Vision", href: "#vision" },
+    { name: "Careers", href: "/job-listings" },
+    { name: "Articles", href: "/articles" },
+    { name: "Insights", href: "/insights" },
+  ]
+
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-gray-50">
-      <header className="px-4 lg:px-6 h-16 flex items-center justify-between w-full sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm shadow-sm">
-        <Link href="/" className="flex items-center justify-center" prefetch={false}>
-          <span className="text-xl font-bold text-blue-600 dark:text-blue-400">NNS Enterprise</span>
-        </Link>
-        <nav className="ml-auto flex gap-4 sm:gap-6">
-          <Link
-            href="/job-listings"
-            className="text-sm font-medium hover:underline underline-offset-4"
-            prefetch={false}
-          >
-            Careers
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 text-gray-900">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full bg-white/90 backdrop-blur-sm shadow-sm">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
+          <Link href="/" className="flex items-center gap-2 font-bold text-lg">
+            <Image src="/placeholder-logo.svg" alt="NNS Enterprise Logo" width={32} height={32} />
+            NNS Enterprise
           </Link>
-          <Link href="/articles" className="text-sm font-medium hover:underline underline-offset-4" prefetch={false}>
-            Articles
-          </Link>
-          <Link href="/insights" className="text-sm font-medium hover:underline underline-offset-4" prefetch={false}>
-            Insights
-          </Link>
-          <form action={handleAuthRedirect}>
-            <Button type="submit" variant="default" className="bg-blue-600 hover:bg-blue-700 text-white">
-              {user ? "Go to Dashboard" : "Sign In"}
+
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center space-x-6">
+            {navLinks.map((link) => (
+              <Link
+                key={link.name}
+                href={link.href}
+                className="text-sm font-medium hover:text-blue-600 transition-colors"
+              >
+                {link.name}
+              </Link>
+            ))}
+            <Button onClick={handleAuthRedirect} disabled={loading} className="ml-4">
+              {loading ? "Loading..." : user ? "Go to Dashboard" : "Sign In"}
             </Button>
-          </form>
-        </nav>
+          </nav>
+
+          {/* Mobile Menu */}
+          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+            <SheetTrigger asChild className="md:hidden">
+              <Button variant="outline" size="icon">
+                <Menu className="h-6 w-6" />
+                <span className="sr-only">Toggle mobile menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full max-w-xs bg-white p-6">
+              <div className="flex flex-col items-start space-y-4">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className="text-lg font-medium hover:text-blue-600 transition-colors w-full py-2"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    {link.name}
+                  </Link>
+                ))}
+                <Button onClick={handleAuthRedirect} disabled={loading} className="w-full mt-4">
+                  {loading ? "Loading..." : user ? "Go to Dashboard" : "Sign In"}
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
       </header>
 
-      <main className="flex-1">
+      <main>
         {/* Hero Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48 bg-gradient-to-r from-blue-600 to-purple-700 dark:from-blue-800 dark:to-purple-900 text-white">
-          <div className="container px-4 md:px-6 text-center">
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-tight mb-6 drop-shadow-lg">
-              Your Trusted Partner in FTTH Establishment
+        <section className="relative h-[calc(100vh-64px)] flex items-center justify-center text-center px-4 py-12 md:py-24 overflow-hidden">
+          <div className="absolute inset-0 z-0">
+            <Image
+              src="/placeholder.jpg?height=1080&width=1920&query=fiber optic network background"
+              alt="Fiber Optic Network"
+              fill
+              style={{ objectFit: "cover" }}
+              className="opacity-30"
+            />
+          </div>
+          <div className="relative z-10 max-w-4xl mx-auto">
+            <h1 className="text-5xl md:text-7xl font-extrabold leading-tight text-gray-900 drop-shadow-lg">
+              Pioneering FTTH Infrastructure
             </h1>
-            <p className="text-lg md:text-xl max-w-3xl mx-auto mb-8 opacity-90">
-              Specializing in seamless Fiber-to-the-Home (FTTH) line establishment, we empower connectivity as a
-              dedicated subcontractor.
+            <p className="mt-6 text-xl md:text-2xl text-gray-700 max-w-3xl mx-auto">
+              Your trusted partner in seamless Fiber-to-the-Home (FTTH) establishment. We build the future of
+              connectivity.
             </p>
-            <form action={handleAuthRedirect}>
+            <div className="mt-10 flex flex-col sm:flex-row justify-center gap-4">
               <Button
-                type="submit"
-                variant="secondary"
-                className="bg-white text-blue-600 hover:bg-gray-100 px-8 py-3 text-lg font-semibold rounded-full shadow-lg transition-all duration-300 hover:scale-105"
+                size="lg"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-lg px-8 py-3 rounded-full shadow-lg"
+                onClick={() => router.push("#services")}
               >
-                {user ? "Access Your Dashboard" : "Get Started Today"}
+                Our Services
               </Button>
-            </form>
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-2 border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 text-lg px-8 py-3 rounded-full shadow-lg bg-transparent"
+                onClick={handleAuthRedirect}
+                disabled={loading}
+              >
+                {loading ? "Loading..." : user ? "Go to Dashboard" : "Partner Login"}
+              </Button>
+            </div>
           </div>
         </section>
 
         {/* Our Services: FTTH Establishment Process */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-white dark:bg-gray-900">
-          <div className="container px-4 md:px-6">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-gray-900 dark:text-gray-50">
-              Our FTTH Establishment Process
-            </h2>
+        <section id="services" className="py-16 md:py-24 bg-white">
+          <div className="container mx-auto px-4 md:px-6 text-center">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">Our FTTH Establishment Process</h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto mb-12">
+              We ensure robust and reliable fiber optic deployments through a meticulous, end-to-end process.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              <Card className="text-center p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center">
-                  <Lightbulb className="h-12 w-12 text-blue-500 mb-4" />
-                  <CardTitle className="text-xl font-semibold">1. Planning & Design</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Meticulous site assessment and network architecture planning for optimal fiber deployment.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="text-center p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center">
-                  <HardHat className="h-12 w-12 text-green-500 mb-4" />
-                  <CardTitle className="text-xl font-semibold">2. Infrastructure Setup</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Efficient trenching, ducting, and pole installation to lay the groundwork for fiber.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="text-center p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center">
-                  <Wrench className="h-12 w-12 text-yellow-500 mb-4" />
-                  <CardTitle className="text-xl font-semibold">3. Fiber Optic Cabling</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Precise pulling and blowing of fiber optic cables through established conduits.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="text-center p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center">
-                  <CheckCircle className="h-12 w-12 text-red-500 mb-4" />
-                  <CardTitle className="text-xl font-semibold">4. Splicing & Termination</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Expert fusion splicing and termination for robust, high-performance connections.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="text-center p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center">
-                  <ShieldCheck className="h-12 w-12 text-purple-500 mb-4" />
-                  <CardTitle className="text-xl font-semibold">5. Testing & Quality Assurance</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Rigorous testing with OTDR and power meters to ensure network integrity and performance.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="text-center p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center">
-                  <TrendingUp className="h-12 w-12 text-orange-500 mb-4" />
-                  <CardTitle className="text-xl font-semibold">6. Documentation & Handover</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Comprehensive documentation and seamless handover for operational readiness.
-                  </p>
-                </CardContent>
-              </Card>
+              {[
+                {
+                  icon: Lightbulb,
+                  title: "1. Planning & Design",
+                  description: "Strategic network planning and detailed fiber optic route design for optimal coverage.",
+                },
+                {
+                  icon: Cable,
+                  title: "2. Infrastructure Deployment",
+                  description:
+                    "Efficient and precise installation of fiber cables, conduits, and passive optical networks.",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "3. Splicing & Termination",
+                  description:
+                    "Expert fiber splicing and termination to ensure minimal signal loss and maximum performance.",
+                },
+                {
+                  icon: Zap,
+                  title: "4. Testing & Commissioning",
+                  description: "Rigorous testing and validation of the entire FTTH network for reliability and speed.",
+                },
+                {
+                  icon: CheckCircle,
+                  title: "5. Quality Assurance",
+                  description:
+                    "Comprehensive quality checks at every stage to meet industry standards and client expectations.",
+                },
+                {
+                  icon: BookOpen,
+                  title: "6. Documentation & Handover",
+                  description:
+                    "Detailed documentation and smooth handover, ensuring seamless integration for our partners.",
+                },
+              ].map((service, index) => (
+                <Card key={index} className="p-6 text-left shadow-lg hover:shadow-xl transition-shadow duration-300">
+                  <CardHeader className="flex flex-row items-center justify-between pb-4">
+                    <service.icon className="h-10 w-10 text-blue-600" />
+                    <CardTitle className="text-xl font-semibold text-gray-800">{service.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-700">{service.description}</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         </section>
 
         {/* Why Partner with NNS Enterprise? */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-gray-100 dark:bg-gray-800">
-          <div className="container px-4 md:px-6">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-gray-900 dark:text-gray-50">
-              Why Partner with NNS Enterprise?
-            </h2>
+        <section className="py-16 md:py-24 bg-blue-600 text-white">
+          <div className="container mx-auto px-4 md:px-6 text-center">
+            <h2 className="text-4xl font-bold mb-4">Why Partner with NNS Enterprise?</h2>
+            <p className="text-lg max-w-3xl mx-auto mb-12 opacity-90">
+              We are committed to delivering excellence and fostering strong, reliable partnerships.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <Card className="p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader>
-                  <CardTitle className="text-2xl font-semibold text-blue-600 dark:text-blue-400">
-                    Reliable Partnership
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    We are a dependable subcontractor, committed to fulfilling our commitments and supporting your
-                    project goals with unwavering dedication.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader>
-                  <CardTitle className="text-2xl font-semibold text-blue-600 dark:text-blue-400">
-                    Efficiency & Speed
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Our streamlined processes and experienced teams ensure rapid deployment without compromising on
-                    quality or safety standards.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader>
-                  <CardTitle className="text-2xl font-semibold text-blue-600 dark:text-blue-400">
-                    Uncompromising Quality
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    We adhere to the highest industry standards, ensuring every FTTH line is established with precision
-                    and built to last.
-                  </p>
-                </CardContent>
-              </Card>
+              {[
+                {
+                  icon: Users,
+                  title: "Reliable Partnership",
+                  description:
+                    "We act as a seamless extension of your team, ensuring clear communication and collaborative success.",
+                },
+                {
+                  icon: Zap,
+                  title: "Efficiency & Speed",
+                  description:
+                    "Our streamlined processes and experienced teams ensure rapid and effective project completion.",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "Uncompromising Quality",
+                  description:
+                    "Adhering to the highest industry standards, we guarantee robust and future-proof FTTH networks.",
+                },
+              ].map((reason, index) => (
+                <Card
+                  key={index}
+                  className="p-6 bg-white text-gray-900 shadow-lg hover:shadow-xl transition-shadow duration-300"
+                >
+                  <CardHeader className="flex flex-col items-center pb-4">
+                    <reason.icon className="h-12 w-12 text-blue-600 mb-4" />
+                    <CardTitle className="text-xl font-semibold">{reason.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-700">{reason.description}</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         </section>
 
         {/* Our Future Vision Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-white dark:bg-gray-900">
-          <div className="container px-4 md:px-6 text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900 dark:text-gray-50">
-              Expanding Our Horizons
-            </h2>
-            <p className="text-lg md:text-xl max-w-3xl mx-auto mb-12 text-gray-600 dark:text-gray-400">
-              While currently focused on FTTH establishment, we are actively planning to broaden our service offerings
-              and become a comprehensive technical solutions provider.
+        <section id="vision" className="py-16 md:py-24 bg-white">
+          <div className="container mx-auto px-4 md:px-6 text-center">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">Our Future Vision: Expanding Horizons</h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto mb-12">
+              While FTTH establishment is our core, we are strategically expanding our service portfolio.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <Card className="p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
+              {[
+                {
+                  icon: Briefcase,
+                  title: "Repair & Maintenance Contracts",
+                  description:
+                    "Seeking long-term partnerships for comprehensive network upkeep and rapid incident response.",
+                },
+                {
+                  icon: Cable,
+                  title: "Network Optimization Services",
+                  description: "Offering advanced solutions for enhancing existing network performance and efficiency.",
+                },
+                {
+                  icon: Lightbulb,
+                  title: "Advanced Technical Services",
+                  description: "Venturing into specialized technical consulting and bespoke telecom solutions.",
+                },
+              ].map((vision, index) => (
+                <Card key={index} className="p-6 text-left shadow-lg hover:shadow-xl transition-shadow duration-300">
+                  <CardHeader className="flex flex-row items-center justify-between pb-4">
+                    <vision.icon className="h-10 w-10 text-blue-600" />
+                    <CardTitle className="text-xl font-semibold text-gray-800">{vision.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-700">{vision.description}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <div className="mt-12">
+              <Button
+                size="lg"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-lg px-8 py-3 rounded-full shadow-lg"
+                onClick={() => router.push("/contact")}
+              >
+                Discuss Partnership Opportunities <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* Call to Action for Public Content */}
+        <section className="py-16 md:py-24 bg-gray-50">
+          <div className="container mx-auto px-4 md:px-6 text-center">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">Explore More</h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto mb-12">
+              Stay updated with our latest job openings, industry articles, and expert insights.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <CardHeader>
-                  <CardTitle className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                    Repair & Maintenance Contracts
-                  </CardTitle>
+                  <Briefcase className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+                  <CardTitle className="text-2xl font-semibold text-gray-800">Careers</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Soon, we will offer robust repair and maintenance services to ensure the longevity and optimal
-                    performance of fiber networks.
-                  </p>
+                  <p className="text-gray-700 mb-4">Discover exciting opportunities to join our growing team.</p>
+                  <Link href="/job-listings" passHref>
+                    <Button
+                      variant="outline"
+                      className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 bg-transparent"
+                    >
+                      View Job Openings
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
-              <Card className="p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <CardHeader>
-                  <CardTitle className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                    Network Optimization
-                  </CardTitle>
+                  <BookOpen className="h-12 w-12 text-purple-600 mx-auto mb-4" />
+                  <CardTitle className="text-2xl font-semibold text-gray-800">Articles</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Future plans include advanced services for network analysis, optimization, and performance tuning.
-                  </p>
+                  <p className="text-gray-700 mb-4">Read our in-depth articles on telecom technology and trends.</p>
+                  <Link href="/articles" passHref>
+                    <Button
+                      variant="outline"
+                      className="w-full border-purple-600 text-purple-600 hover:bg-purple-50 bg-transparent"
+                    >
+                      Read Articles
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
-              <Card className="p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <CardHeader>
-                  <CardTitle className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                    Advanced Technical Services
-                  </CardTitle>
+                  <Lightbulb className="h-12 w-12 text-green-600 mx-auto mb-4" />
+                  <CardTitle className="text-2xl font-semibold text-gray-800">Insights</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    We aim to provide a wider variety of technical services, adapting to evolving industry needs and
-                    technologies.
-                  </p>
+                  <p className="text-gray-700 mb-4">Gain valuable insights from our expert blog posts.</p>
+                  <Link href="/insights" passHref>
+                    <Button
+                      variant="outline"
+                      className="w-full border-green-600 text-green-600 hover:bg-green-50 bg-transparent"
+                    >
+                      Explore Insights
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             </div>
@@ -252,25 +355,80 @@ export default async function LandingPage() {
         </section>
       </main>
 
-      <footer className="flex flex-col gap-2 sm:flex-row py-6 w-full shrink-0 items-center px-4 md:px-6 border-t bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300">
-        <p className="text-xs">&copy; 2024 NNS Enterprise. All rights reserved.</p>
-        <nav className="sm:ml-auto flex gap-4 sm:gap-6">
-          <Link href="/job-listings" className="text-xs hover:underline underline-offset-4" prefetch={false}>
-            Careers
-          </Link>
-          <Link href="/articles" className="text-xs hover:underline underline-offset-4" prefetch={false}>
-            Articles
-          </Link>
-          <Link href="/insights" className="text-xs hover:underline underline-offset-4" prefetch={false}>
-            Insights
-          </Link>
-          <Link href="#" className="text-xs hover:underline underline-offset-4" prefetch={false}>
-            Privacy
-          </Link>
-          <Link href="#" className="text-xs hover:underline underline-offset-4" prefetch={false}>
-            Terms
-          </Link>
-        </nav>
+      {/* Footer */}
+      <footer className="bg-gray-800 text-white py-12">
+        <div className="container mx-auto px-4 md:px-6 grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div>
+            <h3 className="text-xl font-bold mb-4">NNS Enterprise</h3>
+            <p className="text-gray-400 text-sm">
+              Your trusted partner in Fiber-to-the-Home (FTTH) infrastructure and beyond. Building the future of
+              connectivity.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="#services" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  Our Services
+                </Link>
+              </li>
+              <li>
+                <Link href="#vision" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  Future Vision
+                </Link>
+              </li>
+              <li>
+                <Link href="/job-listings" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  Careers
+                </Link>
+              </li>
+              <li>
+                <Link href="/articles" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  Articles
+                </Link>
+              </li>
+              <li>
+                <Link href="/insights" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  Insights
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
+            <p className="text-gray-400 text-sm">
+              123 Telecom Way, Fiber City, FC 12345
+              <br />
+              Email: info@nnsenterprise.com
+              <br />
+              Phone: +1 (555) 123-4567
+            </p>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Follow Us</h3>
+            <div className="flex space-x-4">
+              <Link href="#" className="text-gray-400 hover:text-white transition-colors">
+                {/* Placeholder for social media icons */}
+                <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    fillRule="evenodd"
+                    d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33V22H12c5.523 0 10-4.477 10-10Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </Link>
+              <Link href="#" className="text-gray-400 hover:text-white transition-colors">
+                <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8.29 20.251c-1.094.306-2.27.46-3.47.46-2.07 0-4.01-.79-5.48-2.26C-.01 17.25 0 15.25 0 13.18V12c0-1.09.2-2.15.58-3.15.38-1 .9-1.9 1.56-2.7.66-.8 1.4-1.4 2.26-1.9.86-.5 1.78-.8 2.76-.9.98-.1 1.96-.1 2.94 0 .98.1 1.96.3 2.94.6.98.3 1.9.7 2.76 1.2.86.5 1.6 1.1 2.26 1.9.66.8 1.18 1.7 1.56 2.7.38 1 .58 2.06.58 3.15v.82c0 2.07-.79 4.01-2.26 5.48-1.47 1.47-3.41 2.26-5.48 2.26-1.2 0-2.37-.15-3.47-.46zM12 2.5c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z" />
+                </svg>
+              </Link>
+            </div>
+          </div>
+        </div>
+        <div className="container mx-auto px-4 md:px-6 text-center text-gray-500 text-sm mt-8 border-t border-gray-700 pt-8">
+          &copy; {new Date().getFullYear()} NNS Enterprise. All rights reserved.
+        </div>
       </footer>
     </div>
   )

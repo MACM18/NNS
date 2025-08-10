@@ -1,6 +1,24 @@
-// This file was left out for brevity. Assume it is correct and does not need any modifications.
-// However, for the current context, ensure JobVacancy type includes 'created_at'
-// Example:
+export interface Post {
+  id: string
+  title: string
+  content: string
+  author: string
+  category: string
+  created_at: string
+  image_url?: string
+}
+
+export interface Blog {
+  id: string
+  title: string
+  content: string
+  author: string
+  tags: string[]
+  created_at: string
+  image_url?: string
+  reading_time_minutes: number
+}
+
 export interface JobVacancy {
   id: string
   title: string
@@ -8,26 +26,7 @@ export interface JobVacancy {
   location: string
   salary_range: string
   employment_type: string
-  department?: string
-  status: "active" | "inactive"
-  created_at: string // Added/Ensured this field
-  end_date: string
-}
-
-export interface Post {
-  id: string
-  title: string
-  content: string
-  image_url?: string
-  created_at: string
-  author?: string
-}
-
-export interface Blog {
-  id: string
-  title: string
-  content: string
-  image_url?: string
-  created_at: string
-  reading_time_minutes?: number
+  created_at: string // Use created_at for consistency with Supabase
+  responsibilities: string[]
+  requirements: string[]
 }

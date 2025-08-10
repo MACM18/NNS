@@ -1,489 +1,244 @@
 "use client"
 
-import type React from "react"
+import { Badge } from "@/components/ui/badge"
 
-import {
-  Bell,
-  Plus,
-  Search,
-  Settings,
-  Check,
-  Trash2,
-  X,
-  Filter,
-  Phone,
-  Package,
-  FileText,
-  CheckCircle,
-} from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
+import { Search, Bell, User, Settings, LogOut, ChevronRight, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Separator } from "@/components/ui/separator"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { useNotification } from "@/contexts/notification-context"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useState, useEffect, useRef } from "react"
-import { AddTelephoneLineModal } from "../modals/add-telephone-line-modal"
-import { formatDistanceToNow } from "date-fns"
-import { useRouter } from "next/navigation"
-import { cn } from "@/lib/utils"
-import { getSupabaseClient } from "@/lib/supabase"
+import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/hooks/use-toast"
 
-interface SearchResult {
-  id: string
-  type: "line" | "task" | "invoice" | "inventory"
-  title: string
-  subtitle: string
-  data: any
-}
+// Mock search data - replace with actual data fetching from Supabase
+const mockSearchResults = [
+  {
+    id: "line-1",
+    type: "Line",
+    title: "Fiber Line 101",
+    description: "Customer: John Doe, Location: Colombo",
+    url: "/lines/1",
+  },
+  {
+    id: "task-1",
+    type: "Task",
+    title: "Install new ONT",
+    description: "Assigned to: Technician A, Status: Pending",
+    url: "/tasks/1",
+  },
+  {
+    id: "user-1",
+    type: "User",
+    title: "Jane Smith",
+    description: "Role: Admin, Email: jane@example.com",
+    url: "/users/1",
+  },
+  {
+    id: "invoice-1",
+    type: "Invoice",
+    title: "Invoice #2023-001",
+    description: "Amount: LKR 15,000, Status: Paid",
+    url: "/invoices/1",
+  },
+  {
+    id: "line-2",
+    type: "Line",
+    title: "Copper Line 205",
+    description: "Customer: Alice Brown, Location: Kandy",
+    url: "/lines/2",
+  },
+  {
+    id: "blog-1",
+    type: "Blog",
+    title: "Future of FTTH",
+    description: "Author: NNS Insights Team, Date: 2023-10-26",
+    url: "/insights/1",
+  },
+  {
+    id: "job-1",
+    type: "Job",
+    title: "Field Technician",
+    description: "Location: Galle, Type: Full-time",
+    url: "/job-listings/1",
+  },
+]
 
 export function Header() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, isLoading } = useNotification()
-  const [openAddTelephoneLineModal, setOpenAddTelephoneLineModal] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [showSearchResults, setShowSearchResults] = useState(false)
-  const searchRef = useRef<HTMLDivElement>(null)
+  const { user, profile, signOut, loading: authLoading } = useAuth()
   const router = useRouter()
-  const supabase = getSupabaseClient()
-  const { user } = useAuth()
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filteredResults, setFilteredResults] = useState<typeof mockSearchResults>([])
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Close search results when clicking outside
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowSearchResults(false)
-      }
+    if (searchTerm.length > 1) {
+      const results = mockSearchResults.filter(
+        (item) =>
+          item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.description.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+      setFilteredResults(results)
+      setIsSearchOpen(true)
+    } else {
+      setFilteredResults([])
+      setIsSearchOpen(false)
     }
+  }, [searchTerm])
 
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [])
-
-  // Debounced quick search
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (searchQuery.length > 2) {
-        // Only search if query is at least 3 characters
-        performQuickSearch(searchQuery)
-      } else {
-        setSearchResults([])
-        setIsSearching(false)
-        setShowSearchResults(false)
-      }
-    }, 300) // 300ms debounce
-
-    return () => clearTimeout(delayDebounceFn)
-  }, [searchQuery])
-
-  const performQuickSearch = async (query: string) => {
-    if (!query.trim() || !user) {
-      setSearchResults([])
-      setShowSearchResults(false)
-      return
-    }
-
-    setIsSearching(true)
-    setShowSearchResults(true)
-
+  const handleSignOut = async () => {
     try {
-      const results: SearchResult[] = []
-
-      // Search in line_details
-      const { data: lines } = await supabase
-        .from("line_details")
-        .select("id, telephone_no, name, address")
-        .or(`telephone_no.ilike.%${query}%,name.ilike.%${query}%,address.ilike.%${query}%`)
-        .limit(3) // Limit quick results
-
-      if (lines) {
-        lines.forEach((line) => {
-          results.push({
-            id: line.id,
-            type: "line",
-            title: line.telephone_no,
-            subtitle: `${line.name} - ${line.address}`,
-            data: line,
-          })
-        })
-      }
-
-      // Search in tasks
-      const { data: tasks } = await supabase
-        .from("tasks")
-        .select("id, title, telephone_no, address, status")
-        .or(`title.ilike.%${query}%,description.ilike.%${query}%,telephone_no.ilike.%${query}%`)
-        .limit(3)
-
-      if (tasks) {
-        tasks.forEach((task) => {
-          results.push({
-            id: task.id,
-            type: "task",
-            title: task.title,
-            subtitle: `${task.telephone_no || "N/A"} - ${task.address}`,
-            data: task,
-          })
-        })
-      }
-
-      // Search in generated_invoices
-      const { data: invoices } = await supabase
-        .from("generated_invoices")
-        .select("id, invoice_number, customer_name, total_amount")
-        .ilike("invoice_number", `%${query}%`)
-        .limit(3)
-
-      if (invoices) {
-        invoices.forEach((invoice) => {
-          results.push({
-            id: invoice.id,
-            type: "invoice",
-            title: invoice.invoice_number,
-            subtitle: `${invoice.customer_name} - LKR ${invoice.total_amount.toLocaleString()}`,
-            data: invoice,
-          })
-        })
-      }
-
-      // Search in inventory_items
-      const { data: inventory } = await supabase
-        .from("inventory_items")
-        .select("id, name, current_stock, unit")
-        .ilike("name", `%${query}%`)
-        .limit(3)
-
-      if (inventory) {
-        inventory.forEach((item) => {
-          results.push({
-            id: item.id,
-            type: "inventory",
-            title: item.name,
-            subtitle: `Stock: ${item.current_stock} ${item.unit}`,
-            data: item,
-          })
-        })
-      }
-
-      setSearchResults(results)
+      await signOut()
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out.",
+      })
+      router.push("/") // Redirect to landing page after logout
     } catch (error) {
-      console.error("Quick search error:", error)
-      setSearchResults([])
-    } finally {
-      setIsSearching(false)
+      console.error("Error signing out:", error)
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      // Navigate to advanced search with query
-      router.push(`/search?q=${encodeURIComponent(searchQuery)}`)
-      setShowSearchResults(false)
-      setSearchQuery("")
-    }
+  const handleResultClick = (url: string) => {
+    router.push(url)
+    setSearchTerm("")
+    setIsSearchOpen(false)
+    searchInputRef.current?.blur() // Close keyboard on mobile
   }
 
-  const handleSearchResultClick = (result: SearchResult) => {
-    setShowSearchResults(false)
-    setSearchQuery("")
-    router.push(`/search/details/${result.type}/${result.id}`)
-  }
-
-  const clearSearch = () => {
-    setSearchQuery("")
-    setSearchResults([])
-    setShowSearchResults(false)
-  }
-
-  const openAdvancedSearch = () => {
+  const handleAdvancedSearch = () => {
     router.push("/search")
-    setShowSearchResults(false)
-  }
-
-  const getResultIcon = (type: string) => {
-    switch (type) {
-      case "line":
-        return <Phone className="h-4 w-4" />
-      case "task":
-        return <CheckCircle className="h-4 w-4" />
-      case "invoice":
-        return <FileText className="h-4 w-4" />
-      case "inventory":
-        return <Package className="h-4 w-4" />
-      default:
-        return <Search className="h-4 w-4" />
-    }
-  }
-
-  const getResultBadgeColor = (type: string) => {
-    switch (type) {
-      case "line":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-      case "task":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-      case "invoice":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
-      case "inventory":
-        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
-      default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
-    }
-  }
-
-  const handleNotificationClick = async (notification: any) => {
-    if (!notification.is_read) {
-      await markAsRead(notification.id)
-    }
-    if (notification.action_url) {
-      router.push(notification.action_url)
-    }
-  }
-
-  const getNotificationIcon = (category: string) => {
-    switch (category) {
-      case "line_added":
-        return "📞"
-      case "task_completed":
-        return "✅"
-      case "invoice_generated":
-        return "💰"
-      case "report_ready":
-        return "📊"
-      case "inventory_low":
-        return "⚠️"
-      case "system":
-        return "🔧"
-      default:
-        return "📢"
-    }
-  }
-
-  const getNotificationColor = (type: string, isRead: boolean) => {
-    if (isRead) return "text-muted-foreground"
-
-    switch (type) {
-      case "success":
-        return "text-green-600"
-      case "warning":
-        return "text-yellow-600"
-      case "error":
-        return "text-red-600"
-      default:
-        return "text-blue-600"
-    }
+    setSearchTerm("")
+    setIsSearchOpen(false)
+    searchInputRef.current?.blur()
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-      <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mr-2 h-4" />
+    <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-white px-4 md:px-6 dark:bg-gray-950">
+      <div className="relative flex-1 max-w-md mx-auto">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400" />
+        <Input
+          type="search"
+          placeholder="Quick search..."
+          className="w-full rounded-lg bg-gray-100 pl-9 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          onFocus={() => searchTerm.length > 1 && setIsSearchOpen(true)}
+          ref={searchInputRef}
+        />
+        {searchTerm && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-500 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700"
+            onClick={() => {
+              setSearchTerm("")
+              setIsSearchOpen(false)
+              searchInputRef.current?.focus()
+            }}
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Clear search</span>
+          </Button>
+        )}
 
-      {/* Search */}
-      <div className="flex-1 max-w-md relative" ref={searchRef}>
-        <form onSubmit={handleSearchSubmit} className="relative">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search lines, tasks, invoices..."
-            className="pl-8 pr-24"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => searchQuery && setShowSearchResults(true)}
-          />
-          <div className="absolute right-1 top-1 flex gap-1">
-            {searchQuery && (
-              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={clearSearch}>
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={openAdvancedSearch}>
-              <Filter className="h-4 w-4" />
-            </Button>
-            <Button type="submit" size="sm" className="h-8">
-              Search
-            </Button>
-          </div>
-        </form>
-
-        {/* Search Results Dropdown */}
-        {showSearchResults && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-lg z-50 max-h-96 overflow-hidden">
-            {isSearching ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">Searching...</div>
-            ) : searchResults.length > 0 ? (
-              <ScrollArea className="max-h-96">
+        {isSearchOpen && filteredResults.length > 0 && (
+          <Popover open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+            <PopoverTrigger asChild>
+              {/* This invisible trigger keeps the popover open when input is focused */}
+              <div className="absolute inset-0" />
+            </PopoverTrigger>
+            <PopoverContent className="w-[calc(100%-2rem)] md:w-[448px] p-0 mt-2 max-h-[400px] overflow-y-auto">
+              <ScrollArea className="h-full">
                 <div className="p-2">
-                  <div className="text-xs font-medium text-muted-foreground mb-2 px-2 flex items-center justify-between">
-                    <span>Quick Results ({searchResults.length})</span>
-                    <Button variant="ghost" size="sm" className="h-6 px-2" onClick={openAdvancedSearch}>
-                      <Filter className="h-3 w-3 mr-1" />
-                      Advanced
-                    </Button>
-                  </div>
-                  {searchResults.map((result) => (
+                  {filteredResults.map((item) => (
                     <div
-                      key={`${result.type}-${result.id}`}
-                      className="flex items-center gap-3 p-2 hover:bg-muted rounded-md cursor-pointer"
-                      onClick={() => handleSearchResultClick(result)}
+                      key={item.id}
+                      className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors"
+                      onClick={() => handleResultClick(item.url)}
                     >
-                      <div className="flex-shrink-0">{getResultIcon(result.type)}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm truncate">{result.title}</span>
-                          <Badge className={cn("text-xs", getResultBadgeColor(result.type))}>{result.type}</Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">{result.subtitle}</p>
+                      <div>
+                        <p className="font-medium text-sm">{item.title}</p>
+                        <p className="text-xs text-muted-foreground">{item.description}</p>
                       </div>
+                      <Badge variant="secondary" className="ml-2">
+                        {item.type}
+                      </Badge>
                     </div>
                   ))}
-                  <div className="border-t mt-2 pt-2">
-                    <Button variant="ghost" size="sm" className="w-full text-xs" onClick={openAdvancedSearch}>
-                      <Filter className="h-3 w-3 mr-1" />
-                      View all results with advanced filters
-                    </Button>
-                  </div>
+                  <Separator className="my-2" />
+                  <Button variant="ghost" className="w-full justify-start text-blue-600" onClick={handleAdvancedSearch}>
+                    Advanced Search <ChevronRight className="ml-auto h-4 w-4" />
+                  </Button>
                 </div>
               </ScrollArea>
-            ) : searchQuery ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                <div>No quick results found for "{searchQuery}"</div>
-                <Button variant="ghost" size="sm" className="mt-2 text-xs" onClick={openAdvancedSearch}>
-                  <Filter className="h-3 w-3 mr-1" />
-                  Try advanced search
-                </Button>
-              </div>
-            ) : null}
-          </div>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
 
-      <div className="flex items-center gap-2">
-        {/* Add Line Details Button */}
-        <Button onClick={() => setOpenAddTelephoneLineModal(true)} size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Line
+      <div className="ml-auto flex items-center gap-4">
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="h-5 w-5" />
+          <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+            3
+          </span>
+          <span className="sr-only">Notifications</span>
         </Button>
-
-        {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="relative">
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <Badge
-                  variant="destructive"
-                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center"
-                >
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </Badge>
-              )}
+            <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+              <Avatar className="h-9 w-9">
+                <AvatarImage src={profile?.avatar_url || "/placeholder-user.jpg"} alt="User Avatar" />
+                <AvatarFallback>
+                  {profile?.full_name ? profile.full_name[0] : user?.email ? user.email[0] : "U"}
+                </AvatarFallback>
+              </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-96">
-            <DropdownMenuLabel className="flex items-center justify-between">
-              <span>Notifications</span>
-              <div className="flex gap-1">
-                {unreadCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={markAllAsRead} className="h-6 px-2">
-                    <Check className="h-3 w-3 mr-1" />
-                    Mark all read
-                  </Button>
-                )}
+          <DropdownMenuContent className="w-56" align="end" forceMount>
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">{profile?.full_name || user?.email || "Guest User"}</p>
+                <p className="text-xs leading-none text-muted-foreground">{profile?.email || user?.email}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-
-            {isLoading ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">Loading notifications...</div>
-            ) : notifications.length === 0 ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">No notifications yet</div>
-            ) : (
-              <ScrollArea className="h-96">
-                {notifications.slice(0, 10).map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={cn(
-                      "flex items-start gap-3 p-3 hover:bg-muted/50 cursor-pointer border-b border-border/50 last:border-0",
-                      !notification.is_read && "bg-muted/30",
-                    )}
-                    onClick={() => handleNotificationClick(notification)}
-                  >
-                    <div className="text-lg mt-0.5">{getNotificationIcon(notification.category)}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p
-                            className={cn(
-                              "font-medium text-sm leading-tight",
-                              getNotificationColor(notification.type, notification.is_read),
-                            )}
-                          >
-                            {notification.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{notification.message}</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {!notification.is_read && <div className="w-2 h-2 bg-blue-500 rounded-full" />}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              deleteNotification(notification.id)
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {notifications.length > 10 && (
-                  <div className="p-3 text-center">
-                    <Button variant="ghost" size="sm" onClick={() => router.push("/notifications")}>
-                      View all notifications
-                    </Button>
-                  </div>
-                )}
-              </ScrollArea>
-            )}
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => router.push("/profile")}>
+                <User className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/settings")}>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleSignOut} disabled={authLoading}>
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Log out</span>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* Settings */}
-        <Button variant="ghost" size="sm" onClick={() => router.push("/settings")}>
-          <Settings className="h-4 w-4" />
-        </Button>
-
-        {/* Theme Toggle */}
-        <ThemeToggle />
-
-        {openAddTelephoneLineModal && (
-          <AddTelephoneLineModal
-            open={openAddTelephoneLineModal}
-            onOpenChange={() => setOpenAddTelephoneLineModal(false)}
-            onSuccess={() => setOpenAddTelephoneLineModal(false)}
-          />
-        )}
       </div>
     </header>
   )

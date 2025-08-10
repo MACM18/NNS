@@ -7,7 +7,7 @@ import { Briefcase, FileText, Users, Phone, Package, BookOpen } from "lucide-rea
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { AppSidebar } from "@/components/layout/app-sidebar"
+import AppSidebar from "@/components/layout/app-sidebar" // Corrected import
 import { Header } from "@/components/layout/header"
 import DashboardLayout from "@/components/layout/dashboard-layout"
 import { supabase } from "@/lib/supabase"
