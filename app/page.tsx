@@ -5,127 +5,28 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import {
   ArrowRight,
-  Users,
-  Target,
   Award,
   Cable,
-  BarChart3,
-  Shield,
-  Clock,
   CheckCircle,
-  Star,
   Building2,
+  Lightbulb,
+  Handshake,
+  Zap,
+  Settings,
+  FileText,
+  HardHat,
+  Wrench,
+  Network,
+  TrendingUp,
+  PhoneCall,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { supabase } from "@/lib/supabase"
-import { useEffect, useState } from "react"
-
-// Define BlogPost type
-type BlogPost = {
-  id: string
-  title: string
-  slug: string
-  excerpt: string
-  published_at: string
-  [key: string]: any
-}
-
-// Mock statistics for demonstration
-const mockStats = {
-  totalLines: 15420,
-  activeTasks: 89,
-  completedProjects: 1250,
-  customerSatisfaction: 98.5,
-  monthlyGrowth: 12.3,
-  teamMembers: 45,
-}
-
-// Mock testimonials
-const testimonials = [
-  {
-    id: 1,
-    name: "Sarah Johnson",
-    role: "Operations Manager",
-    company: "TechCorp Solutions",
-    content:
-      "NNS Enterprise has transformed our telecom infrastructure management. Their dashboard provides real-time insights that have improved our efficiency by 40%.",
-    rating: 5,
-  },
-  {
-    id: 2,
-    name: "Michael Chen",
-    role: "IT Director",
-    company: "Global Communications",
-    content:
-      "The comprehensive reporting and task management features have streamlined our operations significantly. Highly recommended for any telecom business.",
-    rating: 5,
-  },
-  {
-    id: 3,
-    name: "Emily Rodriguez",
-    role: "Project Coordinator",
-    company: "ConnectPlus",
-    content:
-      "Outstanding support and intuitive interface. The inventory management system alone has saved us countless hours of manual work.",
-    rating: 5,
-  },
-]
-
-// Mock recent achievements
-const achievements = [
-  {
-    icon: Award,
-    title: "Industry Excellence Award 2024",
-    description: "Recognized for innovation in telecom management solutions",
-  },
-  {
-    icon: Users,
-    title: "500+ Happy Clients",
-    description: "Serving businesses across multiple industries worldwide",
-  },
-  {
-    icon: CheckCircle,
-    title: "99.9% Uptime",
-    description: "Reliable service with minimal downtime guarantee",
-  },
-  {
-    icon: Shield,
-    title: "ISO 27001 Certified",
-    description: "Highest standards of information security management",
-  },
-]
-
-async function getRecentPosts(): Promise<BlogPost[]> {
-  try {
-    const { data, error } = await supabase
-      .from("blogs")
-      .select("*")
-      .eq("status", "active")
-      .order("published_at", { ascending: false })
-      .limit(3)
-
-    if (error) {
-      console.error("Error fetching blog posts:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error fetching blog posts:", error)
-    return []
-  }
-}
 
 export default function LandingPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const [recentPosts, setRecentPosts] = useState<BlogPost[]>([])
-
-  useEffect(() => {
-    getRecentPosts().then(setRecentPosts)
-  }, [])
 
   const handleAuthAction = () => {
     if (user) {
@@ -148,28 +49,28 @@ export default function LandingPage() {
           </div>
           <div className="hidden lg:flex lg:gap-x-8">
             <Link
-              href="#features"
+              href="#services"
               className="text-sm font-semibold leading-6 text-foreground hover:text-primary transition-colors"
             >
-              Features
+              Our Services
             </Link>
             <Link
-              href="#testimonials"
+              href="#why-partner"
               className="text-sm font-semibold leading-6 text-foreground hover:text-primary transition-colors"
             >
-              Testimonials
+              Why Partner
             </Link>
             <Link
-              href="#blog"
+              href="#future-vision"
               className="text-sm font-semibold leading-6 text-foreground hover:text-primary transition-colors"
             >
-              Blog
+              Future Vision
             </Link>
             <Link
               href="/welcome/about"
               className="text-sm font-semibold leading-6 text-foreground hover:text-primary transition-colors"
             >
-              About
+              About Us
             </Link>
             <Link
               href="/welcome/contact"
@@ -201,70 +102,41 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <Badge variant="secondary" className="mb-4">
-              🚀 New: Advanced Analytics Dashboard Available
+              FTTH Infrastructure Specialists
             </Badge>
             <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
-              Transform Your{" "}
+              Your Trusted Partner for{" "}
               <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                Telecom Operations
+                Fiber Optic Network Establishment
               </span>
             </h1>
             <p className="mt-6 text-lg leading-8 text-muted-foreground">
-              Streamline your telecommunications infrastructure with our comprehensive management platform. From line
-              tracking to inventory management, we provide the tools you need to optimize operations and drive growth.
+              As a dedicated subcontractor, NNS Enterprise specializes in the precise and efficient deployment of Fiber
+              to the Home (FTTH) infrastructure, ensuring seamless connectivity for your projects.
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
               <Button size="lg" className="text-base" onClick={handleAuthAction}>
-                {user ? "Access Dashboard" : "Get Started"}
+                {user ? "Access Dashboard" : "Explore Our Services"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
               <Button variant="outline" size="lg" asChild className="text-base bg-transparent">
-                <Link href="/welcome/contact">Schedule Demo</Link>
+                <Link href="/welcome/contact">Request a Proposal</Link>
               </Button>
-            </div>
-          </div>
-
-          {/* Stats Section */}
-          <div className="mx-auto mt-16 max-w-5xl">
-            <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">{mockStats.totalLines.toLocaleString()}</div>
-                <div className="text-sm text-muted-foreground">Lines Managed</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">{mockStats.activeTasks}</div>
-                <div className="text-sm text-muted-foreground">Active Tasks</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">{mockStats.completedProjects.toLocaleString()}</div>
-                <div className="text-sm text-muted-foreground">Projects Completed</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">{mockStats.customerSatisfaction}%</div>
-                <div className="text-sm text-muted-foreground">Satisfaction Rate</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">+{mockStats.monthlyGrowth}%</div>
-                <div className="text-sm text-muted-foreground">Monthly Growth</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">{mockStats.teamMembers}</div>
-                <div className="text-sm text-muted-foreground">Team Members</div>
-              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-24 bg-muted/30">
+      {/* Our Services: FTTH Establishment Process */}
+      <section id="services" className="py-24 bg-muted/30">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Comprehensive Telecom Management
+              Our FTTH Establishment Process
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Everything you need to manage your telecommunications infrastructure efficiently and effectively.
+              We follow a meticulous approach to ensure every fiber optic deployment is executed with precision and
+              adherence to the highest industry standards.
             </p>
           </div>
           <div className="mx-auto mt-16 max-w-5xl">
@@ -272,14 +144,41 @@ export default function LandingPage() {
               <Card className="text-center hover:shadow-lg transition-shadow duration-300">
                 <CardHeader>
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                    <Lightbulb className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">1. Planning & Design</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Detailed site surveys, network architecture planning, and route design for optimal fiber deployment.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                    <HardHat className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">2. Civil Works & Ducting</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Efficient trenching, duct laying, and infrastructure preparation with minimal disruption.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
                     <Cable className="h-6 w-6 text-primary-foreground" />
                   </div>
-                  <CardTitle className="text-lg">Line Management</CardTitle>
+                  <CardTitle className="text-lg">3. Fiber Optic Cable Laying</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <CardDescription>
-                    Track and manage telephone lines with detailed information, status monitoring, and automated
-                    reporting.
+                    Careful installation of fiber optic cables, ensuring protection and longevity.
                   </CardDescription>
                 </CardContent>
               </Card>
@@ -287,13 +186,13 @@ export default function LandingPage() {
               <Card className="text-center hover:shadow-lg transition-shadow duration-300">
                 <CardHeader>
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-                    <BarChart3 className="h-6 w-6 text-primary-foreground" />
+                    <Zap className="h-6 w-6 text-primary-foreground" />
                   </div>
-                  <CardTitle className="text-lg">Analytics Dashboard</CardTitle>
+                  <CardTitle className="text-lg">4. Splicing & Termination</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <CardDescription>
-                    Real-time insights and comprehensive analytics to make data-driven decisions for your business.
+                    Expert fiber splicing and precise termination for robust and high-performance connections.
                   </CardDescription>
                 </CardContent>
               </Card>
@@ -301,13 +200,13 @@ export default function LandingPage() {
               <Card className="text-center hover:shadow-lg transition-shadow duration-300">
                 <CardHeader>
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-                    <Users className="h-6 w-6 text-primary-foreground" />
+                    <CheckCircle className="h-6 w-6 text-primary-foreground" />
                   </div>
-                  <CardTitle className="text-lg">Task Management</CardTitle>
+                  <CardTitle className="text-lg">5. Testing & Commissioning</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <CardDescription>
-                    Assign, track, and manage tasks with automated workflows and progress monitoring.
+                    Rigorous testing to verify network integrity, performance, and compliance with specifications.
                   </CardDescription>
                 </CardContent>
               </Card>
@@ -315,41 +214,13 @@ export default function LandingPage() {
               <Card className="text-center hover:shadow-lg transition-shadow duration-300">
                 <CardHeader>
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-                    <Target className="h-6 w-6 text-primary-foreground" />
+                    <FileText className="h-6 w-6 text-primary-foreground" />
                   </div>
-                  <CardTitle className="text-lg">Inventory Control</CardTitle>
+                  <CardTitle className="text-lg">6. Documentation & Handover</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <CardDescription>
-                    Comprehensive inventory management with automated tracking, alerts, and optimization suggestions.
-                  </CardDescription>
-                </CardContent>
-              </Card>
-
-              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
-                <CardHeader>
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-                    <Clock className="h-6 w-6 text-primary-foreground" />
-                  </div>
-                  <CardTitle className="text-lg">Real-time Monitoring</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>
-                    24/7 monitoring with instant alerts and notifications for critical system events.
-                  </CardDescription>
-                </CardContent>
-              </Card>
-
-              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
-                <CardHeader>
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-                    <Award className="h-6 w-6 text-primary-foreground" />
-                  </div>
-                  <CardTitle className="text-lg">Advanced Reporting</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>
-                    Generate detailed reports with customizable templates and automated delivery options.
+                    Comprehensive documentation and smooth handover, ensuring clarity for future maintenance.
                   </CardDescription>
                 </CardContent>
               </Card>
@@ -358,130 +229,132 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Achievements Section */}
-      <section className="py-24">
+      {/* Why Partner With Us Section */}
+      <section id="why-partner" className="py-24">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Trusted by Industry Leaders
+              Why Partner with NNS Enterprise?
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Our commitment to excellence has earned us recognition and trust from businesses worldwide.
+            <p className="mt-4 text-lg leading-8 text-muted-foreground">
+              We are more than just a subcontractor; we are an extension of your team, committed to your project's
+              success.
             </p>
           </div>
           <div className="mx-auto mt-16 max-w-5xl">
-            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
-              {achievements.map((achievement, index) => (
-                <Card key={index} className="text-center hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader>
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
-                      <achievement.icon className="h-6 w-6 text-secondary-foreground" />
-                    </div>
-                    <CardTitle className="text-lg">{achievement.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <CardDescription>{achievement.description}</CardDescription>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              <Card className="hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+                    <Handshake className="h-6 w-6 text-secondary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">Reliable Partnership</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    We integrate seamlessly with your operations, providing dependable support and consistent
+                    communication.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+                    <TrendingUp className="h-6 w-6 text-secondary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">Efficiency & Speed</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Our streamlined processes and experienced teams ensure rapid deployment without compromising
+                    quality.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+                    <Award className="h-6 w-6 text-secondary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">Uncompromising Quality</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Adherence to international standards and rigorous testing guarantee robust and future-proof fiber
+                    networks.
+                  </CardDescription>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section id="testimonials" className="py-24 bg-muted/30">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">What Our Clients Say</h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Don't just take our word for it. Here's what industry professionals say about our platform.
+      {/* Our Future Vision Section */}
+      <section
+        id="future-vision"
+        className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-24 sm:py-32"
+      >
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="mx-auto max-w-3xl text-center">
+            <Badge variant="secondary" className="mb-4">
+              Expanding Our Horizons
+            </Badge>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Beyond Establishment: Our Vision for Comprehensive Telecom Services
+            </h2>
+            <p className="mt-6 text-lg leading-8 text-muted-foreground">
+              While FTTH establishment is our core, we are actively expanding our capabilities to offer a wider array of
+              technical services, including repair, maintenance, and advanced network solutions.
             </p>
-          </div>
-          <div className="mx-auto mt-16 max-w-5xl">
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-              {testimonials.map((testimonial) => (
-                <Card key={testimonial.id} className="hover:shadow-lg transition-shadow duration-300">
+            <div className="mx-auto mt-16 max-w-5xl">
+              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                <Card className="text-center hover:shadow-lg transition-shadow duration-300">
                   <CardHeader>
-                    <div className="flex items-center space-x-1">
-                      {[...Array(testimonial.rating)].map((_, i) => (
-                        <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      ))}
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                      <Wrench className="h-6 w-6 text-primary-foreground" />
                     </div>
-                    <CardTitle className="text-lg">{testimonial.name}</CardTitle>
+                    <CardTitle className="text-lg">Repair & Maintenance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
                     <CardDescription>
-                      {testimonial.role} at {testimonial.company}
+                      Proactive and reactive services to ensure the continuous optimal performance of fiber networks.
                     </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground italic">"{testimonial.content}"</p>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Recent Updates Section */}
-      <section id="blog" className="py-24">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Latest Updates & Insights</h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Stay informed with our latest insights, industry news, and platform updates.
-            </p>
-          </div>
-
-          {recentPosts.length > 0 ? (
-            <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-8 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-              {recentPosts.map((post) => (
-                <Card key={post.id} className="hover:shadow-lg transition-all duration-300 group">
+                <Card className="text-center hover:shadow-lg transition-shadow duration-300">
                   <CardHeader>
-                    <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                      <time dateTime={post.published_at}>
-                        {new Date(post.published_at).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </time>
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                      <Network className="h-6 w-6 text-primary-foreground" />
                     </div>
-                    <CardTitle className="group-hover:text-primary transition-colors">
-                      <Link href={`/welcome/blog/${post.slug}`}>{post.title}</Link>
-                    </CardTitle>
+                    <CardTitle className="text-lg">Network Optimization</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <CardDescription className="line-clamp-3">{post.excerpt}</CardDescription>
-                    <div className="mt-4">
-                      <Link
-                        href={`/welcome/blog/${post.slug}`}
-                        className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors inline-flex items-center"
-                      >
-                        Read more
-                        <ArrowRight className="ml-1 h-3 w-3" />
-                      </Link>
-                    </div>
+                    <CardDescription>
+                      Enhancing existing infrastructure for improved speed, reliability, and future scalability.
+                    </CardDescription>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="mx-auto mt-16 text-center">
-              <p className="text-muted-foreground">No recent posts available.</p>
-              <Button asChild className="mt-4">
-                <Link href="/welcome/blog">View All Posts</Link>
-              </Button>
-            </div>
-          )}
 
-          <div className="mt-12 text-center">
-            <Button asChild variant="outline">
-              <Link href="/welcome/blog">
-                View All Posts
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+                <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                  <CardHeader>
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                      <Settings className="h-6 w-6 text-primary-foreground" />
+                    </div>
+                    <CardTitle className="text-lg">Advanced Technical Services</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Specialized technical consulting and custom solutions for complex telecom challenges.
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -491,14 +364,14 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl">
-              Ready to Transform Your Operations?
+              Ready to Partner for Seamless Connectivity?
             </h2>
             <p className="mt-4 text-lg text-primary-foreground/80">
-              Join thousands of businesses that trust NNS Enterprise for their telecom management needs.
+              Let's discuss how NNS Enterprise can support your next fiber optic project or future technical needs.
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
               <Button size="lg" variant="secondary" onClick={handleAuthAction}>
-                {user ? "Go to Dashboard" : "Start Free Trial"}
+                {user ? "Go to Dashboard" : "Request a Proposal"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
               <Button
@@ -507,7 +380,10 @@ export default function LandingPage() {
                 asChild
                 className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary bg-transparent"
               >
-                <Link href="/welcome/contact">Contact Sales</Link>
+                <Link href="/welcome/contact">
+                  <PhoneCall className="mr-2 h-4 w-4" />
+                  Contact Sales
+                </Link>
               </Button>
             </div>
           </div>
@@ -524,40 +400,45 @@ export default function LandingPage() {
                 <span className="text-lg font-bold">NNS Enterprise</span>
               </div>
               <p className="mt-4 text-sm text-muted-foreground">
-                Leading telecommunications management solutions for modern businesses.
+                Specialized in FTTH establishment and expanding into comprehensive telecom services.
               </p>
             </div>
             <div>
-              <h3 className="text-sm font-semibold">Product</h3>
+              <h3 className="text-sm font-semibold">Company</h3>
               <ul className="mt-4 space-y-2">
                 <li>
-                  <Link href="#features" className="text-sm text-muted-foreground hover:text-foreground">
-                    Features
+                  <Link href="#services" className="text-sm text-muted-foreground hover:text-foreground">
+                    Our Services
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#why-partner" className="text-sm text-muted-foreground hover:text-foreground">
+                    Why Partner
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#future-vision" className="text-sm text-muted-foreground hover:text-foreground">
+                    Future Vision
                   </Link>
                 </li>
                 <li>
                   <Link href="/welcome/about" className="text-sm text-muted-foreground hover:text-foreground">
-                    About
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/welcome/contact" className="text-sm text-muted-foreground hover:text-foreground">
-                    Contact
+                    About Us
                   </Link>
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold">Resources</h3>
+              <h3 className="text-sm font-semibold">Support</h3>
               <ul className="mt-4 space-y-2">
                 <li>
-                  <Link href="/welcome/blog" className="text-sm text-muted-foreground hover:text-foreground">
-                    Blog
+                  <Link href="/welcome/contact" className="text-sm text-muted-foreground hover:text-foreground">
+                    Contact Us
                   </Link>
                 </li>
                 <li>
-                  <Link href="/welcome/careers" className="text-sm text-muted-foreground hover:text-foreground">
-                    Careers
+                  <Link href="#" className="text-sm text-muted-foreground hover:text-foreground">
+                    FAQs
                   </Link>
                 </li>
               </ul>
