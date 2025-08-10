@@ -1,18 +1,17 @@
 import { createClient } from "@/lib/supabase-server"
 import { PublicLayout } from "@/components/layout/public-layout"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, MapPinIcon, BriefcaseIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { format } from "date-fns"
 
 interface JobVacancy {
   id: string
   title: string
   description: string
   location: string
-  type: string
-  salary_range: string
+  employment_type: string
   created_at: string // Corrected column name
   end_date: string // Corrected column name for application deadline
 }
@@ -21,11 +20,12 @@ async function fetchJobVacancies(): Promise<JobVacancy[]> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from("job_vacancies")
-    .select("id, title, description, location, type, salary_range, created_at, end_date") // Select correct columns
+    .select("id, title, description, location, employment_type, created_at, end_date")
     .order("created_at", { ascending: false })
 
   if (error) {
     console.error("Error fetching job vacancies:", error.message)
+    // In a real application, you might want to throw an error or return an empty array
     return []
   }
   return data as JobVacancy[]
@@ -36,59 +36,50 @@ export default async function JobListingsPage() {
 
   return (
     <PublicLayout>
-      <main className="container mx-auto py-12 px-4 md:px-6">
-        <section className="text-center mb-12">
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Current Job Openings</h1>
-          <p className="mt-4 text-lg text-muted-foreground">
-            Explore exciting career opportunities and join our growing team.
-          </p>
-        </section>
-
-        <section className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {jobVacancies.length > 0 ? (
-            jobVacancies.map((job) => (
-              <Card key={job.id} className="flex flex-col">
-                <CardHeader>
-                  <CardTitle>{job.title}</CardTitle>
-                  <CardDescription className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <MapPinIcon className="h-4 w-4" />
-                    {job.location}
-                  </CardDescription>
-                  <CardDescription className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <BriefcaseIcon className="h-4 w-4" />
-                    {job.type}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  <p className="text-sm text-gray-600 line-clamp-3">{job.description}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Badge variant="secondary">{job.salary_range}</Badge>
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <CalendarIcon className="h-3 w-3" />
-                      Posted: {new Date(job.created_at).toLocaleDateString()}
-                    </Badge>
-                    {job.end_date && (
-                      <Badge variant="outline" className="flex items-center gap-1">
-                        <CalendarIcon className="h-3 w-3" />
-                        Apply by: {new Date(job.end_date).toLocaleDateString()}
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button asChild className="w-full">
-                    <Link href={`/job-listings/${job.id}`}>View Details</Link>
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))
-          ) : (
-            <div className="col-span-full text-center text-muted-foreground">
-              No job vacancies found at the moment. Please check back later!
+      <section className="py-12 md:py-24 lg:py-32">
+        <div className="container px-4 md:px-6">
+          <div className="flex flex-col items-center justify-center space-y-4 text-center">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl">Current Job Openings</h1>
+              <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+                Explore exciting career opportunities at NNS Enterprise and join our growing team.
+              </p>
             </div>
-          )}
-        </section>
-      </main>
+          </div>
+          <div className="mx-auto grid max-w-5xl items-start gap-6 py-12 lg:grid-cols-2 lg:gap-12">
+            {jobVacancies.length > 0 ? (
+              jobVacancies.map((job) => (
+                <Card
+                  key={job.id}
+                  className="flex flex-col justify-between hover:shadow-lg transition-shadow duration-300"
+                >
+                  <CardHeader>
+                    <CardTitle>{job.title}</CardTitle>
+                    <CardDescription className="flex items-center gap-2">
+                      <Badge variant="secondary">{job.employment_type}</Badge>
+                      <span>{job.location}</span>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground line-clamp-3">{job.description}</p>
+                    <div className="flex justify-between items-center text-xs text-muted-foreground">
+                      <span>Posted: {format(new Date(job.created_at), "MMM dd, yyyy")}</span>
+                      {job.end_date && <span>Apply by: {format(new Date(job.end_date), "MMM dd, yyyy")}</span>}
+                    </div>
+                    <Button asChild className="w-full">
+                      <Link href={`/job-listings/${job.id}`}>View Details</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <p className="col-span-full text-center text-muted-foreground">
+                No job vacancies available at the moment. Please check back later!
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
     </PublicLayout>
   )
 }

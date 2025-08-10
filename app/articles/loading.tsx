@@ -1,35 +1,27 @@
 import { PublicLayout } from "@/components/layout/public-layout"
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { Newspaper } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 
-export default function Loading() {
+export default function ArticlesLoading() {
   return (
     <PublicLayout>
-      <section className="py-12 md:py-24 lg:py-32 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+      <section className="py-12 md:py-24 lg:py-32">
         <div className="container px-4 md:px-6">
-          <div className="max-w-3xl mx-auto text-center mb-12">
-            <div className="h-10 bg-gray-200 rounded w-3/4 mx-auto mb-4 dark:bg-gray-700"></div>
-            <div className="h-6 bg-gray-200 rounded w-1/2 mx-auto dark:bg-gray-700"></div>
+          <div className="flex flex-col items-center justify-center space-y-4 text-center">
+            <div className="space-y-2">
+              <Skeleton className="h-10 w-[350px] mx-auto" />
+              <Skeleton className="h-6 w-[700px] mx-auto mt-2" />
+            </div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <Card key={index} className="animate-pulse">
-                <div className="w-full h-48 bg-gray-200 rounded-t-lg flex items-center justify-center dark:bg-gray-700">
-                  <Newspaper className="h-16 w-16 text-gray-300 dark:text-gray-600" />
+          <div className="mx-auto grid max-w-5xl items-start gap-6 py-12 lg:grid-cols-2 lg:gap-12">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex flex-col space-y-3">
+                <Skeleton className="h-[150px] w-full rounded-xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-[280px]" />
+                  <Skeleton className="h-4 w-[220px]" />
+                  <Skeleton className="h-10 w-full" />
                 </div>
-                <CardHeader>
-                  <div className="h-6 bg-gray-200 rounded w-3/4 mb-2 dark:bg-gray-700"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/2 dark:bg-gray-700"></div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="h-4 bg-gray-200 rounded dark:bg-gray-700"></div>
-                  <div className="h-4 bg-gray-200 rounded w-5/6 dark:bg-gray-700"></div>
-                </CardContent>
-                <CardFooter className="flex justify-end">
-                  <div className="h-8 bg-gray-200 rounded w-1/4 dark:bg-gray-700"></div>
-                </CardFooter>
-              </Card>
+              </div>
             ))}
           </div>
         </div>
