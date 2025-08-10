@@ -1,32 +1,55 @@
 export interface Post {
-  id: string
+  id: number
   title: string
   content: string
+  excerpt?: string
   author: string
-  category: string
+  category?: string
+  tags?: string[]
+  featured_image_url?: string
+  status: "active" | "disabled"
   created_at: string
-  image_url?: string
+  updated_at: string
 }
 
 export interface Blog {
-  id: string
+  id: number
   title: string
   content: string
+  excerpt?: string
   author: string
-  tags: string[]
+  category?: string
+  tags?: string[]
+  featured_image_url?: string
+  slug?: string
+  meta_description?: string
+  reading_time?: number
+  status: "active" | "disabled"
+  published_at?: string
   created_at: string
-  image_url?: string
-  reading_time_minutes: number
+  updated_at: string
 }
 
 export interface JobVacancy {
-  id: string
+  id: number
   title: string
   description: string
-  location: string
-  salary_range: string
-  employment_type: string
-  created_at: string // Use created_at for consistency with Supabase
-  responsibilities: string[]
-  requirements: string[]
+  requirements?: string
+  responsibilities?: string
+  department?: string
+  location?: string
+  employment_type: "full-time" | "part-time" | "contract" | "internship"
+  salary_range?: string
+  experience_level?: string
+  skills?: string[]
+  benefits?: string[]
+  application_email?: string
+  application_url?: string
+  end_date: string
+  status: "active" | "disabled"
+  created_at: string
+  updated_at: string
 }
+
+export type ContentStatus = "active" | "disabled"
+export type EmploymentType = "full-time" | "part-time" | "contract" | "internship"

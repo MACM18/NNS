@@ -1,22 +1,23 @@
 "use client"
 
 import { CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Briefcase, FileText, Users, Phone, Package, BookOpen } from "lucide-react"
-import Link from "next/link"
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import AppSidebar from "@/components/layout/app-sidebar" // Corrected import to default
+import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Header } from "@/components/layout/header"
-import DashboardLayout from "@/components/layout/dashboard-layout"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Cable, CheckCircle, AlertCircle, Plus, ArrowRight, RefreshCw } from "lucide-react"
+import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal"
+import { MonthYearPicker } from "@/components/ui/month-year-picker"
 import { supabase } from "@/lib/supabase"
 import { useDataCache } from "@/contexts/data-cache-context"
 import { getSupabaseClient } from "@/lib/supabase"
 import { redirect } from "next/navigation"
-import { Plus, RefreshCw } from "lucide-react"
-import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal"
-import { MonthYearPicker } from "@/components/ui/month-year-picker"
+import { DashboardLayout } from "@/components/layout/dashboard-layout"
+import { Users, DollarSign, HardHat, FileText, Clock } from "lucide-react"
 
 interface DashboardStats {
   totalLines: number
@@ -52,19 +53,6 @@ export default async function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const { cache, updateCache } = useDataCache()
   const [isRefreshing, setIsRefreshing] = useState(false)
-
-  // Fetch counts for dashboard cards
-  const { count: usersCount, error: usersError } = await supabase.from("profiles").select("*", { count: "exact" })
-  const { count: jobVacanciesCount, error: jobsError } = await supabase
-    .from("job_vacancies")
-    .select("*", { count: "exact" })
-  const { count: postsCount, error: postsError } = await supabase.from("posts").select("*", { count: "exact" })
-  const { count: blogsCount, error: blogsError } = await supabase.from("blogs").select("*", { count: "exact" })
-
-  if (usersError || jobsError || postsError || blogsError) {
-    console.error("Error fetching dashboard counts:", usersError || jobsError || postsError || blogsError)
-    // Handle error gracefully, maybe show a message or default counts
-  }
 
   const stats = cache.dashboard?.stats || {
     totalLines: 0,
@@ -254,44 +242,43 @@ export default async function DashboardPage() {
 
   const dashboardStats = [
     {
-      title: "Total Users",
-      value: usersCount?.toLocaleString() || "N/A",
-      icon: <Users className="h-5 w-5 text-blue-500" />,
-      description: "Active users in the system",
-    },
-    {
-      title: "Active Lines",
+      title: "Total Lines",
       value: stats.totalLines.toLocaleString(),
       change: formatChange(stats.lineChange),
-      icon: <Phone className="h-5 w-5 text-green-500" />,
-      description: "Currently active telephone lines",
+      icon: Cable,
+      color: "text-blue-600",
     },
     {
-      title: "Inventory Items",
-      value: "5,120", // Mock data
-      icon: <Package className="h-5 w-5 text-yellow-500" />,
-      description: "Items in stock across all warehouses",
+      title: "Active Tasks",
+      value: stats.activeTasks.toString(),
+      change: formatChange(stats.taskChange),
+      icon: CheckCircle,
+      color: "text-green-600",
     },
     {
-      title: "Invoices Generated",
-      value: stats.monthlyRevenue.toLocaleString(),
+      title: "Pending Reviews",
+      value: stats.pendingReviews.toString(),
+      change: formatChange(stats.reviewChange),
+      icon: AlertCircle,
+      color: "text-orange-600",
+    },
+    {
+      title: "Monthly Revenue",
+      value: formatCurrency(stats.monthlyRevenue),
       change: formatChange(stats.revenueChange),
-      icon: <FileText className="h-5 w-5 text-purple-500" />,
-      description: "Invoices processed this month",
-    },
-    {
-      title: "Open Job Vacancies",
-      value: jobVacanciesCount?.toLocaleString() || "N/A",
-      icon: <Briefcase className="h-5 w-5 text-red-500" />,
-      description: "Current job openings",
-    },
-    {
-      title: "Published Blog Posts",
-      value: blogsCount?.toLocaleString() || "N/A",
-      icon: <BookOpen className="h-5 w-5 text-indigo-500" />,
-      description: "Total blog articles published",
+      icon: HardHat, // Renamed TrendingUp to avoid redeclaration
+      color: "text-purple-600",
     },
   ]
+
+  const mockDashboardData = {
+    totalUsers: 1250,
+    monthlyRevenue: 75000,
+    projectCompletionRate: 92,
+    activeProjects: 45,
+    pendingInvoices: 12,
+    averageResponseTime: "2h 15m",
+  }
 
   return (
     <DashboardLayout>
@@ -316,26 +303,39 @@ export default async function DashboardPage() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {dashboardStats.map((stat, index) => (
-                <Card key={index} className="shadow-md hover:shadow-lg transition-shadow duration-300">
+                <Card key={index}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                    {stat.icon}
+                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {isRefreshing ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div> : stat.value}
                     </div>
-                    <p className="text-xs text-muted-foreground">{stat.description}</p>
+                    <p className="text-xs text-muted-foreground">
+                      <span
+                        className={
+                          stat.change.startsWith("+")
+                            ? "text-green-600"
+                            : stat.change.startsWith("-")
+                              ? "text-red-600"
+                              : "text-gray-600"
+                        }
+                      >
+                        {isRefreshing ? "..." : stat.change}
+                      </span>{" "}
+                      from last month
+                    </p>
                   </CardContent>
                 </Card>
               ))}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
               {/* Recent Activities */}
-              <Card className="col-span-1 shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="col-span-4">
                 <CardHeader>
                   <CardTitle>Recent Activities</CardTitle>
                   <CardDescription>Latest updates from your telecom operations</CardDescription>
@@ -360,19 +360,19 @@ export default async function DashboardPage() {
                             <p className="text-sm text-muted-foreground">{activity.location}</p>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <span
-                              className={
+                            <Badge
+                              variant={
                                 activity.status === "completed"
-                                  ? "bg-green-100 text-green-800 px-2 py-1 rounded"
+                                  ? "default"
                                   : activity.status === "in_progress"
-                                    ? "bg-blue-100 text-blue-800 px-2 py-1 rounded"
+                                    ? "secondary"
                                     : activity.status === "pending"
-                                      ? "bg-red-100 text-red-800 px-2 py-1 rounded"
-                                      : "bg-gray-100 text-gray-800 px-2 py-1 rounded"
+                                      ? "destructive"
+                                      : "outline"
                               }
                             >
                               {activity.status}
-                            </span>
+                            </Badge>
                             <span className="text-xs text-muted-foreground">{activity.time}</span>
                           </div>
                         </div>
@@ -385,54 +385,117 @@ export default async function DashboardPage() {
               </Card>
 
               {/* Quick Actions */}
-              <Card className="col-span-1 shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="col-span-3">
                 <CardHeader>
                   <CardTitle>Quick Actions</CardTitle>
-                  <CardDescription>Perform common tasks quickly.</CardDescription>
+                  <CardDescription>Common tasks and shortcuts</CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  <Link href="/lines">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      Add New Line Details
-                    </Button>
-                  </Link>
-                  <Link href="/reports">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      Generate Monthly Report
-                    </Button>
-                  </Link>
-                  <Link href="/inventory">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      Update Inventory
-                    </Button>
-                  </Link>
-                  <Link href="/tasks">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      Review Pending Tasks
-                    </Button>
-                  </Link>
-                  <Link href="/users/new">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      Add New User
-                    </Button>
-                  </Link>
-                  <Link href="/careers/new">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      Post New Job
-                    </Button>
-                  </Link>
-                  <Link href="/content/new-post">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      Create New Post
-                    </Button>
-                  </Link>
-                  <Link href="/inventory/add-item">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      Add Inventory Item
-                    </Button>
-                  </Link>
+                <CardContent className="space-y-4">
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/lines")}
+                  >
+                    Add New Line Details
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/reports")}
+                  >
+                    Generate Monthly Report
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/inventory")}
+                  >
+                    Update Inventory
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    className="w-full justify-between bg-transparent"
+                    variant="outline"
+                    onClick={() => router.push("/tasks")}
+                  >
+                    Review Pending Tasks
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Additional Dashboard Components */}
+            <div className="space-y-6">
+              <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
+              <p className="text-muted-foreground">
+                Welcome back, {user?.email || "User"}! Here's a summary of your operations.
+              </p>
+
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.totalUsers}</div>
+                    <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">${mockDashboardData.monthlyRevenue.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground">+15.5% from last month</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Project Completion Rate</CardTitle>
+                    <HardHat className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.projectCompletionRate}%</div>
+                    <p className="text-xs text-muted-foreground">On track for Q3 targets</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
+                    <HardHat className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.activeProjects}</div>
+                    <p className="text-xs text-muted-foreground">Currently underway</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Pending Invoices</CardTitle>
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.pendingInvoices}</div>
+                    <p className="text-xs text-muted-foreground">Awaiting payment</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Average Response Time</CardTitle>
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{mockDashboardData.averageResponseTime}</div>
+                    <p className="text-xs text-muted-foreground">For customer inquiries</p>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </main>
         </div>

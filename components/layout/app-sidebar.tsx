@@ -7,90 +7,204 @@ import { cn } from "@/lib/utils"
 import {
   Home,
   Users,
-  Phone,
-  Package,
-  FileText,
-  Briefcase,
-  BookOpen,
   Settings,
-  ClipboardList,
+  Briefcase,
+  FileText,
+  Package,
+  Phone,
   BarChart2,
   Menu,
+  X,
+  LogOut,
+  Search,
+  Newspaper,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/hooks/use-toast"
 
-export default function AppSidebar() {
+const navItems = [
+  {
+    name: "Dashboard",
+    href: "/dashboard",
+    icon: Home,
+    description: "Overview of system metrics",
+  },
+  {
+    name: "Users",
+    href: "/users",
+    icon: Users,
+    description: "Manage user accounts and roles",
+  },
+  {
+    name: "Lines",
+    href: "/lines",
+    icon: Phone,
+    description: "Manage telephone lines and services",
+  },
+  {
+    name: "Inventory",
+    href: "/inventory",
+    icon: Package,
+    description: "Track and manage equipment inventory",
+  },
+  {
+    name: "Invoices",
+    href: "/invoices",
+    icon: FileText,
+    description: "Handle billing and invoice generation",
+  },
+  {
+    name: "Tasks",
+    href: "/tasks",
+    icon: Briefcase,
+    description: "Assign and track operational tasks",
+  },
+  {
+    name: "Reports",
+    href: "/reports",
+    icon: BarChart2,
+    description: "Generate and view system reports",
+  },
+  {
+    name: "Careers",
+    href: "/careers",
+    icon: Briefcase,
+    description: "Manage job vacancies",
+  },
+  {
+    name: "Content",
+    href: "/content",
+    icon: Newspaper,
+    description: "Manage posts and blogs",
+  },
+  {
+    name: "Search",
+    href: "/search",
+    icon: Search,
+    description: "Advanced search functionality",
+  },
+  {
+    name: "Settings",
+    href: "/settings",
+    icon: Settings,
+    description: "Configure system settings",
+  },
+]
+
+export function AppSidebar() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
+  const { signOut } = useAuth()
 
-  const navItems = [
-    { href: "/dashboard", icon: Home, label: "Dashboard" },
-    { href: "/users", icon: Users, label: "Users" },
-    { href: "/lines", icon: Phone, label: "Telephone Lines" },
-    { href: "/inventory", icon: Package, label: "Inventory" },
-    { href: "/invoices", icon: FileText, label: "Invoices" },
-    { href: "/careers", icon: Briefcase, label: "Career Management" }, // This is the dashboard management page
-    { href: "/content", icon: BookOpen, label: "Content Management" }, // This is the dashboard management page
-    { href: "/tasks", icon: ClipboardList, label: "Tasks" },
-    { href: "/reports", icon: BarChart2, label: "Reports" },
-    { href: "/settings", icon: Settings, label: "Settings" },
-  ]
-
-  const NavLinks = () => (
-    <nav className="grid items-start gap-2 px-4 text-sm font-medium">
-      {navItems.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-50",
-            {
-              "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-50": pathname === item.href,
-            },
-          )}
-          onClick={() => setIsOpen(false)} // Close sidebar on link click
-        >
-          <item.icon className="h-4 w-4" />
-          {item.label}
-        </Link>
-      ))}
-    </nav>
-  )
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out.",
+      })
+    } catch (error) {
+      console.error("Error signing out:", error)
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
     <>
       {/* Mobile Sidebar */}
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetTrigger asChild className="lg:hidden fixed top-4 left-4 z-[999]">
+        <SheetTrigger asChild className="lg:hidden fixed top-4 left-4 z-[100]">
           <Button variant="outline" size="icon">
             <Menu className="h-6 w-6" />
-            <span className="sr-only">Toggle navigation menu</span>
+            <span className="sr-only">Toggle sidebar</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="flex flex-col bg-white dark:bg-gray-950">
-          <div className="flex h-16 items-center border-b px-4">
-            <Link href="/dashboard" className="flex items-center gap-2 font-semibold" onClick={() => setIsOpen(false)}>
-              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">NNS Dashboard</span>
+        <SheetContent side="left" className="w-64 p-0 bg-sidebar-background text-sidebar-foreground flex flex-col">
+          <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
+            <Link className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground" href="/dashboard">
+              <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-6 w-auto" />
+              NNS Dashboard
             </Link>
+            <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
+              <X className="h-6 w-6" />
+              <span className="sr-only">Close sidebar</span>
+            </Button>
           </div>
-          <div className="flex-1 overflow-auto py-4">
-            <NavLinks />
+          <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
+              return (
+                <Link
+                  key={item.name}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
+                  )}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.name}
+                </Link>
+              )
+            })}
+          </nav>
+          <div className="mt-auto p-4 border-t border-sidebar-border">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              onClick={handleSignOut}
+            >
+              <LogOut className="mr-3 h-5 w-5" />
+              Sign Out
+            </Button>
           </div>
         </SheetContent>
       </Sheet>
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:flex flex-col h-full max-h-screen border-r bg-gray-100/40 dark:bg-gray-800/40">
-        <div className="flex h-16 items-center border-b px-6">
-          <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-            <span className="text-lg font-bold text-blue-600 dark:text-blue-400">NNS Dashboard</span>
+      <aside className="hidden lg:flex flex-col w-64 h-screen border-r border-sidebar-border bg-sidebar-background text-sidebar-foreground fixed top-0 left-0 z-40">
+        <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
+          <Link className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground" href="/dashboard">
+            <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-7 w-auto" />
+            NNS Dashboard
           </Link>
         </div>
-        <div className="flex-1 overflow-auto py-4">
-          <NavLinks />
+        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
+            return (
+              <Link
+                key={item.name}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
+                )}
+                href={item.href}
+              >
+                <item.icon className="h-5 w-5" />
+                {item.name}
+              </Link>
+            )
+          })}
+        </nav>
+        <div className="mt-auto p-4 border-t border-sidebar-border">
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            onClick={handleSignOut}
+          >
+            <LogOut className="mr-3 h-5 w-5" />
+            Sign Out
+          </Button>
         </div>
-      </div>
+      </aside>
     </>
   )
 }

@@ -1,334 +1,176 @@
--- WARNING: This schema is for context only and is not meant to be run.
--- Table order and constraints may not be valid for execution.
+-- Create profiles table
+CREATE TABLE profiles (
+  id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
+  full_name TEXT,
+  avatar_url TEXT,
+  billing_address TEXT,
+  payment_method TEXT,
+  role TEXT DEFAULT 'user'
+);
 
-CREATE TABLE public.blogs (
-  id integer NOT NULL DEFAULT nextval('blogs_id_seq'::regclass),
-  title character varying NOT NULL,
-  content text NOT NULL,
-  excerpt text,
-  author character varying NOT NULL,
-  category character varying,
-  tags ARRAY,
-  featured_image_url text,
-  slug character varying UNIQUE,
-  meta_description text,
-  reading_time integer,
-  status character varying DEFAULT 'active'::character varying CHECK (status::text = ANY (ARRAY['active'::character varying, 'disabled'::character varying]::text[])),
-  published_at timestamp with time zone,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT blogs_pkey PRIMARY KEY (id)
+-- Create line_details table
+CREATE TABLE line_details (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  telephone_no TEXT NOT NULL UNIQUE,
+  customer_name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  status TEXT NOT NULL,
+  installation_date DATE NOT NULL,
+  service_type TEXT NOT NULL,
+  monthly_fee NUMERIC(10, 2) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE TABLE public.company_settings (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  company_name text DEFAULT 'NNS Enterprise'::text,
-  address text,
-  contact_numbers ARRAY,
-  website text DEFAULT 'nns.lk'::text,
-  registered_number text,
-  bank_details jsonb,
-  pricing_tiers jsonb,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT company_settings_pkey PRIMARY KEY (id)
+
+-- Create tasks table
+CREATE TABLE tasks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  telephone_no TEXT REFERENCES line_details(telephone_no) ON DELETE CASCADE NOT NULL,
+  description TEXT NOT NULL,
+  status TEXT NOT NULL,
+  priority TEXT NOT NULL,
+  assigned_to UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  due_date DATE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE TABLE public.drum_tracking (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  drum_number text NOT NULL,
-  item_id uuid,
-  initial_quantity numeric NOT NULL,
-  current_quantity numeric NOT NULL,
-  status text DEFAULT 'active'::text,
-  received_date date DEFAULT CURRENT_DATE,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT drum_tracking_pkey PRIMARY KEY (id),
-  CONSTRAINT drum_tracking_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.inventory_items(id)
+
+-- Create inventory table
+CREATE TABLE inventory (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  item_name TEXT NOT NULL,
+  quantity INT NOT NULL,
+  unit_price NUMERIC(10, 2) NOT NULL,
+  supplier TEXT,
+  last_restock DATE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE TABLE public.drum_usage (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  drum_id uuid,
-  line_details_id uuid,
-  quantity_used numeric NOT NULL,
-  usage_date date DEFAULT CURRENT_DATE,
-  cable_start_point numeric DEFAULT 0,
-  cable_end_point numeric DEFAULT 0,
-  wastage_calculated numeric DEFAULT 0,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT drum_usage_pkey PRIMARY KEY (id),
-  CONSTRAINT drum_usage_line_details_id_fkey FOREIGN KEY (line_details_id) REFERENCES public.line_details(id),
-  CONSTRAINT drum_usage_drum_id_fkey FOREIGN KEY (drum_id) REFERENCES public.drum_tracking(id)
+
+-- Create generated_invoices table
+CREATE TABLE generated_invoices (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_name TEXT NOT NULL,
+  invoice_date DATE NOT NULL,
+  due_date DATE NOT NULL,
+  total_amount NUMERIC(10, 2) NOT NULL,
+  status TEXT NOT NULL,
+  job_month DATE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE TABLE public.generated_invoices (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  invoice_number text NOT NULL,
-  month integer CHECK (month >= 1 AND month <= 12),
-  year integer,
-  invoice_type text CHECK (invoice_type = ANY (ARRAY['A'::text, 'B'::text, 'C'::text])),
-  total_amount numeric,
-  pdf_url text,
-  created_at timestamp with time zone DEFAULT now(),
-  invoice_date date,
-  job_month text,
-  line_count numeric,
-  status text,
-  line_details_ids jsonb,
-  CONSTRAINT generated_invoices_pkey PRIMARY KEY (id)
+
+-- Create inventory_invoices table
+CREATE TABLE inventory_invoices (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  invoice_number TEXT NOT NULL UNIQUE,
+  supplier_name TEXT NOT NULL,
+  invoice_date DATE NOT NULL,
+  total_amount NUMERIC(10, 2) NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE TABLE public.inventory_invoice_items (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  invoice_id uuid,
-  item_id uuid,
-  description text,
-  unit text,
-  quantity_requested numeric,
-  quantity_issued numeric,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT inventory_invoice_items_pkey PRIMARY KEY (id),
-  CONSTRAINT inventory_invoice_items_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.inventory_items(id),
-  CONSTRAINT inventory_invoice_items_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.inventory_invoices(id)
+
+-- Create inventory_invoice_items table
+CREATE TABLE inventory_invoice_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  invoice_id UUID REFERENCES inventory_invoices(id) ON DELETE CASCADE NOT NULL,
+  item_id UUID REFERENCES inventory(id) ON DELETE CASCADE NOT NULL,
+  quantity INT NOT NULL,
+  unit_price NUMERIC(10, 2) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE TABLE public.inventory_invoices (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  invoice_number text NOT NULL UNIQUE,
-  warehouse text,
-  date date DEFAULT CURRENT_DATE,
-  issued_by text,
-  drawn_by text,
-  invoice_image_url text,
-  created_by uuid,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  auto_invoice_number text UNIQUE,
-  ocr_processed boolean DEFAULT false,
-  ocr_image_url text,
-  total_items integer DEFAULT 0,
-  status text DEFAULT 'draft'::text,
-  CONSTRAINT inventory_invoices_pkey PRIMARY KEY (id),
-  CONSTRAINT inventory_invoices_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+
+-- Create waste_management table
+CREATE TABLE waste_management (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  item_name TEXT NOT NULL,
+  quantity INT NOT NULL,
+  disposal_date DATE NOT NULL,
+  reason TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE TABLE public.inventory_items (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  name text NOT NULL UNIQUE,
-  unit text NOT NULL,
-  current_stock numeric DEFAULT 0,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  drum_size numeric,
-  reorder_level numeric DEFAULT 0,
-  CONSTRAINT inventory_items_pkey PRIMARY KEY (id)
+
+-- Create drum_usage table
+CREATE TABLE drum_usage (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  drum_id TEXT NOT NULL,
+  line_no TEXT REFERENCES line_details(telephone_no) ON DELETE CASCADE NOT NULL,
+  used_date DATE NOT NULL,
+  quantity_used NUMERIC(10, 2) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE TABLE public.job_vacancies (
-  id integer NOT NULL DEFAULT nextval('job_vacancies_id_seq'::regclass),
-  title character varying NOT NULL,
-  description text NOT NULL,
-  requirements text,
-  responsibilities text,
-  department character varying,
-  location character varying,
-  employment_type character varying DEFAULT 'full-time'::character varying CHECK (employment_type::text = ANY (ARRAY['full-time'::character varying, 'part-time'::character varying, 'contract'::character varying, 'internship'::character varying]::text[])),
-  salary_range character varying,
-  experience_level character varying,
-  skills ARRAY,
-  benefits ARRAY,
-  application_email character varying,
-  application_url text,
-  end_date date NOT NULL,
-  status character varying DEFAULT 'active'::character varying CHECK (status::text = ANY (ARRAY['active'::character varying, 'disabled'::character varying]::text[])),
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT job_vacancies_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.line_assignees (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  line_id uuid NOT NULL,
-  user_id uuid NOT NULL,
-  assigned_at timestamp with time zone DEFAULT now(),
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT line_assignees_pkey PRIMARY KEY (id),
-  CONSTRAINT line_assignees_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
-  CONSTRAINT line_assignees_line_id_fkey FOREIGN KEY (line_id) REFERENCES public.line_details(id)
-);
-CREATE TABLE public.line_details (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  task_id uuid,
-  date date DEFAULT CURRENT_DATE,
-  telephone_no text NOT NULL,
-  dp text NOT NULL,
-  power_dp numeric CHECK (power_dp >= 0::numeric),
-  power_inbox numeric CHECK (power_inbox >= 0::numeric),
-  name text,
-  address text,
-  cable_start numeric DEFAULT 0,
-  cable_middle numeric DEFAULT 0,
-  cable_end numeric DEFAULT 0,
-  f1 numeric DEFAULT abs((cable_start - cable_middle)),
-  g1 numeric DEFAULT abs((cable_middle - cable_end)),
-  total_cable numeric DEFAULT (abs((cable_start - cable_middle)) + abs((cable_middle - cable_end))),
-  wastage numeric DEFAULT 0,
-  retainers integer DEFAULT 0,
-  l_hook integer DEFAULT 0,
-  top_bolt integer DEFAULT 0,
-  c_hook integer DEFAULT 1,
-  fiber_rosette integer DEFAULT 1,
-  internal_wire numeric DEFAULT 0,
-  s_rosette integer DEFAULT 0,
-  fac integer DEFAULT 2,
-  casing numeric DEFAULT 0,
-  c_tie integer DEFAULT 0,
-  c_clip integer DEFAULT 0,
-  conduit numeric DEFAULT 0,
-  tag_tie integer DEFAULT 1,
-  ont text,
-  voice_test_no text,
-  stb text,
-  flexible integer DEFAULT 2,
-  rj45 integer DEFAULT 0,
-  cat5 numeric DEFAULT 0,
-  pole_67 integer DEFAULT 0,
-  pole integer DEFAULT 0,
-  concrete_nail integer DEFAULT 0,
-  roll_plug integer DEFAULT 0,
-  u_clip integer DEFAULT 0,
-  socket integer DEFAULT 0,
-  bend integer DEFAULT 0,
-  rj11 integer DEFAULT 0,
-  rj12 integer DEFAULT 0,
-  drum_number text,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  phone_number text,
-  wastage_input numeric,
-  ont_serial text,
-  voice_test_no_new text,
-  stb_serial text,
-  drum_number_new text,
-  completed_date date,
-  status text,
-  nut_bolt integer DEFAULT 0,
-  screw_nail integer DEFAULT 0,
-  CONSTRAINT line_details_pkey PRIMARY KEY (id),
-  CONSTRAINT line_details_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id)
-);
-CREATE TABLE public.line_entries (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  date date NOT NULL,
-  phone_number text NOT NULL,
-  dp text NOT NULL,
-  power_dp numeric NOT NULL,
-  power_inbox numeric NOT NULL,
-  name text NOT NULL,
-  address text NOT NULL,
-  cable_start numeric NOT NULL,
-  cable_middle numeric NOT NULL,
-  cable_end numeric NOT NULL,
-  f1 numeric NOT NULL,
-  g1 numeric NOT NULL,
-  total numeric NOT NULL,
-  wastage numeric NOT NULL,
-  created_at timestamp with time zone DEFAULT now(),
-  user_id uuid,
-  CONSTRAINT line_entries_pkey PRIMARY KEY (id),
-  CONSTRAINT line_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
-CREATE TABLE public.monthly_wastage (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  month integer CHECK (month >= 1 AND month <= 12),
-  year integer,
-  item_id uuid,
-  quantity numeric,
-  created_by uuid,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT monthly_wastage_pkey PRIMARY KEY (id),
-  CONSTRAINT monthly_wastage_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
-  CONSTRAINT monthly_wastage_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.inventory_items(id)
-);
-CREATE TABLE public.notifications (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid,
-  title character varying NOT NULL,
-  message text NOT NULL,
-  type character varying DEFAULT 'info'::character varying CHECK (type::text = ANY (ARRAY['info'::character varying, 'success'::character varying, 'warning'::character varying, 'error'::character varying]::text[])),
-  category character varying DEFAULT 'system'::character varying CHECK (category::text = ANY (ARRAY['line_added'::character varying, 'task_completed'::character varying, 'invoice_generated'::character varying, 'report_ready'::character varying, 'inventory_low'::character varying, 'system'::character varying]::text[])),
-  is_read boolean DEFAULT false,
-  action_url character varying,
-  metadata jsonb DEFAULT '{}'::jsonb,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT notifications_pkey PRIMARY KEY (id),
-  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
-CREATE TABLE public.posts (
-  id integer NOT NULL DEFAULT nextval('posts_id_seq'::regclass),
-  title character varying NOT NULL,
-  content text NOT NULL,
-  excerpt text,
-  author character varying NOT NULL,
-  category character varying,
-  tags ARRAY,
-  featured_image_url text,
-  status character varying DEFAULT 'active'::character varying CHECK (status::text = ANY (ARRAY['active'::character varying, 'disabled'::character varying]::text[])),
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT posts_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.profiles (
-  id uuid NOT NULL,
-  email text,
-  full_name text,
-  role text DEFAULT 'user'::text,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT profiles_pkey PRIMARY KEY (id),
-  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
-);
-CREATE TABLE public.role_permissions (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  role USER-DEFINED NOT NULL,
-  permission USER-DEFINED NOT NULL,
-  CONSTRAINT role_permissions_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.tasks (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  added_date date DEFAULT CURRENT_DATE,
-  telephone_no text NOT NULL,
-  dp text NOT NULL,
-  contact_no text,
-  customer_name text,
-  address text,
-  status text DEFAULT 'pending'::text,
-  connection_types ARRAY,
-  connection_type_main text DEFAULT 'new'::text,
-  rejection_reason text,
-  rejected_by uuid,
-  rejected_at timestamp with time zone,
-  completed_at timestamp with time zone,
-  created_by uuid,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  task_date date DEFAULT CURRENT_DATE,
-  connection_type_new text DEFAULT 'New'::text,
-  connection_services ARRAY DEFAULT '{}'::text[],
-  assigned_to uuid,
-  completed_by uuid,
-  line_details_id uuid,
-  notes text,
-  CONSTRAINT tasks_pkey PRIMARY KEY (id),
-  CONSTRAINT tasks_line_details_id_fkey FOREIGN KEY (line_details_id) REFERENCES public.line_details(id),
-  CONSTRAINT tasks_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id),
-  CONSTRAINT tasks_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES public.profiles(id),
-  CONSTRAINT tasks_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.profiles(id),
-  CONSTRAINT tasks_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
-);
-CREATE TABLE public.waste_tracking (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  item_id uuid,
-  quantity numeric NOT NULL,
-  waste_reason text,
-  waste_date date DEFAULT CURRENT_DATE,
-  reported_by uuid,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT waste_tracking_pkey PRIMARY KEY (id),
-  CONSTRAINT waste_tracking_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.inventory_items(id),
-  CONSTRAINT waste_tracking_reported_by_fkey FOREIGN KEY (reported_by) REFERENCES public.profiles(id)
-);
+
+-- Enable Row Level Security (RLS) for tables
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE line_details ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE generated_invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inventory_invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inventory_invoice_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE waste_management ENABLE ROW LEVEL SECURITY;
+ALTER TABLE drum_usage ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policies for profiles table
+CREATE POLICY "Public profiles are viewable by everyone." ON profiles FOR SELECT USING (TRUE);
+CREATE POLICY "Users can insert their own profile." ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can update their own profile." ON profiles FOR UPDATE USING (auth.uid() = id);
+
+-- Create RLS policies for line_details table
+CREATE POLICY "Enable read access for all users" ON line_details FOR SELECT USING (TRUE);
+CREATE POLICY "Enable insert for authenticated users only" ON line_details FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable update for authenticated users only" ON line_details FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable delete for authenticated users only" ON line_details FOR DELETE USING (auth.role() = 'authenticated');
+
+-- Create RLS policies for tasks table
+CREATE POLICY "Enable read access for all users" ON tasks FOR SELECT USING (TRUE);
+CREATE POLICY "Enable insert for authenticated users only" ON tasks FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable update for authenticated users only" ON tasks FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable delete for authenticated users only" ON tasks FOR DELETE USING (auth.role() = 'authenticated');
+
+-- Create RLS policies for inventory table
+CREATE POLICY "Enable read access for all users" ON inventory FOR SELECT USING (TRUE);
+CREATE POLICY "Enable insert for authenticated users only" ON inventory FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable update for authenticated users only" ON inventory FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable delete for authenticated users only" ON inventory FOR DELETE USING (auth.role() = 'authenticated');
+
+-- Create RLS policies for generated_invoices table
+CREATE POLICY "Enable read access for all users" ON generated_invoices FOR SELECT USING (TRUE);
+CREATE POLICY "Enable insert for authenticated users only" ON generated_invoices FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable update for authenticated users only" ON generated_invoices FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable delete for authenticated users only" ON generated_invoices FOR DELETE USING (auth.role() = 'authenticated');
+
+-- Create RLS policies for inventory_invoices table
+CREATE POLICY "Enable read access for all users" ON inventory_invoices FOR SELECT USING (TRUE);
+CREATE POLICY "Enable insert for authenticated users only" ON inventory_invoices FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable update for authenticated users only" ON inventory_invoices FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable delete for authenticated users only" ON inventory_invoices FOR DELETE USING (auth.role() = 'authenticated');
+
+-- Create RLS policies for inventory_invoice_items table
+CREATE POLICY "Enable read access for all users" ON inventory_invoice_items FOR SELECT USING (TRUE);
+CREATE POLICY "Enable insert for authenticated users only" ON inventory_invoice_items FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable update for authenticated users only" ON inventory_invoice_items FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable delete for authenticated users only" ON inventory_invoice_items FOR DELETE USING (auth.role() = 'authenticated');
+
+-- Create RLS policies for waste_management table
+CREATE POLICY "Enable read access for all users" ON waste_management FOR SELECT USING (TRUE);
+CREATE POLICY "Enable insert for authenticated users only" ON waste_management FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable update for authenticated users only" ON waste_management FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable delete for authenticated users only" ON waste_management FOR DELETE USING (auth.role() = 'authenticated');
+
+-- Create RLS policies for drum_usage table
+CREATE POLICY "Enable read access for all users" ON drum_usage FOR SELECT USING (TRUE);
+CREATE POLICY "Enable insert for authenticated users only" ON drum_usage FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable update for authenticated users only" ON drum_usage FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable delete for authenticated users only" ON drum_usage FOR DELETE USING (auth.role() = 'authenticated');
+
+-- Create a trigger to insert a new profile when a new user signs up
+CREATE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, avatar_url)
+  VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data->>'avatar_url');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

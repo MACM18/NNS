@@ -1,157 +1,126 @@
-"use client";
-import { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { getSupabaseClient } from "@/lib/supabase";
-import { toast } from "@/hooks/use-toast";
+"use client"
 
-interface EditUserModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  user: any;
-  onSuccess: () => void;
+import type React from "react"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { supabase } from "@/lib/supabase"
+import { toast } from "@/hooks/use-toast"
+import { Loader2 } from "lucide-react"
+
+interface UserProfile {
+  id: string
+  full_name: string | null
+  email: string
+  role: string
 }
 
-export function EditUserModal({
-  open,
-  onOpenChange,
-  user,
-  onSuccess,
-}: EditUserModalProps) {
-  const [form, setForm] = useState({
-    full_name: "",
-    email: "",
-    role: "user",
-  });
-  const [loading, setLoading] = useState(false);
+interface EditUserModalProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  user: UserProfile | null
+  onSuccess: () => void
+}
+
+export function EditUserModal({ open, onOpenChange, user, onSuccess }: EditUserModalProps) {
+  const [fullName, setFullName] = useState("")
+  const [role, setRole] = useState("user")
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (user) {
-      setForm({
-        full_name: user.full_name || "",
-        email: user.email || "",
-        role: user.role || "user",
-      });
+      setFullName(user.full_name || "")
+      setRole(user.role)
     }
-  }, [user]);
-
-  const handleChange = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  }, [user])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const supabase = getSupabaseClient();
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: form.full_name,
-          email: form.email,
-          role: form.role,
-        })
-        .eq("id", user.id);
-      if (error) throw error;
-      toast({
-        title: "User Updated",
-        description: "User details updated successfully.",
-      });
-      onSuccess();
-      onOpenChange(false);
-    } catch (error: any) {
+    e.preventDefault()
+    setLoading(true)
+
+    if (!user) {
       toast({
         title: "Error",
-        description: error.message,
+        description: "No user selected for editing.",
         variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+      })
+      setLoading(false)
+      return
     }
-  };
 
-  if (!user) return null;
+    try {
+      // Update profile data
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          full_name: fullName,
+          role,
+        })
+        .eq("id", user.id)
+
+      if (profileError) throw profileError
+
+      toast({
+        title: "User Updated",
+        description: `User ${user.email} updated successfully.`,
+      })
+      onSuccess()
+      onOpenChange(false)
+    } catch (error: any) {
+      console.error("Error updating user:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-md'>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
-          <DialogDescription>
-            Update the user's details and role.
-          </DialogDescription>
+          <DialogDescription>Make changes to the user's profile and role.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className='space-y-4'>
-          <div>
-            <label htmlFor='full_name' className='block mb-1'>
-              Full Name
-            </label>
-            <Input
-              id='full_name'
-              value={form.full_name}
-              onChange={(e) => handleChange("full_name", e.target.value)}
-              required
-            />
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" value={user?.email || ""} disabled />
           </div>
-          <div>
-            <label htmlFor='email' className='block mb-1'>
-              Email
-            </label>
-            <Input
-              id='email'
-              type='email'
-              value={form.email}
-              onChange={(e) => handleChange("email", e.target.value)}
-              required
-            />
+          <div className="grid gap-2">
+            <Label htmlFor="fullName">Full Name</Label>
+            <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
           </div>
-          <div>
-            <label htmlFor='role' className='block mb-1'>
-              Role
-            </label>
-            <Select
-              value={form.role}
-              onValueChange={(value) => handleChange("role", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder='Select role' />
+          <div className="grid gap-2">
+            <Label htmlFor="role">Role</Label>
+            <Select value={role} onValueChange={setRole} required>
+              <SelectTrigger id="role">
+                <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value='user'>User</SelectItem>
-                <SelectItem value='moderator'>Moderator</SelectItem>
-                <SelectItem value='admin'>Admin</SelectItem>
+                <SelectItem value="user">User</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type='submit' disabled={loading}>
-              {loading ? "Saving..." : "Update User"}
-            </Button>
-          </DialogFooter>
+          <Button type="submit" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving Changes...
+              </>
+            ) : (
+              "Save Changes"
+            )}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
