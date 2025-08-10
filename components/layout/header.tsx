@@ -328,7 +328,7 @@ export function Header() {
                 <div className="p-2">
                   <div className="text-xs font-medium text-muted-foreground mb-2 px-2 flex items-center justify-between">
                     <span>Quick Results ({searchResults.length})</span>
-                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={openAdvancedSearch}>
+                    <Button variant="ghost" size="sm" className="h-6 px-2" onClick={openAdvancedSearch}>
                       <Filter className="h-3 w-3 mr-1" />
                       Advanced
                     </Button>

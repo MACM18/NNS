@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 
 export default function Loading() {
   return (
@@ -11,19 +12,40 @@ export default function Loading() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Filters Panel Skeleton */}
         <div className="lg:col-span-1">
-          <Skeleton className="h-[500px] w-full" />
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-3/4" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </CardContent>
+          </Card>
         </div>
 
         {/* Results Panel Skeleton */}
         <div className="lg:col-span-2">
-          <div className="space-y-4">
-            <Skeleton className="h-20 w-full" /> {/* Header card */}
-            <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-1/2" />
+              <Skeleton className="h-4 w-full" />
+            </CardHeader>
+            <CardContent className="space-y-4">
               {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full" />
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-3 w-full" />
+                </div>
               ))}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
