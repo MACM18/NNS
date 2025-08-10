@@ -113,6 +113,7 @@ export function AddTaskModal({
           title: "Validation Error",
           message: "Please select at least one connection service",
           type: "error",
+          category: "system",
         });
         setLoading(false);
         return;
@@ -150,6 +151,7 @@ export function AddTaskModal({
         title: "Success",
         message: "Task added successfully",
         type: "success",
+        category: "system",
       });
 
       onSuccess();
@@ -172,6 +174,7 @@ export function AddTaskModal({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     } finally {
       setLoading(false);
@@ -364,7 +367,6 @@ export function AddTaskModal({
                     handleInputChange("contact_no", e.target.value)
                   }
                   placeholder='Customer contact number'
-                  required
                 />
               </div>
             </div>
