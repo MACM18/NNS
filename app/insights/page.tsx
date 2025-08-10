@@ -1,4 +1,4 @@
-import { supabaseServer } from "@/lib/supabase-server" // Corrected import
+import { supabaseServer } from "@/lib/supabase-server"
 import { PublicLayout } from "@/components/layout/public-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +16,7 @@ interface Blog {
 }
 
 async function fetchBlogs(): Promise<Blog[]> {
-  const supabase = supabaseServer // Corrected usage
+  const supabase = supabaseServer
   const { data, error } = await supabase
     .from("blogs")
     .select("id, title, summary, author, tags, created_at")

@@ -1,157 +1,394 @@
+"use client"
+
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
+import {
+  ArrowRight,
+  Award,
+  Cable,
+  CheckCircle,
+  Lightbulb,
+  Handshake,
+  Zap,
+  Settings,
+  FileText,
+  HardHat,
+  Wrench,
+  Network,
+  TrendingUp,
+  PhoneCall,
+  ShieldCheck,
+  Rocket,
+  Users,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { PublicLayout } from "@/components/layout/public-layout"
-import { Card, CardContent, CardTitle } from "@/components/ui/card"
-import { CheckCircleIcon, LightbulbIcon, UsersIcon } from "lucide-react"
 
 export default function LandingPage() {
+  const { user, loading } = useAuth()
+  const router = useRouter()
+
+  const handleAuthAction = () => {
+    if (user) {
+      router.push("/dashboard")
+    } else {
+      router.push("/login")
+    }
+  }
+
   return (
     <PublicLayout>
-      <main className="flex-1">
-        <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48 bg-gradient-to-r from-blue-600 to-purple-700 text-white">
-          <div className="container px-4 md:px-6">
-            <div className="grid gap-6 lg:grid-cols-[1fr_400px] lg:gap-12 xl:grid-cols-[1fr_550px]">
-              <div className="flex flex-col justify-center space-y-4">
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none">
-                    Revolutionizing Connectivity with NNS Enterprise
-                  </h1>
-                  <p className="max-w-[600px] text-gray-200 md:text-xl">
-                    Delivering cutting-edge fiber optic solutions and unparalleled telecom services for a connected
-                    future.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2 min-[400px]:flex-row">
-                  <Link
-                    href="/welcome/contact"
-                    className="inline-flex h-10 items-center justify-center rounded-md bg-white px-8 text-sm font-medium text-blue-600 shadow transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 disabled:pointer-events-none disabled:opacity-50"
-                    prefetch={false}
-                  >
-                    Get a Quote
-                  </Link>
-                  <Link
-                    href="/services"
-                    className="inline-flex h-10 items-center justify-center rounded-md border border-white bg-transparent px-8 text-sm font-medium shadow-sm transition-colors hover:bg-white hover:text-blue-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 disabled:pointer-events-none disabled:opacity-50"
-                    prefetch={false}
-                  >
-                    Learn More
-                  </Link>
-                </div>
-              </div>
-              <img
-                src="/placeholder.svg?height=400&width=550"
-                width="550"
-                height="400"
-                alt="Hero"
-                className="mx-auto aspect-video overflow-hidden rounded-xl object-cover sm:w-full lg:order-last"
-              />
-            </div>
-          </div>
-        </section>
-
-        <section id="services" className="w-full py-12 md:py-24 lg:py-32 bg-gray-100 dark:bg-gray-800">
-          <div className="container px-4 md:px-6">
-            <div className="flex flex-col items-center justify-center space-y-4 text-center">
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">Our Services</h2>
-                <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  We offer a comprehensive suite of telecom solutions tailored to your needs.
-                </p>
-              </div>
-            </div>
-            <div className="mx-auto grid max-w-5xl items-start gap-6 py-12 lg:grid-cols-3 lg:gap-12">
-              <Card className="flex flex-col items-center p-6 text-center">
-                <LightbulbIcon className="h-12 w-12 text-blue-600 mb-4" />
-                <CardTitle className="text-xl font-bold">Fiber Optic Installation</CardTitle>
-                <CardContent className="text-sm text-muted-foreground mt-2">
-                  High-speed, reliable fiber optic network deployment for homes and businesses.
-                </CardContent>
-              </Card>
-              <Card className="flex flex-col items-center p-6 text-center">
-                <UsersIcon className="h-12 w-12 text-blue-600 mb-4" />
-                <CardTitle className="text-xl font-bold">Managed Network Services</CardTitle>
-                <CardContent className="text-sm text-muted-foreground mt-2">
-                  Proactive monitoring, maintenance, and support for your network infrastructure.
-                </CardContent>
-              </Card>
-              <Card className="flex flex-col items-center p-6 text-center">
-                <CheckCircleIcon className="h-12 w-12 text-blue-600 mb-4" />
-                <CardTitle className="text-xl font-bold">Custom Telecom Solutions</CardTitle>
-                <CardContent className="text-sm text-muted-foreground mt-2">
-                  Tailored solutions to meet unique communication requirements for various industries.
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </section>
-
-        <section id="why-us" className="w-full py-12 md:py-24 lg:py-32">
-          <div className="container px-4 md:px-6">
-            <div className="flex flex-col items-center justify-center space-y-4 text-center">
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">Why Choose NNS Enterprise?</h2>
-                <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Experience the difference with our commitment to excellence and innovation.
-                </p>
-              </div>
-            </div>
-            <div className="mx-auto grid max-w-5xl items-start gap-6 py-12 lg:grid-cols-2 lg:gap-12">
-              <div className="flex flex-col justify-center space-y-4">
-                <ul className="grid gap-6">
-                  <li>
-                    <div className="grid gap-1">
-                      <h3 className="text-xl font-bold">Unmatched Reliability</h3>
-                      <p className="text-muted-foreground">
-                        Our robust infrastructure ensures consistent and uninterrupted service.
-                      </p>
-                    </div>
-                  </li>
-                  <li>
-                    <div className="grid gap-1">
-                      <h3 className="text-xl font-bold">Expert Support</h3>
-                      <p className="text-muted-foreground">
-                        Our team of certified professionals is available 24/7 to assist you.
-                      </p>
-                    </div>
-                  </li>
-                  <li>
-                    <div className="grid gap-1">
-                      <h3 className="text-xl font-bold">Innovative Solutions</h3>
-                      <p className="text-muted-foreground">
-                        We leverage the latest technology to provide future-proof telecom solutions.
-                      </p>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-              <img
-                src="/placeholder.svg?height=400&width=550"
-                width="550"
-                height="400"
-                alt="Why Us"
-                className="mx-auto aspect-video overflow-hidden rounded-xl object-cover sm:w-full"
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-gray-100 dark:bg-gray-800">
-          <div className="container px-4 md:px-6 text-center">
-            <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">Ready to Connect?</h2>
-            <p className="max-w-[700px] mx-auto text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed mt-4">
-              Contact us today to discuss your telecom needs and get a personalized quote.
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-24 sm:py-32">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative mx-auto max-w-7xl px-6 lg:px-8 text-center">
+          <div className="mx-auto max-w-3xl">
+            <Badge variant="secondary" className="mb-4">
+              FTTH Infrastructure Specialists
+            </Badge>
+            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
+              Your Trusted Partner for{" "}
+              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                Fiber Optic Network Establishment
+              </span>
+            </h1>
+            <p className="mt-6 text-lg leading-8 text-muted-foreground">
+              As a dedicated subcontractor, NNS Enterprise specializes in the precise and efficient deployment of Fiber
+              to the Home (FTTH) infrastructure, ensuring seamless connectivity for your projects.
             </p>
-            <div className="mt-8">
-              <Link
-                href="/welcome/contact"
-                className="inline-flex h-10 items-center justify-center rounded-md bg-blue-600 px-8 text-sm font-medium text-white shadow transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-950 disabled:pointer-events-none disabled:opacity-50"
-                prefetch={false}
-              >
-                Contact Us
-              </Link>
+            <div className="mt-10 flex items-center justify-center gap-x-6">
+              <Button size="lg" className="text-base" onClick={handleAuthAction}>
+                {user ? "Access Dashboard" : "Explore Our Services"}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="lg" asChild className="text-base bg-transparent">
+                <Link href="/welcome/contact">Request a Proposal</Link>
+              </Button>
             </div>
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
+
+      {/* Our Services: FTTH Establishment Process */}
+      <section id="services" className="py-24 bg-muted/30">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Our Core Services: FTTH Establishment
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              We follow a meticulous approach to ensure every fiber optic deployment is executed with precision and
+              adherence to the highest industry standards.
+            </p>
+          </div>
+          <div className="mx-auto mt-16 max-w-5xl">
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                    <Lightbulb className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">1. Planning & Design</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Detailed site surveys, network architecture planning, and route design for optimal fiber deployment.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                    <HardHat className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">2. Civil Works & Ducting</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Efficient trenching, duct laying, and infrastructure preparation with minimal disruption.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                    <Cable className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">3. Fiber Optic Cable Laying</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Careful installation of fiber optic cables, ensuring protection and longevity.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                    <Zap className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">4. Splicing & Termination</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Expert fiber splicing and precise termination for robust and high-performance connections.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                    <CheckCircle className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">5. Testing & Commissioning</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Rigorous testing to verify network integrity, performance, and compliance with specifications.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                    <FileText className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">6. Documentation & Handover</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Comprehensive documentation and smooth handover, ensuring clarity for future maintenance.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Why Partner With Us Section */}
+      <section id="why-partner" className="py-24">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Why Partner with NNS Enterprise?
+            </h2>
+            <p className="mt-4 text-lg leading-8 text-muted-foreground">
+              We are more than just a subcontractor; we are an extension of your team, committed to your project's
+              success.
+            </p>
+          </div>
+          <div className="mx-auto mt-16 max-w-5xl">
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              <Card className="hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+                    <Handshake className="h-6 w-6 text-secondary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">Reliable Partnership</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    We integrate seamlessly with your operations, providing dependable support and consistent
+                    communication.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+                    <TrendingUp className="h-6 w-6 text-secondary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">Efficiency & Speed</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Our streamlined processes and experienced teams ensure rapid deployment without compromising
+                    quality.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-lg transition-shadow duration-300">
+                <CardHeader>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+                    <Award className="h-6 w-6 text-secondary-foreground" />
+                  </div>
+                  <CardTitle className="text-lg">Uncompromising Quality</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>
+                    Adherence to international standards and rigorous testing guarantee robust and future-proof fiber
+                    networks.
+                  </CardDescription>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Our Future Vision Section - Expanded */}
+      <section
+        id="future-vision"
+        className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-24 sm:py-32"
+      >
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative mx-auto max-w-7xl px-6 lg:px-8 text-center">
+          <div className="mx-auto max-w-3xl">
+            <Badge variant="secondary" className="mb-4">
+              Expanding Our Horizons
+            </Badge>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Beyond Establishment: Our Vision for Comprehensive Telecom Services
+            </h2>
+            <p className="mt-6 text-lg leading-8 text-muted-foreground">
+              While FTTH establishment is our core, we are actively expanding our capabilities to offer a wider array of
+              technical services, including repair, maintenance, and advanced network solutions.
+            </p>
+            <div className="mx-auto mt-16 max-w-5xl">
+              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                  <CardHeader>
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                      <Wrench className="h-6 w-6 text-primary-foreground" />
+                    </div>
+                    <CardTitle className="text-lg">Repair & Maintenance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Proactive and reactive services to ensure the continuous optimal performance of fiber networks.
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+
+                <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                  <CardHeader>
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                      <Network className="h-6 w-6 text-primary-foreground" />
+                    </div>
+                    <CardTitle className="text-lg">Network Optimization</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Enhancing existing infrastructure for improved speed, reliability, and future scalability.
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+
+                <Card className="text-center hover:shadow-lg transition-shadow duration-300">
+                  <CardHeader>
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                      <Settings className="h-6 w-6 text-primary-foreground" />
+                    </div>
+                    <CardTitle className="text-lg">Advanced Technical Services</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Specialized technical consulting and custom solutions for complex telecom challenges.
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Our Approach Section - New Creative Section */}
+      <section className="py-24 bg-background">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Our Collaborative Approach
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              We believe in transparent communication and seamless integration with your project teams.
+            </p>
+          </div>
+          <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+            <Card className="hover:shadow-lg transition-shadow duration-300">
+              <CardHeader>
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                  <Users className="h-6 w-6 text-primary-foreground" />
+                </div>
+                <CardTitle className="text-lg">Dedicated Project Teams</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Each project is assigned a dedicated team, ensuring consistent communication and accountability.
+                </CardDescription>
+              </CardContent>
+            </Card>
+            <Card className="hover:shadow-lg transition-shadow duration-300">
+              <CardHeader>
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                  <ShieldCheck className="h-6 w-6 text-primary-foreground" />
+                </div>
+                <CardTitle className="text-lg">Quality Assurance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Rigorous quality checks at every stage guarantee the highest standards of work.
+                </CardDescription>
+              </CardContent>
+            </Card>
+            <Card className="hover:shadow-lg transition-shadow duration-300">
+              <CardHeader>
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                  <Rocket className="h-6 w-6 text-primary-foreground" />
+                </div>
+                <CardTitle className="text-lg">Agile Deployment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Flexible and adaptive deployment strategies to meet evolving project requirements and timelines.
+                </CardDescription>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-24 bg-primary">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8 text-center">
+          <div className="mx-auto max-w-2xl">
+            <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl">
+              Ready to Partner for Seamless Connectivity?
+            </h2>
+            <p className="mt-4 text-lg text-primary-foreground/80">
+              Let's discuss how NNS Enterprise can support your next fiber optic project or future technical needs.
+            </p>
+            <div className="mt-10 flex items-center justify-center gap-x-6">
+              <Button size="lg" variant="secondary" onClick={handleAuthAction}>
+                {user ? "Go to Dashboard" : "Request a Proposal"}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                asChild
+                className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary bg-transparent"
+              >
+                <Link href="/welcome/contact">
+                  <PhoneCall className="mr-2 h-4 w-4" />
+                  Contact Sales
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
     </PublicLayout>
   )
 }

@@ -1,4 +1,4 @@
-import { supabaseServer } from "@/lib/supabase-server" // Corrected import
+import { supabaseServer } from "@/lib/supabase-server"
 import { PublicLayout } from "@/components/layout/public-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -17,10 +17,12 @@ interface JobVacancy {
 }
 
 async function fetchJobVacancies(): Promise<JobVacancy[]> {
-  const supabase = supabaseServer // Corrected usage
+  const supabase = supabaseServer
+  const today = new Date().toISOString() // Get current date in ISO format
   const { data, error } = await supabase
     .from("job_vacancies")
     .select("id, title, description, location, employment_type, created_at, end_date")
+    .gte("end_date", today) // Filter to show only jobs not yet expired
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -73,7 +75,7 @@ export default async function JobListingsPage() {
               ))
             ) : (
               <p className="col-span-full text-center text-muted-foreground">
-                No job vacancies available at the moment. Please check back later!
+                No active job vacancies available at the moment. Please check back later!
               </p>
             )}
           </div>
