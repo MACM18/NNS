@@ -1,102 +1,133 @@
-import { Button } from "@/components/ui/button"
+"use client"
+
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { BookOpen, Calendar, Tag, Search, Clock, ArrowRight } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { User, Tag, CalendarDays, Clock } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { PublicLayout } from "@/components/layout/public-layout"
 import { supabase } from "@/lib/supabase"
 import type { Blog } from "@/types/content"
-import Link from "next/link"
 
-export const revalidate = 0 // Ensure data is fresh on every request
+export default function InsightsPage() {
+  const [blogs, setBlogs] = useState<Blog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
 
-export default async function InsightsPage() {
-  const { data: blogs, error } = await supabase
-    .from("blogs")
-    .select("*")
-    .eq("status", "active") // Only show active blogs
-    .order("published_at", { ascending: false })
+  useEffect(() => {
+    fetchBlogs()
+  }, [])
 
-  if (error) {
-    console.error("Error fetching blogs:", error)
-    return (
-      <div className="container mx-auto py-12 px-4 md:px-6">
-        <h1 className="text-4xl font-bold text-center mb-8">Our Blog</h1>
-        <p className="text-center text-red-500">Failed to load blog posts. Please try again later.</p>
-      </div>
-    )
+  const fetchBlogs = async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from("blogs")
+        .select("*")
+        .eq("status", "active") // Only show active blogs
+        .order("published_at", { ascending: false })
+
+      if (error) throw error
+      setBlogs(data || [])
+    } catch (error) {
+      console.error("Error fetching blogs:", error)
+      // Optionally show a toast or error message to the user
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const activeBlogs: Blog[] = blogs || []
+  const filteredBlogs = blogs.filter((blog) => {
+    const matchesSearch =
+      blog.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      blog.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      blog.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (blog.category && blog.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (blog.tags && blog.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase())))
+    return matchesSearch
+  })
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 py-12 px-4 md:px-6">
-      <div className="container mx-auto">
-        <h1 className="text-4xl md:text-5xl font-extrabold text-center text-gray-900 dark:text-gray-50 mb-6">
-          NNS Insights
-        </h1>
-        <p className="text-xl text-center text-gray-600 dark:text-gray-400 mb-12 max-w-3xl mx-auto">
-          Dive into our latest articles, industry analyses, and expert opinions on telecommunications and fiber optics.
-        </p>
+    <PublicLayout>
+      <section className="py-12 md:py-24 lg:py-32 bg-background">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Our Insights & Blog</h1>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Dive into our latest articles, thought leadership, and industry analysis.
+            </p>
+          </div>
 
-        {activeBlogs.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-2xl text-gray-700 dark:text-gray-300">No blog posts published yet. Check back soon!</p>
+          <div className="mt-12 flex justify-center">
+            <div className="relative w-full max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Input
+                placeholder="Search insights..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 rounded-md border border-input focus:ring-primary focus:border-primary w-full"
+              />
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {activeBlogs.map((blog) => (
-              <Card key={blog.id} className="flex flex-col h-full hover:shadow-lg transition-shadow duration-300">
-                {blog.featured_image_url && (
-                  <img
-                    src={blog.featured_image_url || "/placeholder.svg"}
-                    alt={blog.title}
-                    width={400}
-                    height={225}
-                    className="w-full h-48 object-cover rounded-t-lg"
-                  />
-                )}
-                <CardHeader>
-                  <CardTitle className="text-2xl font-bold text-gray-900 dark:text-gray-50 line-clamp-2">
-                    {blog.title}
-                  </CardTitle>
-                  <CardDescription className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                    <User className="h-4 w-4" />
-                    {blog.author}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-grow space-y-4">
-                  <div className="flex flex-wrap gap-2">
-                    {blog.category && (
-                      <Badge variant="secondary" className="flex items-center gap-1">
-                        <Tag className="h-3 w-3" />
-                        {blog.category}
-                      </Badge>
-                    )}
-                    {blog.published_at && (
-                      <Badge variant="outline" className="flex items-center gap-1">
-                        <CalendarDays className="h-3 w-3" />
-                        {new Date(blog.published_at).toLocaleDateString()}
-                      </Badge>
-                    )}
-                    {blog.reading_time && (
-                      <Badge variant="outline" className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {blog.reading_time} min read
-                      </Badge>
-                    )}
+
+          {loading ? (
+            <div className="text-center py-16 text-muted-foreground">Loading insights...</div>
+          ) : filteredBlogs.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">No insights or blog posts found.</div>
+          ) : (
+            <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredBlogs.map((blog) => (
+                <Card
+                  key={blog.id}
+                  className="flex flex-col justify-between hover:shadow-lg transition-shadow duration-300"
+                >
+                  <CardHeader>
+                    <CardTitle className="text-xl font-semibold line-clamp-2">{blog.title}</CardTitle>
+                    <CardDescription className="flex items-center gap-2 text-muted-foreground">
+                      <BookOpen className="h-4 w-4" />
+                      <span>By {blog.author}</span>
+                    </CardDescription>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {blog.category && <Badge variant="secondary">{blog.category}</Badge>}
+                      {blog.tags &&
+                        blog.tags.map((tag, index) => (
+                          <Badge key={index} variant="outline" className="flex items-center gap-1">
+                            <Tag className="h-3 w-3" /> {tag}
+                          </Badge>
+                        ))}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex-grow">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {blog.excerpt || blog.content.substring(0, 150) + "..."}
+                    </p>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-4">
+                      <Calendar className="h-4 w-4" />
+                      <span>
+                        Published: {blog.published_at ? new Date(blog.published_at).toLocaleDateString() : "Draft"}
+                      </span>
+                      {blog.reading_time && (
+                        <span className="flex items-center gap-1 ml-auto">
+                          <Clock className="h-4 w-4" /> {blog.reading_time} min read
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
+                  <div className="p-6 pt-0">
+                    <Link href={`/insights/${blog.id}`} passHref>
+                      <Button variant="outline" className="w-full bg-transparent">
+                        Read Blog <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
                   </div>
-                  <p className="text-gray-700 dark:text-gray-300 line-clamp-3">{blog.excerpt || blog.content}</p>
-                </CardContent>
-                {/* Placeholder for actual blog detail page */}
-                <div className="p-6 pt-0">
-                  <Link href={`/insights/${blog.slug || blog.id}`} passHref>
-                    <Button className="w-full">Read Article</Button>
-                  </Link>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    </PublicLayout>
   )
 }

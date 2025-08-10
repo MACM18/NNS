@@ -1,121 +1,116 @@
-import type React from "react"
-import Link from "next/link"
-import { cn } from "@/lib/utils"
-import { Home, Users, Settings, Briefcase, FileText, Package, Phone, BarChart2, Newspaper, Search } from "lucide-react"
+"use client";
 
-export function MainNav({ className, ...props }: React.HTMLAttributes<HTMLElement>) {
-  const navItems = [
-    {
-      name: "Home",
-      href: "/",
-    },
-    {
-      name: "Careers",
-      href: "/job-listings",
-    },
-    {
-      name: "Articles",
-      href: "/articles",
-    },
-    {
-      name: "Insights",
-      href: "/insights",
-    },
-  ]
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Menu, X, Building2 } from "lucide-react";
+import { useState } from "react";
+import { Button } from "./ui/button";
+import { cn } from "@/lib/utils";
+
+const navigation = [
+  { name: "Home", href: "/welcome" },
+  { name: "About", href: "/welcome/about" },
+  { name: "Blog", href: "/welcome/blog" },
+  { name: "Careers", href: "/welcome/careers" },
+  { name: "Contact", href: "/welcome/contact" },
+];
+
+export function Navigation() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   return (
-    <nav className={cn("flex items-center space-x-4 lg:space-x-6", className)} {...props}>
-      {navItems.map((item) => (
-        <Link key={item.name} href={item.href} className="text-sm font-medium transition-colors hover:text-primary">
-          {item.name}
-        </Link>
-      ))}
-    </nav>
-  )
-}
+    <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
+      <nav
+        className='mx-auto flex max-w-7xl items-center justify-between p-6 lg:px-8'
+        aria-label='Global'
+      >
+        <div className='flex lg:flex-1'>
+          <Link
+            href='/welcome'
+            className='-m-1.5 p-1.5 flex items-center space-x-2'
+          >
+            <Building2 className='h-8 w-8 text-primary' />
+            <span className='text-xl font-bold text-foreground'>
+              NNS Enterprise
+            </span>
+          </Link>
+        </div>
+        <div className='flex lg:hidden'>
+          <Button
+            variant='ghost'
+            className='-m-2.5 inline-flex items-center justify-center rounded-md p-2.5 text-foreground'
+            onClick={() => setMobileMenuOpen(true)}
+          >
+            <span className='sr-only'>Open main menu</span>
+            <Menu className='h-6 w-6' aria-hidden='true' />
+          </Button>
+        </div>
+        <div className='hidden lg:flex lg:gap-x-12'>
+          {navigation.map((item) => (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={cn(
+                "text-sm font-semibold leading-6 transition-colors hover:text-primary",
+                pathname === item.href ? "text-primary" : "text-foreground"
+              )}
+            >
+              {item.name}
+            </Link>
+          ))}
+        </div>
+        <div className='hidden lg:flex lg:flex-1 lg:justify-end'></div>
+      </nav>
 
-export function DashboardNav({ className, ...props }: React.HTMLAttributes<HTMLElement>) {
-  const navItems = [
-    {
-      name: "Dashboard",
-      href: "/dashboard",
-      icon: Home,
-      description: "Overview of system metrics",
-    },
-    {
-      name: "Users",
-      href: "/users",
-      icon: Users,
-      description: "Manage user accounts and roles",
-    },
-    {
-      name: "Lines",
-      href: "/lines",
-      icon: Phone,
-      description: "Manage telephone lines and services",
-    },
-    {
-      name: "Inventory",
-      href: "/inventory",
-      icon: Package,
-      description: "Track and manage equipment inventory",
-    },
-    {
-      name: "Invoices",
-      href: "/invoices",
-      icon: FileText,
-      description: "Handle billing and invoice generation",
-    },
-    {
-      name: "Tasks",
-      href: "/tasks",
-      icon: Briefcase,
-      description: "Assign and track operational tasks",
-    },
-    {
-      name: "Reports",
-      href: "/reports",
-      icon: BarChart2,
-      description: "Generate and view system reports",
-    },
-    {
-      name: "Careers",
-      href: "/careers",
-      icon: Briefcase,
-      description: "Manage job vacancies",
-    },
-    {
-      name: "Content",
-      href: "/content",
-      icon: Newspaper,
-      description: "Manage posts and blogs",
-    },
-    {
-      name: "Search",
-      href: "/search",
-      icon: Search,
-      description: "Advanced search functionality",
-    },
-    {
-      name: "Settings",
-      href: "/settings",
-      icon: Settings,
-      description: "Configure system settings",
-    },
-  ]
-
-  return (
-    <nav className={cn("grid items-start gap-2 text-sm font-medium", className)} {...props}>
-      {navItems.map((item) => (
-        <Link
-          key={item.name}
-          href={item.href}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-50"
-        >
-          <item.icon className="h-4 w-4" />
-          {item.name}
-        </Link>
-      ))}
-    </nav>
-  )
+      {/* Mobile menu */}
+      {mobileMenuOpen && (
+        <div className='lg:hidden' role='dialog' aria-modal='true'>
+          <div className='fixed inset-0 z-50'></div>
+          <div className='fixed inset-y-0 right-0 z-50 w-full overflow-y-auto bg-background px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-border'>
+            <div className='flex items-center justify-between'>
+              <Link
+                href='/welcome'
+                className='-m-1.5 p-1.5 flex items-center space-x-2'
+              >
+                <Building2 className='h-8 w-8 text-primary' />
+                <span className='text-xl font-bold text-foreground'>
+                  NNS Enterprise
+                </span>
+              </Link>
+              <Button
+                variant='ghost'
+                className='-m-2.5 rounded-md p-2.5 text-foreground'
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <span className='sr-only'>Close menu</span>
+                <X className='h-6 w-6' aria-hidden='true' />
+              </Button>
+            </div>
+            <div className='mt-6 flow-root'>
+              <div className='-my-6 divide-y divide-border'>
+                <div className='space-y-2 py-6'>
+                  {navigation.map((item) => (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={cn(
+                        "-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 transition-colors hover:bg-muted",
+                        pathname === item.href
+                          ? "text-primary"
+                          : "text-foreground"
+                      )}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      {item.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </header>
+  );
 }

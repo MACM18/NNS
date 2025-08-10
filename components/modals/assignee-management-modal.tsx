@@ -1,229 +1,263 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabase"
-import { toast } from "@/hooks/use-toast"
-import { Loader2, Plus, Trash2 } from "lucide-react"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Search, UserPlus, UserMinus } from "lucide-react"
+import { getSupabaseClient } from "@/lib/supabase"
+import { useNotification } from "@/contexts/notification-context"
 
-interface UserProfile {
+interface Profile {
   id: string
-  full_name: string | null
-  email: string
+  full_name: string
   role: string
+  email?: string
 }
 
 interface AssigneeManagementModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  lineId: string | null
   onSuccess: () => void
 }
 
-export function AssigneeManagementModal({ open, onOpenChange, onSuccess }: AssigneeManagementModalProps) {
-  const [users, setUsers] = useState<UserProfile[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [newUserName, setNewUserName] = useState("")
-  const [newUserEmail, setNewUserEmail] = useState("")
-  const [newUserPassword, setNewUserPassword] = useState("")
-  const [isAddingUser, setIsAddingUser] = useState(false)
+export function AssigneeManagementModal({ open, onOpenChange, lineId, onSuccess }: AssigneeManagementModalProps) {
+  const [loading, setLoading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [allUsers, setAllUsers] = useState<Profile[]>([])
+  const [currentAssignees, setCurrentAssignees] = useState<Profile[]>([])
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
+
+  const supabase = getSupabaseClient()
+  const { addNotification } = useNotification()
 
   useEffect(() => {
-    if (open) {
+    if (open && lineId) {
       fetchUsers()
+      fetchCurrentAssignees()
     }
-  }, [open])
+  }, [open, lineId])
 
   const fetchUsers = async () => {
-    setLoading(true)
-    setError(null)
-    const { data: profiles, error: profilesError } = await supabase.from("profiles").select("*")
-    const { data: authUsers, error: authUsersError } = await supabase.auth.admin.listUsers()
-
-    if (profilesError || authUsersError) {
-      console.error("Error fetching users:", profilesError || authUsersError)
-      setError("Failed to load user data.")
-      toast({
-        title: "Error",
-        description: "Failed to load user data.",
-        variant: "destructive",
-      })
-    } else {
-      const combinedUsers: UserProfile[] =
-        authUsers?.users.map((authUser) => {
-          const profile = profiles?.find((p) => p.id === authUser.id)
-          return {
-            id: authUser.id,
-            full_name: profile?.full_name || authUser.email,
-            email: authUser.email || "N/A",
-            role: profile?.role || "user", // Default role if not found in profile
-          }
-        }) || []
-      setUsers(combinedUsers)
-    }
-    setLoading(false)
-  }
-
-  const handleAddUser = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsAddingUser(true)
     try {
-      const { data, error } = await supabase.auth.admin.createUser({
-        email: newUserEmail,
-        password: newUserPassword,
-        email_confirm: true,
-        user_metadata: { full_name: newUserName },
-      })
+      const { data: profiles, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, role, email")
+        .order("full_name")
 
       if (error) throw error
 
-      // Optionally update profile role if needed, though handle_new_user trigger handles basic profile creation
-      toast({
-        title: "User Added",
-        description: `User ${newUserEmail} created successfully.`,
+      setAllUsers(profiles || [])
+    } catch (error: any) {
+      addNotification({
+        title: "Error",
+        message: "Failed to fetch users",
+        type: "error",
       })
-      setNewUserName("")
-      setNewUserEmail("")
-      setNewUserPassword("")
-      fetchUsers() // Refresh the list
+    }
+  }
+
+  const fetchCurrentAssignees = async () => {
+    if (!lineId) return
+
+    try {
+      const { data: assignees, error } = await supabase
+        .from("line_assignees")
+        .select(`
+          profiles!inner(
+            id,
+            full_name,
+            role,
+            email
+          )
+        `)
+        .eq("line_id", lineId)
+
+      if (error) throw error
+
+      const assigneeProfiles = assignees?.map((a: any) => a.profiles) || []
+      setCurrentAssignees(assigneeProfiles)
+      setSelectedUsers(new Set(assigneeProfiles.map((p: Profile) => p.id)))
+    } catch (error: any) {
+      addNotification({
+        title: "Error",
+        message: "Failed to fetch current assignees",
+        type: "error",
+      })
+    }
+  }
+
+  const handleUserToggle = (userId: string) => {
+    const newSelected = new Set(selectedUsers)
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId)
+    } else {
+      newSelected.add(userId)
+    }
+    setSelectedUsers(newSelected)
+  }
+
+  const handleSave = async () => {
+    if (!lineId) return
+
+    setLoading(true)
+    try {
+      // Get current assignee IDs
+      const currentIds = new Set(currentAssignees.map((a) => a.id))
+      const selectedIds = selectedUsers
+
+      // Find users to add and remove
+      const toAdd = Array.from(selectedIds).filter((id) => !currentIds.has(id))
+      const toRemove = Array.from(currentIds).filter((id) => !selectedIds.has(id))
+
+      // Remove assignees
+      if (toRemove.length > 0) {
+        const { error: removeError } = await supabase
+          .from("line_assignees")
+          .delete()
+          .eq("line_id", lineId)
+          .in("user_id", toRemove)
+
+        if (removeError) throw removeError
+      }
+
+      // Add new assignees
+      if (toAdd.length > 0) {
+        const { error: addError } = await supabase.from("line_assignees").insert(
+          toAdd.map((userId) => ({
+            line_id: lineId,
+            user_id: userId,
+            assigned_at: new Date().toISOString(),
+          })),
+        )
+
+        if (addError) throw addError
+      }
+
+      addNotification({
+        title: "Success",
+        message: "Assignees updated successfully",
+        type: "success",
+      })
+
       onSuccess()
     } catch (error: any) {
-      console.error("Error adding user:", error)
-      toast({
+      addNotification({
         title: "Error",
-        description: error.message || "Failed to add user.",
-        variant: "destructive",
+        message: error.message,
+        type: "error",
       })
     } finally {
-      setIsAddingUser(false)
+      setLoading(false)
     }
   }
 
-  const handleDeleteUser = async (id: string) => {
-    try {
-      const { error } = await supabase.auth.admin.deleteUser(id)
-      if (error) throw error
-      toast({
-        title: "User Deleted",
-        description: "User removed successfully.",
-      })
-      fetchUsers() // Refresh the list
-      onSuccess()
-    } catch (error: any) {
-      console.error("Error deleting user:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete user.",
-        variant: "destructive",
-      })
-    }
-  }
+  const filteredUsers = allUsers.filter(
+    (user) =>
+      user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.role?.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Manage Assignees</DialogTitle>
-          <DialogDescription>Add or remove users who can be assigned tasks.</DialogDescription>
+          <DialogTitle>Manage Line Assignees</DialogTitle>
+          <DialogDescription>Select team members to assign to this line installation.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <h3 className="text-lg font-medium">Add New User</h3>
-          <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="newUserName">Full Name</Label>
-              <Input id="newUserName" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newUserEmail">Email</Label>
-              <Input
-                id="newUserEmail"
-                type="email"
-                value={newUserEmail}
-                onChange={(e) => setNewUserEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newUserPassword">Password</Label>
-              <Input
-                id="newUserPassword"
-                type="password"
-                value={newUserPassword}
-                onChange={(e) => setNewUserPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" disabled={isAddingUser} className="md:col-span-3">
-              {isAddingUser ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding User...
-                </>
-              ) : (
-                <>
-                  <Plus className="mr-2 h-4 w-4" /> Add User
-                </>
-              )}
-            </Button>
-          </form>
 
-          <h3 className="text-lg font-medium mt-6">Existing Users</h3>
-          {loading ? (
-            <div className="flex justify-center items-center">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : error ? (
-            <p className="text-red-500">{error}</p>
-          ) : users.length === 0 ? (
-            <p className="text-muted-foreground">No users found.</p>
-          ) : (
-            <div className="space-y-2">
-              {users.map((user) => (
-                <div key={user.id} className="flex items-center justify-between p-2 border rounded-md">
-                  <div>
-                    <p className="font-medium">{user.full_name || user.email}</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
-                    <p className="text-xs text-muted-foreground">Role: {user.role}</p>
-                  </div>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete the user and all associated data.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteUser(user.id)}>Continue</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              ))}
+        <div className="flex-1 overflow-hidden flex flex-col space-y-4">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search users by name, email, or role..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Current Assignees Summary */}
+          {currentAssignees.length > 0 && (
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <Label className="text-sm font-medium">Currently Assigned:</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {currentAssignees.map((assignee) => (
+                  <Badge key={assignee.id} variant="secondary" className="flex items-center gap-1">
+                    <Avatar className="h-4 w-4">
+                      <AvatarFallback className="text-xs">{assignee.full_name?.charAt(0) || "U"}</AvatarFallback>
+                    </Avatar>
+                    {assignee.full_name}
+                  </Badge>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* User List */}
+          <div className="flex-1 overflow-y-auto space-y-2">
+            {filteredUsers.map((user) => (
+              <div
+                key={user.id}
+                className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                onClick={() => handleUserToggle(user.id)}
+              >
+                <Checkbox checked={selectedUsers.has(user.id)} onChange={() => handleUserToggle(user.id)} />
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback>{user.full_name?.charAt(0) || "U"}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{user.full_name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                    <Badge variant="outline" className="text-xs">
+                      {user.role}
+                    </Badge>
+                  </div>
+                </div>
+                {selectedUsers.has(user.id) ? (
+                  <UserMinus className="h-4 w-4 text-red-500" />
+                ) : (
+                  <UserPlus className="h-4 w-4 text-green-500" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {filteredUsers.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">No users found matching your search.</div>
+          )}
         </div>
+
+        <DialogFooter>
+          <div className="flex justify-between items-center w-full">
+            <p className="text-sm text-muted-foreground">
+              {selectedUsers.size} user{selectedUsers.size !== 1 ? "s" : ""} selected
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={loading}>
+                {loading ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

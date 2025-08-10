@@ -1,122 +1,166 @@
-"use client"
-import { useState } from "react"
-import type React from "react"
-
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { supabase } from "@/lib/supabase"
-import { toast } from "@/hooks/use-toast"
-import { Loader2 } from "lucide-react"
+"use client";
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getSupabaseClient } from "@/lib/supabase";
+import { toast } from "@/hooks/use-toast";
 
 interface CreateUserModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSuccess: () => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
 }
 
-export function CreateUserModal({ open, onOpenChange, onSuccess }: CreateUserModalProps) {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [fullName, setFullName] = useState("")
-  const [role, setRole] = useState("user")
-  const [loading, setLoading] = useState(false)
+export function CreateUserModal({
+  open,
+  onOpenChange,
+  onSuccess,
+}: CreateUserModalProps) {
+  const [form, setForm] = useState({
+    email: "",
+    full_name: "",
+    password: "",
+    role: "user",
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (field: string, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-
+    e.preventDefault();
+    setLoading(true);
     try {
-      // Create user in Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true, // Automatically confirm email for admin created users
-      })
-
-      if (authError) throw authError
-
-      // Insert profile data
+      const supabase = getSupabaseClient();
+      // Create user in auth
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: form.email,
+        password: form.password,
+        email_confirm: true,
+        user_metadata: { full_name: form.full_name },
+      });
+      if (error) throw error;
+      // Create profile
       const { error: profileError } = await supabase.from("profiles").insert({
-        id: authData.user?.id,
-        full_name: fullName,
-        role,
-      })
-
-      if (profileError) throw profileError
-
+        id: data.user.id,
+        email: form.email,
+        full_name: form.full_name,
+        role: form.role,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      if (profileError) throw profileError;
       toast({
         title: "User Created",
-        description: `User ${email} created successfully with role ${role}.`,
-      })
-      onSuccess()
-      setEmail("")
-      setPassword("")
-      setFullName("")
-      setRole("user")
+        description: "User account created successfully.",
+      });
+      onSuccess();
+      onOpenChange(false);
+      setForm({ email: "", full_name: "", password: "", role: "user" });
     } catch (error: any) {
-      console.error("Error creating user:", error)
       toast({
         title: "Error",
-        description: error.message || "Failed to create user. Please try again.",
+        description: error.message,
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className='max-w-md'>
         <DialogHeader>
-          <DialogTitle>Create New User</DialogTitle>
-          <DialogDescription>Fill in the details for the new user account.</DialogDescription>
+          <DialogTitle>Create User</DialogTitle>
+          <DialogDescription>
+            Fill in the details to create a new user account.
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="fullName">Full Name</Label>
-            <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
+        <form onSubmit={handleSubmit} className='space-y-4'>
+          <div>
+            <label htmlFor='full_name' className='block mb-1'>
+              Full Name
+            </label>
             <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              id='full_name'
+              value={form.full_name}
+              onChange={(e) => handleChange("full_name", e.target.value)}
               required
             />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={setRole} required>
-              <SelectTrigger id="role">
-                <SelectValue placeholder="Select role" />
+          <div>
+            <label htmlFor='email' className='block mb-1'>
+              Email
+            </label>
+            <Input
+              id='email'
+              type='email'
+              value={form.email}
+              onChange={(e) => handleChange("email", e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor='password' className='block mb-1'>
+              Password
+            </label>
+            <Input
+              id='password'
+              type='password'
+              value={form.password}
+              onChange={(e) => handleChange("password", e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor='role' className='block mb-1'>
+              Role
+            </label>
+            <Select
+              value={form.role}
+              onValueChange={(value) => handleChange("role", value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder='Select role' />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">User</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value='user'>User</SelectItem>
+                <SelectItem value='moderator'>Moderator</SelectItem>
+                <SelectItem value='admin'>Admin</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating User...
-              </>
-            ) : (
-              "Create User"
-            )}
-          </Button>
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type='submit' disabled={loading}>
+              {loading ? "Creating..." : "Create User"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

@@ -1,160 +1,286 @@
-"use client"
-
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { supabase } from "@/lib/supabase"
-import { toast } from "@/hooks/use-toast"
-import { Loader2 } from "lucide-react"
-
-interface InventoryInvoice {
-  id: string
-  invoice_number: string
-  supplier_name: string
-  invoice_date: string
-  total_amount: number
-  status: string
-}
+import React from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface EditInventoryInvoiceModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  invoice: InventoryInvoice | null
-  onSuccess: () => void
+  open: boolean;
+  invoice: any;
+  invoiceItems: any[];
+  onClose: () => void;
+  onSuccess: () => void;
+  supabase: any;
+  addNotification: (n: any) => void;
 }
 
-export function EditInventoryInvoiceModal({ open, onOpenChange, invoice, onSuccess }: EditInventoryInvoiceModalProps) {
-  const [invoiceNumber, setInvoiceNumber] = useState("")
-  const [supplierName, setSupplierName] = useState("")
-  const [invoiceDate, setInvoiceDate] = useState("")
-  const [totalAmount, setTotalAmount] = useState("")
-  const [status, setStatus] = useState("")
-  const [loading, setLoading] = useState(false)
+export const EditInventoryInvoiceModal: React.FC<
+  EditInventoryInvoiceModalProps
+> = ({
+  open,
+  invoice,
+  invoiceItems = [],
+  onClose,
+  onSuccess,
+  supabase,
+  addNotification,
+}) => {
+  const [items, setItems] = React.useState<any[]>(invoiceItems);
+  const [page, setPage] = React.useState(1);
+  const itemsPerPage = 4;
+  React.useEffect(() => {
+    setItems(invoiceItems);
+    setPage(1);
+  }, [invoiceItems]);
+  if (!open || !invoice) return null;
 
-  useEffect(() => {
-    if (invoice) {
-      setInvoiceNumber(invoice.invoice_number)
-      setSupplierName(invoice.supplier_name)
-      setInvoiceDate(invoice.invoice_date)
-      setTotalAmount(invoice.total_amount.toString())
-      setStatus(invoice.status)
-    }
-  }, [invoice])
+  const totalPages = Math.ceil(items.length / itemsPerPage);
+  const paginatedItems = items.slice(
+    (page - 1) * itemsPerPage,
+    page * itemsPerPage
+  );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-
-    if (!invoice) {
-      toast({
-        title: "Error",
-        description: "No invoice selected for editing.",
-        variant: "destructive",
-      })
-      setLoading(false)
-      return
-    }
-
-    const { error } = await supabase
-      .from("inventory_invoices")
-      .update({
-        invoice_number: invoiceNumber,
-        supplier_name: supplierName,
-        invoice_date: invoiceDate,
-        total_amount: Number.parseFloat(totalAmount),
-        status,
-      })
-      .eq("id", invoice.id)
-
-    if (error) {
-      console.error("Error updating inventory invoice:", error)
-      toast({
-        title: "Error",
-        description: "Failed to update inventory invoice. Please try again.",
-        variant: "destructive",
-      })
-    } else {
-      toast({
-        title: "Success",
-        description: "Inventory invoice updated successfully.",
-      })
-      onSuccess()
-      onOpenChange(false)
-    }
-    setLoading(false)
-  }
+  const handleItemChange = (idx: number, field: string, value: any) => {
+    setItems((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, [field]: value } : item))
+    );
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className='max-w-2xl'>
         <DialogHeader>
           <DialogTitle>Edit Inventory Invoice</DialogTitle>
-          <DialogDescription>Make changes to the inventory invoice details.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="invoiceNumber">Invoice Number</Label>
-            <Input
-              id="invoiceNumber"
-              value={invoiceNumber}
-              onChange={(e) => setInvoiceNumber(e.target.value)}
-              required
-            />
+        <form
+          className='space-y-4'
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const updatedInvoice = {
+              warehouse: formData.get("warehouse") as string,
+              date: formData.get("date") as string,
+              issued_by: formData.get("issued_by") as string,
+              drawn_by: formData.get("drawn_by") as string,
+              status: formData.get("status") as string,
+            };
+            const { error: invoiceError } = await supabase
+              .from("inventory_invoices")
+              .update(updatedInvoice)
+              .eq("id", invoice.id);
+            let itemError = null;
+            for (const item of items) {
+              const { error } = await supabase
+                .from("inventory_invoice_items")
+                .update({
+                  description: item.description,
+                  unit: item.unit,
+                  quantity_requested: Number(item.quantity_requested),
+                  quantity_issued: Number(item.quantity_issued),
+                })
+                .eq("id", item.id);
+              if (error) itemError = error;
+            }
+            if (invoiceError || itemError) {
+              addNotification({
+                title: "Error",
+                message: `Failed to update invoice: ${
+                  invoiceError?.message || itemError?.message
+                }`,
+                type: "error",
+                category: "system",
+              });
+            } else {
+              addNotification({
+                title: "Invoice Updated",
+                message: `Invoice updated successfully`,
+                type: "success",
+                category: "system",
+              });
+              onSuccess();
+              onClose();
+            }
+          }}
+        >
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <div>
+              <Label htmlFor='invoice_number'>Invoice Number</Label>
+              <Input
+                name='invoice_number'
+                id='invoice_number'
+                value={invoice.invoice_number}
+                disabled
+                className='bg-muted cursor-not-allowed'
+              />
+            </div>
+            <div>
+              <Label htmlFor='warehouse'>Warehouse</Label>
+              <Input
+                name='warehouse'
+                id='warehouse'
+                defaultValue={invoice.warehouse}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor='date'>Date</Label>
+              <Input
+                name='date'
+                id='date'
+                type='date'
+                defaultValue={invoice.date?.slice(0, 10)}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor='issued_by'>Issued By</Label>
+              <Input
+                name='issued_by'
+                id='issued_by'
+                defaultValue={invoice.issued_by}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor='drawn_by'>Drawn By</Label>
+              <Input
+                name='drawn_by'
+                id='drawn_by'
+                defaultValue={invoice.drawn_by}
+              />
+            </div>
+            <div>
+              <Label htmlFor='status'>Status</Label>
+              <Select name='status' defaultValue={invoice.status} required>
+                <SelectTrigger id='status'>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='pending'>Pending</SelectItem>
+                  <SelectItem value='completed'>Completed</SelectItem>
+                  <SelectItem value='cancelled'>Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="supplierName">Supplier Name</Label>
-            <Input id="supplierName" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="invoiceDate">Invoice Date</Label>
-            <Input
-              id="invoiceDate"
-              type="date"
-              value={invoiceDate}
-              onChange={(e) => setInvoiceDate(e.target.value)}
-              required
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="totalAmount">Total Amount</Label>
-            <Input
-              id="totalAmount"
-              type="number"
-              step="0.01"
-              value={totalAmount}
-              onChange={(e) => setTotalAmount(e.target.value)}
-              required
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="status">Status</Label>
-            <Select value={status} onValueChange={setStatus} required>
-              <SelectTrigger id="status">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="due">Due</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving Changes...
-              </>
-            ) : (
-              "Save Changes"
+          <div className='mt-6'>
+            <h4 className='font-semibold mb-2'>Invoice Items</h4>
+            <div className='space-y-4'>
+              {paginatedItems.map((item, idx) => {
+                const globalIdx = (page - 1) * itemsPerPage + idx;
+                return (
+                  <div
+                    key={item.id}
+                    className='grid grid-cols-1 md:grid-cols-4 gap-2 items-end border rounded p-2 bg-muted/30'
+                  >
+                    <div>
+                      <Label>Description</Label>
+                      <Input
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange(
+                            globalIdx,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label>Qty Requested</Label>
+                      <Input
+                        type='number'
+                        min='0'
+                        value={item.quantity_requested}
+                        onChange={(e) =>
+                          handleItemChange(
+                            globalIdx,
+                            "quantity_requested",
+                            e.target.value
+                          )
+                        }
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label>Qty Issued</Label>
+                      <Input
+                        type='number'
+                        min='0'
+                        value={item.quantity_issued}
+                        onChange={(e) =>
+                          handleItemChange(
+                            globalIdx,
+                            "quantity_issued",
+                            e.target.value
+                          )
+                        }
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label>Unit</Label>
+                      <Input
+                        value={item.unit}
+                        onChange={(e) =>
+                          handleItemChange(globalIdx, "unit", e.target.value)
+                        }
+                        required
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className='flex justify-center items-center gap-2 mt-4'>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  disabled={page === 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  Previous
+                </Button>
+                <span className='text-sm'>
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  disabled={page === totalPages}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
             )}
-          </Button>
+          </div>
+          <DialogFooter className='mt-4'>
+            <Button variant='outline' type='button' onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type='submit'>Save</Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  )
-}
+  );
+};
