@@ -62,6 +62,24 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             >
               Contact
             </Link>
+            <Link
+              href="/job-listings"
+              className="text-sm font-semibold leading-6 text-foreground hover:text-primary transition-colors"
+            >
+              Job Listings
+            </Link>
+            <Link
+              href="/articles"
+              className="text-sm font-semibold leading-6 text-foreground hover:text-primary transition-colors"
+            >
+              Articles
+            </Link>
+            <Link
+              href="/insights"
+              className="text-sm font-semibold leading-6 text-foreground hover:text-primary transition-colors"
+            >
+              Insights
+            </Link>
           </div>
           <div className="flex lg:flex-1 lg:justify-end">
             <Button onClick={handleAuthAction} disabled={loading}>
@@ -116,6 +134,21 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <li>
                   <Link href="/welcome/about" className="text-sm text-muted-foreground hover:text-foreground">
                     About Us
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/job-listings" className="text-sm text-muted-foreground hover:text-foreground">
+                    Job Listings
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/articles" className="text-sm text-muted-foreground hover:text-foreground">
+                    Articles
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/insights" className="text-sm text-muted-foreground hover:text-foreground">
+                    Insights
                   </Link>
                 </li>
               </ul>
