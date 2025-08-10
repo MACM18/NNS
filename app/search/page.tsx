@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AdvancedSearchFilters, type SearchFilters } from "@/components/search/advanced-search-filters"
-import { getSupabaseClient } from "@/lib/supabase" // Corrected import
+import { getSupabaseClient } from "@/lib/supabase"
 import Link from "next/link"
 
 interface SearchResult {
@@ -32,7 +32,7 @@ export default function SearchPage() {
   const [searchTime, setSearchTime] = useState<number | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
 
-  const supabase = getSupabaseClient() // Corrected usage
+  const supabase = getSupabaseClient()
 
   useEffect(() => {
     const query = searchParams.get("q")
@@ -43,7 +43,13 @@ export default function SearchPage() {
   }, [])
 
   const performSearch = async (searchFilters = filters) => {
-    if (!searchFilters.query.trim() && searchFilters.categories.length === 4) return
+    if (!searchFilters.query.trim() && searchFilters.categories.length === 0) {
+      setResults([])
+      setHasSearched(false)
+      setSearchTime(null)
+      setIsSearching(false)
+      return
+    }
 
     setIsSearching(true)
     setHasSearched(true)
@@ -63,7 +69,7 @@ export default function SearchPage() {
         }
 
         if (searchFilters.lineStatus && searchFilters.lineStatus !== "all") {
-          lineQuery = lineQuery.eq("status", searchFilters.lineStatus)
+          lineQuery = lineQuery.eq("completed", searchFilters.lineStatus === "completed")
         }
 
         if (searchFilters.lengthRange?.min) {
@@ -75,11 +81,11 @@ export default function SearchPage() {
         }
 
         if (searchFilters.dateRange?.from) {
-          lineQuery = lineQuery.gte("created_at", searchFilters.dateRange.from.toISOString())
+          lineQuery = lineQuery.gte("date", searchFilters.dateRange.from.toISOString())
         }
 
         if (searchFilters.dateRange?.to) {
-          lineQuery = lineQuery.lte("created_at", searchFilters.dateRange.to.toISOString())
+          lineQuery = lineQuery.lte("date", searchFilters.dateRange.to.toISOString())
         }
 
         const { data: lines } = await lineQuery
@@ -157,7 +163,7 @@ export default function SearchPage() {
         }
 
         if (searchFilters.invoiceType && searchFilters.invoiceType !== "all") {
-          invoiceQuery = invoiceQuery.eq("type", searchFilters.invoiceType)
+          invoiceQuery = invoiceQuery.eq("invoice_type", searchFilters.invoiceType)
         }
 
         if (searchFilters.amountRange?.min) {
@@ -190,7 +196,7 @@ export default function SearchPage() {
             type: "invoice",
             title: invoice.invoice_number,
             subtitle: invoice.customer_name,
-            description: `LKR ${invoice.total_amount?.toLocaleString()} • ${invoice.type}`,
+            description: `LKR ${invoice.total_amount?.toLocaleString()} • ${invoice.invoice_type}`,
             relevanceScore,
             metadata: invoice,
           })
@@ -208,7 +214,7 @@ export default function SearchPage() {
         }
 
         if (searchFilters.inventoryLowStock) {
-          inventoryQuery = inventoryQuery.lt("current_stock", 10) // Assuming low stock is < 10
+          inventoryQuery = inventoryQuery.lt("current_stock", supabase.raw("reorder_level"))
         }
 
         if (searchFilters.dateRange?.from) {
@@ -241,7 +247,7 @@ export default function SearchPage() {
       setResults(searchResults)
       setSearchTime(Date.now() - startTime)
     } catch (error) {
-      console.error("Search error:", error)
+      console.error("Advanced search error:", error)
     } finally {
       setIsSearching(false)
     }
