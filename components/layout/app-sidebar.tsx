@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import type * as React from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import type * as React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Home,
   Cable,
@@ -16,7 +16,7 @@ import {
   Search,
   LogOut,
   Building2,
-} from "lucide-react"
+} from "lucide-react";
 
 import {
   Sidebar,
@@ -31,8 +31,8 @@ import {
   SidebarMenuItem,
   SidebarRail,
   SidebarSeparator,
-} from "@/components/ui/sidebar"
-import { useAuth } from "@/contexts/auth-context"
+} from "@/components/ui/sidebar";
+import { useAuth } from "@/contexts/auth-context";
 
 // Menu items.
 const navItems = [
@@ -81,18 +81,20 @@ const navItems = [
     url: "/search",
     icon: Search,
   },
-]
+];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const pathname = usePathname()
-  const { signOut } = useAuth()
+  const pathname = usePathname();
+  const { signOut } = useAuth();
 
   return (
     <Sidebar {...props}>
       <SidebarHeader>
-        <Link href="/dashboard" className="flex items-center space-x-2 p-2">
-          <Building2 className="h-6 w-6 text-primary" />
-          <span className="text-lg font-bold text-foreground">NNS Enterprise</span>
+        <Link href='/' className='flex items-center space-x-2 p-2'>
+          <Building2 className='h-6 w-6 text-primary' />
+          <span className='text-lg font-bold text-foreground'>
+            NNS Enterprise
+          </span>
         </Link>
       </SidebarHeader>
       <SidebarContent>
@@ -120,7 +122,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/profile"}>
-                  <Link href="/profile">
+                  <Link href='/profile'>
                     <Users />
                     <span>Profile</span>
                   </Link>
@@ -128,7 +130,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/settings"}>
-                  <Link href="/settings">
+                  <Link href='/settings'>
                     <Settings />
                     <span>Settings</span>
                   </Link>
@@ -150,5 +152,5 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }
