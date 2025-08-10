@@ -7,18 +7,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { DatePickerWithRange } from "@/components/ui/date-range-picker"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Separator } from "@/components/ui/separator"
+import type { DateRange } from "react-day-picker"
 
 export interface SearchFilters {
   query: string
-  dateRange?: {
-    from: Date
-    to: Date
-  }
+  dateRange?: DateRange
   categories: string[]
   status?: string
   lineStatus?: string
@@ -151,7 +149,7 @@ export function AdvancedSearchFilters({
             {/* Date Range */}
             <div className="space-y-2">
               <Label>Date Range</Label>
-              <DateRangePicker date={filters.dateRange} onDateChange={(dateRange) => updateFilters({ dateRange })} />
+              <DatePickerWithRange date={filters.dateRange} setDate={(dateRange) => updateFilters({ dateRange })} />
             </div>
 
             {/* Line-specific filters */}
