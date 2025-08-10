@@ -1,323 +1,334 @@
+"use client"
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
+  ArrowRight,
   CheckCircle,
   HardHat,
   Lightbulb,
   MapPin,
-  FileText,
-  Handshake,
-  Zap,
+  Network,
+  Rocket,
   ShieldCheck,
-  TrendingUp,
-  Globe,
+  GaugeIcon as Speedometer,
+  Users,
 } from "lucide-react"
-import { getSupabaseClient } from "@/lib/supabase"
-import { redirect } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
+import Image from "next/image"
 
-export default async function LandingPage() {
-  const supabase = getSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const handleAuthRedirect = async () => {
-    "use server"
-    if (user) {
-      redirect("/dashboard")
-    } else {
-      redirect("/login")
-    }
-  }
+export default function LandingPage() {
+  const { user, loading } = useAuth()
 
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-gray-50">
-      <header className="px-4 lg:px-6 h-16 flex items-center justify-between w-full bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-sm fixed top-0 z-50">
-        <Link className="flex items-center justify-center" href="/">
-          <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-8 w-auto" />
-          <span className="sr-only">NNS Enterprise</span>
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="w-full bg-white shadow-sm py-4 px-6 flex justify-between items-center sticky top-0 z-50">
+        <Link href="/" className="flex items-center space-x-2">
+          <Image src="/placeholder-logo.svg" alt="NNS Enterprise Logo" width={40} height={40} />
+          <span className="text-2xl font-bold text-gray-900">NNS Enterprise</span>
         </Link>
-        <nav className="flex gap-4 sm:gap-6">
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="#services">
+        <nav className="hidden md:flex space-x-6">
+          <Link href="#services" className="text-gray-600 hover:text-blue-600 transition-colors">
             Services
           </Link>
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="#why-us">
+          <Link href="#why-us" className="text-gray-600 hover:text-blue-600 transition-colors">
             Why Us
           </Link>
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="#future-vision">
+          <Link href="#future-vision" className="text-gray-600 hover:text-blue-600 transition-colors">
             Future
           </Link>
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="/job-listings">
+          <Link href="/job-listings" className="text-gray-600 hover:text-blue-600 transition-colors">
             Careers
           </Link>
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="/articles">
+          <Link href="/articles" className="text-gray-600 hover:text-blue-600 transition-colors">
             Articles
           </Link>
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="/insights">
+          <Link href="/insights" className="text-gray-600 hover:text-blue-600 transition-colors">
             Insights
           </Link>
-          <form action={handleAuthRedirect}>
-            <Button type="submit" variant="ghost" className="text-sm font-medium">
-              {user ? "Go to Dashboard" : "Sign In"}
-            </Button>
-          </form>
         </nav>
+        <div className="flex items-center space-x-4">
+          {!loading &&
+            (user ? (
+              <Link href="/dashboard">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full shadow-md transition-all duration-300 ease-in-out transform hover:scale-105">
+                  Go to Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <Link href="/login">
+                <Button
+                  variant="outline"
+                  className="border-blue-600 text-blue-600 hover:bg-blue-50 px-6 py-2 rounded-full transition-all duration-300 ease-in-out transform hover:scale-105 bg-transparent"
+                >
+                  Sign In
+                </Button>
+              </Link>
+            ))}
+        </div>
       </header>
 
-      <main className="flex-1 pt-16">
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-r from-blue-600 to-purple-700 text-white flex items-center justify-center text-center">
-          <div className="container px-4 md:px-6 max-w-4xl">
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight mb-4 animate-fade-in-up">
-              Your Trusted Partner in FTTH Infrastructure
+      <main className="flex-1">
+        {/* Hero Section */}
+        <section className="relative w-full h-[600px] bg-gradient-to-r from-blue-600 to-purple-700 flex items-center justify-center text-center px-4 py-12 overflow-hidden">
+          <div className="absolute inset-0 opacity-20">
+            <Image
+              src="/placeholder.svg?height=600&width=1200"
+              alt="Abstract Fiber Optic Network"
+              layout="fill"
+              objectFit="cover"
+              quality={100}
+            />
+          </div>
+          <div className="relative z-10 max-w-4xl mx-auto text-white">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight mb-6 drop-shadow-lg">
+              Your Trusted Partner in FTTH Network Establishment
             </h1>
-            <p className="text-lg md:text-xl mb-8 opacity-90 animate-fade-in-up delay-200">
-              Specializing in seamless Fiber-to-the-Home (FTTH) line establishment for leading telecom providers.
+            <p className="text-xl md:text-2xl mb-8 opacity-90">
+              Specializing in efficient, high-quality Fiber-to-the-Home (FTTH) line deployment as a dedicated
+              subcontractor.
             </p>
-            <form action={handleAuthRedirect}>
-              <Button
-                type="submit"
-                className="bg-white text-blue-600 hover:bg-gray-100 dark:bg-gray-900 dark:text-white dark:hover:bg-gray-700 px-8 py-3 text-lg rounded-full shadow-lg transition-all duration-300 hover:scale-105 animate-fade-in-up delay-400"
-              >
-                {user ? "Access Your Dashboard" : "Get Started"}
-              </Button>
-            </form>
+            <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <Link href="#services">
+                <Button className="bg-white text-blue-700 hover:bg-gray-100 px-8 py-3 rounded-full text-lg font-semibold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105">
+                  Explore Our Services <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              </Link>
+              {!loading &&
+                (user ? (
+                  <Link href="/dashboard">
+                    <Button
+                      variant="outline"
+                      className="border-2 border-white text-white hover:bg-white hover:text-blue-700 px-8 py-3 rounded-full text-lg font-semibold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 bg-transparent"
+                    >
+                      Go to Dashboard
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href="/login">
+                    <Button
+                      variant="outline"
+                      className="border-2 border-white text-white hover:bg-white hover:text-blue-700 px-8 py-3 rounded-full text-lg font-semibold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 bg-transparent"
+                    >
+                      Sign In
+                    </Button>
+                  </Link>
+                ))}
+            </div>
           </div>
         </section>
 
-        <section id="services" className="w-full py-12 md:py-24 lg:py-32 bg-white dark:bg-gray-800">
-          <div className="container px-4 md:px-6">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-gray-900 dark:text-gray-50">
-              Our FTTH Establishment Process
-            </h2>
+        {/* Our Services: FTTH Establishment Process */}
+        <section id="services" className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+          <div className="max-w-7xl mx-auto text-center">
+            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">Our FTTH Establishment Process</h2>
+            <p className="text-xl text-gray-600 mb-12 max-w-3xl mx-auto">
+              We follow a meticulous, step-by-step approach to ensure seamless and reliable fiber optic network
+              deployment.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
                 <CardHeader className="flex flex-col items-center pb-4">
                   <Lightbulb className="h-12 w-12 text-blue-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">1. Planning & Design</CardTitle>
+                  <CardTitle className="text-2xl font-bold text-gray-900">1. Planning & Design</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Meticulous site surveys and network architecture planning to ensure optimal fiber deployment.
-                  </p>
+                <CardContent className="text-gray-600">
+                  Detailed site surveys, network architecture planning, and material estimation to lay the groundwork
+                  for success.
                 </CardContent>
               </Card>
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
                 <CardHeader className="flex flex-col items-center pb-4">
                   <MapPin className="h-12 w-12 text-blue-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">2. Route Mapping & Permitting</CardTitle>
+                  <CardTitle className="text-2xl font-bold text-gray-900">2. Route Preparation</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Precise route identification and efficient acquisition of all necessary permits.
-                  </p>
+                <CardContent className="text-gray-600">
+                  Efficient trenching, duct laying, and pole attachment preparation, minimizing disruption and
+                  maximizing safety.
                 </CardContent>
               </Card>
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
                 <CardHeader className="flex flex-col items-center pb-4">
-                  <HardHat className="h-12 w-12 text-blue-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">3. Infrastructure Deployment</CardTitle>
+                  <Network className="h-12 w-12 text-blue-600 mb-4" />
+                  <CardTitle className="text-2xl font-bold text-gray-900">3. Fiber Laying & Splicing</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Expert trenching, duct laying, and pole installation for robust physical infrastructure.
-                  </p>
+                <CardContent className="text-gray-600">
+                  Precise fiber optic cable installation and expert fusion splicing for robust, high-performance
+                  connections.
                 </CardContent>
               </Card>
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center pb-4">
-                  <Zap className="h-12 w-12 text-blue-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">4. Fiber Optic Cabling</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Precision fiber pulling, splicing, and termination by certified technicians.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
                 <CardHeader className="flex flex-col items-center pb-4">
                   <CheckCircle className="h-12 w-12 text-blue-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">5. Testing & Quality Assurance</CardTitle>
+                  <CardTitle className="text-2xl font-bold text-gray-900">4. Testing & Validation</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Rigorous testing to ensure optimal signal strength, minimal loss, and network reliability.
-                  </p>
+                <CardContent className="text-gray-600">
+                  Rigorous testing using advanced equipment to ensure signal integrity, low loss, and network
+                  reliability.
                 </CardContent>
               </Card>
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
                 <CardHeader className="flex flex-col items-center pb-4">
-                  <FileText className="h-12 w-12 text-blue-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">6. Documentation & Handover</CardTitle>
+                  <HardHat className="h-12 w-12 text-blue-600 mb-4" />
+                  <CardTitle className="text-2xl font-bold text-gray-900">5. Installation & Activation</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Comprehensive documentation and smooth handover to ensure seamless operation for our partners.
-                  </p>
+                <CardContent className="text-gray-600">
+                  Final connection of customer premises equipment (CPE) and activation of services, ensuring end-user
+                  satisfaction.
+                </CardContent>
+              </Card>
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
+                <CardHeader className="flex flex-col items-center pb-4">
+                  <Users className="h-12 w-12 text-blue-600 mb-4" />
+                  <CardTitle className="text-2xl font-bold text-gray-900">6. Documentation & Handover</CardTitle>
+                </CardHeader>
+                <CardContent className="text-gray-600">
+                  Comprehensive documentation of the deployed network and smooth handover to the primary contractor.
                 </CardContent>
               </Card>
             </div>
           </div>
         </section>
 
-        <section id="why-us" className="w-full py-12 md:py-24 lg:py-32 bg-gray-50 dark:bg-gray-900">
-          <div className="container px-4 md:px-6">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-gray-900 dark:text-gray-50">
-              Why Partner with NNS Enterprise?
-            </h2>
+        {/* Why Partner with NNS Enterprise? */}
+        <section id="why-us" className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-100">
+          <div className="max-w-7xl mx-auto text-center">
+            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">Why Partner with NNS Enterprise?</h2>
+            <p className="text-xl text-gray-600 mb-12 max-w-3xl mx-auto">
+              We are committed to delivering excellence and building strong, reliable partnerships.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center pb-4">
-                  <Handshake className="h-12 w-12 text-green-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">Reliable Partnership</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    We are committed to building long-term relationships based on trust, transparency, and mutual
-                    success.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center pb-4">
-                  <Zap className="h-12 w-12 text-green-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">Efficiency & Speed</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Our streamlined processes and experienced teams ensure rapid and efficient project completion.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
                 <CardHeader className="flex flex-col items-center pb-4">
                   <ShieldCheck className="h-12 w-12 text-green-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">Uncompromising Quality</CardTitle>
+                  <CardTitle className="text-2xl font-bold text-gray-900">Reliable Partnership</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    We adhere to the highest industry standards, delivering robust and future-proof fiber networks.
-                  </p>
+                <CardContent className="text-gray-600">
+                  We act as a seamless extension of your team, ensuring project continuity and consistent communication.
+                </CardContent>
+              </Card>
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
+                <CardHeader className="flex flex-col items-center pb-4">
+                  <Speedometer className="h-12 w-12 text-green-600 mb-4" />
+                  <CardTitle className="text-2xl font-bold text-gray-900">Efficiency & Speed</CardTitle>
+                </CardHeader>
+                <CardContent className="text-gray-600">
+                  Our experienced teams and streamlined processes ensure rapid deployment without compromising quality.
+                </CardContent>
+              </Card>
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
+                <CardHeader className="flex flex-col items-center pb-4">
+                  <CheckCircle className="h-12 w-12 text-green-600 mb-4" />
+                  <CardTitle className="text-2xl font-bold text-gray-900">Uncompromising Quality</CardTitle>
+                </CardHeader>
+                <CardContent className="text-gray-600">
+                  We adhere to the highest industry standards, guaranteeing robust and future-proof fiber networks.
                 </CardContent>
               </Card>
             </div>
           </div>
         </section>
 
-        <section id="future-vision" className="w-full py-12 md:py-24 lg:py-32 bg-white dark:bg-gray-800">
-          <div className="container px-4 md:px-6">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-gray-900 dark:text-gray-50">
-              Our Future Vision: Expanding Horizons
-            </h2>
-            <p className="text-xl text-center text-gray-600 dark:text-gray-400 mb-12 max-w-3xl mx-auto">
-              While we excel in FTTH establishment, we are actively expanding our capabilities to offer a broader
-              spectrum of telecom services.
+        {/* Our Future Vision Section */}
+        <section id="future-vision" className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-purple-50">
+          <div className="max-w-7xl mx-auto text-center">
+            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">Our Future Vision: Expanding Horizons</h2>
+            <p className="text-xl text-gray-600 mb-12 max-w-3xl mx-auto">
+              While specializing in FTTH establishment, we are actively planning to broaden our service offerings.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
                 <CardHeader className="flex flex-col items-center pb-4">
-                  <TrendingUp className="h-12 w-12 text-purple-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">Repair & Maintenance Contracts</CardTitle>
+                  <Rocket className="h-12 w-12 text-purple-600 mb-4" />
+                  <CardTitle className="text-2xl font-bold text-gray-900">Repair & Maintenance</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Ensuring the longevity and optimal performance of fiber networks through proactive and reactive
-                    maintenance.
-                  </p>
+                <CardContent className="text-gray-600">
+                  Expanding into comprehensive repair and maintenance contracts to ensure long-term network reliability.
                 </CardContent>
               </Card>
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
+                <CardHeader className="flex flex-col items-center pb-4">
+                  <Network className="h-12 w-12 text-purple-600 mb-4" />
+                  <CardTitle className="text-2xl font-bold text-gray-900">Network Optimization</CardTitle>
+                </CardHeader>
+                <CardContent className="text-gray-600">
+                  Offering advanced services for network performance analysis and optimization to maximize efficiency.
+                </CardContent>
+              </Card>
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1">
                 <CardHeader className="flex flex-col items-center pb-4">
                   <Lightbulb className="h-12 w-12 text-purple-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">Network Optimization</CardTitle>
+                  <CardTitle className="text-2xl font-bold text-gray-900">Advanced Technical Services</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Advanced solutions for enhancing network efficiency, capacity, and overall performance.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="p-6 text-center shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center pb-4">
-                  <Globe className="h-12 w-12 text-purple-600 mb-4" />
-                  <CardTitle className="text-xl font-semibold">Diverse Technical Services</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    Expanding into a wider variety of technical services to meet evolving industry demands.
-                  </p>
+                <CardContent className="text-gray-600">
+                  Venturing into a wider variety of technical services to meet evolving industry demands.
                 </CardContent>
               </Card>
             </div>
-          </div>
-        </section>
-
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-r from-blue-600 to-purple-700 text-white flex items-center justify-center text-center">
-          <div className="container px-4 md:px-6 max-w-3xl">
-            <h2 className="text-3xl md:text-5xl font-bold mb-4">Ready to Build the Future Together?</h2>
-            <p className="text-lg md:text-xl mb-8 opacity-90">
-              Partner with NNS Enterprise for reliable, high-quality FTTH infrastructure and beyond.
-            </p>
-            <form action={handleAuthRedirect}>
-              <Button
-                type="submit"
-                className="bg-white text-blue-600 hover:bg-gray-100 dark:bg-gray-900 dark:text-white dark:hover:bg-gray-700 px-8 py-3 text-lg rounded-full shadow-lg transition-all duration-300 hover:scale-105"
-              >
-                {user ? "Go to Dashboard" : "Contact Us"}
-              </Button>
-            </form>
           </div>
         </section>
       </main>
 
-      <footer className="bg-gray-900 text-gray-400 py-8 px-4 md:px-6">
-        <div className="container mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+      {/* Footer */}
+      <footer className="bg-gray-800 text-white py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="space-y-4">
-            <Link className="flex items-center" href="/">
-              <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-8 w-auto mr-2" />
-              <span className="text-xl font-bold text-white">NNS Enterprise</span>
-            </Link>
-            <p className="text-sm">
-              Your trusted partner in Fiber-to-the-Home (FTTH) infrastructure and beyond. Building the future of
-              connectivity, one fiber at a time.
+            <h3 className="text-xl font-bold">NNS Enterprise</h3>
+            <p className="text-gray-400">
+              Your trusted partner in Fiber-to-the-Home (FTTH) network establishment and future-proof connectivity
+              solutions.
             </p>
           </div>
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Quick Links</h3>
-            <nav className="space-y-2 flex flex-col">
-              <Link className="text-sm hover:text-white transition-colors" href="#services">
-                Our Services
-              </Link>
-              <Link className="text-sm hover:text-white transition-colors" href="#why-us">
-                Why Partner With Us
-              </Link>
-              <Link className="text-sm hover:text-white transition-colors" href="#future-vision">
-                Future Vision
-              </Link>
-              <Link className="text-sm hover:text-white transition-colors" href="/job-listings">
-                Careers
-              </Link>
-              <Link className="text-sm hover:text-white transition-colors" href="/articles">
-                Articles
-              </Link>
-              <Link className="text-sm hover:text-white transition-colors" href="/insights">
-                Insights
-              </Link>
-            </nav>
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="#services" className="text-gray-400 hover:text-white transition-colors">
+                  Our Services
+                </Link>
+              </li>
+              <li>
+                <Link href="#why-us" className="text-gray-400 hover:text-white transition-colors">
+                  Why Partner With Us
+                </Link>
+              </li>
+              <li>
+                <Link href="#future-vision" className="text-gray-400 hover:text-white transition-colors">
+                  Future Vision
+                </Link>
+              </li>
+              <li>
+                <Link href="/job-listings" className="text-gray-400 hover:text-white transition-colors">
+                  Careers
+                </Link>
+              </li>
+            </ul>
           </div>
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Contact Us</h3>
-            <p className="text-sm">
-              123 Fiber Optic Way, Telecom City, TX 78901
-              <br />
-              Email: info@nnsenterprise.com
-              <br />
-              Phone: (123) 456-7890
-            </p>
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Content</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/articles" className="text-gray-400 hover:text-white transition-colors">
+                  Articles
+                </Link>
+              </li>
+              <li>
+                <Link href="/insights" className="text-gray-400 hover:text-white transition-colors">
+                  Insights
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
+            <p className="text-gray-400">123 Fiber Optic Way, Tech City, TX 78701</p>
+            <p className="text-gray-400">info@nnsenterprise.com</p>
+            <p className="text-gray-400">+1 (555) 123-4567</p>
           </div>
         </div>
-        <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm">
+        <div className="border-t border-gray-700 mt-8 pt-8 text-center text-gray-500">
           &copy; {new Date().getFullYear()} NNS Enterprise. All rights reserved.
         </div>
       </footer>

@@ -1,210 +1,136 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
-  Home,
-  Users,
-  Settings,
   Briefcase,
   FileText,
+  LayoutDashboard,
+  Menu,
+  Newspaper,
   Package,
   Phone,
-  BarChart2,
-  Menu,
-  X,
-  LogOut,
-  Search,
-  Newspaper,
+  PieChart,
+  Settings,
+  Tag,
+  Users,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { useAuth } from "@/contexts/auth-context"
-import { toast } from "@/hooks/use-toast"
+import Image from "next/image"
 
-const navItems = [
-  {
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: Home,
-    description: "Overview of system metrics",
-  },
-  {
-    name: "Users",
-    href: "/users",
-    icon: Users,
-    description: "Manage user accounts and roles",
-  },
-  {
-    name: "Lines",
-    href: "/lines",
-    icon: Phone,
-    description: "Manage telephone lines and services",
-  },
-  {
-    name: "Inventory",
-    href: "/inventory",
-    icon: Package,
-    description: "Track and manage equipment inventory",
-  },
-  {
-    name: "Invoices",
-    href: "/invoices",
-    icon: FileText,
-    description: "Handle billing and invoice generation",
-  },
-  {
-    name: "Tasks",
-    href: "/tasks",
-    icon: Briefcase,
-    description: "Assign and track operational tasks",
-  },
-  {
-    name: "Reports",
-    href: "/reports",
-    icon: BarChart2,
-    description: "Generate and view system reports",
-  },
-  {
-    name: "Careers",
-    href: "/careers",
-    icon: Briefcase,
-    description: "Manage job vacancies",
-  },
-  {
-    name: "Content",
-    href: "/content",
-    icon: Newspaper,
-    description: "Manage posts and blogs",
-  },
-  {
-    name: "Search",
-    href: "/search",
-    icon: Search,
-    description: "Advanced search functionality",
-  },
-  {
-    name: "Settings",
-    href: "/settings",
-    icon: Settings,
-    description: "Configure system settings",
-  },
-]
+interface NavLinkProps {
+  href: string
+  icon: React.ElementType
+  label: string
+  isCollapsed: boolean
+  pathname: string
+}
+
+const NavLink: React.FC<NavLinkProps> = ({ href, icon: Icon, label, isCollapsed, pathname }) => {
+  const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href))
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-900 transition-all hover:bg-gray-100 dark:text-gray-50 dark:hover:bg-gray-800",
+        isActive && "bg-gray-100 dark:bg-gray-800",
+      )}
+    >
+      <Icon className="h-5 w-5" />
+      {!isCollapsed && label}
+    </Link>
+  )
+}
 
 export function AppSidebar() {
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const pathname = usePathname()
-  const [isOpen, setIsOpen] = useState(false)
-  const { signOut } = useAuth()
 
-  const handleSignOut = async () => {
-    try {
-      await signOut()
-      toast({
-        title: "Logged out",
-        description: "You have been successfully logged out.",
-      })
-    } catch (error) {
-      console.error("Error signing out:", error)
-      toast({
-        title: "Error",
-        description: "Failed to log out. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
+  const navItems = [
+    { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { href: "/users", icon: Users, label: "User Management" },
+    { href: "/lines", icon: Phone, label: "Telephone Lines" },
+    { href: "/inventory", icon: Package, label: "Inventory" },
+    { href: "/invoices", icon: FileText, label: "Invoices" },
+    { href: "/tasks", icon: Briefcase, label: "Task Management" },
+    { href: "/reports", icon: PieChart, label: "Reports" },
+    { href: "/content", icon: Newspaper, label: "Content Management" },
+    { href: "/careers", icon: Tag, label: "Career Management" },
+    { href: "/settings", icon: Settings, label: "Settings" },
+  ]
 
   return (
     <>
-      {/* Mobile Sidebar */}
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetTrigger asChild className="lg:hidden fixed top-4 left-4 z-[100]">
-          <Button variant="outline" size="icon">
-            <Menu className="h-6 w-6" />
+      {/* Desktop Sidebar */}
+      <aside
+        className={cn(
+          "hidden md:flex flex-col border-r bg-white dark:bg-gray-950 transition-all duration-300",
+          isCollapsed ? "w-16" : "w-64",
+        )}
+      >
+        <div className="flex h-16 items-center border-b px-4 shrink-0">
+          <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+            <Image src="/placeholder-logo.svg" alt="NNS Enterprise Logo" width={32} height={32} />
+            {!isCollapsed && <span className="text-lg">NNS Dashboard</span>}
+          </Link>
+          <Button variant="ghost" size="icon" className="ml-auto h-8 w-8" onClick={() => setIsCollapsed(!isCollapsed)}>
+            <Menu className="h-4 w-4" />
             <span className="sr-only">Toggle sidebar</span>
           </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0 bg-sidebar-background text-sidebar-foreground flex flex-col">
-          <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
-            <Link className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground" href="/dashboard">
-              <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-6 w-auto" />
-              NNS Dashboard
-            </Link>
-            <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
-              <X className="h-6 w-6" />
-              <span className="sr-only">Close sidebar</span>
-            </Button>
-          </div>
-          <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
-              return (
-                <Link
-                  key={item.name}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
-                  )}
-                  href={item.href}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.name}
-                </Link>
-              )
-            })}
+        </div>
+        <ScrollArea className="flex-1 py-4">
+          <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                icon={item.icon}
+                label={item.label}
+                isCollapsed={isCollapsed}
+                pathname={pathname}
+              />
+            ))}
           </nav>
-          <div className="mt-auto p-4 border-t border-sidebar-border">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              onClick={handleSignOut}
-            >
-              <LogOut className="mr-3 h-5 w-5" />
-              Sign Out
-            </Button>
+        </ScrollArea>
+      </aside>
+
+      {/* Mobile Sidebar */}
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button size="icon" variant="outline" className="md:hidden fixed top-4 left-4 z-50 bg-transparent">
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">Toggle Menu</span>
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="flex flex-col bg-white dark:bg-gray-950 w-64">
+          <div className="flex h-16 items-center border-b px-4 shrink-0">
+            <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+              <Image src="/placeholder-logo.svg" alt="NNS Enterprise Logo" width={32} height={32} />
+              <span className="text-lg">NNS Dashboard</span>
+            </Link>
           </div>
+          <ScrollArea className="flex-1 py-4">
+            <nav className="grid items-start px-2 text-sm font-medium">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  isCollapsed={false} // Mobile sidebar is never collapsed
+                  pathname={pathname}
+                />
+              ))}
+            </nav>
+          </ScrollArea>
         </SheetContent>
       </Sheet>
-
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 h-screen border-r border-sidebar-border bg-sidebar-background text-sidebar-foreground fixed top-0 left-0 z-40">
-        <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
-          <Link className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground" href="/dashboard">
-            <img src="/placeholder-logo.svg" alt="NNS Enterprise Logo" className="h-7 w-auto" />
-            NNS Dashboard
-          </Link>
-        </div>
-        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
-            return (
-              <Link
-                key={item.name}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
-                )}
-                href={item.href}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.name}
-              </Link>
-            )
-          })}
-        </nav>
-        <div className="mt-auto p-4 border-t border-sidebar-border">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            onClick={handleSignOut}
-          >
-            <LogOut className="mr-3 h-5 w-5" />
-            Sign Out
-          </Button>
-        </div>
-      </aside>
     </>
   )
 }

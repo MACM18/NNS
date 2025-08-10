@@ -39,7 +39,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchUser()
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN") {
         setUser(session?.user || null)
         // Only redirect if not already on dashboard or login page
@@ -61,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => {
-      authListener.unsubscribe()
+      subscription.unsubscribe() // Correctly unsubscribe from the subscription object
     }
   }, [fetchUser, router])
 

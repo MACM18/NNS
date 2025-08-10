@@ -1,23 +1,22 @@
 "use client"
 
 import { CardDescription } from "@/components/ui/card"
-
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Briefcase, FileText, LineChart, Users } from "lucide-react"
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Header } from "@/components/layout/header"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Cable, CheckCircle, AlertCircle, Plus, ArrowRight, RefreshCw } from "lucide-react"
-import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal"
-import { MonthYearPicker } from "@/components/ui/month-year-picker"
+import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { supabase } from "@/lib/supabase"
 import { useDataCache } from "@/contexts/data-cache-context"
 import { getSupabaseClient } from "@/lib/supabase"
 import { redirect } from "next/navigation"
-import { DashboardLayout } from "@/components/layout/dashboard-layout"
-import { Users, DollarSign, HardHat, FileText, Clock } from "lucide-react"
+import { Cable, CheckCircle, AlertCircle, Plus, RefreshCw } from "lucide-react"
+import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal"
+import { MonthYearPicker } from "@/components/ui/month-year-picker"
 
 interface DashboardStats {
   totalLines: number
@@ -53,6 +52,19 @@ export default async function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const { cache, updateCache } = useDataCache()
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Fetch counts for dashboard cards
+  const { count: usersCount, error: usersError } = await supabase.from("profiles").select("*", { count: "exact" })
+  const { count: jobVacanciesCount, error: jobsError } = await supabase
+    .from("job_vacancies")
+    .select("*", { count: "exact" })
+  const { count: postsCount, error: postsError } = await supabase.from("posts").select("*", { count: "exact" })
+  const { count: blogsCount, error: blogsError } = await supabase.from("blogs").select("*", { count: "exact" })
+
+  if (usersError || jobsError || postsError || blogsError) {
+    console.error("Error fetching dashboard counts:", usersError || jobsError || postsError || blogsError)
+    // Handle error gracefully, maybe show a message or default counts
+  }
 
   const stats = cache.dashboard?.stats || {
     totalLines: 0,
@@ -266,19 +278,10 @@ export default async function DashboardPage() {
       title: "Monthly Revenue",
       value: formatCurrency(stats.monthlyRevenue),
       change: formatChange(stats.revenueChange),
-      icon: HardHat, // Renamed TrendingUp to avoid redeclaration
+      icon: LineChart, // Renamed TrendingUp to avoid redeclaration
       color: "text-purple-600",
     },
   ]
-
-  const mockDashboardData = {
-    totalUsers: 1250,
-    monthlyRevenue: 75000,
-    projectCompletionRate: 92,
-    activeProjects: 45,
-    pendingInvoices: 12,
-    averageResponseTime: "2h 15m",
-  }
 
   return (
     <DashboardLayout>
@@ -305,7 +308,7 @@ export default async function DashboardPage() {
             {/* Stats Grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {dashboardStats.map((stat, index) => (
-                <Card key={index}>
+                <Card key={index} className="shadow-md hover:shadow-lg transition-shadow duration-300">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
                     <stat.icon className={`h-4 w-4 ${stat.color}`} />
@@ -335,7 +338,7 @@ export default async function DashboardPage() {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
               {/* Recent Activities */}
-              <Card className="col-span-4">
+              <Card className="col-span-4 shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader>
                   <CardTitle>Recent Activities</CardTitle>
                   <CardDescription>Latest updates from your telecom operations</CardDescription>
@@ -360,19 +363,19 @@ export default async function DashboardPage() {
                             <p className="text-sm text-muted-foreground">{activity.location}</p>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge
-                              variant={
+                            <span
+                              className={
                                 activity.status === "completed"
-                                  ? "default"
+                                  ? "bg-green-100 text-green-800 px-2 py-1 rounded"
                                   : activity.status === "in_progress"
-                                    ? "secondary"
+                                    ? "bg-blue-100 text-blue-800 px-2 py-1 rounded"
                                     : activity.status === "pending"
-                                      ? "destructive"
-                                      : "outline"
+                                      ? "bg-red-100 text-red-800 px-2 py-1 rounded"
+                                      : "bg-gray-100 text-gray-800 px-2 py-1 rounded"
                               }
                             >
                               {activity.status}
-                            </Badge>
+                            </span>
                             <span className="text-xs text-muted-foreground">{activity.time}</span>
                           </div>
                         </div>
@@ -385,44 +388,44 @@ export default async function DashboardPage() {
               </Card>
 
               {/* Quick Actions */}
-              <Card className="col-span-3">
+              <Card className="col-span-3 shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader>
                   <CardTitle>Quick Actions</CardTitle>
-                  <CardDescription>Common tasks and shortcuts</CardDescription>
+                  <CardDescription>Perform common tasks quickly.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <Button
-                    className="w-full justify-between bg-transparent"
-                    variant="outline"
-                    onClick={() => router.push("/lines")}
-                  >
-                    Add New Line Details
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    className="w-full justify-between bg-transparent"
-                    variant="outline"
-                    onClick={() => router.push("/reports")}
-                  >
-                    Generate Monthly Report
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    className="w-full justify-between bg-transparent"
-                    variant="outline"
-                    onClick={() => router.push("/inventory")}
-                  >
-                    Update Inventory
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    className="w-full justify-between bg-transparent"
-                    variant="outline"
-                    onClick={() => router.push("/tasks")}
-                  >
-                    Review Pending Tasks
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Link href="/lines">
+                    <Button className="w-full bg-transparent hover:bg-blue-600 text-blue-600 hover:text-white">
+                      Add New Line Details
+                    </Button>
+                  </Link>
+                  <Link href="/reports">
+                    <Button className="w-full bg-transparent hover:bg-green-600 text-green-600 hover:text-white">
+                      Generate Monthly Report
+                    </Button>
+                  </Link>
+                  <Link href="/inventory">
+                    <Button className="w-full bg-transparent hover:bg-purple-600 text-purple-600 hover:text-white">
+                      Update Inventory
+                    </Button>
+                  </Link>
+                  <Link href="/tasks">
+                    <Button className="w-full bg-transparent hover:bg-yellow-600 text-yellow-600 hover:text-white">
+                      Review Pending Tasks
+                    </Button>
+                  </Link>
+                  <Link href="/users/new">
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">Add New User</Button>
+                  </Link>
+                  <Link href="/careers/new">
+                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white">Post New Job</Button>
+                  </Link>
+                  <Link href="/content/new-post">
+                    <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white">Create New Post</Button>
+                  </Link>
+                  <Link href="/inventory/add-item">
+                    <Button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white">Add Inventory Item</Button>
+                  </Link>
                 </CardContent>
               </Card>
             </div>
@@ -435,64 +438,44 @@ export default async function DashboardPage() {
               </p>
 
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <Card>
+                <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Users</CardTitle>
                     <Users className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{mockDashboardData.totalUsers}</div>
-                    <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+                    <div className="text-2xl font-bold">{usersCount ?? "N/A"}</div>
+                    <p className="text-xs text-muted-foreground">Registered users in the system</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-sm font-medium">Job Vacancies</CardTitle>
+                    <Briefcase className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">${mockDashboardData.monthlyRevenue.toLocaleString()}</div>
-                    <p className="text-xs text-muted-foreground">+15.5% from last month</p>
+                    <div className="text-2xl font-bold">{jobVacanciesCount ?? "N/A"}</div>
+                    <p className="text-xs text-muted-foreground">Active job openings</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Project Completion Rate</CardTitle>
-                    <HardHat className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{mockDashboardData.projectCompletionRate}%</div>
-                    <p className="text-xs text-muted-foreground">On track for Q3 targets</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
-                    <HardHat className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{mockDashboardData.activeProjects}</div>
-                    <p className="text-xs text-muted-foreground">Currently underway</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Pending Invoices</CardTitle>
+                    <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
                     <FileText className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{mockDashboardData.pendingInvoices}</div>
-                    <p className="text-xs text-muted-foreground">Awaiting payment</p>
+                    <div className="text-2xl font-bold">{postsCount ?? "N/A"}</div>
+                    <p className="text-xs text-muted-foreground">Published articles</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Average Response Time</CardTitle>
-                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-sm font-medium">Total Blogs</CardTitle>
+                    <LineChart className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{mockDashboardData.averageResponseTime}</div>
-                    <p className="text-xs text-muted-foreground">For customer inquiries</p>
+                    <div className="text-2xl font-bold">{blogsCount ?? "N/A"}</div>
+                    <p className="text-xs text-muted-foreground">Published blog entries</p>
                   </CardContent>
                 </Card>
               </div>
