@@ -51,7 +51,7 @@ export default function LandingPage() {
             </Badge>
             <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
               Your Trusted Partner for{" "}
-              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                 Fiber Optic Network Establishment
               </span>
             </h1>
@@ -175,7 +175,7 @@ export default function LandingPage() {
       </section>
 
       {/* Why Partner With Us Section */}
-      <section id="why-partner" className="py-24">
+      <section id="why-partner" className="py-24 bg-background">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">

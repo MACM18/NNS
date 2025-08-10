@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
@@ -57,7 +58,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   ]
 
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-gray-50">
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-muted/50 text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <nav className="mx-auto flex max-w-7xl items-center justify-between p-6 lg:px-8" aria-label="Global">
