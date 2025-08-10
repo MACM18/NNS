@@ -1,201 +1,330 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Edit, Trash2, RefreshCw } from "lucide-react"
-import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal"
-import { EditTelephoneLineModal } from "@/components/modals/edit-telephone-line-modal"
-import { supabase } from "@/lib/supabase"
-import { toast } from "@/hooks/use-toast"
+import { useState, useEffect } from "react";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+  Calendar,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { Header } from "@/components/layout/header";
+import { LineDetailsTable } from "@/components/tables/enhanced-line-details-table";
+import { AssigneeManagementModal } from "@/components/modals/assignee-management-modal";
+import { useAuth } from "@/contexts/auth-context";
+import { AuthWrapper } from "@/components/auth/auth-wrapper";
+import { getSupabaseClient } from "@/lib/supabase";
+import { useNotification } from "@/contexts/notification-context";
+import { useDataCache } from "@/contexts/data-cache-context";
+import { Button } from "@/components/ui/button";
 
-interface LineDetails {
-  id: string
-  telephone_no: string
-  customer_name: string
-  address: string
-  status: string
-  installation_date: string
-  service_type: string
-  monthly_fee: number
+interface LineStats {
+  total: number;
+  completed: number;
+  inProgress: number;
+  pending: number;
 }
 
-export default function TelephoneLinesPage() {
-  const [lines, setLines] = useState<LineDetails[]>([])
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [selectedLine, setSelectedLine] = useState<LineDetails | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export default function LineDetailsPage() {
+  const { user, loading } = useAuth();
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [assigneeModalOpen, setAssigneeModalOpen] = useState(false);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const { cache, updateCache } = useDataCache();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const lineStats = cache.lines.stats || {
+    total: 0,
+    completed: 0,
+    inProgress: 0,
+    pending: 0,
+  };
+
+  const supabase = getSupabaseClient();
+  const { addNotification } = useNotification();
 
   useEffect(() => {
-    fetchLines()
-  }, [])
-
-  const fetchLines = async () => {
-    setLoading(true)
-    setError(null)
-    const { data, error } = await supabase.from("line_details").select("*").order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Error fetching telephone lines:", error)
-      setError("Failed to load telephone lines.")
-      toast({
-        title: "Error",
-        description: "Failed to load telephone lines.",
-        variant: "destructive",
-      })
-    } else {
-      setLines(data as LineDetails[])
+    if (!cache.lines.lastUpdated) {
+      fetchLineStats();
     }
-    setLoading(false)
-  }
+  }, []);
 
-  const handleEditLine = (line: LineDetails) => {
-    setSelectedLine(line)
-    setIsEditModalOpen(true)
-  }
+  const fetchLineStats = async () => {
+    setIsRefreshing(true);
+    try {
+      // Get start and end dates for the selected month
+      const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+      const endDate = new Date(selectedYear, selectedMonth, 0);
 
-  const handleDeleteLine = async (id: string) => {
-    const { error } = await supabase.from("line_details").delete().eq("id", id)
+      // Fetch all columns to avoid missing-column errors
+      const { data: lines, error } = await supabase
+        .from("line_details")
+        .select("*")
+        .gte("date", startDate.toISOString().split("T")[0])
+        .lte("date", endDate.toISOString().split("T")[0]);
 
-    if (error) {
-      console.error("Error deleting line:", error)
-      toast({
+      if (error) throw error;
+
+      const stats = {
+        total: lines?.length || 0,
+        completed:
+          lines?.filter(
+            (l: any) => l.completed === true || l.status === "completed"
+          ).length || 0,
+        inProgress:
+          lines?.filter(
+            (l: any) => l.status === "in_progress" || l.status === "ongoing"
+          ).length || 0,
+        pending:
+          lines?.filter(
+            (l: any) => !(l.completed === true || l.status === "completed")
+          ).length || 0,
+      };
+
+      updateCache("lines", {
+        stats: stats,
+      });
+    } catch (error: any) {
+      console.error("Stats error:", error);
+      addNotification({
         title: "Error",
-        description: "Failed to delete telephone line.",
-        variant: "destructive",
-      })
-    } else {
-      setLines(lines.filter((line) => line.id !== id))
-      toast({
-        title: "Success",
-        description: "Telephone line deleted successfully.",
-      })
+        message: `Failed to fetch line statistics: ${error.message}`,
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setIsRefreshing(false);
     }
-  }
+  };
 
   if (loading) {
     return (
-      <div className="p-8">
-        <p>Loading telephone lines...</p>
+      <div className='flex items-center justify-center min-h-screen'>
+        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary'></div>
       </div>
-    )
+    );
   }
 
-  if (error) {
-    return (
-      <div className="p-8">
-        <p className="text-red-500">{error}</p>
-        <Button onClick={fetchLines}>Retry</Button>
-      </div>
-    )
+  if (!user) {
+    return <AuthWrapper />;
   }
+
+  const handleAssigneeSuccess = () => {
+    fetchLineStats(); // Refresh data after assignee change
+    setAssigneeModalOpen(false);
+    setSelectedLineId(null);
+  };
+
+  const months = [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" },
+  ];
+
+  const years = Array.from(
+    { length: 5 },
+    (_, i) => new Date().getFullYear() - 2 + i
+  );
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Telephone Lines</h2>
-        <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm" onClick={fetchLines} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Button onClick={() => setIsAddModalOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add New Line
-          </Button>
-        </div>
-      </div>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <Header />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {lines.length === 0 ? (
-          <p className="col-span-full text-center text-muted-foreground">No telephone lines found.</p>
-        ) : (
-          lines.map((line) => (
-            <Card key={line.id}>
-              <CardHeader>
-                <CardTitle>{line.telephone_no}</CardTitle>
-                <CardDescription>{line.customer_name}</CardDescription>
+        <main className='flex-1 space-y-6 p-6'>
+          {/* Page Header */}
+          <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
+            <div>
+              <h1 className='text-3xl font-bold'>Line Details</h1>
+              <p className='text-muted-foreground'>
+                Manage telecom line installations and track progress
+              </p>
+            </div>
+            <div className='flex gap-2'>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={fetchLineStats}
+                disabled={isRefreshing}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${
+                    isRefreshing ? "animate-spin" : ""
+                  }`}
+                />
+                Refresh
+              </Button>
+              <Select
+                value={selectedMonth.toString()}
+                onValueChange={(value) =>
+                  setSelectedMonth(Number.parseInt(value))
+                }
+              >
+                <SelectTrigger className='w-[140px]'>
+                  <SelectValue placeholder='Month' />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((month) => (
+                    <SelectItem
+                      key={month.value}
+                      value={month.value.toString()}
+                    >
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={selectedYear.toString()}
+                onValueChange={(value) =>
+                  setSelectedYear(Number.parseInt(value))
+                }
+              >
+                <SelectTrigger className='w-[100px]'>
+                  <SelectValue placeholder='Year' />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Stats Cards */}
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+            <Card>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>
+                  Total Lines
+                </CardTitle>
+                <Calendar className='h-4 w-4 text-muted-foreground' />
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <p>
-                  <strong>Address:</strong> {line.address}
+              <CardContent>
+                <div className='text-2xl font-bold'>{lineStats.total}</div>
+                <p className='text-xs text-muted-foreground'>
+                  {months.find((m) => m.value === selectedMonth)?.label}{" "}
+                  {selectedYear}
                 </p>
-                <p>
-                  <strong>Status:</strong> {line.status}
-                </p>
-                <p>
-                  <strong>Installation Date:</strong> {new Date(line.installation_date).toLocaleDateString()}
-                </p>
-                <p>
-                  <strong>Service Type:</strong> {line.service_type}
-                </p>
-                <p>
-                  <strong>Monthly Fee:</strong>{" "}
-                  {new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" }).format(line.monthly_fee)}
-                </p>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEditLine(line)}>
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete the telephone line.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteLine(line.id)}>Continue</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
               </CardContent>
             </Card>
-          ))
-        )}
-      </div>
 
-      <AddTelephoneLineModal
-        open={isAddModalOpen}
-        onOpenChange={setIsAddModalOpen}
-        onSuccess={() => {
-          setIsAddModalOpen(false)
-          fetchLines()
-        }}
-      />
+            <Card>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>Completed</CardTitle>
+                <CheckCircle className='h-4 w-4 text-green-600' />
+              </CardHeader>
+              <CardContent>
+                <div className='text-2xl font-bold text-green-600'>
+                  {lineStats.completed}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  {lineStats.total > 0
+                    ? Math.round((lineStats.completed / lineStats.total) * 100)
+                    : 0}
+                  % completion rate
+                </p>
+              </CardContent>
+            </Card>
 
-      {selectedLine && (
-        <EditTelephoneLineModal
-          open={isEditModalOpen}
-          onOpenChange={setIsEditModalOpen}
-          line={selectedLine}
-          onSuccess={() => {
-            setIsEditModalOpen(false)
-            fetchLines()
-          }}
+            <Card>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>
+                  In Progress
+                </CardTitle>
+                <Clock className='h-4 w-4 text-blue-600' />
+              </CardHeader>
+              <CardContent>
+                <div className='text-2xl font-bold text-blue-600'>
+                  {lineStats.inProgress}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Currently being worked on
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>Pending</CardTitle>
+                <AlertCircle className='h-4 w-4 text-orange-600' />
+              </CardHeader>
+              <CardContent>
+                <div className='text-2xl font-bold text-orange-600'>
+                  {lineStats.pending}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Awaiting assignment
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Line Details Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Line Details</CardTitle>
+              <CardDescription>
+                Detailed view of all telecom lines for{" "}
+                {months.find((m) => m.value === selectedMonth)?.label}{" "}
+                {selectedYear}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <LineDetailsTable
+                selectedMonth={selectedMonth}
+                selectedYear={selectedYear}
+                refreshTrigger={refreshTrigger}
+                onAssigneeManage={(lineId) => {
+                  setSelectedLineId(lineId);
+                  setAssigneeModalOpen(true);
+                }}
+                onRefresh={() => setRefreshTrigger((prev) => prev + 1)}
+              />
+            </CardContent>
+          </Card>
+        </main>
+
+        {/* Assignee Management Modal */}
+        <AssigneeManagementModal
+          open={assigneeModalOpen}
+          onOpenChange={setAssigneeModalOpen}
+          lineId={selectedLineId}
+          onSuccess={handleAssigneeSuccess}
         />
-      )}
-    </div>
-  )
+      </SidebarInset>
+    </SidebarProvider>
+  );
 }

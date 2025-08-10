@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Plus, Search, Filter, Edit, Trash2, Eye, EyeOff, Calendar, MapPin, Briefcase } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Edit, Trash2, ExternalLink } from "lucide-react"
-import { AddJobVacancyModal } from "@/components/modals/add-job-vacancy-modal"
-import { supabase } from "@/lib/supabase"
-import { toast } from "@/hooks/use-toast"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,158 +17,286 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import Link from "next/link"
+import { toast } from "@/hooks/use-toast"
+import { AddJobVacancyModal } from "@/components/modals/add-job-vacancy-modal"
+import { DashboardLayout } from "@/components/layout/dashboard-layout"
+import { supabase } from "@/lib/supabase"
+import type { JobVacancy } from "@/types/content"
 
-interface JobVacancy {
-  id: string
-  title: string
-  description: string
-  requirements: string
-  location: string
-  salary: string
-  posted_at: string
-}
-
-export default function CareerManagementPage() {
+export default function CareersPage() {
   const [jobVacancies, setJobVacancies] = useState<JobVacancy[]>([])
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "disabled">("all")
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editingJob, setEditingJob] = useState<JobVacancy | null>(null)
+  const [deleteJobId, setDeleteJobId] = useState<number | null>(null)
 
   useEffect(() => {
     fetchJobVacancies()
   }, [])
 
   const fetchJobVacancies = async () => {
-    setLoading(true)
-    setError(null)
-    const { data, error } = await supabase.from("job_vacancies").select("*").order("created_at", { ascending: false })
+    try {
+      setLoading(true)
 
-    if (error) {
+      const { data, error } = await supabase.from("job_vacancies").select("*").order("created_at", { ascending: false })
+
+      if (error) throw error
+      setJobVacancies(data || [])
+    } catch (error) {
       console.error("Error fetching job vacancies:", error)
-      setError("Failed to load job vacancies.")
       toast({
         title: "Error",
-        description: "Failed to load job vacancies.",
+        description: "Failed to fetch job vacancies",
         variant: "destructive",
       })
-    } else {
-      setJobVacancies(data as JobVacancy[])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
-  const handleDeleteJob = async (id: string) => {
-    const { error } = await supabase.from("job_vacancies").delete().eq("id", id)
+  const handleStatusToggle = async (id: number, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === "active" ? "disabled" : "active"
 
-    if (error) {
+      const { error } = await supabase
+        .from("job_vacancies")
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq("id", id)
+
+      if (error) throw error
+
+      setJobVacancies(
+        jobVacancies.map((job) => (job.id === id ? { ...job, status: newStatus as "active" | "disabled" } : job)),
+      )
+
+      toast({
+        title: "Success",
+        description: "Job vacancy status updated successfully",
+      })
+    } catch (error) {
+      console.error("Error updating status:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update job vacancy status",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteJobId) return
+
+    try {
+      const { error } = await supabase.from("job_vacancies").delete().eq("id", deleteJobId)
+
+      if (error) throw error
+
+      setJobVacancies(jobVacancies.filter((job) => job.id !== deleteJobId))
+
+      toast({
+        title: "Success",
+        description: "Job vacancy deleted successfully",
+      })
+    } catch (error) {
       console.error("Error deleting job vacancy:", error)
       toast({
         title: "Error",
-        description: "Failed to delete job vacancy.",
+        description: "Failed to delete job vacancy",
         variant: "destructive",
       })
-    } else {
-      setJobVacancies(jobVacancies.filter((job) => job.id !== id))
-      toast({
-        title: "Success",
-        description: "Job vacancy deleted successfully.",
-      })
+    } finally {
+      setDeleteJobId(null)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="p-8">
-        <p>Loading job vacancies...</p>
-      </div>
-    )
+  const isJobExpired = (endDate: string) => {
+    return new Date(endDate) < new Date()
   }
 
-  if (error) {
-    return (
-      <div className="p-8">
-        <p className="text-red-500">{error}</p>
-        <Button onClick={fetchJobVacancies}>Retry</Button>
-      </div>
-    )
-  }
+  const filteredJobs = jobVacancies.filter((job) => {
+    const matchesSearch =
+      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (job.department && job.department.toLowerCase().includes(searchTerm.toLowerCase()))
+    const matchesStatus = statusFilter === "all" || job.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Career Management</h2>
-        <Button onClick={() => setIsAddModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add New Job
-        </Button>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Career Management</h1>
+            <p className="text-muted-foreground">Manage job vacancies and career opportunities</p>
+          </div>
+          <Button onClick={() => setShowAddModal(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Job Vacancy
+          </Button>
+        </div>
+
+        <div className="flex items-center space-x-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search job vacancies..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Filter className="mr-2 h-4 w-4" />
+                Status: {statusFilter}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setStatusFilter("all")}>All</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("active")}>Active</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("disabled")}>Disabled</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Job Vacancies ({jobVacancies.length})</CardTitle>
+            <CardDescription>Manage your company's job openings and career opportunities</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-4">Loading...</div>
+            ) : filteredJobs.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No job vacancies found</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Job Title</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>End Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredJobs.map((job) => (
+                    <TableRow key={job.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center space-x-2">
+                          <Briefcase className="h-4 w-4 text-muted-foreground" />
+                          <span>{job.title}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{job.department || "Not specified"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-1">
+                          <MapPin className="h-3 w-3 text-muted-foreground" />
+                          <span>{job.location || "Remote"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{job.employment_type}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                          <span className={isJobExpired(job.end_date) ? "text-red-600" : ""}>
+                            {new Date(job.end_date).toLocaleDateString()}
+                          </span>
+                          {isJobExpired(job.end_date) && (
+                            <Badge variant="destructive" className="ml-2">
+                              Expired
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={job.status === "active" ? "default" : "secondary"}>{job.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              •••
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => setEditingJob(job)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStatusToggle(job.id, job.status)}>
+                              {job.status === "active" ? (
+                                <>
+                                  <EyeOff className="mr-2 h-4 w-4" />
+                                  Disable
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Enable
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDeleteJobId(job.id)} className="text-red-600">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {jobVacancies.length === 0 ? (
-          <p className="col-span-full text-center text-muted-foreground">No job vacancies found.</p>
-        ) : (
-          jobVacancies.map((job) => (
-            <Card key={job.id}>
-              <CardHeader>
-                <CardTitle>{job.title}</CardTitle>
-                <CardDescription className="line-clamp-2">{job.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <p>
-                  <strong>Location:</strong> {job.location}
-                </p>
-                <p>
-                  <strong>Salary:</strong> {job.salary}
-                </p>
-                <p>
-                  <strong>Posted:</strong> {new Date(job.posted_at).toLocaleDateString()}
-                </p>
-                <div className="flex justify-end gap-2">
-                  <Link href={`/job-listings/${job.id}`} passHref>
-                    <Button variant="outline" size="sm">
-                      <ExternalLink className="h-4 w-4 mr-2" /> View Public
-                    </Button>
-                  </Link>
-                  <Button variant="outline" size="sm">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete the job vacancy.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteJob(job.id)}>Continue</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
-
+      {/* Add/Edit Modal */}
       <AddJobVacancyModal
-        open={isAddModalOpen}
-        onOpenChange={setIsAddModalOpen}
+        open={showAddModal || !!editingJob}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowAddModal(false)
+            setEditingJob(null)
+          }
+        }}
+        editingJob={editingJob}
         onSuccess={() => {
-          setIsAddModalOpen(false)
           fetchJobVacancies()
+          setShowAddModal(false)
+          setEditingJob(null)
         }}
       />
-    </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteJobId} onOpenChange={() => setDeleteJobId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the job vacancy.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </DashboardLayout>
   )
 }

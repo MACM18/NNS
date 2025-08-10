@@ -1,145 +1,185 @@
-"use client"
-
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabase"
-import { toast } from "@/hooks/use-toast"
-import { Loader2 } from "lucide-react"
-
-interface InventoryItem {
-  id: string
-  item_name: string
-  quantity: number
-  unit_price: number
-  supplier: string | null
-  last_restock: string | null
-}
+import React from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import type { Notification } from "@/types/notifications";
 
 interface EditDrumModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  drum: InventoryItem | null
-  onSuccess: () => void
+  open: boolean;
+  drum: {
+    id: string;
+    drum_number: string;
+    initial_quantity: number;
+    current_quantity: number;
+    received_date: string;
+    status: string;
+  } | null;
+  onClose: () => void;
+  onSuccess: () => void;
+  supabase: any;
+  addNotification: (
+    notification: Omit<
+      Notification,
+      "id" | "user_id" | "is_read" | "created_at" | "updated_at"
+    >
+  ) => Promise<void>;
 }
 
-export function EditDrumModal({ open, onOpenChange, drum, onSuccess }: EditDrumModalProps) {
-  const [itemName, setItemName] = useState("")
-  const [quantity, setQuantity] = useState("")
-  const [unitPrice, setUnitPrice] = useState("")
-  const [supplier, setSupplier] = useState("")
-  const [lastRestock, setLastRestock] = useState("")
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (drum) {
-      setItemName(drum.item_name)
-      setQuantity(drum.quantity.toString())
-      setUnitPrice(drum.unit_price.toString())
-      setSupplier(drum.supplier || "")
-      setLastRestock(drum.last_restock || "")
-    }
-  }, [drum])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-
-    if (!drum) {
-      toast({
-        title: "Error",
-        description: "No drum selected for editing.",
-        variant: "destructive",
-      })
-      setLoading(false)
-      return
-    }
-
-    const { error } = await supabase
-      .from("inventory")
-      .update({
-        item_name: itemName,
-        quantity: Number.parseInt(quantity),
-        unit_price: Number.parseFloat(unitPrice),
-        supplier: supplier || null,
-        last_restock: lastRestock || null,
-      })
-      .eq("id", drum.id)
-
-    if (error) {
-      console.error("Error updating drum:", error)
-      toast({
-        title: "Error",
-        description: "Failed to update drum. Please try again.",
-        variant: "destructive",
-      })
-    } else {
-      toast({
-        title: "Success",
-        description: "Drum updated successfully.",
-      })
-      onSuccess()
-      onOpenChange(false)
-    }
-    setLoading(false)
-  }
-
+export function EditDrumModal({
+  open,
+  drum,
+  onClose,
+  onSuccess,
+  supabase,
+  addNotification,
+}: EditDrumModalProps) {
+  if (!drum) return null;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit Drum Details</DialogTitle>
-          <DialogDescription>Make changes to the drum inventory details.</DialogDescription>
+          <DialogTitle>Edit Drum</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="itemName">Item Name</Label>
-            <Input id="itemName" value={itemName} onChange={(e) => setItemName(e.target.value)} required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="quantity">Quantity</Label>
-            <Input
-              id="quantity"
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            try {
+              const form = e.target as HTMLFormElement;
+              const drum_number = (
+                form.elements.namedItem("drum_number") as HTMLInputElement
+              ).value;
+              const initial_quantity = Number(
+                (
+                  form.elements.namedItem(
+                    "initial_quantity"
+                  ) as HTMLInputElement
+                ).value
+              );
+              const current_quantity = Number(
+                (
+                  form.elements.namedItem(
+                    "current_quantity"
+                  ) as HTMLInputElement
+                ).value
+              );
+              const received_date = (
+                form.elements.namedItem("received_date") as HTMLInputElement
+              ).value;
+              const status = (
+                form.elements.namedItem("status") as HTMLSelectElement
+              ).value;
+              const { error } = await supabase
+                .from("drum_tracking")
+                .update({
+                  drum_number,
+                  initial_quantity,
+                  current_quantity,
+                  received_date,
+                  status,
+                })
+                .eq("id", drum.id);
+              if (error) throw error;
+              addNotification({
+                title: "Drum Updated",
+                message: `Drum #${drum_number} updated successfully`,
+                type: "success",
+                category: "system",
+              });
+              onClose();
+              onSuccess();
+            } catch (error: any) {
+              addNotification({
+                title: "Error",
+                message: error.message || "Failed to update drum",
+                type: "error",
+                category: "system",
+              });
+            }
+          }}
+          className='space-y-4'
+        >
+          <div>
+            <label className='block text-sm font-medium mb-1'>
+              Drum Number
+            </label>
+            <input
+              name='drum_number'
+              type='text'
+              defaultValue={drum.drum_number}
+              className='w-full border rounded px-2 py-1'
               required
             />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="unitPrice">Unit Price</Label>
-            <Input
-              id="unitPrice"
-              type="number"
-              step="0.01"
-              value={unitPrice}
-              onChange={(e) => setUnitPrice(e.target.value)}
+          <div className='flex gap-2'>
+            <div className='flex-1'>
+              <label className='block text-sm font-medium mb-1'>
+                Initial Quantity
+              </label>
+              <input
+                name='initial_quantity'
+                type='number'
+                min='0'
+                step='0.01'
+                defaultValue={drum.initial_quantity}
+                className='w-full border rounded px-2 py-1'
+                required
+              />
+            </div>
+            <div className='flex-1'>
+              <label className='block text-sm font-medium mb-1'>
+                Current Quantity
+              </label>
+              <input
+                name='current_quantity'
+                type='number'
+                min='0'
+                step='0.01'
+                defaultValue={drum.current_quantity}
+                className='w-full border rounded px-2 py-1'
+                required
+              />
+            </div>
+          </div>
+          <div>
+            <label className='block text-sm font-medium mb-1'>
+              Received Date
+            </label>
+            <input
+              name='received_date'
+              type='date'
+              defaultValue={
+                drum.received_date ? drum.received_date.slice(0, 10) : ""
+              }
+              className='w-full border rounded px-2 py-1'
               required
             />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="supplier">Supplier</Label>
-            <Input id="supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
+          <div>
+            <label className='block text-sm font-medium mb-1'>Status</label>
+            <select
+              name='status'
+              defaultValue={drum.status}
+              className='w-full border rounded px-2 py-1'
+              required
+            >
+              <option value='active'>Active</option>
+              <option value='empty'>Empty</option>
+              <option value='maintenance'>Maintenance</option>
+            </select>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="lastRestock">Last Restock Date</Label>
-            <Input id="lastRestock" type="date" value={lastRestock} onChange={(e) => setLastRestock(e.target.value)} />
-          </div>
-          <Button type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving Changes...
-              </>
-            ) : (
-              "Save Changes"
-            )}
-          </Button>
+          <DialogFooter>
+            <Button type='button' variant='secondary' onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type='submit'>Save Changes</Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

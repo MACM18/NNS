@@ -1,12 +1,7 @@
-"use client"
+"use client";
 
-import { AuthWrapper } from "@/components/auth/auth-wrapper"
-import { LoginForm } from "@/components/auth/login-form"
+import { AuthWrapper } from "@/components/auth/auth-wrapper";
 
 export default function AuthPage() {
-  return (
-    <AuthWrapper>
-      <LoginForm />
-    </AuthWrapper>
-  )
+  return <AuthWrapper />;
 }

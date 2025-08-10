@@ -1,244 +1,327 @@
-"use client"
-
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabase"
-import { toast } from "@/hooks/use-toast"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+"use client";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+import { Pencil, Trash2, Plus } from "lucide-react";
+import { getSupabaseClient } from "@/lib/supabase";
+import { toast } from "@/hooks/use-toast";
 
 interface InventoryItem {
-  id: string
-  item_name: string
-  quantity: number
-  unit_price: number
-  supplier: string | null
-  last_restock: string | null
+  id: string;
+  name: string;
+  unit: string;
+  reorder_level: number;
 }
 
 interface ManageInventoryItemsModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSuccess: () => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  userRole: string;
 }
 
-export function ManageInventoryItemsModal({ open, onOpenChange, onSuccess }: ManageInventoryItemsModalProps) {
-  const [items, setItems] = useState<InventoryItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [newItemName, setNewItemName] = useState("")
-  const [newQuantity, setNewQuantity] = useState("")
-  const [newUnitPrice, setNewUnitPrice] = useState("")
-  const [newSupplier, setNewSupplier] = useState("")
-  const [newLastRestock, setNewLastRestock] = useState("")
-  const [isAddingItem, setIsAddingItem] = useState(false)
+export function ManageInventoryItemsModal({
+  open,
+  onOpenChange,
+  userRole,
+}: ManageInventoryItemsModalProps) {
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [newItem, setNewItem] = useState<Omit<InventoryItem, "id">>({
+    name: "",
+    unit: "",
+    reorder_level: 0,
+  });
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(5);
+  const supabase = getSupabaseClient();
+
+  const totalPages = Math.ceil(items.length / pageSize);
+  const paginatedItems = items.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    if (open) fetchItems();
+  }, [open]);
+
+  const fetchItems = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("inventory_items")
+      .select("id, name, unit, reorder_level")
+      .order("name");
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      setItems((data as InventoryItem[]) || []);
+    }
+    setLoading(false);
+  };
+
+  const handleEdit = (item: InventoryItem) => setEditingItem(item);
+  const handleEditChange = (
+    field: keyof InventoryItem,
+    value: string | number
+  ) => setEditingItem((prev) => (prev ? { ...prev, [field]: value } : prev));
+  const handleNewChange = (
+    field: keyof Omit<InventoryItem, "id">,
+    value: string | number
+  ) => setNewItem((prev) => ({ ...prev, [field]: value }));
+
+  const saveEdit = async () => {
+    if (!editingItem) return;
+    const { id, ...updateData } = editingItem;
+    const { error } = await supabase
+      .from("inventory_items")
+      .update(updateData)
+      .eq("id", id);
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "Item Updated" });
+      setEditingItem(null);
+      fetchItems();
+    }
+  };
+
+  const saveNew = async () => {
+    if (!newItem.name.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    const { error } = await supabase.from("inventory_items").insert([newItem]);
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "Item Added" });
+      setNewItem({ name: "", unit: "", reorder_level: 0 });
+      fetchItems();
+    }
+  };
+
+  const handleDelete = async (item: InventoryItem) => {
+    const { error } = await supabase
+      .from("inventory_items")
+      .delete()
+      .eq("id", item.id);
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "Item Deleted" });
+      fetchItems();
+    }
+  };
 
   useEffect(() => {
     if (open) {
-      fetchItems()
+      fetchItems();
+      setPage(1);
     }
-  }, [open])
-
-  const fetchItems = async () => {
-    setLoading(true)
-    setError(null)
-    const { data, error } = await supabase.from("inventory").select("*").order("item_name", { ascending: true })
-
-    if (error) {
-      console.error("Error fetching inventory items:", error)
-      setError("Failed to load inventory items.")
-      toast({
-        title: "Error",
-        description: "Failed to load inventory items.",
-        variant: "destructive",
-      })
-    } else {
-      setItems(data as InventoryItem[])
-    }
-    setLoading(false)
-  }
-
-  const handleAddItem = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsAddingItem(true)
-    try {
-      const { error } = await supabase.from("inventory").insert({
-        item_name: newItemName,
-        quantity: Number.parseInt(newQuantity),
-        unit_price: Number.parseFloat(newUnitPrice),
-        supplier: newSupplier || null,
-        last_restock: newLastRestock || null,
-      })
-
-      if (error) throw error
-
-      toast({
-        title: "Item Added",
-        description: `${newItemName} added to inventory.`,
-      })
-      setNewItemName("")
-      setNewQuantity("")
-      setNewUnitPrice("")
-      setNewSupplier("")
-      setNewLastRestock("")
-      fetchItems() // Refresh the list
-      onSuccess()
-    } catch (error: any) {
-      console.error("Error adding item:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add item.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsAddingItem(false)
-    }
-  }
-
-  const handleDeleteItem = async (id: string) => {
-    try {
-      const { error } = await supabase.from("inventory").delete().eq("id", id)
-      if (error) throw error
-      toast({
-        title: "Item Deleted",
-        description: "Inventory item removed successfully.",
-      })
-      fetchItems() // Refresh the list
-      onSuccess()
-    } catch (error: any) {
-      console.error("Error deleting item:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete item.",
-        variant: "destructive",
-      })
-    }
-  }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className='max-w-2xl'>
         <DialogHeader>
           <DialogTitle>Manage Inventory Items</DialogTitle>
-          <DialogDescription>Add, edit, or remove items from your inventory.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <h3 className="text-lg font-medium">Add New Item</h3>
-          <form onSubmit={handleAddItem} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="newItemName">Item Name</Label>
-              <Input id="newItemName" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newQuantity">Quantity</Label>
-              <Input
-                id="newQuantity"
-                type="number"
-                value={newQuantity}
-                onChange={(e) => setNewQuantity(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newUnitPrice">Unit Price</Label>
-              <Input
-                id="newUnitPrice"
-                type="number"
-                step="0.01"
-                value={newUnitPrice}
-                onChange={(e) => setNewUnitPrice(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newSupplier">Supplier</Label>
-              <Input id="newSupplier" value={newSupplier} onChange={(e) => setNewSupplier(e.target.value)} />
-            </div>
-            <div className="grid gap-2 md:col-span-2">
-              <Label htmlFor="newLastRestock">Last Restock Date</Label>
-              <Input
-                id="newLastRestock"
-                type="date"
-                value={newLastRestock}
-                onChange={(e) => setNewLastRestock(e.target.value)}
-              />
-            </div>
-            <Button type="submit" disabled={isAddingItem} className="md:col-span-2">
-              {isAddingItem ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding Item...
-                </>
-              ) : (
-                <>
-                  <Plus className="mr-2 h-4 w-4" /> Add Item
-                </>
-              )}
+        <div className='mb-4'>
+          <div className='flex gap-2 mb-2'>
+            <Input
+              placeholder='Name'
+              value={newItem.name}
+              onChange={(e) => handleNewChange("name", e.target.value)}
+            />
+            <Input
+              placeholder='Unit'
+              value={newItem.unit}
+              onChange={(e) => handleNewChange("unit", e.target.value)}
+            />
+            <Input
+              placeholder='Reorder Level'
+              type='number'
+              value={newItem.reorder_level}
+              onChange={(e) =>
+                handleNewChange("reorder_level", Number(e.target.value))
+              }
+            />
+            <Button
+              onClick={saveNew}
+              disabled={userRole === "user"}
+              variant='default'
+            >
+              <Plus className='h-4 w-4' />
             </Button>
-          </form>
-
-          <h3 className="text-lg font-medium mt-6">Existing Items</h3>
-          {loading ? (
-            <div className="flex justify-center items-center">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : error ? (
-            <p className="text-red-500">{error}</p>
-          ) : items.length === 0 ? (
-            <p className="text-muted-foreground">No inventory items found.</p>
-          ) : (
-            <div className="space-y-2">
-              {items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-md">
-                  <div>
-                    <p className="font-medium">{item.item_name}</p>
-                    <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>
-                    <p className="text-xs text-muted-foreground">Price: {item.unit_price}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    {/* <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button> */}
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the inventory item.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteItem(item.id)}>Continue</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          </div>
         </div>
+        <div className='overflow-x-auto'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Unit</TableHead>
+                <TableHead>Reorder Level</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={4}>Loading...</TableCell>
+                </TableRow>
+              ) : (
+                paginatedItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      {editingItem?.id === item.id ? (
+                        <Input
+                          value={editingItem.name}
+                          onChange={(e) =>
+                            handleEditChange("name", e.target.value)
+                          }
+                        />
+                      ) : (
+                        item.name
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingItem?.id === item.id ? (
+                        <Input
+                          value={editingItem.unit}
+                          onChange={(e) =>
+                            handleEditChange("unit", e.target.value)
+                          }
+                        />
+                      ) : (
+                        item.unit
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingItem?.id === item.id ? (
+                        <Input
+                          type='number'
+                          value={editingItem.reorder_level}
+                          onChange={(e) =>
+                            handleEditChange(
+                              "reorder_level",
+                              Number(e.target.value)
+                            )
+                          }
+                        />
+                      ) : (
+                        item.reorder_level
+                      )}
+                    </TableCell>
+                    <TableCell className='flex gap-2'>
+                      {editingItem?.id === item.id ? (
+                        <>
+                          <Button
+                            size='sm'
+                            onClick={saveEdit}
+                            variant='default'
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size='sm'
+                            onClick={() => setEditingItem(null)}
+                            variant='outline'
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size='icon'
+                            variant='outline'
+                            onClick={() => handleEdit(item)}
+                            disabled={userRole === "user"}
+                          >
+                            <Pencil className='h-4 w-4' />
+                          </Button>
+                          {userRole === "admin" && (
+                            <Button
+                              size='icon'
+                              variant='destructive'
+                              onClick={() => handleDelete(item)}
+                            >
+                              <Trash2 className='h-4 w-4' />
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        {/* Pagination Controls */}
+        <div className='flex justify-between items-center mt-4'>
+          <span className='text-sm text-muted-foreground'>
+            Page {page} of {totalPages || 1}
+          </span>
+          <div className='flex gap-2'>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              Previous
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages || totalPages === 0}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant='outline' onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

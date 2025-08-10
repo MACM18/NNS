@@ -1,46 +1,49 @@
-import Link from "next/link"
+import Link from 'next/link'
+import { Building2, Mail, Phone, MapPin } from 'lucide-react'
 
 export function Footer() {
   return (
-    <footer className="bg-gray-100 p-6 md:py-12 w-full dark:bg-gray-800">
-      <div className="container max-w-7xl grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-8 text-sm">
-        <div className="grid gap-1">
-          <h3 className="font-semibold">Company</h3>
-          <Link href="#">About Us</Link>
-          <Link href="#">Our Team</Link>
-          <Link href="#">Careers</Link>
-          <Link href="#">News</Link>
+    <footer className="bg-muted">
+      <div className="mx-auto max-w-7xl px-6 py-12 md:flex md:items-center md:justify-between lg:px-8">
+        <div className="flex flex-col md:flex-row md:items-center md:space-x-8">
+          <div className="flex items-center space-x-2 mb-4 md:mb-0">
+            <Building2 className="h-6 w-6 text-primary" />
+            <span className="text-lg font-bold text-foreground">NNS Enterprise</span>
+          </div>
+          <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-6 text-sm text-muted-foreground">
+            <div className="flex items-center space-x-2">
+              <Mail className="h-4 w-4" />
+              <span>info@nns.lk</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Phone className="h-4 w-4" />
+              <span>+94 11 234 5678</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <MapPin className="h-4 w-4" />
+              <span>Colombo, Sri Lanka</span>
+            </div>
+          </div>
         </div>
-        <div className="grid gap-1">
-          <h3 className="font-semibold">Products</h3>
-          <Link href="#">Fiber Optic Cables</Link>
-          <Link href="#">Networking Equipment</Link>
-          <Link href="#">Installation Services</Link>
-          <Link href="#">Maintenance Plans</Link>
+        <div className="mt-6 md:mt-0">
+          <div className="flex space-x-6">
+            <Link href="/welcome/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              About
+            </Link>
+            <Link href="/welcome/blog" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Blog
+            </Link>
+            <Link href="/welcome/careers" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Careers
+            </Link>
+            <Link href="/welcome/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Contact
+            </Link>
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            &copy; 2025 NNS Enterprise. All rights reserved.
+          </p>
         </div>
-        <div className="grid gap-1">
-          <h3 className="font-semibold">Resources</h3>
-          <Link href="#">Blog</Link>
-          <Link href="#">Case Studies</Link>
-          <Link href="#">Whitepapers</Link>
-          <Link href="#">Support</Link>
-        </div>
-        <div className="grid gap-1">
-          <h3 className="font-semibold">Legal</h3>
-          <Link href="#">Privacy Policy</Link>
-          <Link href="#">Terms of Service</Link>
-          <Link href="#">Cookie Policy</Link>
-        </div>
-        <div className="grid gap-1">
-          <h3 className="font-semibold">Contact</h3>
-          <p>123 Fiber Optic Way</p>
-          <p>Telecom City, TX 75001</p>
-          <p>info@nnstelecom.com</p>
-          <p>+1 (555) 123-4567</p>
-        </div>
-      </div>
-      <div className="container max-w-7xl text-center mt-8 text-xs text-gray-500 dark:text-gray-400">
-        © 2024 NNS Telecom. All rights reserved.
       </div>
     </footer>
   )
