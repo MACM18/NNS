@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { Bell, Plus, Search, Settings, Check, Trash2, X } from "lucide-react"
+import { Bell, Plus, Search, Settings, Check, Trash2, X, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -160,7 +160,12 @@ export function Header() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    performSearch(searchQuery)
+    if (searchQuery.trim()) {
+      // Navigate to advanced search with query
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`)
+      setShowSearchResults(false)
+      setSearchQuery("")
+    }
   }
 
   const handleSearchResultClick = (result: SearchResult) => {
@@ -174,6 +179,11 @@ export function Header() {
   const clearSearch = () => {
     setSearchQuery("")
     setSearchResults([])
+    setShowSearchResults(false)
+  }
+
+  const openAdvancedSearch = () => {
+    router.push("/search")
     setShowSearchResults(false)
   }
 
@@ -246,9 +256,17 @@ export function Header() {
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search lines, tasks, invoices..."
-            className="pl-8 pr-20"
+            className="pl-8 pr-24"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              if (e.target.value) {
+                performSearch(e.target.value)
+              } else {
+                setSearchResults([])
+                setShowSearchResults(false)
+              }
+            }}
             onFocus={() => searchQuery && setShowSearchResults(true)}
           />
           <div className="absolute right-1 top-1 flex gap-1">
@@ -257,6 +275,9 @@ export function Header() {
                 <X className="h-4 w-4" />
               </Button>
             )}
+            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={openAdvancedSearch}>
+              <Filter className="h-4 w-4" />
+            </Button>
             <Button type="submit" size="sm" className="h-8">
               Search
             </Button>
@@ -271,8 +292,12 @@ export function Header() {
             ) : searchResults.length > 0 ? (
               <ScrollArea className="max-h-96">
                 <div className="p-2">
-                  <div className="text-xs font-medium text-muted-foreground mb-2 px-2">
-                    Search Results ({searchResults.length})
+                  <div className="text-xs font-medium text-muted-foreground mb-2 px-2 flex items-center justify-between">
+                    <span>Quick Results ({searchResults.length})</span>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={openAdvancedSearch}>
+                      <Filter className="h-3 w-3 mr-1" />
+                      Advanced
+                    </Button>
                   </div>
                   {searchResults.map((result) => (
                     <div
@@ -290,10 +315,22 @@ export function Header() {
                       </Badge>
                     </div>
                   ))}
+                  <div className="border-t mt-2 pt-2">
+                    <Button variant="ghost" size="sm" className="w-full text-xs" onClick={openAdvancedSearch}>
+                      <Filter className="h-3 w-3 mr-1" />
+                      View all results with advanced filters
+                    </Button>
+                  </div>
                 </div>
               </ScrollArea>
             ) : searchQuery ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">No results found for "{searchQuery}"</div>
+              <div className="p-4 text-center text-sm text-muted-foreground">
+                <div>No quick results found for "{searchQuery}"</div>
+                <Button variant="ghost" size="sm" className="mt-2 text-xs" onClick={openAdvancedSearch}>
+                  <Filter className="h-3 w-3 mr-1" />
+                  Try advanced search
+                </Button>
+              </div>
             ) : null}
           </div>
         )}
