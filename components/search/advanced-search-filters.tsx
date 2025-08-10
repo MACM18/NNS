@@ -1,36 +1,27 @@
 "use client"
 
 import { useState } from "react"
-import { Filter, X, ChevronDown } from "lucide-react"
+import type { DateRange } from "react-day-picker"
+import { X, Filter, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { DatePickerWithRange } from "@/components/ui/date-range-picker"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Separator } from "@/components/ui/separator"
-import type { DateRange } from "react-day-picker"
+import { DatePickerWithRange } from "@/components/ui/date-range-picker"
 
 export interface SearchFilters {
   query: string
+  categories: ("line" | "task" | "invoice" | "inventory")[]
   dateRange?: DateRange
-  categories: string[]
-  status?: string
-  lineStatus?: string
-  taskStatus?: string
-  invoiceType?: string
+  lineStatus?: "all" | "completed" | "pending"
+  taskStatus?: "all" | "pending" | "in_progress" | "completed" | "cancelled"
+  invoiceType?: "all" | "monthly" | "inventory"
+  amountRange?: { min: number; max: number }
+  lengthRange?: { min: number; max: number }
   inventoryLowStock?: boolean
-  amountRange?: {
-    min: number
-    max: number
-  }
-  lengthRange?: {
-    min: number
-    max: number
-  }
 }
 
 interface AdvancedSearchFiltersProps {
@@ -38,7 +29,7 @@ interface AdvancedSearchFiltersProps {
   onFiltersChange: (filters: SearchFilters) => void
   onSearch: () => void
   onClear: () => void
-  isSearching?: boolean
+  isSearching: boolean
 }
 
 export function AdvancedSearchFilters({
@@ -46,139 +37,208 @@ export function AdvancedSearchFilters({
   onFiltersChange,
   onSearch,
   onClear,
-  isSearching = false,
+  isSearching,
 }: AdvancedSearchFiltersProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isCategoriesOpen, setIsCategoriesOpen] = useState(true)
+  const [isDateRangeOpen, setIsDateRangeOpen] = useState(false)
+  const [isLineFiltersOpen, setIsLineFiltersOpen] = useState(false)
+  const [isTaskFiltersOpen, setIsTaskFiltersOpen] = useState(false)
+  const [isInvoiceFiltersOpen, setIsInvoiceFiltersOpen] = useState(false)
+  const [isInventoryFiltersOpen, setIsInventoryFiltersOpen] = useState(false)
 
-  const updateFilters = (updates: Partial<SearchFilters>) => {
-    onFiltersChange({ ...filters, ...updates })
+  const handleCategoryChange = (category: "line" | "task" | "invoice" | "inventory", checked: boolean) => {
+    onFiltersChange({
+      ...filters,
+      categories: checked ? [...filters.categories, category] : filters.categories.filter((c) => c !== category),
+    })
   }
 
-  const toggleCategory = (category: string) => {
-    const newCategories = filters.categories.includes(category)
-      ? filters.categories.filter((c) => c !== category)
-      : [...filters.categories, category]
-    updateFilters({ categories: newCategories })
+  const handleAmountRangeChange = (field: "min" | "max", value: string) => {
+    const numValue = Number.parseFloat(value)
+    onFiltersChange({
+      ...filters,
+      amountRange: {
+        ...filters.amountRange,
+        [field]: isNaN(numValue) ? 0 : numValue,
+      },
+    })
   }
 
-  const getActiveFiltersCount = () => {
-    let count = 0
-    if (filters.dateRange) count++
-    if (filters.status) count++
-    if (filters.lineStatus) count++
-    if (filters.taskStatus) count++
-    if (filters.invoiceType) count++
-    if (filters.inventoryLowStock) count++
-    if (filters.amountRange) count++
-    if (filters.lengthRange) count++
-    return count
+  const handleLengthRangeChange = (field: "min" | "max", value: string) => {
+    const numValue = Number.parseFloat(value)
+    onFiltersChange({
+      ...filters,
+      lengthRange: {
+        ...filters.lengthRange,
+        [field]: isNaN(numValue) ? 0 : numValue,
+      },
+    })
   }
 
-  const clearAllFilters = () => {
+  const handleClearAll = () => {
     onFiltersChange({
       query: "",
       categories: ["line", "task", "invoice", "inventory"],
+      dateRange: undefined,
+      lineStatus: "all",
+      taskStatus: "all",
+      invoiceType: "all",
+      amountRange: undefined,
+      lengthRange: undefined,
+      inventoryLowStock: false,
     })
     onClear()
   }
 
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Advanced Search
-            {getActiveFiltersCount() > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {getActiveFiltersCount()} active
-              </Badge>
-            )}
-          </CardTitle>
-          <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-              </Button>
-            </CollapsibleTrigger>
-          </Collapsible>
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          <Filter className="h-5 w-5" />
+          Filters
+        </CardTitle>
       </CardHeader>
-
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         {/* Search Query */}
-        <div className="space-y-2">
-          <Label htmlFor="search-query">Search Query</Label>
+        <div>
+          <Label htmlFor="search-query">Search Term</Label>
           <Input
             id="search-query"
-            placeholder="Enter search terms..."
+            placeholder="Enter keywords..."
             value={filters.query}
-            onChange={(e) => updateFilters({ query: e.target.value })}
+            onChange={(e) => onFiltersChange({ ...filters, query: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                onSearch()
+              }
+            }}
           />
         </div>
 
         {/* Categories */}
-        <div className="space-y-2">
-          <Label>Search Categories</Label>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { value: "line", label: "Lines", icon: "📞" },
-              { value: "task", label: "Tasks", icon: "📋" },
-              { value: "invoice", label: "Invoices", icon: "💰" },
-              { value: "inventory", label: "Inventory", icon: "📦" },
-            ].map((category) => (
-              <div key={category.value} className="flex items-center space-x-2">
-                <Checkbox
-                  id={category.value}
-                  checked={filters.categories.includes(category.value)}
-                  onCheckedChange={() => toggleCategory(category.value)}
-                />
-                <Label htmlFor={category.value} className="flex items-center gap-1 cursor-pointer">
-                  <span>{category.icon}</span>
-                  {category.label}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-          <CollapsibleContent className="space-y-4">
-            <Separator />
-
-            {/* Date Range */}
-            <div className="space-y-2">
-              <Label>Date Range</Label>
-              <DatePickerWithRange date={filters.dateRange} setDate={(dateRange) => updateFilters({ dateRange })} />
+        <Collapsible open={isCategoriesOpen} onOpenChange={setIsCategoriesOpen}>
+          <CollapsibleTrigger className="flex w-full items-center justify-between py-2 font-semibold text-sm [&[data-state=open]>svg]:rotate-180">
+            Categories
+            <ChevronDown className="h-4 w-4 transition-transform" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="category-line"
+                checked={filters.categories.includes("line")}
+                onCheckedChange={(checked) => handleCategoryChange("line", !!checked)}
+              />
+              <Label htmlFor="category-line">Line Details</Label>
             </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="category-task"
+                checked={filters.categories.includes("task")}
+                onCheckedChange={(checked) => handleCategoryChange("task", !!checked)}
+              />
+              <Label htmlFor="category-task">Tasks</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="category-invoice"
+                checked={filters.categories.includes("invoice")}
+                onCheckedChange={(checked) => handleCategoryChange("invoice", !!checked)}
+              />
+              <Label htmlFor="category-invoice">Invoices</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="category-inventory"
+                checked={filters.categories.includes("inventory")}
+                onCheckedChange={(checked) => handleCategoryChange("inventory", !!checked)}
+              />
+              <Label htmlFor="category-inventory">Inventory</Label>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
-            {/* Line-specific filters */}
-            {filters.categories.includes("line") && (
-              <div className="space-y-2">
-                <Label>Line Status</Label>
-                <Select value={filters.lineStatus} onValueChange={(value) => updateFilters({ lineStatus: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select line status" />
+        {/* Date Range */}
+        <Collapsible open={isDateRangeOpen} onOpenChange={setIsDateRangeOpen}>
+          <CollapsibleTrigger className="flex w-full items-center justify-between py-2 font-semibold text-sm [&[data-state=open]>svg]:rotate-180">
+            Date Range
+            <ChevronDown className="h-4 w-4 transition-transform" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <DatePickerWithRange
+              date={filters.dateRange}
+              setDate={(date) => onFiltersChange({ ...filters, dateRange: date || undefined })}
+            />
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Line Filters */}
+        {filters.categories.includes("line") && (
+          <Collapsible open={isLineFiltersOpen} onOpenChange={setIsLineFiltersOpen}>
+            <CollapsibleTrigger className="flex w-full items-center justify-between py-2 font-semibold text-sm [&[data-state=open]>svg]:rotate-180">
+              Line Filters
+              <ChevronDown className="h-4 w-4 transition-transform" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4">
+              <div>
+                <Label htmlFor="line-status">Status</Label>
+                <Select
+                  value={filters.lineStatus || "all"}
+                  onValueChange={(value: "all" | "completed" | "pending") =>
+                    onFiltersChange({ ...filters, lineStatus: value })
+                  }
+                >
+                  <SelectTrigger id="line-status">
+                    <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Lines</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
+              <div>
+                <Label>Length (meters)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Min"
+                    value={filters.lengthRange?.min || ""}
+                    onChange={(e) => handleLengthRangeChange("min", e.target.value)}
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Max"
+                    value={filters.lengthRange?.max || ""}
+                    onChange={(e) => handleLengthRangeChange("max", e.target.value)}
+                  />
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
-            {/* Task-specific filters */}
-            {filters.categories.includes("task") && (
-              <div className="space-y-2">
-                <Label>Task Status</Label>
-                <Select value={filters.taskStatus} onValueChange={(value) => updateFilters({ taskStatus: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select task status" />
+        {/* Task Filters */}
+        {filters.categories.includes("task") && (
+          <Collapsible open={isTaskFiltersOpen} onOpenChange={setIsTaskFiltersOpen}>
+            <CollapsibleTrigger className="flex w-full items-center justify-between py-2 font-semibold text-sm [&[data-state=open]>svg]:rotate-180">
+              Task Filters
+              <ChevronDown className="h-4 w-4 transition-transform" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4">
+              <div>
+                <Label htmlFor="task-status">Status</Label>
+                <Select
+                  value={filters.taskStatus || "all"}
+                  onValueChange={(value: "all" | "pending" | "in_progress" | "completed" | "cancelled") =>
+                    onFiltersChange({ ...filters, taskStatus: value })
+                  }
+                >
+                  <SelectTrigger id="task-status">
+                    <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Tasks</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="in_progress">In Progress</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
@@ -186,119 +246,84 @@ export function AdvancedSearchFilters({
                   </SelectContent>
                 </Select>
               </div>
-            )}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
-            {/* Invoice-specific filters */}
-            {filters.categories.includes("invoice") && (
-              <div className="space-y-2">
-                <Label>Invoice Type</Label>
-                <Select value={filters.invoiceType} onValueChange={(value) => updateFilters({ invoiceType: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select invoice type" />
+        {/* Invoice Filters */}
+        {filters.categories.includes("invoice") && (
+          <Collapsible open={isInvoiceFiltersOpen} onOpenChange={setIsInvoiceFiltersOpen}>
+            <CollapsibleTrigger className="flex w-full items-center justify-between py-2 font-semibold text-sm [&[data-state=open]>svg]:rotate-180">
+              Invoice Filters
+              <ChevronDown className="h-4 w-4 transition-transform" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4">
+              <div>
+                <Label htmlFor="invoice-type">Invoice Type</Label>
+                <Select
+                  value={filters.invoiceType || "all"}
+                  onValueChange={(value: "all" | "monthly" | "inventory") =>
+                    onFiltersChange({ ...filters, invoiceType: value })
+                  }
+                >
+                  <SelectTrigger id="invoice-type">
+                    <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     <SelectItem value="monthly">Monthly</SelectItem>
                     <SelectItem value="inventory">Inventory</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
-
-            {/* Inventory-specific filters */}
-            {filters.categories.includes("inventory") && (
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="low-stock"
-                    checked={filters.inventoryLowStock || false}
-                    onCheckedChange={(checked) => updateFilters({ inventoryLowStock: checked as boolean })}
-                  />
-                  <Label htmlFor="low-stock">Show only low stock items</Label>
-                </div>
-              </div>
-            )}
-
-            {/* Amount Range (for invoices) */}
-            {filters.categories.includes("invoice") && (
-              <div className="space-y-2">
-                <Label>Amount Range (LKR)</Label>
+              <div>
+                <Label>Amount (LKR)</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
-                    placeholder="Min amount"
+                    placeholder="Min"
                     value={filters.amountRange?.min || ""}
-                    onChange={(e) =>
-                      updateFilters({
-                        amountRange: {
-                          min: Number(e.target.value),
-                          max: filters.amountRange?.max || 0,
-                        },
-                      })
-                    }
+                    onChange={(e) => handleAmountRangeChange("min", e.target.value)}
                   />
                   <Input
                     type="number"
-                    placeholder="Max amount"
+                    placeholder="Max"
                     value={filters.amountRange?.max || ""}
-                    onChange={(e) =>
-                      updateFilters({
-                        amountRange: {
-                          min: filters.amountRange?.min || 0,
-                          max: Number(e.target.value),
-                        },
-                      })
-                    }
+                    onChange={(e) => handleAmountRangeChange("max", e.target.value)}
                   />
                 </div>
               </div>
-            )}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
-            {/* Length Range (for lines) */}
-            {filters.categories.includes("line") && (
-              <div className="space-y-2">
-                <Label>Length Range (meters)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="Min length"
-                    value={filters.lengthRange?.min || ""}
-                    onChange={(e) =>
-                      updateFilters({
-                        lengthRange: {
-                          min: Number(e.target.value),
-                          max: filters.lengthRange?.max || 0,
-                        },
-                      })
-                    }
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Max length"
-                    value={filters.lengthRange?.max || ""}
-                    onChange={(e) =>
-                      updateFilters({
-                        lengthRange: {
-                          min: filters.lengthRange?.min || 0,
-                          max: Number(e.target.value),
-                        },
-                      })
-                    }
-                  />
-                </div>
+        {/* Inventory Filters */}
+        {filters.categories.includes("inventory") && (
+          <Collapsible open={isInventoryFiltersOpen} onOpenChange={setIsInventoryFiltersOpen}>
+            <CollapsibleTrigger className="flex w-full items-center justify-between py-2 font-semibold text-sm [&[data-state=open]>svg]:rotate-180">
+              Inventory Filters
+              <ChevronDown className="h-4 w-4 transition-transform" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="inventory-low-stock"
+                  checked={filters.inventoryLowStock || false}
+                  onCheckedChange={(checked) => onFiltersChange({ ...filters, inventoryLowStock: !!checked })}
+                />
+                <Label htmlFor="inventory-low-stock">Low Stock Only</Label>
               </div>
-            )}
-          </CollapsibleContent>
-        </Collapsible>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 pt-4">
-          <Button onClick={onSearch} disabled={isSearching} className="flex-1">
+        <div className="flex gap-2">
+          <Button onClick={onSearch} className="flex-1" disabled={isSearching}>
             {isSearching ? "Searching..." : "Search"}
           </Button>
-          <Button variant="outline" onClick={clearAllFilters}>
+          <Button variant="outline" onClick={handleClearAll} disabled={isSearching}>
             <X className="h-4 w-4 mr-2" />
-            Clear All
+            Clear
           </Button>
         </div>
       </CardContent>

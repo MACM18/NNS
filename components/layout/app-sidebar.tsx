@@ -1,173 +1,117 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Home,
+  LayoutDashboard,
+  Users,
   Phone,
-  CheckSquare,
   FileText,
   Package,
-  Users,
+  ClipboardList,
+  Briefcase,
+  Newspaper,
   Settings,
-  BarChart3,
+  BarChart2,
   Search,
-  ChevronDown,
-  Building2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
-const navigation = [
-  {
-    name: "Dashboard",
-    href: "/",
-    icon: Home,
-  },
-  {
-    name: "Search",
-    href: "/search",
-    icon: Search,
-  },
-  {
-    name: "Lines",
-    href: "/lines",
-    icon: Phone,
-  },
-  {
-    name: "Tasks",
-    href: "/tasks",
-    icon: CheckSquare,
-  },
-  {
-    name: "Invoices",
-    href: "/invoices",
-    icon: FileText,
-  },
-  {
-    name: "Inventory",
-    href: "/inventory",
-    icon: Package,
-  },
-  {
-    name: "Users",
-    href: "/users",
-    icon: Users,
-  },
-  {
-    name: "Content Management",
-    icon: Building2,
-    children: [
-      {
-        name: "Careers",
-        href: "/careers",
-        icon: Building2,
-      },
-      {
-        name: "Content",
-        href: "/content",
-        icon: FileText,
-      },
-    ],
-  },
-  {
-    name: "Reports",
-    href: "/reports",
-    icon: BarChart3,
-  },
-  {
-    name: "Settings",
-    href: "/settings",
-    icon: Settings,
-  },
-]
-
-export function AppSidebar() {
+export function Navigation() {
   const pathname = usePathname()
-  const [openItems, setOpenItems] = useState<string[]>([])
 
-  const toggleItem = (name: string) => {
-    setOpenItems((prev) => (prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]))
-  }
-
-  const isActive = (href: string) => {
-    if (href === "/") {
-      return pathname === "/"
-    }
-    return pathname.startsWith(href)
-  }
-
-  const isParentActive = (children: any[]) => {
-    return children.some((child) => isActive(child.href))
-  }
+  const navItems = [
+    {
+      title: "Dashboard",
+      href: "/",
+      icon: LayoutDashboard,
+    },
+    {
+      title: "Users",
+      href: "/users",
+      icon: Users,
+    },
+    {
+      title: "Lines",
+      href: "/lines",
+      icon: Phone,
+    },
+    {
+      title: "Invoices",
+      href: "/invoices",
+      icon: FileText,
+    },
+    {
+      title: "Inventory",
+      href: "/inventory",
+      icon: Package,
+    },
+    {
+      title: "Tasks",
+      href: "/tasks",
+      icon: ClipboardList,
+    },
+    {
+      title: "Careers",
+      href: "/careers",
+      icon: Briefcase,
+    },
+    {
+      title: "Content",
+      href: "/content",
+      icon: Newspaper,
+    },
+    {
+      title: "Reports",
+      href: "/reports",
+      icon: BarChart2,
+    },
+    {
+      title: "Settings",
+      href: "/settings",
+      icon: Settings,
+    },
+    {
+      title: "Search", // Added Search item
+      href: "/search",
+      icon: Search,
+    },
+  ]
 
   return (
-    <div className="flex h-full w-64 flex-col bg-background border-r">
-      <div className="flex h-14 items-center border-b px-4">
-        <Link className="flex items-center gap-2 font-semibold" href="/">
-          <Building2 className="h-6 w-6" />
-          <span>NNS Telecom</span>
+    <ScrollArea className="h-full py-6">
+      <nav className="grid items-start px-4 text-sm font-medium">
+        {navItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary",
+              pathname === item.href && "bg-muted text-primary",
+            )}
+          >
+            <item.icon className="h-4 w-4" />
+            {item.title}
+          </Link>
+        ))}
+      </nav>
+    </ScrollArea>
+  )
+}
+
+export function AppSidebar() {
+  return (
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-background p-4 lg:flex">
+      <div className="flex h-16 items-center px-4">
+        <Link href="/" className="flex items-center gap-2 font-semibold">
+          <img src="/placeholder-logo.svg" alt="NNS Logo" className="h-6 w-6" />
+          <span className="text-lg">NNS Enterprise</span>
         </Link>
       </div>
-      <ScrollArea className="flex-1">
-        <div className="space-y-2 p-4">
-          {navigation.map((item) => {
-            if (item.children) {
-              const isOpen = openItems.includes(item.name)
-              const hasActiveChild = isParentActive(item.children)
-
-              return (
-                <Collapsible key={item.name} open={isOpen} onOpenChange={() => toggleItem(item.name)}>
-                  <CollapsibleTrigger asChild>
-                    <Button
-                      variant={hasActiveChild ? "secondary" : "ghost"}
-                      className={cn("w-full justify-between", hasActiveChild && "bg-secondary")}
-                    >
-                      <div className="flex items-center gap-2">
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.name}</span>
-                      </div>
-                      <ChevronDown className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")} />
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-1 pl-6 pt-1">
-                    {item.children.map((child) => (
-                      <Button
-                        key={child.href}
-                        variant={isActive(child.href) ? "secondary" : "ghost"}
-                        className="w-full justify-start"
-                        asChild
-                      >
-                        <Link href={child.href}>
-                          <child.icon className="h-4 w-4" />
-                          <span>{child.name}</span>
-                        </Link>
-                      </Button>
-                    ))}
-                  </CollapsibleContent>
-                </Collapsible>
-              )
-            }
-
-            return (
-              <Button
-                key={item.href}
-                variant={isActive(item.href) ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                asChild
-              >
-                <Link href={item.href}>
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.name}</span>
-                </Link>
-              </Button>
-            )
-          })}
-        </div>
-      </ScrollArea>
-    </div>
+      <div className="flex-1">
+        <Navigation />
+      </div>
+    </aside>
   )
 }

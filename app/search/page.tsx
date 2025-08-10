@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AdvancedSearchFilters, type SearchFilters } from "@/components/search/advanced-search-filters"
-import { createClient } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase" // Corrected import
 import Link from "next/link"
 
 interface SearchResult {
@@ -32,7 +32,7 @@ export default function SearchPage() {
   const [searchTime, setSearchTime] = useState<number | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
 
-  const supabase = createClient()
+  const supabase = getSupabaseClient() // Corrected usage
 
   useEffect(() => {
     const query = searchParams.get("q")
@@ -40,7 +40,7 @@ export default function SearchPage() {
       setFilters((prev) => ({ ...prev, query }))
       performSearch({ ...filters, query })
     }
-  }, [searchParams])
+  }, [])
 
   const performSearch = async (searchFilters = filters) => {
     if (!searchFilters.query.trim() && searchFilters.categories.length === 4) return
@@ -324,6 +324,10 @@ export default function SearchPage() {
             onFiltersChange={setFilters}
             onSearch={() => performSearch()}
             onClear={() => {
+              setFilters({
+                query: "",
+                categories: ["line", "task", "invoice", "inventory"],
+              })
               setResults([])
               setHasSearched(false)
               setSearchTime(null)
