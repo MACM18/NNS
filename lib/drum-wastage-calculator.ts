@@ -15,6 +15,7 @@ export interface WastageCalculationResult {
   totalUsed: number
   totalWastage: number
   calculatedCurrentQuantity: number
+  remainingCable: number
   usageSegments: UsageSegment[]
   wastedSegments: Array<{ start: number; end: number; length: number }>
   calculationMethod: 'smart_segments' | 'legacy_gaps' | 'manual_override'
@@ -32,20 +33,28 @@ export interface DrumUsage {
 /**
  * Smart segment-based wastage calculation
  * This method tracks actual used segments and calculates waste as truly unused portions
+ * Now includes remaining cable calculation from highest usage point to drum end
  */
 export function calculateSmartWastage(
   usages: DrumUsage[], 
   drumCapacity: number,
-  manualWastageOverride?: number
+  manualWastageOverride?: number,
+  drumStatus?: string
 ): WastageCalculationResult {
   
   if (usages.length === 0) {
+    const remainingCable = drumCapacity
+    const totalWastage = drumStatus === 'inactive' 
+      ? remainingCable 
+      : (manualWastageOverride || 0)
+    
     return {
       totalUsed: 0,
-      totalWastage: manualWastageOverride || 0,
-      calculatedCurrentQuantity: drumCapacity - (manualWastageOverride || 0),
+      totalWastage,
+      calculatedCurrentQuantity: drumCapacity - totalWastage,
+      remainingCable,
       usageSegments: [],
-      wastedSegments: manualWastageOverride ? [{ start: 0, end: manualWastageOverride, length: manualWastageOverride }] : [],
+      wastedSegments: totalWastage > 0 ? [{ start: 0, end: totalWastage, length: totalWastage }] : [],
       calculationMethod: manualWastageOverride !== undefined ? 'manual_override' : 'smart_segments'
     }
   }
@@ -72,6 +81,14 @@ export function calculateSmartWastage(
   // Calculate total used length
   const totalUsed = mergedSegments.reduce((sum, seg) => sum + seg.length, 0)
 
+  // Find the highest point of usage to calculate remaining cable
+  const highestUsagePoint = mergedSegments.length > 0 
+    ? Math.max(...mergedSegments.map(seg => seg.end))
+    : 0
+  
+  // Calculate remaining cable from highest usage point to drum end
+  const remainingCable = Math.max(0, drumCapacity - highestUsagePoint)
+
   // If manual override is provided, use it
   if (manualWastageOverride !== undefined) {
     const totalWastage = Math.max(0, Math.min(manualWastageOverride, drumCapacity - totalUsed))
@@ -79,6 +96,7 @@ export function calculateSmartWastage(
       totalUsed,
       totalWastage,
       calculatedCurrentQuantity: Math.max(0, drumCapacity - totalUsed - totalWastage),
+      remainingCable,
       usageSegments: mergedSegments,
       wastedSegments: totalWastage > 0 ? [{ start: 0, end: totalWastage, length: totalWastage }] : [],
       calculationMethod: 'manual_override',
@@ -88,12 +106,24 @@ export function calculateSmartWastage(
 
   // Calculate wasted segments (gaps and unused ends)
   const wastedSegments = calculateWastedSegments(mergedSegments, drumCapacity)
-  const totalWastage = wastedSegments.reduce((sum, seg) => sum + seg.length, 0)
+  let totalWastage = wastedSegments.reduce((sum, seg) => sum + seg.length, 0)
+
+  // For inactive drums, add remaining cable to wastage
+  if (drumStatus === 'inactive' && remainingCable > 0) {
+    totalWastage += remainingCable
+    // Add remaining cable as a wasted segment
+    wastedSegments.push({
+      start: highestUsagePoint,
+      end: drumCapacity,
+      length: remainingCable
+    })
+  }
 
   return {
     totalUsed,
     totalWastage,
     calculatedCurrentQuantity: Math.max(0, drumCapacity - totalUsed - totalWastage),
+    remainingCable,
     usageSegments: mergedSegments,
     wastedSegments,
     calculationMethod: 'smart_segments'
@@ -106,14 +136,19 @@ export function calculateSmartWastage(
  */
 export function calculateLegacyWastage(
   usages: DrumUsage[], 
-  drumCapacity: number
+  drumCapacity: number,
+  drumStatus?: string
 ): WastageCalculationResult {
   
   if (usages.length === 0) {
+    const remainingCable = drumCapacity
+    const totalWastage = drumStatus === 'inactive' ? remainingCable : 0
+    
     return {
       totalUsed: 0,
-      totalWastage: 0,
-      calculatedCurrentQuantity: drumCapacity,
+      totalWastage,
+      calculatedCurrentQuantity: drumCapacity - totalWastage,
+      remainingCable,
       usageSegments: [],
       wastedSegments: [],
       calculationMethod: 'legacy_gaps'
@@ -165,6 +200,22 @@ export function calculateLegacyWastage(
     lastEndPoint = Math.max(startPoint, endPoint)
   })
 
+  // Calculate remaining cable from highest usage point
+  const highestUsagePoint = Math.max(...sortedUsages.map(usage => 
+    Math.max(usage.cable_start_point || 0, usage.cable_end_point || 0)
+  ))
+  const remainingCable = Math.max(0, drumCapacity - highestUsagePoint)
+
+  // For inactive drums, add remaining cable to wastage
+  if (drumStatus === 'inactive' && remainingCable > 0) {
+    totalWastage += remainingCable
+    wastedSegments.push({
+      start: highestUsagePoint,
+      end: drumCapacity,
+      length: remainingCable
+    })
+  }
+
   // Ensure totals don't exceed initial drum length
   const totalDeducted = totalUsed + totalWastage
   if (totalDeducted > drumCapacity) {
@@ -176,6 +227,7 @@ export function calculateLegacyWastage(
     totalUsed,
     totalWastage,
     calculatedCurrentQuantity: Math.max(0, drumCapacity - totalUsed - totalWastage),
+    remainingCable,
     usageSegments,
     wastedSegments,
     calculationMethod: 'legacy_gaps'
