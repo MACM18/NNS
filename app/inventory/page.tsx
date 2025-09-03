@@ -22,6 +22,7 @@ import { AuthWrapper } from "@/components/auth/auth-wrapper"
 import { getSupabaseClient } from "@/lib/supabase"
 import { useNotification } from "@/contexts/notification-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { calculateSmartWastage, calculateLegacyWastage, type DrumUsage } from "@/lib/drum-wastage-calculator"
 
 interface InventoryStats {
   totalItems: number
@@ -67,6 +68,8 @@ export interface DrumTracking {
   received_date: string
   status: string
   item_name?: string
+  wastage_calculation_method?: 'smart_segments' | 'legacy_gaps' | 'manual_override'
+  manual_wastage_override?: number
 }
 
 interface WasteReport {
@@ -90,79 +93,64 @@ interface InventoryInvoiceItem {
   quantity_issued: number
 }
 
-// Enhanced drum calculation logic
+// Enhanced drum calculation logic with smart wastage calculation
 const calculateDrumMetrics = (drum: any, usageData: any[]) => {
   const drumUsages = usageData.filter((usage) => usage.drum_id === drum.id)
 
   if (drumUsages.length === 0) {
     return {
       totalUsed: 0,
-      totalWastage: 0,
-      calculatedCurrentQuantity: drum.initial_quantity,
+      totalWastage: drum.manual_wastage_override || 0,
+      calculatedCurrentQuantity: drum.initial_quantity - (drum.manual_wastage_override || 0),
       calculatedStatus: drum.initial_quantity > 10 ? "active" : "inactive",
       usageCount: 0,
       lastUsageDate: null,
       usages: [],
+      wastageCalculationMethod: drum.manual_wastage_override !== undefined ? 'manual_override' : 'smart_segments',
     }
   }
 
-  // Sort usages by date to process chronologically
+  // Convert to the format expected by our calculation functions
+  const drumUsageData: DrumUsage[] = drumUsages.map(usage => ({
+    id: usage.id,
+    cable_start_point: usage.cable_start_point || 0,
+    cable_end_point: usage.cable_end_point || 0,
+    usage_date: usage.usage_date,
+    quantity_used: usage.quantity_used
+  }))
+
+  // Use smart calculation by default, with manual override if set
+  const calculation = calculateSmartWastage(
+    drumUsageData, 
+    drum.initial_quantity,
+    drum.manual_wastage_override
+  )
+
+  // Sort usages by date for UI display
   const sortedUsages = [...drumUsages].sort(
     (a, b) => new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime(),
   )
 
-  let totalUsed = 0
-  let totalWastage = 0
-  let lastEndPoint = 0 // Track the last used end point
-
-  sortedUsages.forEach((usage, index) => {
-    const startPoint = usage.cable_start_point || 0
-    const endPoint = usage.cable_end_point || 0
-
-    // Calculate actual usage (absolute difference)
-    const actualUsage = Math.abs(endPoint - startPoint)
-    totalUsed += actualUsage
-
-    // Calculate wastage based on gap from last usage
-    if (index > 0) {
-      // Find the gap between last end point and current start point
-      const gap = Math.abs(startPoint - lastEndPoint)
-      if (gap > 0) {
-        totalWastage += gap
-      }
-    }
-
-    // Update last end point (use the higher value to track cable progression)
-    lastEndPoint = Math.max(startPoint, endPoint)
-  })
-
-  // Ensure totals don't exceed initial drum length
-  const maxCapacity = drum.initial_quantity
-  const totalDeducted = totalUsed + totalWastage
-
-  if (totalDeducted > maxCapacity) {
-    // Cap the wastage to fit within capacity
-    totalWastage = Math.max(0, maxCapacity - totalUsed)
-  }
-
-  const calculatedCurrentQuantity = Math.max(0, maxCapacity - totalUsed - totalWastage)
-
   // Determine status based on calculated quantity
   let calculatedStatus = "active"
-  if (calculatedCurrentQuantity <= 0) {
+  if (calculation.calculatedCurrentQuantity <= 0) {
     calculatedStatus = "empty"
-  } else if (calculatedCurrentQuantity <= 10) {
+  } else if (calculation.calculatedCurrentQuantity <= 10) {
     calculatedStatus = "inactive"
   }
 
   return {
-    totalUsed,
-    totalWastage,
-    calculatedCurrentQuantity,
+    totalUsed: calculation.totalUsed,
+    totalWastage: calculation.totalWastage,
+    calculatedCurrentQuantity: calculation.calculatedCurrentQuantity,
     calculatedStatus,
     usageCount: sortedUsages.length,
     lastUsageDate: sortedUsages.length > 0 ? sortedUsages[sortedUsages.length - 1].usage_date : null,
     usages: sortedUsages.slice(-5), // Keep last 5 usages for details
+    wastageCalculationMethod: calculation.calculationMethod,
+    usageSegments: calculation.usageSegments,
+    wastedSegments: calculation.wastedSegments,
+    manualWastageOverride: calculation.manualWastageOverride,
   }
 }
 
@@ -899,7 +887,15 @@ export default function InventoryPage() {
                                     {drum.usage_count} installation
                                     {drum.usage_count !== 1 ? "s" : ""}
                                     {totalWastage > 0 && (
-                                      <span className="text-orange-600"> • {totalWastage.toFixed(1)}m waste</span>
+                                      <>
+                                        <span className="text-orange-600"> • {totalWastage.toFixed(1)}m waste</span>
+                                        {drum.wastageCalculationMethod === 'manual_override' && (
+                                          <span className="text-blue-600"> (manual)</span>
+                                        )}
+                                        {drum.wastageCalculationMethod === 'smart_segments' && (
+                                          <span className="text-green-600"> (smart)</span>
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                 )}
@@ -1109,6 +1105,7 @@ export default function InventoryPage() {
           onOpenChange={setDrumUsageModalOpen}
           drumId={selectedDrumForUsage?.id || null}
           drumNumber={selectedDrumForUsage?.drum_number || ""}
+          onWastageUpdate={fetchDrums}
         />
 
         {/* Delete Confirmation Dialogs */}
