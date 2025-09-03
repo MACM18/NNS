@@ -168,6 +168,7 @@ export function EditDrumModal({
               required
             >
               <option value='active'>Active</option>
+              <option value='inactive'>Inactive</option>
               <option value='empty'>Empty</option>
               <option value='maintenance'>Maintenance</option>
             </select>

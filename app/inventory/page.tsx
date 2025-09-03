@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { Plus, Package, TrendingDown, AlertTriangle, BarChart3, Eye, Pencil, Trash, Cable } from "lucide-react"
+import { Plus, Package, TrendingDown, AlertTriangle, BarChart3, Eye, Pencil, Trash, Cable, ToggleLeft, ToggleRight } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Header } from "@/components/layout/header"
@@ -22,6 +23,7 @@ import { AuthWrapper } from "@/components/auth/auth-wrapper"
 import { getSupabaseClient } from "@/lib/supabase"
 import { useNotification } from "@/contexts/notification-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { calculateSmartWastage, calculateLegacyWastage, type DrumUsage } from "@/lib/drum-wastage-calculator"
 
 interface InventoryStats {
   totalItems: number
@@ -61,12 +63,15 @@ export interface DrumTracking {
   calculated_status?: string
   total_used?: number
   total_wastage?: number
+  remaining_cable?: number
   usage_count?: number
   last_usage_date?: string
   usages?: any[]
   received_date: string
   status: string
   item_name?: string
+  wastage_calculation_method?: 'smart_segments' | 'legacy_gaps' | 'manual_override'
+  manual_wastage_override?: number
 }
 
 interface WasteReport {
@@ -90,79 +95,67 @@ interface InventoryInvoiceItem {
   quantity_issued: number
 }
 
-// Enhanced drum calculation logic
+// Enhanced drum calculation logic with smart wastage calculation
 const calculateDrumMetrics = (drum: any, usageData: any[]) => {
   const drumUsages = usageData.filter((usage) => usage.drum_id === drum.id)
 
   if (drumUsages.length === 0) {
     return {
       totalUsed: 0,
-      totalWastage: 0,
-      calculatedCurrentQuantity: drum.initial_quantity,
-      calculatedStatus: drum.initial_quantity > 10 ? "active" : "inactive",
+      totalWastage: drum.manual_wastage_override || (drum.status === 'inactive' ? drum.initial_quantity : 0),
+      calculatedCurrentQuantity: drum.initial_quantity - (drum.manual_wastage_override || (drum.status === 'inactive' ? drum.initial_quantity : 0)),
+      remainingCable: drum.status === 'inactive' ? 0 : drum.initial_quantity,
+      calculatedStatus: drum.initial_quantity > 10 ? drum.status : "inactive",
       usageCount: 0,
       lastUsageDate: null,
       usages: [],
+      wastageCalculationMethod: drum.manual_wastage_override !== undefined ? 'manual_override' : 'smart_segments',
     }
   }
 
-  // Sort usages by date to process chronologically
+  // Convert to the format expected by our calculation functions
+  const drumUsageData: DrumUsage[] = drumUsages.map(usage => ({
+    id: usage.id,
+    cable_start_point: usage.cable_start_point || 0,
+    cable_end_point: usage.cable_end_point || 0,
+    usage_date: usage.usage_date,
+    quantity_used: usage.quantity_used
+  }))
+
+  // Use smart calculation by default, with manual override if set
+  const calculation = calculateSmartWastage(
+    drumUsageData, 
+    drum.initial_quantity,
+    drum.manual_wastage_override,
+    drum.status
+  )
+
+  // Sort usages by date for UI display
   const sortedUsages = [...drumUsages].sort(
     (a, b) => new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime(),
   )
 
-  let totalUsed = 0
-  let totalWastage = 0
-  let lastEndPoint = 0 // Track the last used end point
-
-  sortedUsages.forEach((usage, index) => {
-    const startPoint = usage.cable_start_point || 0
-    const endPoint = usage.cable_end_point || 0
-
-    // Calculate actual usage (absolute difference)
-    const actualUsage = Math.abs(endPoint - startPoint)
-    totalUsed += actualUsage
-
-    // Calculate wastage based on gap from last usage
-    if (index > 0) {
-      // Find the gap between last end point and current start point
-      const gap = Math.abs(startPoint - lastEndPoint)
-      if (gap > 0) {
-        totalWastage += gap
-      }
-    }
-
-    // Update last end point (use the higher value to track cable progression)
-    lastEndPoint = Math.max(startPoint, endPoint)
-  })
-
-  // Ensure totals don't exceed initial drum length
-  const maxCapacity = drum.initial_quantity
-  const totalDeducted = totalUsed + totalWastage
-
-  if (totalDeducted > maxCapacity) {
-    // Cap the wastage to fit within capacity
-    totalWastage = Math.max(0, maxCapacity - totalUsed)
-  }
-
-  const calculatedCurrentQuantity = Math.max(0, maxCapacity - totalUsed - totalWastage)
-
   // Determine status based on calculated quantity
-  let calculatedStatus = "active"
-  if (calculatedCurrentQuantity <= 0) {
+  let calculatedStatus = drum.status
+  if (calculation.calculatedCurrentQuantity <= 0) {
     calculatedStatus = "empty"
-  } else if (calculatedCurrentQuantity <= 10) {
+  } else if (calculation.calculatedCurrentQuantity <= 10 && drum.status !== 'inactive') {
     calculatedStatus = "inactive"
   }
 
   return {
-    totalUsed,
-    totalWastage,
-    calculatedCurrentQuantity,
+    totalUsed: calculation.totalUsed,
+    totalWastage: calculation.totalWastage,
+    calculatedCurrentQuantity: calculation.calculatedCurrentQuantity,
+    remainingCable: calculation.remainingCable,
     calculatedStatus,
     usageCount: sortedUsages.length,
     lastUsageDate: sortedUsages.length > 0 ? sortedUsages[sortedUsages.length - 1].usage_date : null,
     usages: sortedUsages.slice(-5), // Keep last 5 usages for details
+    wastageCalculationMethod: calculation.calculationMethod,
+    usageSegments: calculation.usageSegments,
+    wastedSegments: calculation.wastedSegments,
+    manualWastageOverride: calculation.manualWastageOverride,
   }
 }
 
@@ -199,6 +192,7 @@ export default function InventoryPage() {
   const [wasteToDelete, setWasteToDelete] = useState<WasteReport | null>(null)
   const [drumUsageModalOpen, setDrumUsageModalOpen] = useState(false)
   const [selectedDrumForUsage, setSelectedDrumForUsage] = useState<DrumTracking | null>(null)
+  const [showInactiveDrums, setShowInactiveDrums] = useState(false)
 
   const supabase = getSupabaseClient()
   const { addNotification } = useNotification()
@@ -358,7 +352,8 @@ export default function InventoryPage() {
       const { data, error } = await supabase
         .from("drum_tracking")
         .select(
-          `id, drum_number, item_id, initial_quantity, current_quantity, received_date, status, inventory_items(name)`,
+          `id, drum_number, item_id, initial_quantity, current_quantity, received_date, status, 
+           wastage_calculation_method, manual_wastage_override, inventory_items(name)`,
         )
         .order("received_date", { ascending: false })
       if (error) throw error
@@ -384,6 +379,7 @@ export default function InventoryPage() {
           calculated_status: metrics.calculatedStatus,
           total_used: metrics.totalUsed,
           total_wastage: metrics.totalWastage,
+          remaining_cable: metrics.remainingCable,
           usage_count: metrics.usageCount,
           last_usage_date: metrics.lastUsageDate,
           usages: metrics.usages,
@@ -504,6 +500,36 @@ export default function InventoryPage() {
 
   const handleSuccess = () => {
     setRefreshTrigger((prev) => prev + 1)
+  }
+
+  const updateDrumStatus = async (drumId: string, newStatus: string, drumNumber: string) => {
+    try {
+      const { error } = await supabase
+        .from("drum_tracking")
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", drumId)
+
+      if (error) throw error
+
+      addNotification({
+        title: "Status Updated",
+        message: `Drum ${drumNumber} status changed to ${newStatus}`,
+        type: "success",
+        category: "system",
+      })
+
+      handleSuccess()
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message: "Failed to update drum status",
+        type: "error",
+        category: "system",
+      })
+    }
   }
 
   const syncDrumQuantity = async (drum: DrumTracking) => {
@@ -833,6 +859,17 @@ export default function InventoryPage() {
                   <CardDescription>
                     Cable drum usage and remaining quantities with enhanced tracking logic
                   </CardDescription>
+                  <div className="flex items-center gap-2 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowInactiveDrums(!showInactiveDrums)}
+                      className="gap-2"
+                    >
+                      {showInactiveDrums ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                      {showInactiveDrums ? "Hide Inactive Drums" : "Show Inactive Drums"}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {loadingData ? (
@@ -855,7 +892,9 @@ export default function InventoryPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {drums.map((drum) => {
+                        {drums
+                          .filter(drum => showInactiveDrums || drum.status !== 'inactive')
+                          .map((drum) => {
                           const displayQuantity = drum.calculated_current_quantity ?? 0
                           const displayStatus = drum.calculated_status ?? drum.status
                           const totalUsed = drum.total_used ?? 0
@@ -899,7 +938,21 @@ export default function InventoryPage() {
                                     {drum.usage_count} installation
                                     {drum.usage_count !== 1 ? "s" : ""}
                                     {totalWastage > 0 && (
-                                      <span className="text-orange-600"> • {totalWastage.toFixed(1)}m waste</span>
+                                      <>
+                                        <span className="text-orange-600"> • {totalWastage.toFixed(1)}m waste</span>
+                                        {drum.wastageCalculationMethod === 'manual_override' && (
+                                          <span className="text-blue-600"> (manual)</span>
+                                        )}
+                                        {drum.wastageCalculationMethod === 'smart_segments' && (
+                                          <span className="text-green-600"> (smart)</span>
+                                        )}
+                                      </>
+                                    )}
+                                    {drum.remaining_cable !== undefined && drum.remaining_cable > 0 && (
+                                      <span className="text-gray-600"> • {drum.remaining_cable.toFixed(1)}m remaining</span>
+                                    )}
+                                    {drum.status === 'inactive' && drum.remaining_cable && drum.remaining_cable > 0 && (
+                                      <span className="text-red-600"> (added to waste)</span>
                                     )}
                                   </div>
                                 )}
@@ -918,7 +971,24 @@ export default function InventoryPage() {
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
-                                  {getStatusBadge(displayStatus)}
+                                  {(role === "admin" || role === "moderator") ? (
+                                    <Select
+                                      value={displayStatus}
+                                      onValueChange={(value) => updateDrumStatus(drum.id, value, drum.drum_number)}
+                                    >
+                                      <SelectTrigger className="w-[100px] h-7 text-xs">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="active">Active</SelectItem>
+                                        <SelectItem value="inactive">Inactive</SelectItem>
+                                        <SelectItem value="empty">Empty</SelectItem>
+                                        <SelectItem value="maintenance">Maintenance</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    getStatusBadge(displayStatus)
+                                  )}
                                   {displayStatus !== drum.status && (
                                     <Badge variant="outline" className="text-xs">
                                       DB: {drum.status}
@@ -1109,6 +1179,7 @@ export default function InventoryPage() {
           onOpenChange={setDrumUsageModalOpen}
           drumId={selectedDrumForUsage?.id || null}
           drumNumber={selectedDrumForUsage?.drum_number || ""}
+          onWastageUpdate={fetchDrums}
         />
 
         {/* Delete Confirmation Dialogs */}

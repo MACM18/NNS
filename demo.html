@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NNS Drum Wastage Calculation - Enhanced with Status Management</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .demo { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .header { border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 20px; }
+        .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin: 20px 0; }
+        .stat { background: #f8f9fa; padding: 15px; border-radius: 6px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+        .used { color: #2563eb; }
+        .waste { color: #ea580c; }
+        .remaining { color: #16a34a; }
+        .inactive { color: #9333ea; }
+        .settings { background: #e0f2fe; border: 2px dashed #0284c7; padding: 15px; border-radius: 6px; margin: 15px 0; }
+        .cable-bar { height: 40px; background: #e5e7eb; border-radius: 4px; position: relative; margin: 10px 0; }
+        .cable-used { position: absolute; height: 100%; background: #16a34a; opacity: 0.8; }
+        .cable-waste { position: absolute; height: 100%; background: #ea580c; opacity: 0.6; }
+        .cable-inactive-waste { position: absolute; height: 100%; background: #9333ea; opacity: 0.6; }
+        .success { background: #d1fae5; border: 1px solid #10b981; padding: 15px; border-radius: 6px; margin-top: 20px; }
+        .toggle { background: #fef3c7; border: 1px solid #f59e0b; padding: 10px; border-radius: 6px; margin: 10px 0; }
+        .example { background: #f3f4f6; border: 1px solid #d1d5db; padding: 15px; border-radius: 6px; margin: 10px 0; }
+        .feature { background: #ecfdf5; border: 1px solid #10b981; padding: 10px; border-radius: 6px; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <div class="demo">
+        <div class="header">
+            <h1>🔌 NNS Drum Wastage Calculation System</h1>
+            <h2>Enhanced with Smart Calculation, Manual Override & Status Management</h2>
+            <p><strong>Drum:</strong> DRM-2024-001 | <strong>Problem Solved:</strong> Issue #13 + Status Enhancement</p>
+        </div>
+
+        <div class="feature">
+            <h3>🆕 New Features Added</h3>
+            <ul>
+                <li><strong>Drum Status Selection:</strong> Active, Inactive, Empty, Maintenance</li>
+                <li><strong>Inactive Drum Toggle:</strong> Hide/show inactive drums in the inventory table</li>
+                <li><strong>Remaining Cable Calculation:</strong> Calculates remaining cable from highest usage point to drum end</li>
+                <li><strong>Inactive Drum Wastage:</strong> Remaining cable is automatically added to wastage for inactive drums</li>
+            </ul>
+        </div>
+
+        <div class="toggle">
+            <h3>🔄 Drum Status Toggle</h3>
+            <p><strong>Toggle Control:</strong> "Show Inactive Drums" button allows users to view/hide inactive drums</p>
+            <p><strong>Default Behavior:</strong> Inactive drums are hidden by default to focus on active operations</p>
+        </div>
+
+        <h3>📊 Example: 2000m Drum with Mixed Usage</h3>
+        
+        <div class="example">
+            <h4>Usage Lines (as per user example):</h4>
+            <ul>
+                <li>Line 1: start 200m, end 500m (300m used)</li>
+                <li>Line 2: start 750m, end 600m (150m used in reverse)</li>
+                <li>Line 3: start 1750m, end 1800m (50m used) - <strong>HIGHEST POINT</strong></li>
+                <li>Line 4: start 1050m, end 1200m (150m used)</li>
+            </ul>
+            <p><strong>Calculation:</strong> Remaining cable = 2000m - 1800m (highest point) = <span class="remaining">200m</span></p>
+        </div>
+    </div>
+
+    <div class="demo">
+        <div class="settings">
+            <h3>⚙️ Active Drum - Normal Operation</h3>
+            <p><strong>Status:</strong> Active | <strong>Method:</strong> Smart Segments</p>
+            <p><strong>Remaining Cable:</strong> 200m available for future use</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">2000m</div>
+                <div>Initial Length</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value used">650m</div>
+                <div>Total Used</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value waste">150m</div>
+                <div>Gaps/Waste</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value remaining">200m</div>
+                <div>Remaining Cable</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">1000m</div>
+                <div>Available</div>
+            </div>
+        </div>
+
+        <h4>📊 Active Drum Visualization</h4>
+        <p>Green = Used | Orange = Internal Waste | Gray = Remaining Available</p>
+        <div class="cable-bar">
+            <div class="cable-used" style="left: 10%; width: 15%;"></div>
+            <div class="cable-waste" style="left: 25%; width: 5%;"></div>
+            <div class="cable-used" style="left: 30%; width: 7.5%;"></div>
+            <div class="cable-used" style="left: 52.5%; width: 7.5%;"></div>
+            <div class="cable-used" style="left: 87.5%; width: 2.5%;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
+            <span>0m</span>
+            <span>1800m (highest)</span>
+            <span>2000m</span>
+        </div>
+    </div>
+
+    <div class="demo">
+        <div class="settings">
+            <h3>⚙️ Inactive Drum - Enhanced Calculation</h3>
+            <p><strong>Status:</strong> Inactive | <strong>Method:</strong> Smart Segments</p>
+            <p><strong>Remaining Cable:</strong> 200m automatically added to wastage</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">2000m</div>
+                <div>Initial Length</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value used">650m</div>
+                <div>Total Used</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value waste">350m</div>
+                <div>Total Waste</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value inactive">200m</div>
+                <div>Inactive Waste</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">0m</div>
+                <div>Available</div>
+            </div>
+        </div>
+
+        <h4>📊 Inactive Drum Visualization</h4>
+        <p>Green = Used | Orange = Internal Waste | Purple = Inactive Waste (Remaining)</p>
+        <div class="cable-bar">
+            <div class="cable-used" style="left: 10%; width: 15%;"></div>
+            <div class="cable-waste" style="left: 25%; width: 5%;"></div>
+            <div class="cable-used" style="left: 30%; width: 7.5%;"></div>
+            <div class="cable-used" style="left: 52.5%; width: 7.5%;"></div>
+            <div class="cable-used" style="left: 87.5%; width: 2.5%;"></div>
+            <div class="cable-inactive-waste" style="left: 90%; width: 10%;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
+            <span>0m</span>
+            <span>1800m (highest)</span>
+            <span>2000m</span>
+        </div>
+    </div>
+
+    <div class="demo">
+        <div class="success">
+            <h3>✅ Enhanced Problem Resolution Summary</h3>
+            <p><strong>Original Issue:</strong> Drum 2000m with lines: 10→120, 250→130, 300→500, 2000→1750</p>
+            <p><strong>Smart Calculation:</strong> 880m actual usage (handles bidirectional pulls correctly)</p>
+            <p><strong>Remaining Cable Logic:</strong> Calculates from highest usage point (1800m) to drum end</p>
+            <p><strong>Inactive Drum Feature:</strong> Remaining cable (200m) automatically added to wastage</p>
+            <p><strong>UI Enhancement:</strong> Toggle to show/hide inactive drums for better workflow management</p>
+            <p><strong>Status Management:</strong> Active, Inactive, Empty, Maintenance status options</p>
+        </div>
+    </div>
+</body>
+</html>
