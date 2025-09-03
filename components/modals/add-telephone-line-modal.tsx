@@ -23,6 +23,13 @@ import { AlertTriangle, Check, ChevronsUpDown, Calculator, Package } from "lucid
 import { getSupabaseClient } from "@/lib/supabase"
 import { useNotification } from "@/contexts/notification-context"
 import { cn } from "@/lib/utils"
+import { 
+  getWastageCalculation, 
+  getWastageSettings, 
+  formatWastageAmount, 
+  formatWastagePercentage,
+  type WastageSettings 
+} from "@/lib/wastage-utils"
 
 interface AddTelephoneLineModalProps {
   open: boolean
@@ -49,6 +56,9 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
   const [dpOpen, setDpOpen] = useState(false)
   const [drumOpen, setDrumOpen] = useState(false)
   const [dpValidationError, setDpValidationError] = useState("")
+  const [wastageSettings, setWastageSettings] = useState<WastageSettings | null>(null)
+  const [autoCalculatedWastage, setAutoCalculatedWastage] = useState(0)
+  const [isManualWastage, setIsManualWastage] = useState(false)
   const [formData, setFormData] = useState({
     // Basic Information
     date: new Date().toISOString().split("T")[0],
@@ -125,6 +135,33 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
       total_calc: total,
     }))
   }, [formData.cable_start_new, formData.cable_middle_new, formData.cable_end_new])
+
+  // Auto-calculate wastage when total changes or settings are loaded
+  useEffect(() => {
+    if (formData.total_calc > 0 && wastageSettings && wastageSettings.auto_calculate_enabled && !isManualWastage) {
+      const calculation = getWastageCalculation({
+        totalCableLength: formData.total_calc,
+        customWastagePercentage: wastageSettings.default_wastage_percentage
+      })
+      
+      setAutoCalculatedWastage(calculation.autoWastage)
+      setFormData((prev) => ({
+        ...prev,
+        wastage_input: calculation.autoWastage.toString(),
+      }))
+    }
+  }, [formData.total_calc, wastageSettings, isManualWastage])
+
+  // Load wastage settings when modal opens
+  useEffect(() => {
+    if (open) {
+      const loadWastageSettings = async () => {
+        const settings = await getWastageSettings()
+        setWastageSettings(settings)
+      }
+      loadWastageSettings()
+    }
+  }, [open])
 
   // Auto-calculate Nut & Bolt (½ of L-Hook)
   useEffect(() => {
@@ -262,6 +299,11 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
   }
 
   const handleInputChange = (field: string, value: string | number) => {
+    // Track manual wastage changes
+    if (field === "wastage_input") {
+      setIsManualWastage(true)
+    }
+    
     setFormData((prev) => ({ ...prev, [field]: value }))
 
     if (field === "dp" && typeof value === "string") {
@@ -274,6 +316,22 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
       if (selectedDrum) {
         setFormData((prev) => ({ ...prev, drum_number_new: selectedDrum.drum_number }))
       }
+    }
+  }
+
+  const handleAutoCalculateWastage = () => {
+    if (formData.total_calc > 0 && wastageSettings) {
+      const calculation = getWastageCalculation({
+        totalCableLength: formData.total_calc,
+        customWastagePercentage: wastageSettings.default_wastage_percentage
+      })
+      
+      setFormData((prev) => ({
+        ...prev,
+        wastage_input: calculation.autoWastage.toString(),
+      }))
+      setIsManualWastage(false)
+      setAutoCalculatedWastage(calculation.autoWastage)
     }
   }
 
@@ -476,6 +534,8 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
         rj12_new: 0,
       })
       setDpValidationError("")
+      setIsManualWastage(false)
+      setAutoCalculatedWastage(0)
     } catch (error: any) {
       addNotification({
         title: "Error",
@@ -760,7 +820,21 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                 <div className="text-lg font-bold text-green-600">{formData.total_calc.toFixed(2)}m</div>
               </div>
               <div>
-                <Label htmlFor="wastage_input">Wastage</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="wastage_input">Wastage</Label>
+                  {wastageSettings && formData.total_calc > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleAutoCalculateWastage}
+                      className="h-6 text-xs gap-1"
+                    >
+                      <Calculator className="h-3 w-3" />
+                      Auto ({formatWastagePercentage(wastageSettings.default_wastage_percentage || 0.05)})
+                    </Button>
+                  )}
+                </div>
                 <Input
                   id="wastage_input"
                   type="number"
@@ -768,7 +842,23 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                   value={formData.wastage_input}
                   onChange={(e) => handleInputChange("wastage_input", e.target.value)}
                   placeholder="0.00"
+                  className={isManualWastage ? "border-orange-200 bg-orange-50 dark:bg-orange-950" : ""}
                 />
+                {formData.wastage_input && formData.total_calc > 0 && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {((Number.parseFloat(formData.wastage_input) / formData.total_calc) * 100).toFixed(1)}% of total cable
+                    {isManualWastage && (
+                      <span className="text-orange-600 ml-1">(Manual override)</span>
+                    )}
+                  </div>
+                )}
+                {formData.wastage_input && formData.total_calc > 0 && 
+                 Number.parseFloat(formData.wastage_input) / formData.total_calc > 0.20 && (
+                  <div className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Exceeds 20% maximum wastage limit
+                  </div>
+                )}
               </div>
             </div>
 
