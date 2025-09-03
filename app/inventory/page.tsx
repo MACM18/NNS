@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Header } from "@/components/layout/header"
@@ -501,6 +502,36 @@ export default function InventoryPage() {
     setRefreshTrigger((prev) => prev + 1)
   }
 
+  const updateDrumStatus = async (drumId: string, newStatus: string, drumNumber: string) => {
+    try {
+      const { error } = await supabase
+        .from("drum_tracking")
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", drumId)
+
+      if (error) throw error
+
+      addNotification({
+        title: "Status Updated",
+        message: `Drum ${drumNumber} status changed to ${newStatus}`,
+        type: "success",
+        category: "system",
+      })
+
+      handleSuccess()
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message: "Failed to update drum status",
+        type: "error",
+        category: "system",
+      })
+    }
+  }
+
   const syncDrumQuantity = async (drum: DrumTracking) => {
     try {
       const calculatedQuantity = drum.calculated_current_quantity ?? drum.current_quantity
@@ -940,7 +971,24 @@ export default function InventoryPage() {
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
-                                  {getStatusBadge(displayStatus)}
+                                  {(role === "admin" || role === "moderator") ? (
+                                    <Select
+                                      value={displayStatus}
+                                      onValueChange={(value) => updateDrumStatus(drum.id, value, drum.drum_number)}
+                                    >
+                                      <SelectTrigger className="w-[100px] h-7 text-xs">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="active">Active</SelectItem>
+                                        <SelectItem value="inactive">Inactive</SelectItem>
+                                        <SelectItem value="empty">Empty</SelectItem>
+                                        <SelectItem value="maintenance">Maintenance</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    getStatusBadge(displayStatus)
+                                  )}
                                   {displayStatus !== drum.status && (
                                     <Badge variant="outline" className="text-xs">
                                       DB: {drum.status}
