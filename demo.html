@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NNS Drum Wastage Calculation - Enhanced</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .demo { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 20px; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }
+        .stat { background: #f8f9fa; padding: 15px; border-radius: 6px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+        .used { color: #2563eb; }
+        .waste { color: #ea580c; }
+        .remaining { color: #16a34a; }
+        .settings { background: #e0f2fe; border: 2px dashed #0284c7; padding: 15px; border-radius: 6px; margin: 15px 0; }
+        .cable-bar { height: 40px; background: #e5e7eb; border-radius: 4px; position: relative; margin: 10px 0; }
+        .cable-used { position: absolute; height: 100%; background: #16a34a; opacity: 0.8; }
+        .cable-waste { position: absolute; height: 100%; background: #ea580c; opacity: 0.6; }
+        .success { background: #d1fae5; border: 1px solid #10b981; padding: 15px; border-radius: 6px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="demo">
+        <div class="header">
+            <h1>🔌 NNS Drum Wastage Calculation System</h1>
+            <h2>Enhanced with Smart Calculation & Manual Override</h2>
+            <p><strong>Drum:</strong> DRM-2024-001 | <strong>Problem Solved:</strong> Issue #13</p>
+        </div>
+
+        <div class="settings">
+            <h3>⚙️ Wastage Calculation Settings</h3>
+            <p><strong>Method:</strong> Manual Override (45.5m waste specified by field technician)</p>
+            <p><strong>Previous Methods:</strong> Smart Segments ✓ | Legacy Gaps (Original)</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">2000m</div>
+                <div>Initial Length</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value used">880m</div>
+                <div>Total Used</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value waste">45.5m</div>
+                <div>Wastage (Manual)</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value remaining">1074.5m</div>
+                <div>Remaining</div>
+            </div>
+        </div>
+
+        <h3>📊 Cable Usage Visualization</h3>
+        <p>Green = Used | Orange = Waste | Gray = Remaining</p>
+        <div class="cable-bar">
+            <div class="cable-used" style="left: 0.5%; width: 5.5%;"></div>
+            <div class="cable-used" style="left: 6.5%; width: 6%;"></div>
+            <div class="cable-used" style="left: 15%; width: 10%;"></div>
+            <div class="cable-used" style="left: 50%; width: 10%;"></div>
+            <div class="cable-used" style="left: 87.5%; width: 12.5%;"></div>
+            <div class="cable-waste" style="left: 25%; width: 2.3%;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
+            <span>0m</span>
+            <span>2000m</span>
+        </div>
+
+        <div class="success">
+            <h3>✅ Problem Resolution Summary</h3>
+            <p><strong>Original Issue:</strong> Drum 2000m with lines: 10→120, 250→130, 300→500, 2000→1750</p>
+            <p><strong>Smart Calculation:</strong> 880m actual usage (handles bidirectional pulls correctly)</p>
+            <p><strong>Manual Override:</strong> Field technicians can set precise wastage values</p>
+            <p><strong>Visual Interface:</strong> Clear representation of cable usage and waste segments</p>
+        </div>
+    </div>
+</body>
+</html>
