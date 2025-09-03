@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wastage Configuration Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f8fafc;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-header {
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .card-description {
+            color: #64748b;
+            margin: 0;
+        }
+        
+        .icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        .label {
+            font-weight: 500;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #3b82f6;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        
+        .example-box {
+            background-color: #f1f5f9;
+            padding: 16px;
+            border-radius: 6px;
+            margin-top: 16px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .stat-card {
+            background-color: #f8fafc;
+            padding: 16px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #3b82f6;
+            margin-bottom: 4px;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+        
+        .button {
+            background-color: #3b82f6;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .button:hover {
+            background-color: #2563eb;
+        }
+        
+        .button-secondary {
+            background-color: #f1f5f9;
+            color: #374151;
+        }
+        
+        .button-secondary:hover {
+            background-color: #e2e8f0;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 16px;
+        }
+        
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .toggle-info {
+            flex: 1;
+        }
+        
+        .toggle-description {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Wastage Configuration System Demo</h1>
+    <p>This demo shows the new automatic wastage calculation feature for the NNS Telecom Management System.</p>
+
+    <!-- Wastage Configuration Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <span class="icon">⚙️</span>
+                Wastage Configuration
+            </h2>
+            <p class="card-description">
+                Configure automatic wastage calculation for cable installations
+            </p>
+        </div>
+
+        <!-- Auto Calculate Toggle -->
+        <div class="toggle-row">
+            <div class="toggle-info">
+                <div class="label">Auto-calculate wastage</div>
+                <div class="toggle-description">
+                    Automatically calculate wastage based on total cable length
+                </div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="autoCalculate" checked>
+                <span class="slider"></span>
+            </label>
+        </div>
+
+        <!-- Percentage Settings -->
+        <div class="form-row">
+            <div class="form-group">
+                <label class="label" for="defaultPercentage">Default Wastage Percentage</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input class="input" type="number" id="defaultPercentage" value="8.0" min="0" max="50" step="0.1">
+                    <span>%</span>
+                </div>
+                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                    Default percentage applied to all new installations
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="label" for="maxPercentage">Maximum Wastage Percentage</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input class="input" type="number" id="maxPercentage" value="20.0" min="0" max="100" step="0.1">
+                    <span>%</span>
+                </div>
+                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                    Maximum allowable wastage before warning
+                </div>
+            </div>
+        </div>
+
+        <!-- Example Calculation -->
+        <div class="example-box">
+            <h4 style="margin: 0 0 8px 0; display: flex; align-items: center; gap: 8px;">
+                <span>📊</span>
+                Example Calculation
+            </h4>
+            <div id="exampleCalculation" style="font-size: 14px;">
+                <p>For a 100m cable installation:</p>
+                <p>• Wastage: <span id="exampleWastage">8.00</span>m (<span id="examplePercentage">8.0</span>%)</p>
+                <p>• Total usage: <span id="exampleTotal">108.00</span>m</p>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="button-group">
+            <button class="button button-secondary">Reset</button>
+            <button class="button">Save Configuration</button>
+        </div>
+    </div>
+
+    <!-- Current Configuration Display -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <span class="icon">📦</span>
+                Current Drum Tracking Settings
+            </h2>
+            <p class="card-description">
+                Active configuration for cable drum tracking and wastage calculation
+            </p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="autoStatus">ON</div>
+                <div class="stat-label">Auto Calculation</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="defaultDisplay">8.0%</div>
+                <div class="stat-label">Default Wastage</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="maxDisplay">20.0%</div>
+                <div class="stat-label">Maximum Allowed</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature Benefits -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <span class="icon">✨</span>
+                Key Features & Benefits
+            </h2>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            <div>
+                <h3 style="color: #3b82f6; margin: 0 0 8px 0;">🎯 Automatic Calculation</h3>
+                <p style="margin: 0; color: #64748b;">
+                    Wastage is automatically calculated as a percentage of total cable length, 
+                    eliminating manual errors and ensuring consistency.
+                </p>
+            </div>
+            
+            <div>
+                <h3 style="color: #3b82f6; margin: 0 0 8px 0;">🔧 Configurable Settings</h3>
+                <p style="margin: 0; color: #64748b;">
+                    Default and maximum wastage percentages can be configured through the 
+                    drum tracking tab to match operational requirements.
+                </p>
+            </div>
+            
+            <div>
+                <h3 style="color: #3b82f6; margin: 0 0 8px 0;">⚡ Manual Override</h3>
+                <p style="margin: 0; color: #64748b;">
+                    Users can switch to manual mode for special cases while maintaining 
+                    validation against maximum allowable limits.
+                </p>
+            </div>
+            
+            <div>
+                <h3 style="color: #3b82f6; margin: 0 0 8px 0;">📊 Accurate Tracking</h3>
+                <p style="margin: 0; color: #64748b;">
+                    Drum quantities are updated with total usage including wastage, 
+                    providing accurate inventory tracking and availability checks.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Interactive demo functionality
+        const autoCalculateInput = document.getElementById('autoCalculate');
+        const defaultPercentageInput = document.getElementById('defaultPercentage');
+        const maxPercentageInput = document.getElementById('maxPercentage');
+
+        function updateExample() {
+            const isAutoEnabled = autoCalculateInput.checked;
+            const defaultPercentage = parseFloat(defaultPercentageInput.value) || 0;
+            const cableLength = 100;
+            
+            if (isAutoEnabled) {
+                const wastage = (cableLength * defaultPercentage) / 100;
+                const total = cableLength + wastage;
+                
+                document.getElementById('exampleWastage').textContent = wastage.toFixed(2);
+                document.getElementById('examplePercentage').textContent = defaultPercentage.toFixed(1);
+                document.getElementById('exampleTotal').textContent = total.toFixed(2);
+            } else {
+                document.getElementById('exampleWastage').textContent = '0.00';
+                document.getElementById('examplePercentage').textContent = '0.0';
+                document.getElementById('exampleTotal').textContent = '100.00';
+            }
+        }
+
+        function updateDisplay() {
+            const isAutoEnabled = autoCalculateInput.checked;
+            const defaultPercentage = parseFloat(defaultPercentageInput.value) || 0;
+            const maxPercentage = parseFloat(maxPercentageInput.value) || 0;
+            
+            document.getElementById('autoStatus').textContent = isAutoEnabled ? 'ON' : 'OFF';
+            document.getElementById('defaultDisplay').textContent = defaultPercentage.toFixed(1) + '%';
+            document.getElementById('maxDisplay').textContent = maxPercentage.toFixed(1) + '%';
+            
+            // Enable/disable inputs based on auto-calculate
+            defaultPercentageInput.disabled = !isAutoEnabled;
+        }
+
+        // Event listeners
+        autoCalculateInput.addEventListener('change', () => {
+            updateExample();
+            updateDisplay();
+        });
+
+        defaultPercentageInput.addEventListener('input', () => {
+            updateExample();
+            updateDisplay();
+        });
+
+        maxPercentageInput.addEventListener('input', updateDisplay);
+
+        // Initial update
+        updateExample();
+        updateDisplay();
+    </script>
+</body>
+</html>
