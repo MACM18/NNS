@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Header } from "@/components/layout/header"
 import { AddInventoryInvoiceModal } from "@/components/modals/add-inventory-invoice-modal"
 import { AddWasteModal } from "@/components/modals/add-waste-modal"
+import { DrumTrackingTab } from "@/components/drum-tracking-tab"
 import { useAuth } from "@/contexts/auth-context"
 import { AuthWrapper } from "@/components/auth/auth-wrapper"
 
@@ -149,19 +150,7 @@ export default function InventoryPage() {
             </TabsContent>
 
             <TabsContent value="drums">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Drum Tracking</CardTitle>
-                  <CardDescription>Cable drum usage and remaining quantities</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Drum tracking table will be implemented here</p>
-                    <p className="text-sm">Features: 2000m drum tracking, daily usage, line assignments</p>
-                  </div>
-                </CardContent>
-              </Card>
+              <DrumTrackingTab refreshTrigger={refreshTrigger} />
             </TabsContent>
 
             <TabsContent value="waste">

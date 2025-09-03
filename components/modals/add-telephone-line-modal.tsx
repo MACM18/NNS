@@ -19,10 +19,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Check, ChevronsUpDown, Calculator, Package } from "lucide-react"
+import { AlertTriangle, Check, ChevronsUpDown, Calculator, Package, TrendingDown } from "lucide-react"
 import { getSupabaseClient } from "@/lib/supabase"
 import { useNotification } from "@/contexts/notification-context"
 import { cn } from "@/lib/utils"
+import { wastageConfigService, type WastageConfig } from "@/lib/wastage-config"
 
 interface AddTelephoneLineModalProps {
   open: boolean
@@ -49,6 +50,8 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
   const [dpOpen, setDpOpen] = useState(false)
   const [drumOpen, setDrumOpen] = useState(false)
   const [dpValidationError, setDpValidationError] = useState("")
+  const [wastageConfig, setWastageConfig] = useState<WastageConfig | null>(null)
+  const [manualWastageOverride, setManualWastageOverride] = useState(false)
   const [formData, setFormData] = useState({
     // Basic Information
     date: new Date().toISOString().split("T")[0],
@@ -125,6 +128,33 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
       total_calc: total,
     }))
   }, [formData.cable_start_new, formData.cable_middle_new, formData.cable_end_new])
+
+  // Auto-calculate wastage based on total and configuration
+  useEffect(() => {
+    if (wastageConfig?.auto_calculate && formData.total_calc > 0 && !manualWastageOverride) {
+      const autoWastage = wastageConfigService.calculateWastage(formData.total_calc, wastageConfig)
+      setFormData((prev) => ({
+        ...prev,
+        wastage_input: autoWastage.toFixed(2),
+      }))
+    }
+  }, [formData.total_calc, wastageConfig, manualWastageOverride])
+
+  // Load wastage configuration on mount
+  useEffect(() => {
+    if (open) {
+      loadWastageConfig()
+    }
+  }, [open])
+
+  const loadWastageConfig = async () => {
+    try {
+      const config = await wastageConfigService.getWastageConfig()
+      setWastageConfig(config)
+    } catch (error) {
+      console.error("Error loading wastage config:", error)
+    }
+  }
 
   // Auto-calculate Nut & Bolt (½ of L-Hook)
   useEffect(() => {
@@ -318,13 +348,14 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
         return
       }
 
-      // Check if selected drum has enough cable
+      // Check if selected drum has enough cable (including wastage)
       if (formData.selected_drum_id && formData.total_calc > 0) {
         const selectedDrum = drumOptions.find((drum) => drum.id === formData.selected_drum_id)
-        if (selectedDrum && formData.total_calc > selectedDrum.current_quantity) {
+        const totalRequired = formData.total_calc + (Number.parseFloat(formData.wastage_input) || 0)
+        if (selectedDrum && totalRequired > selectedDrum.current_quantity) {
           addNotification({
             title: "Insufficient Cable",
-            message: `Selected drum only has ${selectedDrum.current_quantity}m available, but ${formData.total_calc}m is required`,
+            message: `Selected drum only has ${selectedDrum.current_quantity}m available, but ${totalRequired.toFixed(2)}m is required (${formData.total_calc}m + ${(Number.parseFloat(formData.wastage_input) || 0).toFixed(2)}m wastage)`,
             type: "error",
           })
           setLoading(false)
@@ -393,11 +424,12 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
       // Record drum usage if drum was selected and cable was used
       if (formData.selected_drum_id && formData.total_calc > 0) {
         // Record drum usage
+        const totalUsageWithWastage = formData.total_calc + (Number.parseFloat(formData.wastage_input) || 0)
         await supabase.from("drum_usage").insert([
           {
             drum_id: formData.selected_drum_id,
             line_details_id: lineDetails.id,
-            quantity_used: formData.total_calc,
+            quantity_used: totalUsageWithWastage,
             usage_date: formData.date,
           },
         ])
@@ -405,7 +437,7 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
         // Update drum current quantity
         const selectedDrum = drumOptions.find((drum) => drum.id === formData.selected_drum_id)
         if (selectedDrum) {
-          const newQuantity = selectedDrum.current_quantity - formData.total_calc
+          const newQuantity = selectedDrum.current_quantity - totalUsageWithWastage
           await supabase
             .from("drum_tracking")
             .update({
@@ -427,6 +459,7 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
       onOpenChange(false)
 
       // Reset form to defaults
+      setManualWastageOverride(false)
       setFormData({
         date: new Date().toISOString().split("T")[0],
         phone_number: "",
@@ -759,16 +792,68 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                 <Label className="text-sm font-medium">Total (F1 + G1)</Label>
                 <div className="text-lg font-bold text-green-600">{formData.total_calc.toFixed(2)}m</div>
               </div>
-              <div>
-                <Label htmlFor="wastage_input">Wastage</Label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="wastage_input" className="flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4" />
+                    Wastage
+                  </Label>
+                  {wastageConfig?.auto_calculate && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setManualWastageOverride(!manualWastageOverride)
+                        if (manualWastageOverride && formData.total_calc > 0) {
+                          // Reset to auto-calculated value
+                          const autoWastage = wastageConfigService.calculateWastage(formData.total_calc, wastageConfig)
+                          setFormData(prev => ({
+                            ...prev,
+                            wastage_input: autoWastage.toFixed(2),
+                          }))
+                        }
+                      }}
+                    >
+                      {manualWastageOverride ? "Auto" : "Manual"}
+                    </Button>
+                  )}
+                </div>
                 <Input
                   id="wastage_input"
                   type="number"
                   step="0.01"
                   value={formData.wastage_input}
-                  onChange={(e) => handleInputChange("wastage_input", e.target.value)}
+                  onChange={(e) => {
+                    handleInputChange("wastage_input", e.target.value)
+                    setManualWastageOverride(true)
+                  }}
                   placeholder="0.00"
+                  disabled={wastageConfig?.auto_calculate && !manualWastageOverride}
                 />
+                {wastageConfig?.auto_calculate && !manualWastageOverride && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Calculator className="h-3 w-3" />
+                    Auto-calculated at {wastageConfig.default_wastage_percentage}%
+                  </p>
+                )}
+                {/* Wastage validation */}
+                {formData.wastage_input && formData.total_calc > 0 && (() => {
+                  const validation = wastageConfigService.validateWastage(
+                    Number.parseFloat(formData.wastage_input) || 0,
+                    formData.total_calc,
+                    wastageConfig || undefined
+                  )
+                  if (!validation.isValid) {
+                    return (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        {validation.message}
+                      </p>
+                    )
+                  }
+                  return null
+                })()}
               </div>
             </div>
 
@@ -780,12 +865,17 @@ export function AddTelephoneLineModal({ open, onOpenChange, onSuccess }: AddTele
                   <span className="text-sm font-medium">Drum Usage Check</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Required: {formData.total_calc.toFixed(2)}m | Available:{" "}
-                  {drumOptions.find((d) => d.id === formData.selected_drum_id)?.current_quantity.toFixed(2)}m
+                  Cable needed: {formData.total_calc.toFixed(2)}m + Wastage: {(Number.parseFloat(formData.wastage_input) || 0).toFixed(2)}m = Total: {(formData.total_calc + (Number.parseFloat(formData.wastage_input) || 0)).toFixed(2)}m
                 </p>
-                {formData.total_calc >
+                <p className="text-sm text-muted-foreground">
+                  Available: {drumOptions.find((d) => d.id === formData.selected_drum_id)?.current_quantity.toFixed(2)}m
+                </p>
+                {(formData.total_calc + (Number.parseFloat(formData.wastage_input) || 0)) >
                   (drumOptions.find((d) => d.id === formData.selected_drum_id)?.current_quantity || 0) && (
-                  <p className="text-sm text-red-600 mt-1">⚠️ Insufficient cable in selected drum</p>
+                  <p className="text-sm text-red-600 mt-1 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Insufficient cable in selected drum
+                  </p>
                 )}
               </div>
             )}
