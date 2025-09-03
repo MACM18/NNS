@@ -135,12 +135,17 @@ const calculateDrumMetrics = (drum: any, usageData: any[]) => {
     (a, b) => new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime(),
   )
 
-  // Determine status based on calculated quantity
+  // Determine status based on calculated quantity, but respect manual status changes
   let calculatedStatus = drum.status
-  if (calculation.calculatedCurrentQuantity <= 0) {
-    calculatedStatus = "empty"
-  } else if (calculation.calculatedCurrentQuantity <= 10 && drum.status !== 'inactive') {
-    calculatedStatus = "inactive"
+  
+  // Only auto-calculate status if the current status is 'active'
+  // This preserves manual status changes (inactive, maintenance, etc.)
+  if (drum.status === 'active') {
+    if (calculation.calculatedCurrentQuantity <= 0) {
+      calculatedStatus = "empty"
+    } else if (calculation.calculatedCurrentQuantity <= 10) {
+      calculatedStatus = "inactive"
+    }
   }
 
   return {
