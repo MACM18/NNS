@@ -60,7 +60,7 @@ export interface DrumTracking {
   initial_quantity: number
   current_quantity: number
   calculated_current_quantity?: number
-  calculated_status?: string
+  suggested_status?: string | null
   total_used?: number
   total_wastage?: number
   remaining_cable?: number
@@ -135,25 +135,27 @@ const calculateDrumMetrics = (drum: any, usageData: any[]) => {
     (a, b) => new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime(),
   )
 
-  // Determine status based on calculated quantity, but respect manual status changes
-  let calculatedStatus = drum.status
+  // Determine status based on calculated quantity, but ALWAYS respect database status
+  let suggestedStatus = drum.status
   
-  // Only auto-calculate status if the current status is 'active'
-  // This preserves manual status changes (inactive, maintenance, etc.)
+  // Only suggest status changes for active drums based on calculated quantity
   if (drum.status === 'active') {
     if (calculation.calculatedCurrentQuantity <= 0) {
-      calculatedStatus = "empty"
+      suggestedStatus = "empty"
     } else if (calculation.calculatedCurrentQuantity <= 10) {
-      calculatedStatus = "inactive"
+      suggestedStatus = "inactive"
     }
   }
+  
+  // Determine if there's a suggested status change (for display purposes only)
+  const hasSuggestedChange = drum.status === 'active' && suggestedStatus !== drum.status
 
   return {
     totalUsed: calculation.totalUsed,
     totalWastage: calculation.totalWastage,
     calculatedCurrentQuantity: calculation.calculatedCurrentQuantity,
     remainingCable: calculation.remainingCable,
-    calculatedStatus,
+    suggestedStatus: hasSuggestedChange ? suggestedStatus : null, // Only set if suggesting a change
     usageCount: sortedUsages.length,
     lastUsageDate: sortedUsages.length > 0 ? sortedUsages[sortedUsages.length - 1].usage_date : null,
     usages: sortedUsages.slice(-5), // Keep last 5 usages for details
@@ -381,7 +383,7 @@ export default function InventoryPage() {
           ...drum,
           item_name: drum.inventory_items?.name || "",
           calculated_current_quantity: metrics.calculatedCurrentQuantity,
-          calculated_status: metrics.calculatedStatus,
+          suggested_status: metrics.suggestedStatus,
           total_used: metrics.totalUsed,
           total_wastage: metrics.totalWastage,
           remaining_cable: metrics.remainingCable,
@@ -901,7 +903,8 @@ export default function InventoryPage() {
                           .filter(drum => showInactiveDrums || drum.status !== 'inactive')
                           .map((drum) => {
                           const displayQuantity = drum.calculated_current_quantity ?? 0
-                          const displayStatus = drum.calculated_status ?? drum.status
+                          // Always use database status - never override with calculations
+                          const displayStatus = drum.status
                           const totalUsed = drum.total_used ?? 0
                           const totalWastage = drum.total_wastage ?? 0
                           const usagePercentage =
@@ -994,9 +997,9 @@ export default function InventoryPage() {
                                   ) : (
                                     getStatusBadge(displayStatus)
                                   )}
-                                  {displayStatus !== drum.status && (
-                                    <Badge variant="outline" className="text-xs">
-                                      DB: {drum.status}
+                                  {drum.suggested_status && (
+                                    <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-800">
+                                      Suggest: {drum.suggested_status}
                                     </Badge>
                                   )}
                                 </div>
