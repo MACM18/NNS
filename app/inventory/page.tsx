@@ -511,15 +511,20 @@ export default function InventoryPage() {
 
   const updateDrumStatus = async (drumId: string, newStatus: string, drumNumber: string) => {
     try {
-      const { error } = await supabase
+      console.log(`Updating drum ${drumNumber} status from current to ${newStatus}`)
+      
+      const { data, error } = await supabase
         .from("drum_tracking")
         .update({
           status: newStatus,
           updated_at: new Date().toISOString(),
         })
         .eq("id", drumId)
+        .select("status") // Return the updated status to verify
 
       if (error) throw error
+
+      console.log(`Drum ${drumNumber} status updated successfully:`, data)
 
       addNotification({
         title: "Status Updated",
@@ -528,11 +533,15 @@ export default function InventoryPage() {
         category: "system",
       })
 
-      handleSuccess()
-    } catch (error) {
+      // Add a small delay to ensure database transaction is committed
+      setTimeout(() => {
+        handleSuccess()
+      }, 500)
+    } catch (error: any) {
+      console.error(`Failed to update drum ${drumNumber} status:`, error)
       addNotification({
         title: "Error",
-        message: "Failed to update drum status",
+        message: `Failed to update drum status: ${error?.message || 'Unknown error'}`,
         type: "error",
         category: "system",
       })
