@@ -96,16 +96,23 @@ interface InventoryInvoiceItem {
 }
 
 // Enhanced drum calculation logic with smart wastage calculation
+// IMPORTANT: This function NEVER modifies the drum status - it only calculates metrics
 const calculateDrumMetrics = (drum: any, usageData: any[]) => {
   const drumUsages = usageData.filter((usage) => usage.drum_id === drum.id)
 
+  // CRITICAL: Always preserve the database status - never override it
+  const preservedStatus = drum.status
+
   if (drumUsages.length === 0) {
+    // For drums with no usage, calculate wastage based on current status
+    const totalWastage = drum.manual_wastage_override || (preservedStatus === 'inactive' ? drum.initial_quantity : 0)
+    
     return {
       totalUsed: 0,
-      totalWastage: drum.manual_wastage_override || (drum.status === 'inactive' ? drum.initial_quantity : 0),
-      calculatedCurrentQuantity: drum.initial_quantity - (drum.manual_wastage_override || (drum.status === 'inactive' ? drum.initial_quantity : 0)),
-      remainingCable: drum.status === 'inactive' ? 0 : drum.initial_quantity,
-      suggestedStatus: null, // Never suggest status changes when there are no usages
+      totalWastage,
+      calculatedCurrentQuantity: drum.initial_quantity - totalWastage,
+      remainingCable: preservedStatus === 'inactive' ? 0 : drum.initial_quantity,
+      suggestedStatus: null, // Never suggest changes for drums without usage
       usageCount: 0,
       lastUsageDate: null,
       usages: [],
@@ -122,12 +129,12 @@ const calculateDrumMetrics = (drum: any, usageData: any[]) => {
     quantity_used: usage.quantity_used
   }))
 
-  // Use smart calculation by default, with manual override if set
+  // Use smart calculation with the PRESERVED status (never modified)
   const calculation = calculateSmartWastage(
     drumUsageData, 
     drum.initial_quantity,
     drum.manual_wastage_override,
-    drum.status
+    preservedStatus // Use preserved status, not a calculated one
   )
 
   // Sort usages by date for UI display
@@ -135,27 +142,22 @@ const calculateDrumMetrics = (drum: any, usageData: any[]) => {
     (a, b) => new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime(),
   )
 
-  // Determine status based on calculated quantity, but ALWAYS respect database status
-  let suggestedStatus = drum.status
-  
-  // Only suggest status changes for active drums based on calculated quantity
-  if (drum.status === 'active') {
+  // Only provide status suggestions for ACTIVE drums (never override inactive/empty/maintenance)
+  let suggestedStatus = null
+  if (preservedStatus === 'active') {
     if (calculation.calculatedCurrentQuantity <= 0) {
       suggestedStatus = "empty"
     } else if (calculation.calculatedCurrentQuantity <= 10) {
       suggestedStatus = "inactive"
     }
   }
-  
-  // Determine if there's a suggested status change (for display purposes only)
-  const hasSuggestedChange = drum.status === 'active' && suggestedStatus !== drum.status
 
   return {
     totalUsed: calculation.totalUsed,
     totalWastage: calculation.totalWastage,
     calculatedCurrentQuantity: calculation.calculatedCurrentQuantity,
     remainingCable: calculation.remainingCable,
-    suggestedStatus: hasSuggestedChange ? suggestedStatus : null, // Only set if suggesting a change
+    suggestedStatus, // Only set if suggesting a change for active drums
     usageCount: sortedUsages.length,
     lastUsageDate: sortedUsages.length > 0 ? sortedUsages[sortedUsages.length - 1].usage_date : null,
     usages: sortedUsages.slice(-5), // Keep last 5 usages for details
@@ -356,6 +358,8 @@ export default function InventoryPage() {
 
   const fetchDrums = async () => {
     try {
+      console.log(`[FETCH DRUMS] Starting to fetch drum data`)
+      
       const { data, error } = await supabase
         .from("drum_tracking")
         .select(
@@ -364,6 +368,8 @@ export default function InventoryPage() {
         )
         .order("received_date", { ascending: false })
       if (error) throw error
+
+      console.log(`[FETCH DRUMS] Fetched ${data?.length || 0} drums from database`)
 
       // Fetch drum usage data for all drums
       const { data: usageData, error: usageError } = await supabase
@@ -377,9 +383,10 @@ export default function InventoryPage() {
 
       // Calculate metrics using the enhanced logic
       const drumsWithUsage = (data || []).map((drum: any) => {
+        console.log(`[FETCH DRUMS] Processing drum ${drum.drum_number} with status: ${drum.status}`)
         const metrics = calculateDrumMetrics(drum, usageData || [])
 
-        return {
+        const processedDrum = {
           ...drum,
           item_name: drum.inventory_items?.name || "",
           calculated_current_quantity: metrics.calculatedCurrentQuantity,
@@ -391,11 +398,15 @@ export default function InventoryPage() {
           last_usage_date: metrics.lastUsageDate,
           usages: metrics.usages,
         }
+        
+        console.log(`[FETCH DRUMS] Processed drum ${drum.drum_number} - final status: ${processedDrum.status}`)
+        return processedDrum
       })
 
+      console.log(`[FETCH DRUMS] Setting drums state with ${drumsWithUsage.length} drums`)
       setDrums(drumsWithUsage as DrumTracking[])
     } catch (error) {
-      console.error("Error fetching drums:", error)
+      console.error("[FETCH DRUMS] Error fetching drums:", error)
     }
   }
 
@@ -511,8 +522,23 @@ export default function InventoryPage() {
 
   const updateDrumStatus = async (drumId: string, newStatus: string, drumNumber: string) => {
     try {
-      console.log(`Updating drum ${drumNumber} status from current to ${newStatus}`)
+      console.log(`[DRUM STATUS UPDATE] Starting update for drum ${drumNumber} (ID: ${drumId}) to status: ${newStatus}`)
       
+      // First, let's verify the current status
+      const { data: currentDrum, error: fetchError } = await supabase
+        .from("drum_tracking")
+        .select("status")
+        .eq("id", drumId)
+        .single()
+      
+      if (fetchError) {
+        console.error(`[DRUM STATUS UPDATE] Failed to fetch current status:`, fetchError)
+        throw fetchError
+      }
+      
+      console.log(`[DRUM STATUS UPDATE] Current status in database: ${currentDrum.status}`)
+      
+      // Now update the status
       const { data, error } = await supabase
         .from("drum_tracking")
         .update({
@@ -522,23 +548,27 @@ export default function InventoryPage() {
         .eq("id", drumId)
         .select("status") // Return the updated status to verify
 
-      if (error) throw error
+      if (error) {
+        console.error(`[DRUM STATUS UPDATE] Update failed:`, error)
+        throw error
+      }
 
-      console.log(`Drum ${drumNumber} status updated successfully:`, data)
+      console.log(`[DRUM STATUS UPDATE] Update successful. New status confirmed: ${data[0]?.status}`)
 
       addNotification({
         title: "Status Updated",
-        message: `Drum ${drumNumber} status changed to ${newStatus}`,
+        message: `Drum ${drumNumber} status changed from ${currentDrum.status} to ${newStatus}`,
         type: "success",
         category: "system",
       })
 
       // Add a small delay to ensure database transaction is committed
       setTimeout(() => {
+        console.log(`[DRUM STATUS UPDATE] Triggering data refresh for drum ${drumNumber}`)
         handleSuccess()
       }, 500)
     } catch (error: any) {
-      console.error(`Failed to update drum ${drumNumber} status:`, error)
+      console.error(`[DRUM STATUS UPDATE] Failed to update drum ${drumNumber} status:`, error)
       addNotification({
         title: "Error",
         message: `Failed to update drum status: ${error?.message || 'Unknown error'}`,
@@ -910,7 +940,8 @@ export default function InventoryPage() {
                           .filter(drum => showInactiveDrums || drum.status !== 'inactive')
                           .map((drum) => {
                           const displayQuantity = drum.calculated_current_quantity ?? 0
-                          // Always use database status - never override with calculations
+                          // CRITICAL: Always use database status - this is the authoritative source of truth
+                          // User manual changes must ALWAYS be preserved and displayed
                           const displayStatus = drum.status
                           const totalUsed = drum.total_used ?? 0
                           const totalWastage = drum.total_wastage ?? 0
