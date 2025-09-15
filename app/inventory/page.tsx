@@ -105,7 +105,7 @@ const calculateDrumMetrics = (drum: any, usageData: any[]) => {
       totalWastage: drum.manual_wastage_override || (drum.status === 'inactive' ? drum.initial_quantity : 0),
       calculatedCurrentQuantity: drum.initial_quantity - (drum.manual_wastage_override || (drum.status === 'inactive' ? drum.initial_quantity : 0)),
       remainingCable: drum.status === 'inactive' ? 0 : drum.initial_quantity,
-      calculatedStatus: drum.initial_quantity > 10 ? drum.status : "inactive",
+      suggestedStatus: null, // Never suggest status changes when there are no usages
       usageCount: 0,
       lastUsageDate: null,
       usages: [],
@@ -542,13 +542,11 @@ export default function InventoryPage() {
   const syncDrumQuantity = async (drum: DrumTracking) => {
     try {
       const calculatedQuantity = drum.calculated_current_quantity ?? drum.current_quantity
-      const calculatedStatus = drum.calculated_status ?? drum.status
 
       const { error } = await supabase
         .from("drum_tracking")
         .update({
           current_quantity: calculatedQuantity,
-          status: calculatedStatus,
           updated_at: new Date().toISOString(),
         })
         .eq("id", drum.id)
