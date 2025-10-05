@@ -45,6 +45,7 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
 ## Google Sheets Import (Admin/Moderator)
 
 - API: `POST /api/import-lines` with `{ sheetUrl, sheetName, month, year }`
+  - Supports dry-run with `{ ..., dryRun: true }` to preview deletions and insertions
 - Validations:
   - Sheet name must contain `nns` (case-insensitive)
   - First row must match required headers (case-insensitive comparison)
@@ -52,6 +53,7 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
 - Mappings: Columns map to `line_details` fields; `Pole-5.6` -> `pole`, `Pole-6.7` -> `pole_67`, `Total` -> `total_cable`, etc.
 - Status defaults to `completed` on import
 - Auth: UI is gated by role, and the API enforces server-side role check via Supabase session (admin/moderator only)
+- Dry-run response includes: totals, existingByPhone, sampleInserts
 - Env vars:
   - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
   - `GOOGLE_SERVICE_ACCOUNT_KEY` (PEM; escape newlines as `\n`)

@@ -14,6 +14,7 @@ type ImportBody = {
   sheetName: string;
   month: number; // 1-12
   year: number; // yyyy
+  dryRun?: boolean;
 };
 
 function monthStartEnd(month: number, year: number) {
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
       });
     }
     const body = (await req.json()) as ImportBody;
-    const { sheetUrl, sheetName, month, year } = body;
+    const { sheetUrl, sheetName, month, year, dryRun } = body;
 
     if (!sheetUrl || !sheetName || !month || !year) {
       return new Response(
@@ -247,6 +248,50 @@ export async function POST(req: NextRequest) {
     const phoneNumbers = Array.from(
       new Set(records.map((r) => r.phone_number))
     );
+
+    // Dry run: return preview only
+    if (dryRun) {
+      let existing: Array<{ id: string; phone_number: string; date: string }> =
+        [];
+      if (phoneNumbers.length) {
+        const { data: existData, error: existErr } = await supabase
+          .from("line_details")
+          .select("id, phone_number, date")
+          .in("phone_number", phoneNumbers)
+          .gte("date", start)
+          .lte("date", end);
+        if (existErr) {
+          return new Response(JSON.stringify({ error: existErr.message }), {
+            status: 500,
+          });
+        }
+        existing = existData || [];
+      }
+
+      const existingByPhone: Record<string, number> = {};
+      for (const row of existing) {
+        existingByPhone[row.phone_number] =
+          (existingByPhone[row.phone_number] || 0) + 1;
+      }
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          dryRun: true,
+          month,
+          year,
+          totals: {
+            phoneNumbers: phoneNumbers.length,
+            existing: existing.length,
+            toInsert: records.length,
+          },
+          existingByPhone,
+          sampleInserts: records.slice(0, 10),
+        }),
+        { status: 200 }
+      );
+    }
+
     if (phoneNumbers.length) {
       const { error: delErr } = await supabase
         .from("line_details")

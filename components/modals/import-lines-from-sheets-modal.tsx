@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/auth-context";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Props = {
   open: boolean;
@@ -33,6 +34,7 @@ export function ImportLinesFromSheetsModal({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dryRun, setDryRun] = useState(true);
 
   const disabled =
     !sheetUrl ||
@@ -42,7 +44,7 @@ export function ImportLinesFromSheetsModal({
     loading ||
     !["admin", "moderator"].includes(role || "");
 
-  const handleImport = async () => {
+  const callImport = async (opts?: { dryRun?: boolean }) => {
     setLoading(true);
     setResult(null);
     setError(null);
@@ -55,12 +57,13 @@ export function ImportLinesFromSheetsModal({
           sheetName,
           month: Number(month),
           year: Number(year),
+          dryRun: opts?.dryRun ?? dryRun,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Import failed");
       setResult(data);
-      onImported?.();
+      if (!data.dryRun) onImported?.();
     } catch (e: any) {
       setError(e?.message || "Failed to import");
     } finally {
@@ -123,8 +126,14 @@ export function ImportLinesFromSheetsModal({
             </div>
           </div>
           <div className='flex items-center gap-2'>
-            <Button onClick={handleImport} disabled={disabled}>
-              {loading ? "Importing..." : "Import"}
+            <Button onClick={() => callImport({ dryRun })} disabled={disabled}>
+              {loading
+                ? dryRun
+                  ? "Previewing..."
+                  : "Importing..."
+                : dryRun
+                ? "Preview (Dry Run)"
+                : "Run Import"}
             </Button>
             <Button
               variant='secondary'
@@ -134,11 +143,57 @@ export function ImportLinesFromSheetsModal({
               Close
             </Button>
           </div>
+          <div className='flex items-center gap-2'>
+            <Checkbox
+              id='dryRun'
+              checked={dryRun}
+              onCheckedChange={(v) => setDryRun(!!v)}
+            />
+            <Label htmlFor='dryRun'>Dry Run (preview only)</Label>
+          </div>
           {error && <div className='text-red-600 text-sm'>{error}</div>}
           {result && (
-            <pre className='bg-muted p-2 rounded text-xs overflow-auto max-h-48'>
-              {JSON.stringify(result, null, 2)}
-            </pre>
+            <div className='space-y-2'>
+              {result.dryRun && (
+                <div className='text-sm'>
+                  <div className='font-medium'>Dry-run Preview</div>
+                  <div className='text-muted-foreground'>
+                    Existing rows to delete: {result.totals?.existing ?? 0}
+                  </div>
+                  <div className='text-muted-foreground'>
+                    New rows to insert: {result.totals?.toInsert ?? 0}
+                  </div>
+                  <div className='text-muted-foreground'>
+                    Distinct phone numbers: {result.totals?.phoneNumbers ?? 0}
+                  </div>
+                  <div className='mt-2'>
+                    <div className='font-medium'>Sample Inserts (first 10)</div>
+                    <pre className='bg-muted p-2 rounded text-xs overflow-auto max-h-48'>
+                      {JSON.stringify(result.sampleInserts, null, 2)}
+                    </pre>
+                  </div>
+                  <div className='mt-2'>
+                    <div className='font-medium'>Existing Rows by Phone</div>
+                    <pre className='bg-muted p-2 rounded text-xs overflow-auto max-h-48'>
+                      {JSON.stringify(result.existingByPhone, null, 2)}
+                    </pre>
+                  </div>
+                  <div className='mt-3'>
+                    <Button
+                      onClick={() => callImport({ dryRun: false })}
+                      disabled={loading}
+                    >
+                      Confirm Import
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {!result.dryRun && (
+                <pre className='bg-muted p-2 rounded text-xs overflow-auto max-h-48'>
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              )}
+            </div>
           )}
         </div>
       </DialogContent>
