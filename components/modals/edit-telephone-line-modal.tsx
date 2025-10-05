@@ -52,12 +52,22 @@ interface EditTelephoneLineModalProps {
 }
 
 export function EditTelephoneLineModal({ isOpen, onClose, line, onSuccess }: EditTelephoneLineModalProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    line_number: string
+    customer_name: string
+    customer_address: string
+    installation_date: string
+    status: TelephoneLine["status"]
+    monthly_fee: number
+    notes: string
+    drum_id: string
+    cable_used: number
+  }>({
     line_number: "",
     customer_name: "",
     customer_address: "",
     installation_date: "",
-    status: "active" as const,
+    status: "active",
     monthly_fee: 0,
     notes: "",
     drum_id: "",
