@@ -45,22 +45,26 @@ export default function PasswordUpdatePage() {
     // On visiting via the magic link, Supabase will set session automatically.
     // We can verify the type is recovery and enable the form.
     const handle = async () => {
-        const { data } = await supabase.auth.getSession();
-        if (!data.session) {
-          // Try to exchange code if present. Read code from client-only state.
-          const code = codeParam || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("code") : null);
-          if (code) {
-            const { data: setData, error: setErr } =
-              await supabase.auth.exchangeCodeForSession(code);
-            if (setErr) {
-              toast({
-                title: "Invalid or expired link",
-                description: setErr.message,
-                variant: "destructive",
-              });
-            }
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        // Try to exchange code if present. Read code from client-only state.
+        const code =
+          codeParam ||
+          (typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("code")
+            : null);
+        if (code) {
+          const { data: setData, error: setErr } =
+            await supabase.auth.exchangeCodeForSession(code);
+          if (setErr) {
+            toast({
+              title: "Invalid or expired link",
+              description: setErr.message,
+              variant: "destructive",
+            });
           }
         }
+      }
       setLoading(false);
     };
     // populate code param on client side to avoid useSearchParams CSR bailout
