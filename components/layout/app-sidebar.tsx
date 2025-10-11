@@ -65,16 +65,22 @@ const navItems = [
     title: "Users",
     url: "/users",
     icon: Users,
+    // admin only
+    roles: ["admin"],
   },
   {
     title: "Content",
     url: "/content",
     icon: BookOpen,
+    // admin and moderator
+    roles: ["admin", "moderator"],
   },
   {
     title: "Careers",
     url: "/careers",
     icon: Briefcase,
+    // admin and moderator
+    roles: ["admin", "moderator"],
   },
   {
     title: "Search",
@@ -85,7 +91,7 @@ const navItems = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
-  const { signOut } = useAuth();
+  const { signOut, role, loading } = useAuth();
 
   return (
     <Sidebar {...props}>
@@ -102,16 +108,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
-                    <Link href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navItems
+                .filter((item) => {
+                  // if item has no roles specified, it's visible to all authenticated users
+                  if (!item.roles || item.roles.length === 0) return true;
+                  // if still loading, hide role-restricted items until we know the role
+                  if (loading) return false;
+                  const r = (role || "").toLowerCase();
+                  return item.roles.map((x) => x.toLowerCase()).includes(r);
+                })
+                .map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={pathname === item.url}>
+                      <Link href={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
