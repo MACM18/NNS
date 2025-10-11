@@ -148,7 +148,7 @@ export default function PasswordUpdatePage() {
                 <div className='mt-2'>
                   <div className='h-2 w-full bg-muted rounded overflow-hidden'>
                     <div
-                      className={`h-full bg-gradient-to-r from-red-400 via-yellow-400 to-green-400 transition-width`}
+                      className={`h-full bg-gradient-to-r from-red-400 via-yellow-400 to-green-400 transition-all`}
                       style={{ width: `${(strength / 4) * 100}%` }}
                     />
                   </div>
