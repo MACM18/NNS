@@ -44,6 +44,8 @@
     "cmdk": "latest",
     "date-fns": "latest",
     "embla-carousel-react": "latest",
+    "googleapis": "^131.0.0",
+    "@supabase/ssr": "^0.5.0",
     "http": "latest",
     "input-otp": "latest",
     "lucide-react": "^0.454.0",

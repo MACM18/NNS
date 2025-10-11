@@ -88,6 +88,11 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <div className='mt-2 text-right'>
+                <Button asChild variant='link' className='px-0 text-sm'>
+                  <a href='/auth/forgot-password'>Forgot password?</a>
+                </Button>
+              </div>
             </div>
             <Button type='submit' className='w-full' disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
