@@ -13,16 +13,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Users } from "lucide-react";
+import {
+  Loader2,
+  Users,
+  TrendingUp,
+  TrendingDown,
+  CheckCircle2,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 
 interface WorkerSummary {
   worker_id: string;
   worker_name: string;
   worker_role: string | null;
   assignments: number;
+  status?: "active" | "inactive" | "on-leave";
+  performance?: number;
 }
 
 interface SummaryState {
@@ -30,6 +39,7 @@ interface SummaryState {
   year: number;
   totals: WorkerSummary[];
   totalAssignments: number;
+  availableWorkers: Array<{ id: string; full_name: string | null }>;
 }
 
 const months = [
@@ -59,6 +69,7 @@ export default function WorkTrackingSummaryPage() {
   const today = useMemo(() => new Date(), []);
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+  const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<SummaryState | null>(null);
   const { toast } = useToast();
@@ -172,7 +183,25 @@ export default function WorkTrackingSummaryPage() {
         0
       );
 
-      setSummary({ month, year, totals, totalAssignments });
+      // Calculate performance and status for each worker
+      const average = totals.length > 0 ? totalAssignments / totals.length : 0;
+      const enhancedTotals = totals.map((worker) => ({
+        ...worker,
+        performance: average > 0 ? (worker.assignments / average) * 100 : 100,
+        status: (worker.assignments >= average
+          ? "active"
+          : worker.assignments > 0
+          ? "inactive"
+          : "on-leave") as "active" | "inactive" | "on-leave",
+      }));
+
+      setSummary({
+        month,
+        year,
+        totals: enhancedTotals,
+        totalAssignments,
+        availableWorkers: json.workers || [],
+      });
     } catch (error: any) {
       toast({
         title: "Unable to load summary",
@@ -189,6 +218,34 @@ export default function WorkTrackingSummaryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, selectedYear]);
 
+  const filteredTotals = useMemo(() => {
+    if (!summary || selectedEmployee === "all") return summary?.totals ?? [];
+    return summary.totals.filter(
+      (worker) => worker.worker_id === selectedEmployee
+    );
+  }, [summary, selectedEmployee]);
+
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case "active":
+        return "bg-green-500/10 text-green-700 border-green-200";
+      case "inactive":
+        return "bg-yellow-500/10 text-yellow-700 border-yellow-200";
+      case "on-leave":
+        return "bg-gray-500/10 text-gray-700 border-gray-200";
+      default:
+        return "bg-muted text-muted-foreground";
+    }
+  };
+
+  const getPerformanceIndicator = (performance?: number) => {
+    if (!performance) return null;
+    if (performance >= 100) {
+      return <TrendingUp className='h-3 w-3 text-green-600' />;
+    }
+    return <TrendingDown className='h-3 w-3 text-orange-600' />;
+  };
+
   return (
     <div className='space-y-6'>
       <Card className='p-4 shadow-sm'>
@@ -201,6 +258,22 @@ export default function WorkTrackingSummaryPage() {
             </p>
           </div>
           <div className='flex gap-2'>
+            <Select
+              value={selectedEmployee}
+              onValueChange={setSelectedEmployee}
+            >
+              <SelectTrigger className='w-[180px]'>
+                <SelectValue placeholder='All employees' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='all'>All employees</SelectItem>
+                {summary?.availableWorkers.map((worker) => (
+                  <SelectItem key={worker.id} value={worker.id}>
+                    {worker.full_name || "Unnamed"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select
               value={selectedMonth.toString()}
               onValueChange={(value) => setSelectedMonth(Number(value))}
@@ -246,18 +319,18 @@ export default function WorkTrackingSummaryPage() {
         </div>
       </Card>
 
-      <div className='grid gap-4 md:grid-cols-[1fr,300px]'>
+      <div className='grid gap-4 md:grid-cols-[1fr,320px]'>
         <Card className='p-4'>
-          <div className='flex items-center justify-between'>
+          <div className='flex items-center justify-between mb-4'>
             <h3 className='text-lg font-semibold'>Team activity</h3>
             <Badge variant='secondary'>
-              {summary?.totalAssignments ?? 0} assignment
-              {summary && summary.totalAssignments === 1 ? "" : "s"}
+              {filteredTotals.length} employee
+              {filteredTotals.length === 1 ? "" : "s"}
             </Badge>
           </div>
-          <ScrollArea className='mt-4 h-[420px]'>
+          <ScrollArea className='h-[480px]'>
             <div className='space-y-3'>
-              {summary && summary.totals.length === 0 && !loading && (
+              {filteredTotals.length === 0 && !loading && (
                 <p className='text-sm text-muted-foreground'>
                   No assignments for this period.
                 </p>
@@ -268,25 +341,75 @@ export default function WorkTrackingSummaryPage() {
                   summary...
                 </div>
               )}
-              {summary?.totals.map((item) => (
-                <Card key={item.worker_id} className='p-3'>
-                  <div className='flex items-start justify-between gap-2'>
-                    <div>
-                      <div className='flex items-center gap-2'>
+              {filteredTotals.map((item) => (
+                <Card
+                  key={item.worker_id}
+                  className='p-4 hover:shadow-md transition-shadow'
+                >
+                  <div className='flex items-start justify-between gap-3'>
+                    <div className='flex-1'>
+                      <div className='flex items-center gap-2 mb-2'>
                         <Users className='h-4 w-4 text-muted-foreground' />
-                        <span className='text-sm font-medium'>
+                        <span className='text-sm font-semibold'>
                           {item.worker_name}
                         </span>
+                        {getPerformanceIndicator(item.performance)}
                       </div>
-                      {item.worker_role && (
-                        <p className='text-xs uppercase text-muted-foreground mt-1'>
-                          {item.worker_role}
-                        </p>
+
+                      <div className='flex items-center gap-2 flex-wrap'>
+                        <Badge
+                          variant='outline'
+                          className={cn(
+                            "text-[10px] capitalize",
+                            getStatusColor(item.status)
+                          )}
+                        >
+                          {item.status || "unknown"}
+                        </Badge>
+                        {item.worker_role && (
+                          <Badge
+                            variant='secondary'
+                            className='text-[10px] uppercase'
+                          >
+                            {item.worker_role}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {item.performance && (
+                        <div className='mt-3 space-y-1'>
+                          <div className='flex justify-between text-xs text-muted-foreground'>
+                            <span>Performance</span>
+                            <span>{item.performance.toFixed(0)}%</span>
+                          </div>
+                          <div className='w-full bg-muted rounded-full h-2 overflow-hidden'>
+                            <div
+                              className={cn(
+                                "h-full rounded-full transition-all",
+                                item.performance >= 100
+                                  ? "bg-green-500"
+                                  : "bg-orange-500"
+                              )}
+                              style={{
+                                width: `${Math.min(item.performance, 100)}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <Badge variant='outline' className='text-xs font-semibold'>
-                      {item.assignments} job{item.assignments === 1 ? "" : "s"}
-                    </Badge>
+
+                    <div className='text-right'>
+                      <Badge
+                        variant='outline'
+                        className='text-sm font-bold mb-1'
+                      >
+                        {item.assignments}
+                      </Badge>
+                      <p className='text-[10px] text-muted-foreground'>
+                        job{item.assignments === 1 ? "" : "s"}
+                      </p>
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -294,18 +417,92 @@ export default function WorkTrackingSummaryPage() {
           </ScrollArea>
         </Card>
 
-        <Card className='p-4 space-y-3'>
-          <h3 className='text-lg font-semibold'>How this helps</h3>
-          <p className='text-sm text-muted-foreground'>
-            Use this view to reconcile payments and monitor workload balance.
-            Export to CSV via Supabase dashboards or extend this page with
-            download actions.
-          </p>
-          <div className='rounded border border-dashed border-border p-3 text-sm text-muted-foreground'>
-            Need more details? Filter by technician or export upcoming
-            improvements straight from this section.
-          </div>
-        </Card>
+        <div className='space-y-4'>
+          <Card className='p-4'>
+            <h3 className='text-lg font-semibold mb-3'>Quick stats</h3>
+            <div className='space-y-3'>
+              <div className='flex justify-between items-center p-2 rounded bg-muted/50'>
+                <span className='text-sm text-muted-foreground'>
+                  Total jobs
+                </span>
+                <span className='font-bold'>
+                  {summary?.totalAssignments ?? 0}
+                </span>
+              </div>
+              <div className='flex justify-between items-center p-2 rounded bg-muted/50'>
+                <span className='text-sm text-muted-foreground'>
+                  Active employees
+                </span>
+                <span className='font-bold'>
+                  {summary?.totals.filter((w) => w.status === "active")
+                    .length ?? 0}
+                </span>
+              </div>
+              <div className='flex justify-between items-center p-2 rounded bg-muted/50'>
+                <span className='text-sm text-muted-foreground'>
+                  Avg per employee
+                </span>
+                <span className='font-bold'>
+                  {summary?.totals.length
+                    ? (
+                        summary.totalAssignments / summary.totals.length
+                      ).toFixed(1)
+                    : "0"}
+                </span>
+              </div>
+            </div>
+          </Card>
+
+          <Card className='p-4 space-y-3'>
+            <h3 className='text-sm font-semibold flex items-center gap-2'>
+              <CheckCircle2 className='h-4 w-4 text-green-600' />
+              Status guide
+            </h3>
+            <div className='space-y-2 text-xs'>
+              <div className='flex items-center gap-2'>
+                <Badge
+                  variant='outline'
+                  className='bg-green-500/10 text-green-700 border-green-200'
+                >
+                  Active
+                </Badge>
+                <span className='text-muted-foreground'>
+                  ≥ Average performance
+                </span>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Badge
+                  variant='outline'
+                  className='bg-yellow-500/10 text-yellow-700 border-yellow-200'
+                >
+                  Inactive
+                </Badge>
+                <span className='text-muted-foreground'>
+                  Below average, but working
+                </span>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Badge
+                  variant='outline'
+                  className='bg-gray-500/10 text-gray-700 border-gray-200'
+                >
+                  On-leave
+                </Badge>
+                <span className='text-muted-foreground'>
+                  No assignments this period
+                </span>
+              </div>
+            </div>
+          </Card>
+
+          <Card className='p-4 space-y-2'>
+            <h3 className='text-sm font-semibold'>Export & reports</h3>
+            <p className='text-xs text-muted-foreground'>
+              Use this data for payroll reconciliation, performance reviews, and
+              workload planning.
+            </p>
+          </Card>
+        </div>
       </div>
     </div>
   );

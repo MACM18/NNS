@@ -152,6 +152,7 @@ export async function GET(req: NextRequest) {
     const { data: workerOptions, error: optionsErr } = await supabaseServer
       .from("profiles")
       .select("id, full_name, role")
+      .eq("role", "employee")
       .order("full_name", { ascending: true });
 
     if (optionsErr) throw optionsErr;

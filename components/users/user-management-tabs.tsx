@@ -230,6 +230,7 @@ export function UserManagementTabs() {
                               className='border rounded px-2 py-1 text-sm bg-background'
                             >
                               <option value='user'>User</option>
+                              <option value='employee'>Employee</option>
                               <option value='moderator'>Moderator</option>
                               <option value='admin'>Admin</option>
                             </select>

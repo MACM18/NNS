@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 const tabs = [
   { label: "Calendar", href: "/work-tracking" },
   { label: "Summary", href: "/work-tracking/summary" },
+  { label: "Analytics", href: "/work-tracking/analytics" },
 ];
 
 type WorkTrackingLayoutProps = {
