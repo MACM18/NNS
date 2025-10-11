@@ -65,7 +65,14 @@ export async function POST(req: NextRequest) {
         },
       }
     );
-    const { data: userRes } = await authClient.auth.getUser();
+    // Prefer Bearer token from Authorization header (works even if session isn't cookie-based)
+    const authHeader = req.headers.get("authorization");
+    const bearer = authHeader?.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : undefined;
+    const { data: userRes } = bearer
+      ? await authClient.auth.getUser(bearer)
+      : await authClient.auth.getUser();
     const user = userRes?.user;
     if (!user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {

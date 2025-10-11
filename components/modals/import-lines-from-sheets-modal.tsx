@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/auth-context";
 import { Checkbox } from "@/components/ui/checkbox";
+import { getSupabaseClient } from "@/lib/supabase";
 
 type Props = {
   open: boolean;
@@ -49,9 +50,16 @@ export function ImportLinesFromSheetsModal({
     setResult(null);
     setError(null);
     try {
+      // Include auth cookies and, when available, the Supabase access token in Authorization header
+      const { data: sessionRes } = await getSupabaseClient().auth.getSession();
+      const token = sessionRes.session?.access_token;
       const res = await fetch("/api/import-lines", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
         body: JSON.stringify({
           sheetUrl,
           sheetName,
@@ -61,7 +69,13 @@ export function ImportLinesFromSheetsModal({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Import failed");
+      if (!res.ok) {
+        let msg = data?.error || "Import failed";
+        if (res.status === 401) msg = "You must be signed in to import.";
+        else if (res.status === 403)
+          msg = "You don't have permission to import (admin/moderator only).";
+        throw new Error(msg);
+      }
       setResult(data);
       if (!data.dryRun) onImported?.();
     } catch (e: any) {
