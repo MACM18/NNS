@@ -16,6 +16,7 @@ import {
   Search,
   LogOut,
   Building2,
+  CalendarDays,
 } from "lucide-react";
 
 import {
@@ -55,6 +56,12 @@ const navItems = [
     title: "Tasks",
     url: "/tasks",
     icon: ClipboardList,
+  },
+  {
+    title: "Work Tracking",
+    url: "/work-tracking",
+    icon: CalendarDays,
+    roles: ["admin", "moderator"],
   },
   {
     title: "Inventory",
