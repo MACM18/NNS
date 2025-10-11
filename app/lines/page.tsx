@@ -33,7 +33,6 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useDataCache } from "@/contexts/data-cache-context";
 import { Button } from "@/components/ui/button";
-import { ImportLinesFromSheetsModal } from "@/components/modals/import-lines-from-sheets-modal";
 
 interface LineStats {
   total: number;
@@ -171,7 +170,6 @@ export default function LineDetailsPage() {
               </p>
             </div>
             <div className='flex gap-2'>
-              <ImportToolbar />
               <Button
                 variant='outline'
                 size='sm'
@@ -331,20 +329,4 @@ export default function LineDetailsPage() {
   );
 }
 
-function ImportToolbar() {
-  "use client";
-  const { role } = useAuth();
-  const [open, setOpen] = useState(false);
-  const canImport = role === "admin" || role === "moderator";
-  if (!canImport) return null;
-  return (
-    <div className='flex justify-end mb-4'>
-      <Button onClick={() => setOpen(true)}>Import from Google Sheets</Button>
-      <ImportLinesFromSheetsModal
-        open={open}
-        onOpenChange={setOpen}
-        onImported={() => window.location.reload()}
-      />
-    </div>
-  );
-}
+
