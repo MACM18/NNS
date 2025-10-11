@@ -413,7 +413,7 @@ export function AddTelephoneLineModal({
 
       if (formData.selected_drum_id && totalCableNeeded > 0) {
         // Get the last usage of this drum
-        const { data: lastUsage, error: lastUsageError } = await supabase
+        const { data: lastUsageData, error: lastUsageError } = await supabase
           .from("drum_usage")
           .select("*, line_details(id, cable_end)")
           .eq("drum_id", formData.selected_drum_id)
@@ -422,10 +422,15 @@ export function AddTelephoneLineModal({
 
         if (lastUsageError) throw lastUsageError;
 
-        if (lastUsage && lastUsage.length > 0) {
-          const previousEndPoint = lastUsage[0].cable_end_point || 0;
+        const lastUsage = (lastUsageData as any[]) || [];
+
+        if (lastUsage.length > 0) {
+          const usage = lastUsage[0] as any;
+          // prefer drum_usage.cable_end_point, fallback to nested line_details.cable_end if available
+          const previousEndPoint =
+            usage.cable_end_point ?? usage.cable_end ?? usage.line_details?.cable_end ?? 0;
           const currentStartPoint = Number.parseFloat(formData.cable_start);
-          previousLineId = lastUsage[0].line_details?.id;
+          previousLineId = usage.line_details?.id ?? null;
 
           // If current start is less than previous end, there's wastage
           if (currentStartPoint < previousEndPoint) {
@@ -525,13 +530,16 @@ export function AddTelephoneLineModal({
 
         // Update drum current quantity - subtract the total cable used AND wastage
         const totalDeduction = totalCableNeeded + calculatedWastage;
-        const newQuantity = currentDrum.current_quantity - totalDeduction;
+
+        // coerce current_quantity to a number with a safe fallback
+        const currentQuantity =
+          typeof (currentDrum as any)?.current_quantity === "number"
+            ? (currentDrum as any).current_quantity
+            : Number((currentDrum as any)?.current_quantity) || 0;
+
+        const newQuantity = currentQuantity - totalDeduction;
         const newStatus =
-          newQuantity <= 10
-            ? "inactive"
-            : newQuantity <= 0
-            ? "empty"
-            : "active";
+          newQuantity <= 0 ? "empty" : newQuantity <= 10 ? "inactive" : "active";
 
         await supabase
           .from("drum_tracking")
@@ -543,22 +551,29 @@ export function AddTelephoneLineModal({
           .eq("id", formData.selected_drum_id);
 
         // Update inventory_items current_stock for Drop wire cable - subtract cable used AND wastage
-        const { data: dropWireItem } = await supabase
-          .from("inventory_items")
-          .select("id,current_stock")
-          .eq("name", "Drop Wire Cable")
-          .single();
-
-        if (dropWireItem) {
-          const newStock = dropWireItem.current_stock - totalDeduction;
-          await supabase
-            .from("inventory_items")
-            .update({
-              current_stock: Math.max(0, newStock),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", dropWireItem.id);
-        }
+                const { data: dropWireItem } = await supabase
+                  .from("inventory_items")
+                  .select("id,current_stock")
+                  .eq("name", "Drop Wire Cable")
+                  .single();
+        
+                if (dropWireItem) {
+                  // coerce current_stock to a number safely (Supabase returns unknown)
+                  const currentStock =
+                    typeof (dropWireItem as any).current_stock === "number"
+                      ? (dropWireItem as any).current_stock
+                      : Number((dropWireItem as any).current_stock) || 0;
+        
+                  const newStock = currentStock - totalDeduction;
+        
+                  await supabase
+                    .from("inventory_items")
+                    .update({
+                      current_stock: Math.max(0, newStock),
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", (dropWireItem as any).id);
+                }
         // Update previous line's wastage if there was wastage calculated
         if (
           previousLineId &&
@@ -1054,28 +1069,28 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Drum availability check */}
-            {formData.selected_drum_id && formData.total_cable > 0 && (
-              <div className='p-3 bg-blue-50 dark:bg-blue-950 rounded-lg'>
-                <div className='flex items-center gap-2'>
-                  <Package className='h-4 w-4 text-blue-600' />
-                  <span className='text-sm font-medium'>Drum Usage Check</span>
-                </div>
-                <p className='text-sm text-muted-foreground mt-1'>
-                  Required: {formData.total_cable}m | Available:{" "}
-                  {drumOptions
-                    .find((d) => d.id === formData.selected_drum_id)
-                    ?.current_quantity.toFixed(2)}
-                  m
-                </p>
-                {Number.parseFloat(formData.total_cable) >
-                  (drumOptions.find((d) => d.id === formData.selected_drum_id)
-                    ?.current_quantity || 0) && (
-                  <p className='text-sm text-red-600 mt-1'>
-                    ⚠️ Insufficient cable in selected drum
+              {formData.selected_drum_id && Number.parseFloat(formData.total_cable || "0") > 0 && (
+                <div className='p-3 bg-blue-50 dark:bg-blue-950 rounded-lg'>
+                  <div className='flex items-center gap-2'>
+                    <Package className='h-4 w-4 text-blue-600' />
+                    <span className='text-sm font-medium'>Drum Usage Check</span>
+                  </div>
+                  <p className='text-sm text-muted-foreground mt-1'>
+                    Required: {formData.total_cable}m | Available:{" "}
+                    {drumOptions
+                      .find((d) => d.id === formData.selected_drum_id)
+                      ?.current_quantity.toFixed(2)}
+                    m
                   </p>
-                )}
-              </div>
-            )}
+                  {Number.parseFloat(formData.total_cable) >
+                    (drumOptions.find((d) => d.id === formData.selected_drum_id)
+                      ?.current_quantity || 0) && (
+                    <p className='text-sm text-red-600 mt-1'>
+                      ⚠️ Insufficient cable in selected drum
+                    </p>
+                  )}
+                </div>
+              )}
           </div>
 
           <Separator />
