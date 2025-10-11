@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -18,7 +18,7 @@ import Link from "next/link";
 
 export default function PasswordUpdatePage() {
   const router = useRouter();
-  const params = useSearchParams();
+  const [codeParam, setCodeParam] = useState<string | null>(null);
   const supabase = getSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");
@@ -45,24 +45,28 @@ export default function PasswordUpdatePage() {
     // On visiting via the magic link, Supabase will set session automatically.
     // We can verify the type is recovery and enable the form.
     const handle = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        // Try to exchange code if present
-        const code = params.get("code");
-        if (code) {
-          const { data: setData, error: setErr } =
-            await supabase.auth.exchangeCodeForSession(code);
-          if (setErr) {
-            toast({
-              title: "Invalid or expired link",
-              description: setErr.message,
-              variant: "destructive",
-            });
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          // Try to exchange code if present. Read code from client-only state.
+          const code = codeParam || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("code") : null);
+          if (code) {
+            const { data: setData, error: setErr } =
+              await supabase.auth.exchangeCodeForSession(code);
+            if (setErr) {
+              toast({
+                title: "Invalid or expired link",
+                description: setErr.message,
+                variant: "destructive",
+              });
+            }
           }
         }
-      }
       setLoading(false);
     };
+    // populate code param on client side to avoid useSearchParams CSR bailout
+    if (typeof window !== "undefined") {
+      setCodeParam(new URLSearchParams(window.location.search).get("code"));
+    }
     handle();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
