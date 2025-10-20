@@ -80,7 +80,7 @@ export default function SearchPage() {
 
         if (searchFilters.query.trim()) {
           lineQuery = lineQuery.or(
-            `telephone_no.ilike.%${searchFilters.query}%,customer_name.ilike.%${searchFilters.query}%,address.ilike.%${searchFilters.query}%`
+            `telephone_no.ilike.%${searchFilters.query}%,name.ilike.%${searchFilters.query}%,address.ilike.%${searchFilters.query}%`
           );
         }
 
@@ -117,24 +117,31 @@ export default function SearchPage() {
 
         (lines as any[] | null)?.forEach((line) => {
           const l = line as any;
-          const title = String(l.telephone_no ?? "");
-          const subtitle = String(l.customer_name ?? "");
+          const telephone = String(l.telephone_no ?? "");
+          const customerName = String(l.customer_name ?? l.name ?? "");
           const addr = String(l.address ?? "");
-          const length = l.length != null ? Number(l.length) : undefined;
+          const lengthValue = l.length != null ? Number(l.length) : undefined;
           const relevanceScore = calculateRelevance(searchFilters.query, [
-            title,
-            subtitle,
+            telephone,
+            customerName,
             addr,
           ]);
 
           searchResults.push({
             id: String(l.id ?? ""),
             type: "line",
-            title,
-            subtitle,
-            description: `${addr}${
-              length != null ? ` • Length: ${length}m` : ""
-            }`,
+            title: telephone || customerName || "Line",
+            subtitle:
+              [telephone, customerName].filter(Boolean).join(" • ") || "Line",
+            description:
+              [
+                addr ? `Address: ${addr}` : null,
+                lengthValue != null && Number.isFinite(lengthValue)
+                  ? `Length: ${lengthValue}m`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" • ") || "No additional details",
             relevanceScore,
             metadata: l,
           });
@@ -147,7 +154,7 @@ export default function SearchPage() {
 
         if (searchFilters.query.trim()) {
           taskQuery = taskQuery.or(
-            `title.ilike.%${searchFilters.query}%,description.ilike.%${searchFilters.query}%,telephone_no.ilike.%${searchFilters.query}%`
+            `customer_name.ilike.%${searchFilters.query}%,telephone_no.ilike.%${searchFilters.query}%,address.ilike.%${searchFilters.query}%,dp.ilike.%${searchFilters.query}%,notes.ilike.%${searchFilters.query}%`
           );
         }
 
@@ -173,21 +180,41 @@ export default function SearchPage() {
 
         (tasks as any[] | null)?.forEach((task) => {
           const t = task as any;
-          const title = String(t.title ?? "");
-          const desc = String(t.description ?? "");
-          const tel = String(t.telephone_no ?? "No phone number");
+          const customer = String(t.customer_name ?? "");
+          const tel = String(t.telephone_no ?? "");
+          const address = String(t.address ?? "");
+          const status = String(t.status ?? "");
+          const dp = String(t.dp ?? "");
+          const notes = String(t.notes ?? "");
+          const taskDate = String(t.task_date ?? "");
+          const connectionType = String(t.connection_type_new ?? "");
+          const title = customer || tel || dp || `Task ${String(t.id ?? "")}`;
+          const descriptionParts = [
+            address ? `Address: ${address}` : null,
+            dp ? `DP: ${dp}` : null,
+            status ? `Status: ${status}` : null,
+            connectionType ? `Connection: ${connectionType}` : null,
+            notes ? `Notes: ${notes}` : null,
+          ].filter(Boolean);
           const relevanceScore = calculateRelevance(searchFilters.query, [
-            title,
-            desc,
+            customer,
             tel,
+            address,
+            status,
+            dp,
+            notes,
           ]);
 
           searchResults.push({
             id: String(t.id ?? ""),
             type: "task",
             title,
-            subtitle: tel,
-            description: desc,
+            subtitle:
+              [tel, address, taskDate ? `Task Date: ${taskDate}` : null]
+                .filter(Boolean)
+                .join(" • ") || "Task",
+            description:
+              descriptionParts.join(" • ") || "No additional details",
             relevanceScore,
             metadata: t,
           });
