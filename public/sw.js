@@ -3,7 +3,7 @@ const PRECACHE_URLS = ["/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   );
   self.skipWaiting();
 });
@@ -16,9 +16,9 @@ self.addEventListener("activate", (event) => {
         Promise.all(
           cacheNames
             .filter((cacheName) => cacheName !== CACHE_NAME)
-            .map((cacheName) => caches.delete(cacheName)),
-        ),
-      ),
+            .map((cacheName) => caches.delete(cacheName))
+        )
+      )
   );
   self.clients.claim();
 });
@@ -55,6 +55,6 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => caches.match("/"));
-    }),
+    })
   );
 });

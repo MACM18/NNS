@@ -13,7 +13,8 @@ export const metadata: Metadata = {
     default: "NNS Telecom Dashboard",
     template: "%s | NNS Telecom",
   },
-  description: "AI-powered telecom management platform for fiber optic operations.",
+  description:
+    "AI-powered telecom management platform for fiber optic operations.",
   applicationName: "NNS Telecom Dashboard",
   generator: "v0.dev",
   manifest: "/manifest.webmanifest",
@@ -31,7 +32,9 @@ export const metadata: Metadata = {
       { url: "/placeholder-logo.png", type: "image/png", sizes: "192x192" },
       { url: "/placeholder-logo.png", type: "image/png", sizes: "512x512" },
     ],
-    apple: [{ url: "/placeholder-logo.png", type: "image/png", sizes: "192x192" }],
+    apple: [
+      { url: "/placeholder-logo.png", type: "image/png", sizes: "192x192" },
+    ],
   },
 };
 

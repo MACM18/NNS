@@ -166,20 +166,25 @@ export default function InvoicesPage() {
       const thisMonth = monthlyInvoices?.length || 0;
       const totalAmount =
         monthlyInvoices?.reduce(
-          (sum, inv) => sum + (inv.total_amount || 0),
+          (sum, inv) => sum + Number(inv.total_amount ?? 0),
           0
-        ) || 0;
+        ) ?? 0;
       const linesBilled =
-        monthlyInvoices?.reduce((sum, inv) => sum + (inv.line_count || 0), 0) /
-          thisMonth || 0;
+        monthlyInvoices?.reduce(
+          (sum, inv) => sum + Number(inv.line_count ?? 0),
+          0
+        ) ?? 0;
+      const averageLinesBilled = thisMonth > 0 ? linesBilled / thisMonth : 0;
       const avgRate =
-        linesBilled > 0 ? Math.round(totalAmount / linesBilled) : 0;
+        averageLinesBilled > 0
+          ? Math.round(totalAmount / averageLinesBilled)
+          : 0;
 
       updateCache("invoices", {
         stats: {
           thisMonth,
           totalAmount,
-          linesBilled,
+          linesBilled: averageLinesBilled,
           avgRate,
         },
       });
@@ -441,7 +446,8 @@ export default function InvoicesPage() {
                       <FileText className='h-12 w-12 mx-auto mb-4 opacity-50' />
                       <p>No invoices generated yet</p>
                       <p className='text-sm'>
-                        Click "Generate Invoices" to create monthly invoices
+                        Click &quot;Generate Invoices&quot; to create monthly
+                        invoices
                       </p>
                     </div>
                   ) : (

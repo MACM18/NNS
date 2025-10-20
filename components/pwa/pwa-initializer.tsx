@@ -14,7 +14,7 @@ export function PWAInitializer() {
       try {
         const registration = await navigator.serviceWorker.register(
           SERVICE_WORKER_PATH,
-          { scope: "/" },
+          { scope: "/" }
         );
 
         registration.addEventListener("updatefound", () => {

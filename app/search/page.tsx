@@ -582,8 +582,8 @@ export default function SearchPage() {
                     Start your search
                   </h3>
                   <p className='text-muted-foreground'>
-                    Enter search terms and apply filters to find what you're
-                    looking for
+                    Enter search terms and apply filters to find what
+                    you&apos;re looking for
                   </p>
                 </div>
               )}
