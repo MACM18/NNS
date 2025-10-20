@@ -93,7 +93,7 @@ export function EditUserModal({
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>
-            Update the user's details and role.
+            Update the user&apos;s details and role.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className='space-y-4'>

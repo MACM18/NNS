@@ -99,8 +99,7 @@ export default function WhyUsPage() {
               <p className='text-muted-foreground leading-relaxed'>
                 Our success is built on the expertise of our dedicated
                 professionals and a collaborative approach that puts your
-                project's needs at the forefront. puts your project&apos;s needs
-                at the forefront.
+                project&apos;s needs at the forefront.
               </p>
               <div className='grid gap-6 sm:grid-cols-2'>
                 <Card>

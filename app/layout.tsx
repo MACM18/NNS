@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   applicationName: "NNS Telecom Dashboard",
   generator: "v0.dev",
   manifest: "/manifest.webmanifest",
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
+  },
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#020617" },
