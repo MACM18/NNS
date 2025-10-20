@@ -35,9 +35,19 @@ import {
   ChevronsUpDown,
   Calculator,
   Package,
+  PlusCircle,
+  Loader2,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
+import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
 
 interface AddTelephoneLineModalProps {
@@ -58,6 +68,12 @@ interface DrumOption {
   item_name: string;
 }
 
+interface InventoryItemOption {
+  id: string;
+  name: string;
+  unit: string;
+}
+
 export function AddTelephoneLineModal({
   open,
   onOpenChange,
@@ -72,6 +88,21 @@ export function AddTelephoneLineModal({
   const [availableTasks, setAvailableTasks] = useState<any[]>([]);
   const [taskOpen, setTaskOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [addDrumModalOpen, setAddDrumModalOpen] = useState(false);
+  const [isCreatingDrum, setIsCreatingDrum] = useState(false);
+  const [drumInvoiceNumber, setDrumInvoiceNumber] = useState("");
+  const [drumInventoryItems, setDrumInventoryItems] = useState<
+    InventoryItemOption[]
+  >([]);
+  const [drumForm, setDrumForm] = useState({
+    item_id: "",
+    drum_number: "",
+    quantity: "2000",
+    date: new Date().toISOString().split("T")[0],
+    warehouse: "Main Warehouse",
+    issued_by: "",
+    drawn_by: "",
+  });
   const [formData, setFormData] = useState({
     // Basic Information
     date: new Date().toISOString().split("T")[0],
@@ -130,6 +161,7 @@ export function AddTelephoneLineModal({
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
+  const { user } = useAuth();
 
   // Auto-calculate F1, G1, and Total when cable values change
   useEffect(() => {
@@ -182,6 +214,28 @@ export function AddTelephoneLineModal({
     }
   }, [formData.dp]);
 
+  useEffect(() => {
+    if (!addDrumModalOpen) {
+      setIsCreatingDrum(false);
+      return;
+    }
+
+    const preparedDate = new Date().toISOString().split("T")[0];
+    setDrumForm((prev) => ({
+      ...prev,
+      date: prev.date || preparedDate,
+      warehouse: prev.warehouse || "Main Warehouse",
+      issued_by: prev.issued_by || user?.user_metadata?.full_name || "",
+    }));
+
+    void (async () => {
+      await Promise.all([
+        generateDrumInvoiceNumber(),
+        fetchDrumInventoryItems(),
+      ]);
+    })();
+  }, [addDrumModalOpen, user]);
+
   const fetchDrumOptions = async () => {
     try {
       const { data, error } = await supabase
@@ -210,6 +264,280 @@ export function AddTelephoneLineModal({
       setDrumOptions(drums);
     } catch (error) {
       console.error("Error fetching drum options:", error);
+    }
+  };
+
+  const generateDrumInvoiceNumber = async () => {
+    try {
+      const { data, error } = await supabase.rpc("generate_invoice_number");
+
+      if (error) throw error;
+      setDrumInvoiceNumber(String(data));
+    } catch (error) {
+      console.error("Error generating invoice number:", error);
+      const fallback = `INV-${new Date().getFullYear()}-${Date.now()
+        .toString()
+        .slice(-6)}`;
+      setDrumInvoiceNumber(fallback);
+    }
+  };
+
+  const fetchDrumInventoryItems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("inventory_items")
+        .select("id, name, unit")
+        .order("name");
+
+      if (error) throw error;
+
+      const items: InventoryItemOption[] = (data || []).map((item: any) => ({
+        id: String(item.id),
+        name: item.name ? String(item.name) : "Unnamed Item",
+        unit: item.unit ? String(item.unit) : "",
+      }));
+
+      setDrumInventoryItems(items);
+
+      if (items.length > 0) {
+        setDrumForm((prev) => {
+          if (prev.item_id) return prev;
+
+          const defaultItem =
+            items.find((item) =>
+              item.name.toLowerCase().includes("drop wire")
+            ) || items[0];
+
+          return {
+            ...prev,
+            item_id: defaultItem.id,
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching inventory items for drum creation:", error);
+      addNotification({
+        title: "Error",
+        message: "Failed to load inventory items for new drum",
+        type: "error",
+        category: "system",
+      });
+    }
+  };
+
+  const handleDrumFormChange = (field: string, value: string) => {
+    setDrumForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const resetDrumFormState = (itemId?: string) => {
+    setDrumForm({
+      item_id: itemId ?? "",
+      drum_number: "",
+      quantity: "2000",
+      date: new Date().toISOString().split("T")[0],
+      warehouse: "Main Warehouse",
+      issued_by: user?.user_metadata?.full_name || "",
+      drawn_by: "",
+    });
+  };
+
+  const handleAddDrumModalChange = (value: boolean) => {
+    setAddDrumModalOpen(value);
+
+    if (!value) {
+      setIsCreatingDrum(false);
+      setDrumInvoiceNumber("");
+      resetDrumFormState();
+    }
+  };
+
+  const handleCreateDrum = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isCreatingDrum) return;
+
+    const trimmedDrumNumber = drumForm.drum_number.trim();
+    const quantityNumber = Number(drumForm.quantity);
+
+    if (!trimmedDrumNumber) {
+      addNotification({
+        title: "Validation Error",
+        message: "Please enter a drum number",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    if (!drumForm.item_id) {
+      addNotification({
+        title: "Validation Error",
+        message: "Please select the inventory item",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(quantityNumber) || quantityNumber <= 0) {
+      addNotification({
+        title: "Validation Error",
+        message: "Quantity must be greater than zero",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    if (!drumForm.date) {
+      addNotification({
+        title: "Validation Error",
+        message: "Please select the received date",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    setIsCreatingDrum(true);
+
+    try {
+      const { data: existingDrums, error: existingError } = await supabase
+        .from("drum_tracking")
+        .select("id")
+        .ilike("drum_number", trimmedDrumNumber);
+
+      if (existingError) throw existingError;
+
+      if (existingDrums && existingDrums.length > 0) {
+        addNotification({
+          title: "Validation Error",
+          message: `Drum #${trimmedDrumNumber} already exists`,
+          type: "error",
+          category: "system",
+        });
+        setIsCreatingDrum(false);
+        return;
+      }
+
+      const invoiceNumber =
+        drumInvoiceNumber ||
+        `INV-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+
+      const invoicePayload = {
+        invoice_number: invoiceNumber,
+        warehouse: drumForm.warehouse,
+        date: drumForm.date,
+        issued_by: drumForm.issued_by,
+        drawn_by: drumForm.drawn_by,
+        created_by: user?.id ?? null,
+        total_items: 1,
+        status: "completed",
+        ocr_processed: false,
+        ocr_image_url: null,
+      };
+
+      const { data: invoice, error: invoiceError } = await supabase
+        .from("inventory_invoices")
+        .insert([invoicePayload])
+        .select()
+        .single();
+
+      if (invoiceError) throw invoiceError;
+
+      const selectedInventoryItem = drumInventoryItems.find(
+        (item) => item.id === drumForm.item_id
+      );
+
+      const description = selectedInventoryItem?.name || "Inventory Item";
+      const unit = selectedInventoryItem?.unit || "";
+
+      const { error: invoiceItemError } = await supabase
+        .from("inventory_invoice_items")
+        .insert([
+          {
+            invoice_id: invoice.id,
+            item_id: drumForm.item_id,
+            description,
+            unit,
+            quantity_requested: quantityNumber,
+            quantity_issued: quantityNumber,
+          },
+        ]);
+
+      if (invoiceItemError) throw invoiceItemError;
+
+      const { data: currentItem, error: currentItemError } = await supabase
+        .from("inventory_items")
+        .select("current_stock")
+        .eq("id", drumForm.item_id)
+        .single();
+
+      if (currentItemError) throw currentItemError;
+
+      const currentStock =
+        typeof (currentItem as any)?.current_stock === "number"
+          ? (currentItem as any).current_stock
+          : Number((currentItem as any)?.current_stock) || 0;
+
+      await supabase
+        .from("inventory_items")
+        .update({
+          current_stock: currentStock + quantityNumber,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", drumForm.item_id);
+
+      const { data: newDrum, error: drumInsertError } = await supabase
+        .from("drum_tracking")
+        .insert([
+          {
+            drum_number: trimmedDrumNumber,
+            item_id: drumForm.item_id,
+            initial_quantity: quantityNumber,
+            current_quantity: quantityNumber,
+            received_date: drumForm.date,
+            status: "active",
+          },
+        ])
+        .select()
+        .single();
+
+      if (drumInsertError) throw drumInsertError;
+
+      addNotification({
+        title: "Drum Added",
+        message: `Drum #${trimmedDrumNumber} created with invoice ${invoiceNumber}`,
+        type: "success",
+        category: "system",
+      });
+
+      await fetchDrumOptions();
+
+      const newDrumId = newDrum?.id ? String(newDrum.id) : "";
+
+      setFormData((prev) => ({
+        ...prev,
+        selected_drum_id: newDrumId || prev.selected_drum_id,
+        drum_number: trimmedDrumNumber,
+      }));
+
+      setAddDrumModalOpen(false);
+      setDrumOpen(false);
+      setDrumInvoiceNumber("");
+      resetDrumFormState(drumForm.item_id);
+    } catch (error: any) {
+      console.error("Error creating drum:", error);
+      addNotification({
+        title: "Error",
+        message: error?.message || "Failed to create drum. Please try again.",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setIsCreatingDrum(false);
     }
   };
 
@@ -683,900 +1011,1133 @@ export function AddTelephoneLineModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto p-4 sm:p-6'>
-        <DialogHeader>
-          <DialogTitle className='text-lg sm:text-xl'>
-            Add Telephone Line Details
-          </DialogTitle>
-          <DialogDescription className='text-sm'>
-            Enter the complete details for a new telephone line installation
-            including inventory usage and drum tracking.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto p-4 sm:p-6'>
+          <DialogHeader>
+            <DialogTitle className='text-lg sm:text-xl'>
+              Add Telephone Line Details
+            </DialogTitle>
+            <DialogDescription className='text-sm'>
+              Enter the complete details for a new telephone line installation
+              including inventory usage and drum tracking.
+            </DialogDescription>
+          </DialogHeader>
 
-        <form onSubmit={handleSubmit} className='space-y-4 sm:space-y-6'>
-          {/* Task Selection */}
-          <div className='space-y-3 sm:space-y-4'>
-            <h3 className='text-base sm:text-lg font-medium'>Task Selection</h3>
-            <div>
-              <Label htmlFor='task_selection'>Select Task</Label>
-              <Popover open={taskOpen} onOpenChange={setTaskOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant='outline'
-                    role='combobox'
-                    aria-expanded={taskOpen}
-                    className='w-full justify-between bg-transparent'
-                  >
-                    {selectedTask
-                      ? `${selectedTask.customer_name ?? "Task"} (${
-                          selectedTask.telephone_no ?? "N/A"
-                        })`
-                      : "Select an available task"}
-                    <ChevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className='w-full p-0'>
-                  <Command>
-                    <CommandInput placeholder='Search tasks...' />
-                    <CommandList>
-                      <CommandEmpty>No available tasks found.</CommandEmpty>
-                      <CommandGroup>
-                        {availableTasks.map((task) => (
-                          <CommandItem
-                            key={task.id}
-                            value={task.id}
-                            onSelect={() => handleTaskSelection(task)}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedTask?.id === task.id
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              )}
-                            />
-                            <div className='flex flex-col'>
-                              <span className='font-medium'>
-                                {task.telephone_no}
-                              </span>
-                              <span className='text-xs text-muted-foreground'>
-                                {task.customer_name} - {task.dp}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <p className='text-xs text-muted-foreground mt-1'>
-                Select an accepted task to convert to a telephone line
-                installation.
-              </p>
-            </div>
-          </div>
-
-          {/* Basic Information - Auto-populated from Task */}
-          <div className='space-y-3 sm:space-y-4'>
-            <h3 className='text-base sm:text-lg font-medium'>
-              Basic Information (From Task)
-            </h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <form onSubmit={handleSubmit} className='space-y-4 sm:space-y-6'>
+            {/* Task Selection */}
+            <div className='space-y-3 sm:space-y-4'>
+              <h3 className='text-base sm:text-lg font-medium'>
+                Task Selection
+              </h3>
               <div>
-                <Label htmlFor='date'>Date</Label>
-                <Input
-                  id='date'
-                  type='date'
-                  value={formData.date}
-                  onChange={(e) => handleInputChange("date", e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor='phone_number'>Phone Number</Label>
-                <Input
-                  id='phone_number'
-                  value={formData.phone_number}
-                  onChange={(e) =>
-                    handleInputChange("phone_number", e.target.value)
-                  }
-                  placeholder='e.g., 0342217442'
-                  className='bg-blue-50 dark:bg-blue-950'
-                  readOnly={!!selectedTask}
-                  required
-                />
-                {selectedTask && (
-                  <p className='text-xs text-blue-600 mt-1'>
-                    Auto-filled from selected task
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* DP Configuration - Auto-populated from Task */}
-          <div className='space-y-3 sm:space-y-4'>
-            <h3 className='text-base sm:text-lg font-medium'>
-              DP Configuration (From Task)
-            </h3>
-            <div>
-              <Label htmlFor='dp'>DP</Label>
-              <Input
-                id='dp'
-                value={formData.dp}
-                onChange={(e) => handleInputChange("dp", e.target.value)}
-                placeholder='e.g., HR-PKJ-0536-021-05'
-                className='bg-blue-50 dark:bg-blue-950'
-                readOnly={!!selectedTask}
-                required
-              />
-              {selectedTask && (
-                <p className='text-xs text-blue-600 mt-1'>
-                  Auto-filled from selected task
+                <Label htmlFor='task_selection'>Select Task</Label>
+                <Popover open={taskOpen} onOpenChange={setTaskOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant='outline'
+                      role='combobox'
+                      aria-expanded={taskOpen}
+                      className='w-full justify-between bg-transparent'
+                    >
+                      {selectedTask
+                        ? `${selectedTask.customer_name ?? "Task"} (${
+                            selectedTask.telephone_no ?? "N/A"
+                          })`
+                        : "Select an available task"}
+                      <ChevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className='w-full p-0'>
+                    <Command>
+                      <CommandInput placeholder='Search tasks...' />
+                      <CommandList>
+                        <CommandEmpty>No available tasks found.</CommandEmpty>
+                        <CommandGroup>
+                          {availableTasks.map((task) => (
+                            <CommandItem
+                              key={task.id}
+                              value={task.id}
+                              onSelect={() => handleTaskSelection(task)}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedTask?.id === task.id
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                              <div className='flex flex-col'>
+                                <span className='font-medium'>
+                                  {task.telephone_no}
+                                </span>
+                                <span className='text-xs text-muted-foreground'>
+                                  {task.customer_name} - {task.dp}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <p className='text-xs text-muted-foreground mt-1'>
+                  Select an accepted task to convert to a telephone line
+                  installation.
                 </p>
-              )}
-              {dpValidationError && (
-                <div className='flex items-center gap-2 mt-2 text-red-600 text-sm'>
-                  <AlertTriangle className='h-4 w-4' />
-                  {dpValidationError}
+              </div>
+            </div>
+
+            {/* Basic Information - Auto-populated from Task */}
+            <div className='space-y-3 sm:space-y-4'>
+              <h3 className='text-base sm:text-lg font-medium'>
+                Basic Information (From Task)
+              </h3>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                <div>
+                  <Label htmlFor='date'>Date</Label>
+                  <Input
+                    id='date'
+                    type='date'
+                    value={formData.date}
+                    onChange={(e) => handleInputChange("date", e.target.value)}
+                    required
+                  />
                 </div>
-              )}
-              <p className='text-xs text-muted-foreground mt-1'>
-                Format: XX-XXXX-XXXX-XXX-0X (2 uppercase strings, 2 numbers,
-                last value 01-08)
-              </p>
-            </div>
-          </div>
-
-          {/* Power Values */}
-          <div className='space-y-3 sm:space-y-4'>
-            <h3 className='text-base sm:text-lg font-medium'>
-              Power Measurements
-            </h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-              <div>
-                <Label htmlFor='power_dp'>Power (DP)</Label>
-                <Input
-                  id='power_dp'
-                  type='number'
-                  step='0.01'
-                  value={formData.power_dp}
-                  onChange={(e) =>
-                    handleInputChange("power_dp", e.target.value)
-                  }
-                  className={
-                    isPowerInvalid(formData.power_dp)
-                      ? "border-red-500 text-red-600"
-                      : ""
-                  }
-                  required
-                />
-                {isPowerInvalid(formData.power_dp) && (
-                  <p className='text-red-600 text-xs mt-1'>
-                    ⚠️ Value must be less than 30
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor='power_inbox'>Power (Inbox)</Label>
-                <Input
-                  id='power_inbox'
-                  type='number'
-                  step='0.01'
-                  value={formData.power_inbox}
-                  onChange={(e) =>
-                    handleInputChange("power_inbox", e.target.value)
-                  }
-                  className={
-                    isPowerInvalid(formData.power_inbox)
-                      ? "border-red-500 text-red-600"
-                      : ""
-                  }
-                  required
-                />
-                {isPowerInvalid(formData.power_inbox) && (
-                  <p className='text-red-600 text-xs mt-1'>
-                    ⚠️ Value must be less than 30
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Customer Information - Auto-populated from Task */}
-          <div className='space-y-3 sm:space-y-4'>
-            <h3 className='text-base sm:text-lg font-medium'>
-              Customer Information (From Task)
-            </h3>
-            <div className='grid grid-cols-1 gap-4'>
-              <div>
-                <Label htmlFor='name'>Name</Label>
-                <Input
-                  id='name'
-                  value={formData.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
-                  className='bg-blue-50 dark:bg-blue-950'
-                  readOnly={!!selectedTask}
-                  required
-                />
-                {selectedTask && (
-                  <p className='text-xs text-blue-600 mt-1'>
-                    Auto-filled from selected task
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor='address'>Address</Label>
-                <Textarea
-                  id='address'
-                  value={formData.address}
-                  onChange={(e) => handleInputChange("address", e.target.value)}
-                  className='bg-blue-50 dark:bg-blue-950'
-                  readOnly={!!selectedTask}
-                  required
-                />
-                {selectedTask && (
-                  <p className='text-xs text-blue-600 mt-1'>
-                    Auto-filled from selected task
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Cable Measurements with Drum Selection */}
-          <div className='space-y-3 sm:space-y-4'>
-            <h3 className='text-lg font-medium flex items-center gap-2'>
-              <Calculator className='h-5 w-5' />
-              Cable Measurements & Drum Tracking
-            </h3>
-
-            {/* Drum Selection */}
-            <div>
-              <Label htmlFor='drum_selection'>Select Cable Drum</Label>
-              <Popover open={drumOpen} onOpenChange={setDrumOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant='outline'
-                    role='combobox'
-                    aria-expanded={drumOpen}
-                    className='w-full justify-between bg-transparent'
-                  >
-                    {formData.drum_number || "Select available drum"}
-                    <ChevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className='w-full p-0'>
-                  <Command>
-                    <CommandInput placeholder='Search drums...' />
-                    <CommandList>
-                      <CommandEmpty>No available drums found.</CommandEmpty>
-                      <CommandGroup>
-                        {drumOptions.map((drum) => (
-                          <CommandItem
-                            key={drum.id}
-                            value={drum.id}
-                            onSelect={(currentValue) => {
-                              handleInputChange(
-                                "selected_drum_id",
-                                currentValue
-                              );
-                              setDrumOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                formData.selected_drum_id === drum.id
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              )}
-                            />
-                            <div className='flex flex-col'>
-                              <span>{drum.drum_number}</span>
-                              <span className='text-xs text-muted-foreground'>
-                                {drum.item_name} - {drum.current_quantity}m
-                                available
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <p className='text-xs text-muted-foreground mt-1'>
-                Select a drum to track cable usage. Only drums with more than
-                10m are shown.
-              </p>
-            </div>
-
-            <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-              <div>
-                <Label htmlFor='cable_start'>Cable Start (m)</Label>
-                <Input
-                  id='cable_start'
-                  type='number'
-                  step='0.01'
-                  value={formData.cable_start}
-                  onChange={(e) =>
-                    handleInputChange("cable_start", e.target.value)
-                  }
-                  placeholder='e.g., 1500'
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor='cable_middle'>Cable Middle (m)</Label>
-                <Input
-                  id='cable_middle'
-                  type='number'
-                  step='0.01'
-                  value={formData.cable_middle}
-                  onChange={(e) =>
-                    handleInputChange("cable_middle", e.target.value)
-                  }
-                  placeholder='e.g., 1450'
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor='cable_end'>Cable End (m)</Label>
-                <Input
-                  id='cable_end'
-                  type='number'
-                  step='0.01'
-                  value={formData.cable_end}
-                  onChange={(e) =>
-                    handleInputChange("cable_end", e.target.value)
-                  }
-                  placeholder='e.g., 1400'
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Auto-calculated values */}
-            <div className='grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg'>
-              <div>
-                <Label className='text-sm font-medium'>
-                  F1 (|Start - Middle|)
-                </Label>
-                <div className='text-lg font-bold text-blue-600'>
-                  {formData.f1}m
-                </div>
-              </div>
-              <div>
-                <Label className='text-sm font-medium'>
-                  G1 (|Middle - End|)
-                </Label>
-                <div className='text-lg font-bold text-blue-600'>
-                  {formData.g1}m
-                </div>
-              </div>
-              <div>
-                <Label className='text-sm font-medium'>
-                  Total Cable Used (F1 + G1)
-                </Label>
-                <div className='text-lg font-bold text-green-600'>
-                  {formData.total_cable}m
-                </div>
-              </div>
-              <div>
-                <Label htmlFor='wastage_input'>Manual Wastage</Label>
-                <Input
-                  id='wastage_input'
-                  type='number'
-                  step='0.01'
-                  value={formData.wastage_input}
-                  onChange={(e) =>
-                    handleInputChange("wastage_input", e.target.value)
-                  }
-                  placeholder='0.00'
-                />
-              </div>
-            </div>
-
-            {/* Drum availability check */}
-            {formData.selected_drum_id &&
-              Number.parseFloat(formData.total_cable || "0") > 0 && (
-                <div className='p-3 bg-blue-50 dark:bg-blue-950 rounded-lg'>
-                  <div className='flex items-center gap-2'>
-                    <Package className='h-4 w-4 text-blue-600' />
-                    <span className='text-sm font-medium'>
-                      Drum Usage Check
-                    </span>
-                  </div>
-                  <p className='text-sm text-muted-foreground mt-1'>
-                    Required: {formData.total_cable}m | Available:{" "}
-                    {drumOptions
-                      .find((d) => d.id === formData.selected_drum_id)
-                      ?.current_quantity.toFixed(2)}
-                    m
-                  </p>
-                  {Number.parseFloat(formData.total_cable) >
-                    (drumOptions.find((d) => d.id === formData.selected_drum_id)
-                      ?.current_quantity || 0) && (
-                    <p className='text-sm text-red-600 mt-1'>
-                      ⚠️ Insufficient cable in selected drum
+                <div>
+                  <Label htmlFor='phone_number'>Phone Number</Label>
+                  <Input
+                    id='phone_number'
+                    value={formData.phone_number}
+                    onChange={(e) =>
+                      handleInputChange("phone_number", e.target.value)
+                    }
+                    placeholder='e.g., 0342217442'
+                    className='bg-blue-50 dark:bg-blue-950'
+                    readOnly={!!selectedTask}
+                    required
+                  />
+                  {selectedTask && (
+                    <p className='text-xs text-blue-600 mt-1'>
+                      Auto-filled from selected task
                     </p>
                   )}
                 </div>
-              )}
-          </div>
+              </div>
+            </div>
 
-          <Separator />
-
-          {/* Inventory Section - keeping the existing comprehensive inventory fields */}
-          <div className='space-y-6'>
-            <h3 className='text-lg font-medium flex items-center gap-2'>
-              <Package className='h-5 w-5' />
-              Inventory & Materials Used
-            </h3>
-
-            {/* Hardware Components */}
+            {/* DP Configuration - Auto-populated from Task */}
             <div className='space-y-3 sm:space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Hardware Components
-              </h4>
-              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+              <h3 className='text-base sm:text-lg font-medium'>
+                DP Configuration (From Task)
+              </h3>
+              <div>
+                <Label htmlFor='dp'>DP</Label>
+                <Input
+                  id='dp'
+                  value={formData.dp}
+                  onChange={(e) => handleInputChange("dp", e.target.value)}
+                  placeholder='e.g., HR-PKJ-0536-021-05'
+                  className='bg-blue-50 dark:bg-blue-950'
+                  readOnly={!!selectedTask}
+                  required
+                />
+                {selectedTask && (
+                  <p className='text-xs text-blue-600 mt-1'>
+                    Auto-filled from selected task
+                  </p>
+                )}
+                {dpValidationError && (
+                  <div className='flex items-center gap-2 mt-2 text-red-600 text-sm'>
+                    <AlertTriangle className='h-4 w-4' />
+                    {dpValidationError}
+                  </div>
+                )}
+                <p className='text-xs text-muted-foreground mt-1'>
+                  Format: XX-XXXX-XXXX-XXX-0X (2 uppercase strings, 2 numbers,
+                  last value 01-08)
+                </p>
+              </div>
+            </div>
+
+            {/* Power Values */}
+            <div className='space-y-3 sm:space-y-4'>
+              <h3 className='text-base sm:text-lg font-medium'>
+                Power Measurements
+              </h3>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                 <div>
-                  <Label htmlFor='retainers'>Retainers</Label>
+                  <Label htmlFor='power_dp'>Power (DP)</Label>
                   <Input
-                    id='retainers'
+                    id='power_dp'
                     type='number'
-                    min='0'
-                    value={formData.retainers}
+                    step='0.01'
+                    value={formData.power_dp}
                     onChange={(e) =>
-                      handleInputChange("retainers", e.target.value)
+                      handleInputChange("power_dp", e.target.value)
                     }
+                    className={
+                      isPowerInvalid(formData.power_dp)
+                        ? "border-red-500 text-red-600"
+                        : ""
+                    }
+                    required
                   />
+                  {isPowerInvalid(formData.power_dp) && (
+                    <p className='text-red-600 text-xs mt-1'>
+                      ⚠️ Value must be less than 30
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <Label htmlFor='l_hook'>L-Hook</Label>
+                  <Label htmlFor='power_inbox'>Power (Inbox)</Label>
                   <Input
-                    id='l_hook'
+                    id='power_inbox'
                     type='number'
-                    min='0'
-                    value={formData.l_hook}
+                    step='0.01'
+                    value={formData.power_inbox}
                     onChange={(e) =>
-                      handleInputChange("l_hook", e.target.value)
+                      handleInputChange("power_inbox", e.target.value)
                     }
+                    className={
+                      isPowerInvalid(formData.power_inbox)
+                        ? "border-red-500 text-red-600"
+                        : ""
+                    }
+                    required
                   />
+                  {isPowerInvalid(formData.power_inbox) && (
+                    <p className='text-red-600 text-xs mt-1'>
+                      ⚠️ Value must be less than 30
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Customer Information - Auto-populated from Task */}
+            <div className='space-y-3 sm:space-y-4'>
+              <h3 className='text-base sm:text-lg font-medium'>
+                Customer Information (From Task)
+              </h3>
+              <div className='grid grid-cols-1 gap-4'>
+                <div>
+                  <Label htmlFor='name'>Name</Label>
+                  <Input
+                    id='name'
+                    value={formData.name}
+                    onChange={(e) => handleInputChange("name", e.target.value)}
+                    className='bg-blue-50 dark:bg-blue-950'
+                    readOnly={!!selectedTask}
+                    required
+                  />
+                  {selectedTask && (
+                    <p className='text-xs text-blue-600 mt-1'>
+                      Auto-filled from selected task
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <Label htmlFor='nut_bolt' className='flex items-center gap-1'>
-                    Nut & Bolt
-                    <span title='Auto-calculated: ½ of L-Hook'>
-                      <Calculator className='h-3 w-3 text-blue-500' />
-                    </span>
-                  </Label>
-                  <Input
-                    id='nut_bolt'
-                    type='number'
-                    min='0'
-                    value={formData.nut_bolt}
+                  <Label htmlFor='address'>Address</Label>
+                  <Textarea
+                    id='address'
+                    value={formData.address}
                     onChange={(e) =>
-                      handleInputChange("nut_bolt", e.target.value)
+                      handleInputChange("address", e.target.value)
                     }
                     className='bg-blue-50 dark:bg-blue-950'
+                    readOnly={!!selectedTask}
+                    required
                   />
-                  <p className='text-xs text-blue-600 mt-1'>
-                    Auto: ½ of L-Hook (
-                    {Math.ceil(
-                      (Number.parseInt(formData.l_hook.toString()) || 0) / 2
-                    )}
-                    )
+                  {selectedTask && (
+                    <p className='text-xs text-blue-600 mt-1'>
+                      Auto-filled from selected task
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Cable Measurements with Drum Selection */}
+            <div className='space-y-3 sm:space-y-4'>
+              <h3 className='text-lg font-medium flex items-center gap-2'>
+                <Calculator className='h-5 w-5' />
+                Cable Measurements & Drum Tracking
+              </h3>
+
+              {/* Drum Selection */}
+              <div>
+                <Label htmlFor='drum_selection'>Select Cable Drum</Label>
+                <Popover open={drumOpen} onOpenChange={setDrumOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant='outline'
+                      role='combobox'
+                      aria-expanded={drumOpen}
+                      className='w-full justify-between bg-transparent'
+                    >
+                      {formData.drum_number || "Select available drum"}
+                      <ChevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className='w-full p-0'>
+                    <Command>
+                      <CommandInput placeholder='Search drums...' />
+                      <CommandList>
+                        <CommandEmpty>No available drums found.</CommandEmpty>
+                        <CommandGroup>
+                          {drumOptions.map((drum) => (
+                            <CommandItem
+                              key={drum.id}
+                              value={drum.id}
+                              onSelect={(currentValue) => {
+                                handleInputChange(
+                                  "selected_drum_id",
+                                  currentValue
+                                );
+                                setDrumOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.selected_drum_id === drum.id
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                              <div className='flex flex-col'>
+                                <span>{drum.drum_number}</span>
+                                <span className='text-xs text-muted-foreground'>
+                                  {drum.item_name} - {drum.current_quantity}m
+                                  available
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <div className='mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2'>
+                  <p className='text-xs text-muted-foreground'>
+                    Select a drum to track cable usage. Only drums with more
+                    than 10m are shown.
                   </p>
-                </div>
-                <div>
-                  <Label htmlFor='top_bolt'>Top-Bolt</Label>
-                  <Input
-                    id='top_bolt'
-                    type='number'
-                    min='0'
-                    value={formData.top_bolt}
-                    onChange={(e) =>
-                      handleInputChange("top_bolt", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='c_hook'>C-Hook (Default: 1)</Label>
-                  <Input
-                    id='c_hook'
-                    type='number'
-                    min='0'
-                    value={formData.c_hook}
-                    onChange={(e) =>
-                      handleInputChange("c_hook", e.target.value)
-                    }
-                    className='bg-green-50 dark:bg-green-950'
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='u_clip'>U-clip</Label>
-                  <Input
-                    id='u_clip'
-                    type='number'
-                    min='0'
-                    value={formData.u_clip}
-                    onChange={(e) =>
-                      handleInputChange("u_clip", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='concrete_nail'>Concrete Nail</Label>
-                  <Input
-                    id='concrete_nail'
-                    type='number'
-                    min='0'
-                    value={formData.concrete_nail}
-                    onChange={(e) =>
-                      handleInputChange("concrete_nail", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='roll_plug'>Roll Plug</Label>
-                  <Input
-                    id='roll_plug'
-                    type='number'
-                    min='0'
-                    value={formData.roll_plug}
-                    onChange={(e) =>
-                      handleInputChange("roll_plug", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label
-                    htmlFor='screw_nail'
-                    className='flex items-center gap-1'
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    className='w-full sm:w-auto gap-2'
+                    onClick={() => handleAddDrumModalChange(true)}
                   >
-                    Screw Nail
-                    <span title='Auto-synced with Roll Plug'>
-                      <Calculator className='h-3 w-3 text-blue-500' />
-                    </span>
-                  </Label>
-                  <Input
-                    id='screw_nail'
-                    type='number'
-                    min='0'
-                    value={formData.screw_nail}
-                    onChange={(e) =>
-                      handleInputChange("screw_nail", e.target.value)
-                    }
-                    className='bg-blue-50 dark:bg-blue-950'
-                  />
-                  <p className='text-xs text-blue-600 mt-1'>
-                    Auto: Same as Roll Plug ({formData.roll_plug})
-                  </p>
+                    <PlusCircle className='h-4 w-4' />
+                    Add new drum
+                  </Button>
                 </div>
+                <p className='text-xs text-muted-foreground'>
+                  New drums automatically create an inventory invoice and update
+                  available stock.
+                </p>
               </div>
-            </div>
 
-            {/* Fiber & Network Components */}
-            <div className='space-y-3 sm:space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Fiber & Network Components
-              </h4>
-              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-                <div>
-                  <Label htmlFor='fiber_rosette'>
-                    Fiber-Rosette (Default: 1)
-                  </Label>
-                  <Input
-                    id='fiber_rosette'
-                    type='number'
-                    min='0'
-                    value={formData.fiber_rosette}
-                    onChange={(e) =>
-                      handleInputChange("fiber_rosette", e.target.value)
-                    }
-                    className='bg-green-50 dark:bg-green-950'
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='s_rosette'>S-Rosette</Label>
-                  <Input
-                    id='s_rosette'
-                    type='number'
-                    min='0'
-                    value={formData.s_rosette}
-                    onChange={(e) =>
-                      handleInputChange("s_rosette", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='fac'>FAC (Default: 2)</Label>
-                  <Input
-                    id='fac'
-                    type='number'
-                    min='0'
-                    value={formData.fac}
-                    onChange={(e) => handleInputChange("fac", e.target.value)}
-                    className='bg-green-50 dark:bg-green-950'
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='rj45'>RJ45</Label>
-                  <Input
-                    id='rj45'
-                    type='number'
-                    min='0'
-                    value={formData.rj45}
-                    onChange={(e) => handleInputChange("rj45", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='rj11'>RJ11</Label>
-                  <Input
-                    id='rj11'
-                    type='number'
-                    min='0'
-                    value={formData.rj11}
-                    onChange={(e) => handleInputChange("rj11", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='rj12'>RJ12</Label>
-                  <Input
-                    id='rj12'
-                    type='number'
-                    min='0'
-                    value={formData.rj12}
-                    onChange={(e) => handleInputChange("rj12", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='socket'>Socket</Label>
-                  <Input
-                    id='socket'
-                    type='number'
-                    min='0'
-                    value={formData.socket}
-                    onChange={(e) =>
-                      handleInputChange("socket", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='bend'>Bend</Label>
-                  <Input
-                    id='bend'
-                    type='number'
-                    min='0'
-                    value={formData.bend}
-                    onChange={(e) => handleInputChange("bend", e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Cables & Wiring */}
-            <div className='space-y-3 sm:space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Cables & Wiring (meters)
-              </h4>
-              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-                <div>
-                  <Label htmlFor='internal_wire'>Internal Wire</Label>
-                  <Input
-                    id='internal_wire'
-                    type='number'
-                    step='0.01'
-                    min='0'
-                    value={formData.internal_wire}
-                    onChange={(e) =>
-                      handleInputChange("internal_wire", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='cat5'>Cat 5</Label>
-                  <Input
-                    id='cat5'
-                    type='number'
-                    step='0.01'
-                    min='0'
-                    value={formData.cat5}
-                    onChange={(e) => handleInputChange("cat5", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='casing'>Casing</Label>
-                  <Input
-                    id='casing'
-                    type='number'
-                    step='0.01'
-                    min='0'
-                    value={formData.casing}
-                    onChange={(e) =>
-                      handleInputChange("casing", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='conduit'>Conduit</Label>
-                  <Input
-                    id='conduit'
-                    type='number'
-                    step='0.01'
-                    min='0'
-                    value={formData.conduit}
-                    onChange={(e) =>
-                      handleInputChange("conduit", e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Accessories & Ties */}
-            <div className='space-y-3 sm:space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Accessories & Ties
-              </h4>
-              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-                <div>
-                  <Label htmlFor='c_tie'>C-tie</Label>
-                  <Input
-                    id='c_tie'
-                    type='number'
-                    min='0'
-                    value={formData.c_tie}
-                    onChange={(e) => handleInputChange("c_tie", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='c_clip'>C-clip</Label>
-                  <Input
-                    id='c_clip'
-                    type='number'
-                    min='0'
-                    value={formData.c_clip}
-                    onChange={(e) =>
-                      handleInputChange("c_clip", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='tag_tie'>Tag tie (Default: 1)</Label>
-                  <Input
-                    id='tag_tie'
-                    type='number'
-                    min='0'
-                    value={formData.tag_tie}
-                    onChange={(e) =>
-                      handleInputChange("tag_tie", e.target.value)
-                    }
-                    className='bg-green-50 dark:bg-green-950'
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='flexible'>Flexible (Default: 2)</Label>
-                  <Input
-                    id='flexible'
-                    type='number'
-                    min='0'
-                    value={formData.flexible}
-                    onChange={(e) =>
-                      handleInputChange("flexible", e.target.value)
-                    }
-                    className='bg-green-50 dark:bg-green-950'
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Infrastructure */}
-            <div className='space-y-3 sm:space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Infrastructure
-              </h4>
-              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-                <div>
-                  <Label htmlFor='pole_67'>Pole 6.7</Label>
-                  <Input
-                    id='pole_67'
-                    type='number'
-                    min='0'
-                    value={formData.pole_67}
-                    onChange={(e) =>
-                      handleInputChange("pole_67", e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='pole'>Pole 5.6</Label>
-                  <Input
-                    id='pole'
-                    type='number'
-                    min='0'
-                    value={formData.pole}
-                    onChange={(e) => handleInputChange("pole", e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Device Serials */}
-            <div className='space-y-3 sm:space-y-4'>
-              <h4 className='text-md font-medium text-muted-foreground'>
-                Device Information
-              </h4>
               <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
                 <div>
-                  <Label htmlFor='ont_serial'>ONT (Hexadecimal Serial)</Label>
+                  <Label htmlFor='cable_start'>Cable Start (m)</Label>
                   <Input
-                    id='ont_serial'
-                    value={formData.ont_serial}
+                    id='cable_start'
+                    type='number'
+                    step='0.01'
+                    value={formData.cable_start}
                     onChange={(e) =>
-                      handleInputChange(
-                        "ont_serial",
-                        e.target.value.toUpperCase()
-                      )
+                      handleInputChange("cable_start", e.target.value)
                     }
-                    placeholder='e.g., 48575443A1B2C3D4'
-                    className='font-mono'
+                    placeholder='e.g., 1500'
+                    required
                   />
                 </div>
                 <div>
-                  <Label htmlFor='voice_test_no'>Voice Test No</Label>
+                  <Label htmlFor='cable_middle'>Cable Middle (m)</Label>
                   <Input
-                    id='voice_test_no'
-                    value={formData.voice_test_no}
+                    id='cable_middle'
+                    type='number'
+                    step='0.01'
+                    value={formData.cable_middle}
                     onChange={(e) =>
-                      handleInputChange("voice_test_no", e.target.value)
+                      handleInputChange("cable_middle", e.target.value)
                     }
-                    placeholder='Voice test number'
+                    placeholder='e.g., 1450'
+                    required
                   />
                 </div>
                 <div>
-                  <Label htmlFor='stb_serial'>STB (Hexadecimal Serial)</Label>
+                  <Label htmlFor='cable_end'>Cable End (m)</Label>
                   <Input
-                    id='stb_serial'
-                    value={formData.stb_serial}
+                    id='cable_end'
+                    type='number'
+                    step='0.01'
+                    value={formData.cable_end}
                     onChange={(e) =>
-                      handleInputChange(
-                        "stb_serial",
-                        e.target.value.toUpperCase()
-                      )
+                      handleInputChange("cable_end", e.target.value)
                     }
-                    placeholder='e.g., 12345ABCDEF67890'
-                    className='font-mono'
+                    placeholder='e.g., 1400'
+                    required
                   />
                 </div>
               </div>
-            </div>
-          </div>
 
-          <DialogFooter className='flex-col sm:flex-row gap-2 sm:gap-0'>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={() => onOpenChange(false)}
-              className='w-full sm:w-auto'
-            >
-              Cancel
-            </Button>
-            <Button
-              type='submit'
-              disabled={loading || !!dpValidationError}
-              className='w-full sm:w-auto'
-            >
-              {loading ? "Adding..." : "Add Telephone Line"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+              {/* Auto-calculated values */}
+              <div className='grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg'>
+                <div>
+                  <Label className='text-sm font-medium'>
+                    F1 (|Start - Middle|)
+                  </Label>
+                  <div className='text-lg font-bold text-blue-600'>
+                    {formData.f1}m
+                  </div>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>
+                    G1 (|Middle - End|)
+                  </Label>
+                  <div className='text-lg font-bold text-blue-600'>
+                    {formData.g1}m
+                  </div>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>
+                    Total Cable Used (F1 + G1)
+                  </Label>
+                  <div className='text-lg font-bold text-green-600'>
+                    {formData.total_cable}m
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor='wastage_input'>Manual Wastage</Label>
+                  <Input
+                    id='wastage_input'
+                    type='number'
+                    step='0.01'
+                    value={formData.wastage_input}
+                    onChange={(e) =>
+                      handleInputChange("wastage_input", e.target.value)
+                    }
+                    placeholder='0.00'
+                  />
+                </div>
+              </div>
+
+              {/* Drum availability check */}
+              {formData.selected_drum_id &&
+                Number.parseFloat(formData.total_cable || "0") > 0 && (
+                  <div className='p-3 bg-blue-50 dark:bg-blue-950 rounded-lg'>
+                    <div className='flex items-center gap-2'>
+                      <Package className='h-4 w-4 text-blue-600' />
+                      <span className='text-sm font-medium'>
+                        Drum Usage Check
+                      </span>
+                    </div>
+                    <p className='text-sm text-muted-foreground mt-1'>
+                      Required: {formData.total_cable}m | Available:{" "}
+                      {drumOptions
+                        .find((d) => d.id === formData.selected_drum_id)
+                        ?.current_quantity.toFixed(2)}
+                      m
+                    </p>
+                    {Number.parseFloat(formData.total_cable) >
+                      (drumOptions.find(
+                        (d) => d.id === formData.selected_drum_id
+                      )?.current_quantity || 0) && (
+                      <p className='text-sm text-red-600 mt-1'>
+                        ⚠️ Insufficient cable in selected drum
+                      </p>
+                    )}
+                  </div>
+                )}
+            </div>
+
+            <Separator />
+
+            {/* Inventory Section - keeping the existing comprehensive inventory fields */}
+            <div className='space-y-6'>
+              <h3 className='text-lg font-medium flex items-center gap-2'>
+                <Package className='h-5 w-5' />
+                Inventory & Materials Used
+              </h3>
+
+              {/* Hardware Components */}
+              <div className='space-y-3 sm:space-y-4'>
+                <h4 className='text-md font-medium text-muted-foreground'>
+                  Hardware Components
+                </h4>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                  <div>
+                    <Label htmlFor='retainers'>Retainers</Label>
+                    <Input
+                      id='retainers'
+                      type='number'
+                      min='0'
+                      value={formData.retainers}
+                      onChange={(e) =>
+                        handleInputChange("retainers", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='l_hook'>L-Hook</Label>
+                    <Input
+                      id='l_hook'
+                      type='number'
+                      min='0'
+                      value={formData.l_hook}
+                      onChange={(e) =>
+                        handleInputChange("l_hook", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label
+                      htmlFor='nut_bolt'
+                      className='flex items-center gap-1'
+                    >
+                      Nut & Bolt
+                      <span title='Auto-calculated: ½ of L-Hook'>
+                        <Calculator className='h-3 w-3 text-blue-500' />
+                      </span>
+                    </Label>
+                    <Input
+                      id='nut_bolt'
+                      type='number'
+                      min='0'
+                      value={formData.nut_bolt}
+                      onChange={(e) =>
+                        handleInputChange("nut_bolt", e.target.value)
+                      }
+                      className='bg-blue-50 dark:bg-blue-950'
+                    />
+                    <p className='text-xs text-blue-600 mt-1'>
+                      Auto: ½ of L-Hook (
+                      {Math.ceil(
+                        (Number.parseInt(formData.l_hook.toString()) || 0) / 2
+                      )}
+                      )
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor='top_bolt'>Top-Bolt</Label>
+                    <Input
+                      id='top_bolt'
+                      type='number'
+                      min='0'
+                      value={formData.top_bolt}
+                      onChange={(e) =>
+                        handleInputChange("top_bolt", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='c_hook'>C-Hook (Default: 1)</Label>
+                    <Input
+                      id='c_hook'
+                      type='number'
+                      min='0'
+                      value={formData.c_hook}
+                      onChange={(e) =>
+                        handleInputChange("c_hook", e.target.value)
+                      }
+                      className='bg-green-50 dark:bg-green-950'
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='u_clip'>U-clip</Label>
+                    <Input
+                      id='u_clip'
+                      type='number'
+                      min='0'
+                      value={formData.u_clip}
+                      onChange={(e) =>
+                        handleInputChange("u_clip", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='concrete_nail'>Concrete Nail</Label>
+                    <Input
+                      id='concrete_nail'
+                      type='number'
+                      min='0'
+                      value={formData.concrete_nail}
+                      onChange={(e) =>
+                        handleInputChange("concrete_nail", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='roll_plug'>Roll Plug</Label>
+                    <Input
+                      id='roll_plug'
+                      type='number'
+                      min='0'
+                      value={formData.roll_plug}
+                      onChange={(e) =>
+                        handleInputChange("roll_plug", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label
+                      htmlFor='screw_nail'
+                      className='flex items-center gap-1'
+                    >
+                      Screw Nail
+                      <span title='Auto-synced with Roll Plug'>
+                        <Calculator className='h-3 w-3 text-blue-500' />
+                      </span>
+                    </Label>
+                    <Input
+                      id='screw_nail'
+                      type='number'
+                      min='0'
+                      value={formData.screw_nail}
+                      onChange={(e) =>
+                        handleInputChange("screw_nail", e.target.value)
+                      }
+                      className='bg-blue-50 dark:bg-blue-950'
+                    />
+                    <p className='text-xs text-blue-600 mt-1'>
+                      Auto: Same as Roll Plug ({formData.roll_plug})
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fiber & Network Components */}
+              <div className='space-y-3 sm:space-y-4'>
+                <h4 className='text-md font-medium text-muted-foreground'>
+                  Fiber & Network Components
+                </h4>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                  <div>
+                    <Label htmlFor='fiber_rosette'>
+                      Fiber-Rosette (Default: 1)
+                    </Label>
+                    <Input
+                      id='fiber_rosette'
+                      type='number'
+                      min='0'
+                      value={formData.fiber_rosette}
+                      onChange={(e) =>
+                        handleInputChange("fiber_rosette", e.target.value)
+                      }
+                      className='bg-green-50 dark:bg-green-950'
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='s_rosette'>S-Rosette</Label>
+                    <Input
+                      id='s_rosette'
+                      type='number'
+                      min='0'
+                      value={formData.s_rosette}
+                      onChange={(e) =>
+                        handleInputChange("s_rosette", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='fac'>FAC (Default: 2)</Label>
+                    <Input
+                      id='fac'
+                      type='number'
+                      min='0'
+                      value={formData.fac}
+                      onChange={(e) => handleInputChange("fac", e.target.value)}
+                      className='bg-green-50 dark:bg-green-950'
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='rj45'>RJ45</Label>
+                    <Input
+                      id='rj45'
+                      type='number'
+                      min='0'
+                      value={formData.rj45}
+                      onChange={(e) =>
+                        handleInputChange("rj45", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='rj11'>RJ11</Label>
+                    <Input
+                      id='rj11'
+                      type='number'
+                      min='0'
+                      value={formData.rj11}
+                      onChange={(e) =>
+                        handleInputChange("rj11", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='rj12'>RJ12</Label>
+                    <Input
+                      id='rj12'
+                      type='number'
+                      min='0'
+                      value={formData.rj12}
+                      onChange={(e) =>
+                        handleInputChange("rj12", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='socket'>Socket</Label>
+                    <Input
+                      id='socket'
+                      type='number'
+                      min='0'
+                      value={formData.socket}
+                      onChange={(e) =>
+                        handleInputChange("socket", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='bend'>Bend</Label>
+                    <Input
+                      id='bend'
+                      type='number'
+                      min='0'
+                      value={formData.bend}
+                      onChange={(e) =>
+                        handleInputChange("bend", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Cables & Wiring */}
+              <div className='space-y-3 sm:space-y-4'>
+                <h4 className='text-md font-medium text-muted-foreground'>
+                  Cables & Wiring (meters)
+                </h4>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                  <div>
+                    <Label htmlFor='internal_wire'>Internal Wire</Label>
+                    <Input
+                      id='internal_wire'
+                      type='number'
+                      step='0.01'
+                      min='0'
+                      value={formData.internal_wire}
+                      onChange={(e) =>
+                        handleInputChange("internal_wire", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='cat5'>Cat 5</Label>
+                    <Input
+                      id='cat5'
+                      type='number'
+                      step='0.01'
+                      min='0'
+                      value={formData.cat5}
+                      onChange={(e) =>
+                        handleInputChange("cat5", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='casing'>Casing</Label>
+                    <Input
+                      id='casing'
+                      type='number'
+                      step='0.01'
+                      min='0'
+                      value={formData.casing}
+                      onChange={(e) =>
+                        handleInputChange("casing", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='conduit'>Conduit</Label>
+                    <Input
+                      id='conduit'
+                      type='number'
+                      step='0.01'
+                      min='0'
+                      value={formData.conduit}
+                      onChange={(e) =>
+                        handleInputChange("conduit", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Accessories & Ties */}
+              <div className='space-y-3 sm:space-y-4'>
+                <h4 className='text-md font-medium text-muted-foreground'>
+                  Accessories & Ties
+                </h4>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                  <div>
+                    <Label htmlFor='c_tie'>C-tie</Label>
+                    <Input
+                      id='c_tie'
+                      type='number'
+                      min='0'
+                      value={formData.c_tie}
+                      onChange={(e) =>
+                        handleInputChange("c_tie", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='c_clip'>C-clip</Label>
+                    <Input
+                      id='c_clip'
+                      type='number'
+                      min='0'
+                      value={formData.c_clip}
+                      onChange={(e) =>
+                        handleInputChange("c_clip", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='tag_tie'>Tag tie (Default: 1)</Label>
+                    <Input
+                      id='tag_tie'
+                      type='number'
+                      min='0'
+                      value={formData.tag_tie}
+                      onChange={(e) =>
+                        handleInputChange("tag_tie", e.target.value)
+                      }
+                      className='bg-green-50 dark:bg-green-950'
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='flexible'>Flexible (Default: 2)</Label>
+                    <Input
+                      id='flexible'
+                      type='number'
+                      min='0'
+                      value={formData.flexible}
+                      onChange={(e) =>
+                        handleInputChange("flexible", e.target.value)
+                      }
+                      className='bg-green-50 dark:bg-green-950'
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Infrastructure */}
+              <div className='space-y-3 sm:space-y-4'>
+                <h4 className='text-md font-medium text-muted-foreground'>
+                  Infrastructure
+                </h4>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                  <div>
+                    <Label htmlFor='pole_67'>Pole 6.7</Label>
+                    <Input
+                      id='pole_67'
+                      type='number'
+                      min='0'
+                      value={formData.pole_67}
+                      onChange={(e) =>
+                        handleInputChange("pole_67", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='pole'>Pole 5.6</Label>
+                    <Input
+                      id='pole'
+                      type='number'
+                      min='0'
+                      value={formData.pole}
+                      onChange={(e) =>
+                        handleInputChange("pole", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Device Serials */}
+              <div className='space-y-3 sm:space-y-4'>
+                <h4 className='text-md font-medium text-muted-foreground'>
+                  Device Information
+                </h4>
+                <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+                  <div>
+                    <Label htmlFor='ont_serial'>ONT (Hexadecimal Serial)</Label>
+                    <Input
+                      id='ont_serial'
+                      value={formData.ont_serial}
+                      onChange={(e) =>
+                        handleInputChange(
+                          "ont_serial",
+                          e.target.value.toUpperCase()
+                        )
+                      }
+                      placeholder='e.g., 48575443A1B2C3D4'
+                      className='font-mono'
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='voice_test_no'>Voice Test No</Label>
+                    <Input
+                      id='voice_test_no'
+                      value={formData.voice_test_no}
+                      onChange={(e) =>
+                        handleInputChange("voice_test_no", e.target.value)
+                      }
+                      placeholder='Voice test number'
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='stb_serial'>STB (Hexadecimal Serial)</Label>
+                    <Input
+                      id='stb_serial'
+                      value={formData.stb_serial}
+                      onChange={(e) =>
+                        handleInputChange(
+                          "stb_serial",
+                          e.target.value.toUpperCase()
+                        )
+                      }
+                      placeholder='e.g., 12345ABCDEF67890'
+                      className='font-mono'
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className='flex-col sm:flex-row gap-2 sm:gap-0'>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => onOpenChange(false)}
+                className='w-full sm:w-auto'
+              >
+                Cancel
+              </Button>
+              <Button
+                type='submit'
+                disabled={loading || !!dpValidationError}
+                className='w-full sm:w-auto'
+              >
+                {loading ? "Adding..." : "Add Telephone Line"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addDrumModalOpen} onOpenChange={handleAddDrumModalChange}>
+        <DialogContent className='max-w-2xl p-4 sm:p-6'>
+          <DialogHeader>
+            <DialogTitle className='text-lg sm:text-xl'>
+              Add new cable drum
+            </DialogTitle>
+            <DialogDescription className='text-sm'>
+              Creating a drum automatically records an inventory invoice and
+              updates stock levels.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateDrum} className='space-y-6'>
+            <div className='space-y-4'>
+              <div className='space-y-2'>
+                <Label htmlFor='drum_item'>Inventory item</Label>
+                <Select
+                  value={drumForm.item_id}
+                  onValueChange={(value) =>
+                    handleDrumFormChange("item_id", value)
+                  }
+                  disabled={isCreatingDrum || drumInventoryItems.length === 0}
+                >
+                  <SelectTrigger id='drum_item'>
+                    <SelectValue placeholder='Select inventory item' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {drumInventoryItems.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        <div className='flex flex-col text-left'>
+                          <span>{item.name}</span>
+                          {item.unit && (
+                            <span className='text-xs text-muted-foreground'>
+                              Unit: {item.unit}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {drumInventoryItems.length === 0 && (
+                  <p className='text-xs text-muted-foreground'>
+                    No inventory items found. Add a cable item in inventory
+                    first.
+                  </p>
+                )}
+              </div>
+
+              <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+                <div className='space-y-2'>
+                  <Label htmlFor='drum_number'>Drum number</Label>
+                  <Input
+                    id='drum_number'
+                    value={drumForm.drum_number}
+                    onChange={(event) =>
+                      handleDrumFormChange("drum_number", event.target.value)
+                    }
+                    placeholder='e.g., DW-2401'
+                    required
+                    disabled={isCreatingDrum}
+                  />
+                </div>
+                <div className='space-y-2'>
+                  <Label htmlFor='drum_quantity'>Quantity (m)</Label>
+                  <Input
+                    id='drum_quantity'
+                    type='number'
+                    min='1'
+                    step='1'
+                    value={drumForm.quantity}
+                    onChange={(event) =>
+                      handleDrumFormChange("quantity", event.target.value)
+                    }
+                    required
+                    disabled={isCreatingDrum}
+                  />
+                </div>
+              </div>
+
+              <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+                <div className='space-y-2'>
+                  <Label htmlFor='drum_date'>Received date</Label>
+                  <Input
+                    id='drum_date'
+                    type='date'
+                    value={drumForm.date}
+                    onChange={(event) =>
+                      handleDrumFormChange("date", event.target.value)
+                    }
+                    required
+                    disabled={isCreatingDrum}
+                  />
+                </div>
+                <div className='space-y-2'>
+                  <Label htmlFor='drum_warehouse'>Warehouse / location</Label>
+                  <Input
+                    id='drum_warehouse'
+                    value={drumForm.warehouse}
+                    onChange={(event) =>
+                      handleDrumFormChange("warehouse", event.target.value)
+                    }
+                    placeholder='Main Warehouse'
+                    required
+                    disabled={isCreatingDrum}
+                  />
+                </div>
+              </div>
+
+              <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+                <div className='space-y-2'>
+                  <Label htmlFor='drum_issued_by'>Issued by</Label>
+                  <Input
+                    id='drum_issued_by'
+                    value={drumForm.issued_by}
+                    onChange={(event) =>
+                      handleDrumFormChange("issued_by", event.target.value)
+                    }
+                    placeholder='Inventory manager'
+                    disabled={isCreatingDrum}
+                  />
+                </div>
+                <div className='space-y-2'>
+                  <Label htmlFor='drum_drawn_by'>Drawn by</Label>
+                  <Input
+                    id='drum_drawn_by'
+                    value={drumForm.drawn_by}
+                    onChange={(event) =>
+                      handleDrumFormChange("drawn_by", event.target.value)
+                    }
+                    placeholder='Field crew or contractor'
+                    disabled={isCreatingDrum}
+                  />
+                </div>
+              </div>
+
+              <div className='space-y-2'>
+                <Label htmlFor='drum_invoice_number'>Invoice number</Label>
+                <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
+                  <Input
+                    id='drum_invoice_number'
+                    value={drumInvoiceNumber}
+                    placeholder='Generating invoice number...'
+                    readOnly
+                    disabled
+                  />
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    onClick={() => void generateDrumInvoiceNumber()}
+                    disabled={isCreatingDrum}
+                    className='sm:w-auto'
+                  >
+                    Refresh
+                  </Button>
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  This invoice will be saved with the drum entry for stock
+                  tracking.
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter className='flex-col sm:flex-row gap-2 sm:gap-0'>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => handleAddDrumModalChange(false)}
+                className='w-full sm:w-auto'
+                disabled={isCreatingDrum}
+              >
+                Cancel
+              </Button>
+              <Button
+                type='submit'
+                className='w-full sm:w-auto'
+                disabled={isCreatingDrum || drumInventoryItems.length === 0}
+              >
+                {isCreatingDrum ? (
+                  <span className='flex items-center gap-2'>
+                    <Loader2 className='h-4 w-4 animate-spin' />
+                    Creating drum...
+                  </span>
+                ) : (
+                  "Save drum"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
