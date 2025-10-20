@@ -35,9 +35,19 @@ import {
   ChevronsUpDown,
   Calculator,
   Package,
+  PlusCircle,
+  Loader2,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
+import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
 
 interface AddTelephoneLineModalProps {
@@ -58,6 +68,12 @@ interface DrumOption {
   item_name: string;
 }
 
+interface InventoryItemOption {
+  id: string;
+  name: string;
+  unit: string;
+}
+
 export function AddTelephoneLineModal({
   open,
   onOpenChange,
@@ -72,6 +88,21 @@ export function AddTelephoneLineModal({
   const [availableTasks, setAvailableTasks] = useState<any[]>([]);
   const [taskOpen, setTaskOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [addDrumModalOpen, setAddDrumModalOpen] = useState(false);
+  const [isCreatingDrum, setIsCreatingDrum] = useState(false);
+  const [drumInvoiceNumber, setDrumInvoiceNumber] = useState("");
+  const [drumInventoryItems, setDrumInventoryItems] = useState<
+    InventoryItemOption[]
+  >([]);
+  const [drumForm, setDrumForm] = useState({
+    item_id: "",
+    drum_number: "",
+    quantity: "2000",
+    date: new Date().toISOString().split("T")[0],
+    warehouse: "Main Warehouse",
+    issued_by: "",
+    drawn_by: "",
+  });
   const [formData, setFormData] = useState({
     // Basic Information
     date: new Date().toISOString().split("T")[0],
@@ -130,6 +161,7 @@ export function AddTelephoneLineModal({
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
+  const { user } = useAuth();
 
   // Auto-calculate F1, G1, and Total when cable values change
   useEffect(() => {
@@ -182,6 +214,29 @@ export function AddTelephoneLineModal({
     }
   }, [formData.dp]);
 
+  useEffect(() => {
+    if (!addDrumModalOpen) {
+      setIsCreatingDrum(false);
+      return;
+    }
+
+    const preparedDate = new Date().toISOString().split("T")[0];
+    setDrumForm((prev) => ({
+      ...prev,
+      date: prev.date || preparedDate,
+      warehouse: prev.warehouse || "Main Warehouse",
+      issued_by:
+        prev.issued_by || user?.user_metadata?.full_name || "",
+    }));
+
+    void (async () => {
+      await Promise.all([
+        generateDrumInvoiceNumber(),
+        fetchDrumInventoryItems(),
+      ]);
+    })();
+  }, [addDrumModalOpen, user]);
+
   const fetchDrumOptions = async () => {
     try {
       const { data, error } = await supabase
@@ -210,6 +265,285 @@ export function AddTelephoneLineModal({
       setDrumOptions(drums);
     } catch (error) {
       console.error("Error fetching drum options:", error);
+    }
+  };
+
+  const generateDrumInvoiceNumber = async () => {
+    try {
+      const { data, error } = await supabase.rpc("generate_invoice_number");
+
+      if (error) throw error;
+      setDrumInvoiceNumber(String(data));
+    } catch (error) {
+      console.error("Error generating invoice number:", error);
+      const fallback = `INV-${new Date().getFullYear()}-${Date.now()
+        .toString()
+        .slice(-6)}`;
+      setDrumInvoiceNumber(fallback);
+    }
+  };
+
+  const fetchDrumInventoryItems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("inventory_items")
+        .select("id, name, unit")
+        .order("name");
+
+      if (error) throw error;
+
+      const items: InventoryItemOption[] = (data || []).map((item: any) => ({
+        id: String(item.id),
+        name: item.name ? String(item.name) : "Unnamed Item",
+        unit: item.unit ? String(item.unit) : "",
+      }));
+
+      setDrumInventoryItems(items);
+
+      if (items.length > 0) {
+        setDrumForm((prev) => {
+          if (prev.item_id) return prev;
+
+          const defaultItem =
+            items.find((item) =>
+              item.name.toLowerCase().includes("drop wire")
+            ) || items[0];
+
+          return {
+            ...prev,
+            item_id: defaultItem.id,
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching inventory items for drum creation:", error);
+      addNotification({
+        title: "Error",
+        message: "Failed to load inventory items for new drum",
+        type: "error",
+        category: "system",
+      });
+    }
+  };
+
+  const handleDrumFormChange = (field: string, value: string) => {
+    setDrumForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const resetDrumFormState = (itemId?: string) => {
+    setDrumForm({
+      item_id: itemId ?? "",
+      drum_number: "",
+      quantity: "2000",
+      date: new Date().toISOString().split("T")[0],
+      warehouse: "Main Warehouse",
+      issued_by: user?.user_metadata?.full_name || "",
+      drawn_by: "",
+    });
+  };
+
+  const handleAddDrumModalChange = (value: boolean) => {
+    setAddDrumModalOpen(value);
+
+    if (!value) {
+      setIsCreatingDrum(false);
+      setDrumInvoiceNumber("");
+      resetDrumFormState();
+    }
+  };
+
+  const handleCreateDrum = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    if (isCreatingDrum) return;
+
+    const trimmedDrumNumber = drumForm.drum_number.trim();
+    const quantityNumber = Number(drumForm.quantity);
+
+    if (!trimmedDrumNumber) {
+      addNotification({
+        title: "Validation Error",
+        message: "Please enter a drum number",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    if (!drumForm.item_id) {
+      addNotification({
+        title: "Validation Error",
+        message: "Please select the inventory item",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(quantityNumber) || quantityNumber <= 0) {
+      addNotification({
+        title: "Validation Error",
+        message: "Quantity must be greater than zero",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    if (!drumForm.date) {
+      addNotification({
+        title: "Validation Error",
+        message: "Please select the received date",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    setIsCreatingDrum(true);
+
+    try {
+      const { data: existingDrums, error: existingError } = await supabase
+        .from("drum_tracking")
+        .select("id")
+        .ilike("drum_number", trimmedDrumNumber);
+
+      if (existingError) throw existingError;
+
+      if (existingDrums && existingDrums.length > 0) {
+        addNotification({
+          title: "Validation Error",
+          message: `Drum #${trimmedDrumNumber} already exists`,
+          type: "error",
+          category: "system",
+        });
+        setIsCreatingDrum(false);
+        return;
+      }
+
+      const invoiceNumber =
+        drumInvoiceNumber ||
+        `INV-${new Date().getFullYear()}-${Date.now()
+          .toString()
+          .slice(-6)}`;
+
+      const invoicePayload = {
+        invoice_number: invoiceNumber,
+        warehouse: drumForm.warehouse,
+        date: drumForm.date,
+        issued_by: drumForm.issued_by,
+        drawn_by: drumForm.drawn_by,
+        created_by: user?.id ?? null,
+        total_items: 1,
+        status: "completed",
+        ocr_processed: false,
+        ocr_image_url: null,
+      };
+
+      const { data: invoice, error: invoiceError } = await supabase
+        .from("inventory_invoices")
+        .insert([invoicePayload])
+        .select()
+        .single();
+
+      if (invoiceError) throw invoiceError;
+
+      const selectedInventoryItem = drumInventoryItems.find(
+        (item) => item.id === drumForm.item_id
+      );
+
+      const description = selectedInventoryItem?.name || "Inventory Item";
+      const unit = selectedInventoryItem?.unit || "";
+
+      const { error: invoiceItemError } = await supabase
+        .from("inventory_invoice_items")
+        .insert([
+          {
+            invoice_id: invoice.id,
+            item_id: drumForm.item_id,
+            description,
+            unit,
+            quantity_requested: quantityNumber,
+            quantity_issued: quantityNumber,
+          },
+        ]);
+
+      if (invoiceItemError) throw invoiceItemError;
+
+      const { data: currentItem, error: currentItemError } = await supabase
+        .from("inventory_items")
+        .select("current_stock")
+        .eq("id", drumForm.item_id)
+        .single();
+
+      if (currentItemError) throw currentItemError;
+
+      const currentStock =
+        typeof (currentItem as any)?.current_stock === "number"
+          ? (currentItem as any).current_stock
+          : Number((currentItem as any)?.current_stock) || 0;
+
+      await supabase
+        .from("inventory_items")
+        .update({
+          current_stock: currentStock + quantityNumber,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", drumForm.item_id);
+
+      const { data: newDrum, error: drumInsertError } = await supabase
+        .from("drum_tracking")
+        .insert([
+          {
+            drum_number: trimmedDrumNumber,
+            item_id: drumForm.item_id,
+            initial_quantity: quantityNumber,
+            current_quantity: quantityNumber,
+            received_date: drumForm.date,
+            status: "active",
+          },
+        ])
+        .select()
+        .single();
+
+      if (drumInsertError) throw drumInsertError;
+
+      addNotification({
+        title: "Drum Added",
+        message: `Drum #${trimmedDrumNumber} created with invoice ${invoiceNumber}`,
+        type: "success",
+        category: "system",
+      });
+
+      await fetchDrumOptions();
+
+      const newDrumId = newDrum?.id ? String(newDrum.id) : "";
+
+      setFormData((prev) => ({
+        ...prev,
+        selected_drum_id: newDrumId || prev.selected_drum_id,
+        drum_number: trimmedDrumNumber,
+      }));
+
+      setAddDrumModalOpen(false);
+      setDrumOpen(false);
+      setDrumInvoiceNumber("");
+      resetDrumFormState(drumForm.item_id);
+    } catch (error: any) {
+      console.error("Error creating drum:", error);
+      addNotification({
+        title: "Error",
+        message:
+          error?.message || "Failed to create drum. Please try again.",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setIsCreatingDrum(false);
     }
   };
 
@@ -683,8 +1017,9 @@ export function AddTelephoneLineModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto p-4 sm:p-6'>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto p-4 sm:p-6'>
         <DialogHeader>
           <DialogTitle className='text-lg sm:text-xl'>
             Add Telephone Line Details
@@ -989,9 +1324,25 @@ export function AddTelephoneLineModal({
                   </Command>
                 </PopoverContent>
               </Popover>
-              <p className='text-xs text-muted-foreground mt-1'>
-                Select a drum to track cable usage. Only drums with more than
-                10m are shown.
+              <div className='mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2'>
+                <p className='text-xs text-muted-foreground'>
+                  Select a drum to track cable usage. Only drums with more than
+                  10m are shown.
+                </p>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  className='w-full sm:w-auto gap-2'
+                  onClick={() => handleAddDrumModalChange(true)}
+                >
+                  <PlusCircle className='h-4 w-4' />
+                  Add new drum
+                </Button>
+              </div>
+              <p className='text-xs text-muted-foreground'>
+                New drums automatically create an inventory invoice and update
+                available stock.
               </p>
             </div>
 
@@ -1576,7 +1927,206 @@ export function AddTelephoneLineModal({
             </Button>
           </DialogFooter>
         </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={addDrumModalOpen}
+        onOpenChange={handleAddDrumModalChange}
+      >
+      <DialogContent className='max-w-2xl p-4 sm:p-6'>
+        <DialogHeader>
+          <DialogTitle className='text-lg sm:text-xl'>
+            Add new cable drum
+          </DialogTitle>
+          <DialogDescription className='text-sm'>
+            Creating a drum automatically records an inventory invoice and
+            updates stock levels.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleCreateDrum} className='space-y-6'>
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='drum_item'>Inventory item</Label>
+              <Select
+                value={drumForm.item_id}
+                onValueChange={(value) =>
+                  handleDrumFormChange("item_id", value)
+                }
+                disabled={isCreatingDrum || drumInventoryItems.length === 0}
+              >
+                <SelectTrigger id='drum_item'>
+                  <SelectValue placeholder='Select inventory item' />
+                </SelectTrigger>
+                <SelectContent>
+                  {drumInventoryItems.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      <div className='flex flex-col text-left'>
+                        <span>{item.name}</span>
+                        {item.unit && (
+                          <span className='text-xs text-muted-foreground'>
+                            Unit: {item.unit}
+                          </span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {drumInventoryItems.length === 0 && (
+                <p className='text-xs text-muted-foreground'>
+                  No inventory items found. Add a cable item in inventory
+                  first.
+                </p>
+              )}
+            </div>
+
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+              <div className='space-y-2'>
+                <Label htmlFor='drum_number'>Drum number</Label>
+                <Input
+                  id='drum_number'
+                  value={drumForm.drum_number}
+                  onChange={(event) =>
+                    handleDrumFormChange("drum_number", event.target.value)
+                  }
+                  placeholder='e.g., DW-2401'
+                  required
+                  disabled={isCreatingDrum}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='drum_quantity'>Quantity (m)</Label>
+                <Input
+                  id='drum_quantity'
+                  type='number'
+                  min='1'
+                  step='1'
+                  value={drumForm.quantity}
+                  onChange={(event) =>
+                    handleDrumFormChange("quantity", event.target.value)
+                  }
+                  required
+                  disabled={isCreatingDrum}
+                />
+              </div>
+            </div>
+
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+              <div className='space-y-2'>
+                <Label htmlFor='drum_date'>Received date</Label>
+                <Input
+                  id='drum_date'
+                  type='date'
+                  value={drumForm.date}
+                  onChange={(event) =>
+                    handleDrumFormChange("date", event.target.value)
+                  }
+                  required
+                  disabled={isCreatingDrum}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='drum_warehouse'>Warehouse / location</Label>
+                <Input
+                  id='drum_warehouse'
+                  value={drumForm.warehouse}
+                  onChange={(event) =>
+                    handleDrumFormChange("warehouse", event.target.value)
+                  }
+                  placeholder='Main Warehouse'
+                  required
+                  disabled={isCreatingDrum}
+                />
+              </div>
+            </div>
+
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+              <div className='space-y-2'>
+                <Label htmlFor='drum_issued_by'>Issued by</Label>
+                <Input
+                  id='drum_issued_by'
+                  value={drumForm.issued_by}
+                  onChange={(event) =>
+                    handleDrumFormChange("issued_by", event.target.value)
+                  }
+                  placeholder='Inventory manager'
+                  disabled={isCreatingDrum}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='drum_drawn_by'>Drawn by</Label>
+                <Input
+                  id='drum_drawn_by'
+                  value={drumForm.drawn_by}
+                  onChange={(event) =>
+                    handleDrumFormChange("drawn_by", event.target.value)
+                  }
+                  placeholder='Field crew or contractor'
+                  disabled={isCreatingDrum}
+                />
+              </div>
+            </div>
+
+            <div className='space-y-2'>
+              <Label htmlFor='drum_invoice_number'>Invoice number</Label>
+              <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
+                <Input
+                  id='drum_invoice_number'
+                  value={drumInvoiceNumber}
+                  placeholder='Generating invoice number...'
+                  readOnly
+                  disabled
+                />
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={() => void generateDrumInvoiceNumber()}
+                  disabled={isCreatingDrum}
+                  className='sm:w-auto'
+                >
+                  Refresh
+                </Button>
+              </div>
+              <p className='text-xs text-muted-foreground'>
+                This invoice will be saved with the drum entry for stock
+                tracking.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className='flex-col sm:flex-row gap-2 sm:gap-0'>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => handleAddDrumModalChange(false)}
+              className='w-full sm:w-auto'
+              disabled={isCreatingDrum}
+            >
+              Cancel
+            </Button>
+            <Button
+              type='submit'
+              className='w-full sm:w-auto'
+              disabled={
+                isCreatingDrum || drumInventoryItems.length === 0
+              }
+            >
+              {isCreatingDrum ? (
+                <span className='flex items-center gap-2'>
+                  <Loader2 className='h-4 w-4 animate-spin' />
+                  Creating drum...
+                </span>
+              ) : (
+                "Save drum"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
