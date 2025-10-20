@@ -33,6 +33,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useDataCache } from "@/contexts/data-cache-context";
+import type { TaskRecord } from "@/types/tasks";
 
 export default function TasksPage() {
   const { user, loading } = useAuth();
@@ -104,8 +105,18 @@ export default function TasksPage() {
     return <AuthWrapper />;
   }
 
-  const handleAddSuccess = () => {
-    fetchTasksForPeriod(dateFilter); // Refresh data after adding task
+  const handleAddSuccess = (newTask: TaskRecord) => {
+    // Update cache immediately for stats and local state
+    const existingTasks = (cache.tasks.data as TaskRecord[]) || [];
+    const dedupedTasksMap = new Map<string, TaskRecord>();
+    [newTask, ...existingTasks].forEach((task) => {
+      dedupedTasksMap.set(task.id, task);
+    });
+    const dedupedTasks = Array.from(dedupedTasksMap.values());
+
+    updateCache("tasks", { data: dedupedTasks });
+    setRefreshTrigger((prev) => prev + 1);
+    fetchTasksForPeriod(dateFilter);
   };
 
   return (

@@ -43,11 +43,12 @@ import {
 } from "@/components/ui/command";
 
 import { cn } from "@/lib/utils";
+import type { TaskRecord } from "@/types/tasks";
 
 interface AddTaskModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (task: TaskRecord) => void;
 }
 interface DPSuggestion {
   dp: string;
@@ -133,7 +134,7 @@ export function AddTaskModal({
         task_date: formData.task_date,
         telephone_no: formData.telephone_no,
         dp: formData.dp,
-        contact_no: formData.contact_no,
+        contact_no: formData.contact_no || null,
         customer_name: formData.customer_name,
         address: formData.address,
         connection_type_new: formData.connection_type_new,
@@ -143,9 +144,17 @@ export function AddTaskModal({
         notes: formData.notes || null,
       };
 
-      const { error } = await supabase.from("tasks").insert([insertData]);
+      const { data: insertedTask, error } = await supabase
+        .from("tasks")
+        .insert([insertData])
+        .select()
+        .single();
 
       if (error) throw error;
+
+      if (!insertedTask) {
+        throw new Error("Task created but no data returned from Supabase.");
+      }
 
       addNotification({
         title: "Success",
@@ -154,7 +163,32 @@ export function AddTaskModal({
         category: "system",
       });
 
-      onSuccess();
+      const normalizedTask: TaskRecord = {
+        id: insertedTask.id as string,
+        task_date: insertedTask.task_date as string,
+        telephone_no: insertedTask.telephone_no as string,
+        dp: insertedTask.dp as string,
+        contact_no: (insertedTask.contact_no as string | null) ?? null,
+        customer_name: insertedTask.customer_name as string,
+        address: insertedTask.address as string,
+        status: insertedTask.status as string,
+        connection_type_new: insertedTask.connection_type_new as string,
+        connection_services:
+          (insertedTask.connection_services as string[] | null) ?? [],
+        notes: (insertedTask.notes as string | null) ?? null,
+        created_at: insertedTask.created_at as string,
+        created_by: (insertedTask.created_by as string | null) ?? null,
+        rejection_reason:
+          (insertedTask.rejection_reason as string | null) ?? null,
+        rejected_by: (insertedTask.rejected_by as string | null) ?? null,
+        rejected_at: (insertedTask.rejected_at as string | null) ?? null,
+        completed_at: (insertedTask.completed_at as string | null) ?? null,
+        completed_by: (insertedTask.completed_by as string | null) ?? null,
+        line_details_id:
+          (insertedTask.line_details_id as string | null) ?? null,
+      };
+
+      onSuccess(normalizedTask);
       onOpenChange(false);
 
       // Reset form
