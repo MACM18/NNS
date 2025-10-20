@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Search,
   ChevronDown,
@@ -117,6 +117,19 @@ interface LineDetailsTableProps {
   onRefresh: () => void;
 }
 
+type TelephoneLineModalPayload = {
+  id: string;
+  line_number: string;
+  customer_name: string;
+  customer_address: string;
+  installation_date: string;
+  status: "active" | "inactive" | "suspended";
+  monthly_fee: number;
+  notes?: string;
+  drum_id?: string;
+  cable_used?: number;
+};
+
 export function LineDetailsTable({
   selectedMonth,
   selectedYear,
@@ -143,6 +156,29 @@ export function LineDetailsTable({
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
   const { role } = useAuth();
+
+  const toTelephoneLinePayload = useCallback(
+    (line: LineDetail | null): TelephoneLineModalPayload | null => {
+      if (!line) return null;
+      return {
+        id: line.id,
+        line_number: line.telephone_no ?? "",
+        customer_name: line.name ?? "",
+        customer_address: line.address ?? "",
+        installation_date: line.date ?? new Date().toISOString().split("T")[0],
+        status: "active",
+        monthly_fee: 0,
+        drum_id: line.drum_number ?? undefined,
+        cable_used: line.total_cable ?? 0,
+      };
+    },
+    []
+  );
+
+  const modalLine = useMemo(
+    () => toTelephoneLinePayload(selectedLine),
+    [selectedLine, toTelephoneLinePayload]
+  );
 
   useEffect(() => {
     fetchData();
@@ -609,7 +645,7 @@ export function LineDetailsTable({
   return (
     <div className='space-y-4'>
       {/* Search and Filter Controls */}
-      <div className='flex flex-col sm:flex-row gap-4'>
+      <div className='flex flex-col gap-4 sm:flex-row'>
         <div className='relative flex-1'>
           <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
           <Input
@@ -625,7 +661,7 @@ export function LineDetailsTable({
             setStatusFilter(v as "all" | "completed" | "pending")
           }
         >
-          <SelectTrigger className='w-[150px]'>
+          <SelectTrigger className='w-full sm:w-[150px]'>
             <SelectValue placeholder='Status' />
           </SelectTrigger>
           <SelectContent>
@@ -635,7 +671,7 @@ export function LineDetailsTable({
           </SelectContent>
         </Select>
         <Select value={sortField} onValueChange={setSortField}>
-          <SelectTrigger className='w-[180px]'>
+          <SelectTrigger className='w-full sm:w-[180px]'>
             <SelectValue placeholder='Sort by' />
           </SelectTrigger>
           <SelectContent>
@@ -648,6 +684,7 @@ export function LineDetailsTable({
         </Select>
         <Button
           variant='outline'
+          className='w-full sm:w-auto'
           onClick={() =>
             setSortDirection(sortDirection === "asc" ? "desc" : "asc")
           }
@@ -938,10 +975,13 @@ export function LineDetailsTable({
 
       {/* Edit Modal */}
       <EditTelephoneLineModal
-        open={editModalOpen}
-        onOpenChange={setEditModalOpen}
-        onSuccess={onRefresh}
-        lineData={selectedLine}
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        onSuccess={() => {
+          onRefresh();
+          setEditModalOpen(false);
+        }}
+        line={modalLine}
       />
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

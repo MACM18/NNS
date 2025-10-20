@@ -428,7 +428,10 @@ export function AddTelephoneLineModal({
           const usage = lastUsage[0] as any;
           // prefer drum_usage.cable_end_point, fallback to nested line_details.cable_end if available
           const previousEndPoint =
-            usage.cable_end_point ?? usage.cable_end ?? usage.line_details?.cable_end ?? 0;
+            usage.cable_end_point ??
+            usage.cable_end ??
+            usage.line_details?.cable_end ??
+            0;
           const currentStartPoint = Number.parseFloat(formData.cable_start);
           previousLineId = usage.line_details?.id ?? null;
 
@@ -539,7 +542,11 @@ export function AddTelephoneLineModal({
 
         const newQuantity = currentQuantity - totalDeduction;
         const newStatus =
-          newQuantity <= 0 ? "empty" : newQuantity <= 10 ? "inactive" : "active";
+          newQuantity <= 0
+            ? "empty"
+            : newQuantity <= 10
+            ? "inactive"
+            : "active";
 
         await supabase
           .from("drum_tracking")
@@ -551,29 +558,29 @@ export function AddTelephoneLineModal({
           .eq("id", formData.selected_drum_id);
 
         // Update inventory_items current_stock for Drop wire cable - subtract cable used AND wastage
-                const { data: dropWireItem } = await supabase
-                  .from("inventory_items")
-                  .select("id,current_stock")
-                  .eq("name", "Drop Wire Cable")
-                  .single();
-        
-                if (dropWireItem) {
-                  // coerce current_stock to a number safely (Supabase returns unknown)
-                  const currentStock =
-                    typeof (dropWireItem as any).current_stock === "number"
-                      ? (dropWireItem as any).current_stock
-                      : Number((dropWireItem as any).current_stock) || 0;
-        
-                  const newStock = currentStock - totalDeduction;
-        
-                  await supabase
-                    .from("inventory_items")
-                    .update({
-                      current_stock: Math.max(0, newStock),
-                      updated_at: new Date().toISOString(),
-                    })
-                    .eq("id", (dropWireItem as any).id);
-                }
+        const { data: dropWireItem } = await supabase
+          .from("inventory_items")
+          .select("id,current_stock")
+          .eq("name", "Drop Wire Cable")
+          .single();
+
+        if (dropWireItem) {
+          // coerce current_stock to a number safely (Supabase returns unknown)
+          const currentStock =
+            typeof (dropWireItem as any).current_stock === "number"
+              ? (dropWireItem as any).current_stock
+              : Number((dropWireItem as any).current_stock) || 0;
+
+          const newStock = currentStock - totalDeduction;
+
+          await supabase
+            .from("inventory_items")
+            .update({
+              current_stock: Math.max(0, newStock),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", (dropWireItem as any).id);
+        }
         // Update previous line's wastage if there was wastage calculated
         if (
           previousLineId &&
@@ -677,19 +684,21 @@ export function AddTelephoneLineModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto'>
+      <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto p-4 sm:p-6'>
         <DialogHeader>
-          <DialogTitle>Add Telephone Line Details</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className='text-lg sm:text-xl'>
+            Add Telephone Line Details
+          </DialogTitle>
+          <DialogDescription className='text-sm'>
             Enter the complete details for a new telephone line installation
             including inventory usage and drum tracking.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className='space-y-6'>
+        <form onSubmit={handleSubmit} className='space-y-4 sm:space-y-6'>
           {/* Task Selection */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Task Selection</h3>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>Task Selection</h3>
             <div>
               <Label htmlFor='task_selection'>Select Task</Label>
               <Popover open={taskOpen} onOpenChange={setTaskOpen}>
@@ -701,7 +710,9 @@ export function AddTelephoneLineModal({
                     className='w-full justify-between bg-transparent'
                   >
                     {selectedTask
-                      ? selectedTask.title
+                      ? `${selectedTask.customer_name ?? "Task"} (${
+                          selectedTask.telephone_no ?? "N/A"
+                        })`
                       : "Select an available task"}
                     <ChevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
                   </Button>
@@ -749,8 +760,8 @@ export function AddTelephoneLineModal({
           </div>
 
           {/* Basic Information - Auto-populated from Task */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
               Basic Information (From Task)
             </h3>
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -787,8 +798,8 @@ export function AddTelephoneLineModal({
           </div>
 
           {/* DP Configuration - Auto-populated from Task */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
               DP Configuration (From Task)
             </h3>
             <div>
@@ -821,8 +832,10 @@ export function AddTelephoneLineModal({
           </div>
 
           {/* Power Values */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Power Measurements</h3>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
+              Power Measurements
+            </h3>
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
               <div>
                 <Label htmlFor='power_dp'>Power (DP)</Label>
@@ -874,8 +887,8 @@ export function AddTelephoneLineModal({
           </div>
 
           {/* Customer Information - Auto-populated from Task */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
               Customer Information (From Task)
             </h3>
             <div className='grid grid-cols-1 gap-4'>
@@ -915,7 +928,7 @@ export function AddTelephoneLineModal({
           </div>
 
           {/* Cable Measurements with Drum Selection */}
-          <div className='space-y-4'>
+          <div className='space-y-3 sm:space-y-4'>
             <h3 className='text-lg font-medium flex items-center gap-2'>
               <Calculator className='h-5 w-5' />
               Cable Measurements & Drum Tracking
@@ -1069,11 +1082,14 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Drum availability check */}
-              {formData.selected_drum_id && Number.parseFloat(formData.total_cable || "0") > 0 && (
+            {formData.selected_drum_id &&
+              Number.parseFloat(formData.total_cable || "0") > 0 && (
                 <div className='p-3 bg-blue-50 dark:bg-blue-950 rounded-lg'>
                   <div className='flex items-center gap-2'>
                     <Package className='h-4 w-4 text-blue-600' />
-                    <span className='text-sm font-medium'>Drum Usage Check</span>
+                    <span className='text-sm font-medium'>
+                      Drum Usage Check
+                    </span>
                   </div>
                   <p className='text-sm text-muted-foreground mt-1'>
                     Required: {formData.total_cable}m | Available:{" "}
@@ -1103,11 +1119,11 @@ export function AddTelephoneLineModal({
             </h3>
 
             {/* Hardware Components */}
-            <div className='space-y-4'>
+            <div className='space-y-3 sm:space-y-4'>
               <h4 className='text-md font-medium text-muted-foreground'>
                 Hardware Components
               </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
                 <div>
                   <Label htmlFor='retainers'>Retainers</Label>
                   <Input
@@ -1246,11 +1262,11 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Fiber & Network Components */}
-            <div className='space-y-4'>
+            <div className='space-y-3 sm:space-y-4'>
               <h4 className='text-md font-medium text-muted-foreground'>
                 Fiber & Network Components
               </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
                 <div>
                   <Label htmlFor='fiber_rosette'>
                     Fiber-Rosette (Default: 1)
@@ -1345,11 +1361,11 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Cables & Wiring */}
-            <div className='space-y-4'>
+            <div className='space-y-3 sm:space-y-4'>
               <h4 className='text-md font-medium text-muted-foreground'>
                 Cables & Wiring (meters)
               </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
                 <div>
                   <Label htmlFor='internal_wire'>Internal Wire</Label>
                   <Input
@@ -1404,11 +1420,11 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Accessories & Ties */}
-            <div className='space-y-4'>
+            <div className='space-y-3 sm:space-y-4'>
               <h4 className='text-md font-medium text-muted-foreground'>
                 Accessories & Ties
               </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
                 <div>
                   <Label htmlFor='c_tie'>C-tie</Label>
                   <Input
@@ -1461,11 +1477,11 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Infrastructure */}
-            <div className='space-y-4'>
+            <div className='space-y-3 sm:space-y-4'>
               <h4 className='text-md font-medium text-muted-foreground'>
                 Infrastructure
               </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
                 <div>
                   <Label htmlFor='pole_67'>Pole 6.7</Label>
                   <Input
@@ -1492,7 +1508,7 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Device Serials */}
-            <div className='space-y-4'>
+            <div className='space-y-3 sm:space-y-4'>
               <h4 className='text-md font-medium text-muted-foreground'>
                 Device Information
               </h4>
@@ -1542,15 +1558,20 @@ export function AddTelephoneLineModal({
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className='flex-col sm:flex-row gap-2 sm:gap-0'>
             <Button
               type='button'
               variant='outline'
               onClick={() => onOpenChange(false)}
+              className='w-full sm:w-auto'
             >
               Cancel
             </Button>
-            <Button type='submit' disabled={loading || !!dpValidationError}>
+            <Button
+              type='submit'
+              disabled={loading || !!dpValidationError}
+              className='w-full sm:w-auto'
+            >
               {loading ? "Adding..." : "Add Telephone Line"}
             </Button>
           </DialogFooter>

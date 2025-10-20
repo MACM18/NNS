@@ -31,6 +31,7 @@ import {
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Header } from "@/components/layout/header";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { GenerateMonthlyInvoicesModal } from "@/components/modals/generate-monthly-invoices-modal";
 import { CompanySettingsModal } from "@/components/modals/company-settings-modal";
 import { InvoicePDFModal } from "@/components/modals/invoice-pdf-modal";
@@ -166,20 +167,25 @@ export default function InvoicesPage() {
       const thisMonth = monthlyInvoices?.length || 0;
       const totalAmount =
         monthlyInvoices?.reduce(
-          (sum, inv) => sum + (inv.total_amount || 0),
+          (sum, inv) => sum + Number(inv.total_amount ?? 0),
           0
-        ) || 0;
+        ) ?? 0;
       const linesBilled =
-        monthlyInvoices?.reduce((sum, inv) => sum + (inv.line_count || 0), 0) /
-          thisMonth || 0;
+        monthlyInvoices?.reduce(
+          (sum, inv) => sum + Number(inv.line_count ?? 0),
+          0
+        ) ?? 0;
+      const averageLinesBilled = thisMonth > 0 ? linesBilled / thisMonth : 0;
       const avgRate =
-        linesBilled > 0 ? Math.round(totalAmount / linesBilled) : 0;
+        averageLinesBilled > 0
+          ? Math.round(totalAmount / averageLinesBilled)
+          : 0;
 
       updateCache("invoices", {
         stats: {
           thisMonth,
           totalAmount,
-          linesBilled,
+          linesBilled: averageLinesBilled,
           avgRate,
         },
       });
@@ -301,240 +307,249 @@ export default function InvoicesPage() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <div className='flex-1 flex flex-col min-h-screen w-full'>
         <Header />
 
-        <main className='flex-1 space-y-6 p-6'>
-          {/* Page Header */}
-          <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
-            <div>
-              <h1 className='text-3xl font-bold'>Invoice Management</h1>
-              <p className='text-muted-foreground'>
-                Generate monthly invoices and manage billing
-              </p>
+        <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-6 overflow-x-hidden'>
+          <div className='w-full max-w-7xl mx-auto space-y-6'>
+            {/* Page Header */}
+            <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
+              <div>
+                <h1 className='text-3xl font-bold'>Invoice Management</h1>
+                <p className='text-muted-foreground'>
+                  Generate monthly invoices and manage billing
+                </p>
+              </div>
+              <div className='flex gap-2'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={refreshData}
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${
+                      isRefreshing ? "animate-spin" : ""
+                    }`}
+                  />
+                  Refresh
+                </Button>
+                <Button
+                  onClick={() => setSettingsModalOpen(true)}
+                  variant='outline'
+                  className='gap-2'
+                >
+                  <Settings className='h-4 w-4' />
+                  Settings
+                </Button>
+                <Button
+                  onClick={() => setGenerateModalOpen(true)}
+                  className='gap-2'
+                >
+                  <Plus className='h-4 w-4' />
+                  Generate Invoices
+                </Button>
+              </div>
             </div>
-            <div className='flex gap-2'>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={refreshData}
-                disabled={isRefreshing}
-              >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${
-                    isRefreshing ? "animate-spin" : ""
-                  }`}
-                />
-                Refresh
-              </Button>
-              <Button
-                onClick={() => setSettingsModalOpen(true)}
-                variant='outline'
-                className='gap-2'
-              >
-                <Settings className='h-4 w-4' />
-                Settings
-              </Button>
-              <Button
-                onClick={() => setGenerateModalOpen(true)}
-                className='gap-2'
-              >
-                <Plus className='h-4 w-4' />
-                Generate Invoices
-              </Button>
-            </div>
-          </div>
 
-          {/* Stats Cards */}
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  This Month
-                </CardTitle>
-                <FileText className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>{stats.thisMonth}</div>
-                <p className='text-xs text-muted-foreground'>
-                  Invoices generated
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Total Amount
-                </CardTitle>
-                <Calendar className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>
-                  LKR {stats.totalAmount.toLocaleString()}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  {new Date().toLocaleDateString("en-US", {
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Lines Billed
-                </CardTitle>
-                <FileText className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>{stats.linesBilled}</div>
-                <p className='text-xs text-muted-foreground'>
-                  Total installations
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>Avg. Rate</CardTitle>
-                <Calendar className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>
-                  LKR {stats.avgRate.toLocaleString()}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  Per installation
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Main Content */}
-          <Tabs defaultValue='invoices' className='space-y-6'>
-            <TabsList>
-              <TabsTrigger value='invoices'>Generated Invoices</TabsTrigger>
-              <TabsTrigger value='settings'>Pricing & Settings</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value='invoices'>
+            {/* Stats Cards */}
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
               <Card>
-                <CardHeader>
-                  <CardTitle>Generated Invoices</CardTitle>
-                  <CardDescription>
-                    Monthly invoices with A/B/C distribution (90%/5%/5%)
-                  </CardDescription>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    This Month
+                  </CardTitle>
+                  <FileText className='h-4 w-4 text-muted-foreground' />
                 </CardHeader>
                 <CardContent>
-                  {isRefreshing ? (
-                    <div className='text-center py-8'>
-                      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                      <p className='mt-2 text-sm text-muted-foreground'>
-                        Loading invoices...
-                      </p>
-                    </div>
-                  ) : invoices.length === 0 ? (
-                    <div className='text-center py-8 text-muted-foreground'>
-                      <FileText className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                      <p>No invoices generated yet</p>
-                      <p className='text-sm'>
-                        Click "Generate Invoices" to create monthly invoices
-                      </p>
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Invoice Number</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Month</TableHead>
-                          <TableHead>Lines</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {invoices.map((invoice) => (
-                          <TableRow key={invoice.id}>
-                            <TableCell className='font-mono text-sm'>
-                              {invoice.invoice_number}
-                            </TableCell>
-                            <TableCell>
-                              {getInvoiceTypeBadge(invoice.invoice_type)}
-                            </TableCell>
-                            <TableCell>{invoice.job_month}</TableCell>
-                            <TableCell>{invoice.line_count}</TableCell>
-                            <TableCell>
-                              LKR {invoice.total_amount.toLocaleString()}
-                            </TableCell>
-                            <TableCell>
-                              {getStatusBadge(invoice.status)}
-                            </TableCell>
-                            <TableCell>
-                              <div className='flex gap-2'>
-                                <Button
-                                  size='sm'
-                                  variant='outline'
-                                  onClick={() => handlePreviewInvoice(invoice)}
-                                >
-                                  <Eye className='h-4 w-4' />
-                                </Button>
-                                <Button
-                                  size='sm'
-                                  variant='outline'
-                                  onClick={() => handleDownloadInvoice(invoice)}
-                                >
-                                  <Download className='h-4 w-4' />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
+                  <div className='text-2xl font-bold'>{stats.thisMonth}</div>
+                  <p className='text-xs text-muted-foreground'>
+                    Invoices generated
+                  </p>
                 </CardContent>
               </Card>
-            </TabsContent>
 
-            <TabsContent value='settings'>
               <Card>
-                <CardHeader>
-                  <CardTitle>Pricing & Company Settings</CardTitle>
-                  <CardDescription>
-                    Configure pricing tiers and company information
-                  </CardDescription>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Total Amount
+                  </CardTitle>
+                  <Calendar className='h-4 w-4 text-muted-foreground' />
                 </CardHeader>
                 <CardContent>
-                  <div className='space-y-4'>
-                    <div className='grid grid-cols-2 md:grid-cols-3 gap-4'>
-                      {pricingTiers.map((tier, index) => (
-                        <div key={index} className='p-4 border rounded-lg'>
-                          <div className='font-medium'>
-                            {tier.min_length}-{tier.max_length}m
-                          </div>
-                          <div className='text-2xl font-bold'>
-                            LKR {tier.rate.toLocaleString()}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <Button
-                      onClick={() => setSettingsModalOpen(true)}
-                      className='gap-2'
-                    >
-                      <Settings className='h-4 w-4' />
-                      Edit Settings
-                    </Button>
+                  <div className='text-2xl font-bold'>
+                    LKR {stats.totalAmount.toLocaleString()}
                   </div>
+                  <p className='text-xs text-muted-foreground'>
+                    {new Date().toLocaleDateString("en-US", {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </p>
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
+
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Lines Billed
+                  </CardTitle>
+                  <FileText className='h-4 w-4 text-muted-foreground' />
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>{stats.linesBilled}</div>
+                  <p className='text-xs text-muted-foreground'>
+                    Total installations
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Avg. Rate
+                  </CardTitle>
+                  <Calendar className='h-4 w-4 text-muted-foreground' />
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>
+                    LKR {stats.avgRate.toLocaleString()}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    Per installation
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Content */}
+            <Tabs defaultValue='invoices' className='space-y-6'>
+              <TabsList>
+                <TabsTrigger value='invoices'>Generated Invoices</TabsTrigger>
+                <TabsTrigger value='settings'>Pricing & Settings</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value='invoices'>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Generated Invoices</CardTitle>
+                    <CardDescription>
+                      Monthly invoices with A/B/C distribution (90%/5%/5%)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isRefreshing ? (
+                      <div className='text-center py-8'>
+                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+                        <p className='mt-2 text-sm text-muted-foreground'>
+                          Loading invoices...
+                        </p>
+                      </div>
+                    ) : invoices.length === 0 ? (
+                      <div className='text-center py-8 text-muted-foreground'>
+                        <FileText className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                        <p>No invoices generated yet</p>
+                        <p className='text-sm'>
+                          Click &quot;Generate Invoices&quot; to create monthly
+                          invoices
+                        </p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Invoice Number</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Month</TableHead>
+                            <TableHead>Lines</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invoices.map((invoice) => (
+                            <TableRow key={invoice.id}>
+                              <TableCell className='font-mono text-sm'>
+                                {invoice.invoice_number}
+                              </TableCell>
+                              <TableCell>
+                                {getInvoiceTypeBadge(invoice.invoice_type)}
+                              </TableCell>
+                              <TableCell>{invoice.job_month}</TableCell>
+                              <TableCell>{invoice.line_count}</TableCell>
+                              <TableCell>
+                                LKR {invoice.total_amount.toLocaleString()}
+                              </TableCell>
+                              <TableCell>
+                                {getStatusBadge(invoice.status)}
+                              </TableCell>
+                              <TableCell>
+                                <div className='flex gap-2'>
+                                  <Button
+                                    size='sm'
+                                    variant='outline'
+                                    onClick={() =>
+                                      handlePreviewInvoice(invoice)
+                                    }
+                                  >
+                                    <Eye className='h-4 w-4' />
+                                  </Button>
+                                  <Button
+                                    size='sm'
+                                    variant='outline'
+                                    onClick={() =>
+                                      handleDownloadInvoice(invoice)
+                                    }
+                                  >
+                                    <Download className='h-4 w-4' />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value='settings'>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Pricing & Company Settings</CardTitle>
+                    <CardDescription>
+                      Configure pricing tiers and company information
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className='space-y-4'>
+                      <div className='grid grid-cols-2 md:grid-cols-3 gap-4'>
+                        {pricingTiers.map((tier, index) => (
+                          <div key={index} className='p-4 border rounded-lg'>
+                            <div className='font-medium'>
+                              {tier.min_length}-{tier.max_length}m
+                            </div>
+                            <div className='text-2xl font-bold'>
+                              LKR {tier.rate.toLocaleString()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        onClick={() => setSettingsModalOpen(true)}
+                        className='gap-2'
+                      >
+                        <Settings className='h-4 w-4' />
+                        Edit Settings
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
         </main>
 
         {/* Modals */}
@@ -553,7 +568,8 @@ export default function InvoicesPage() {
           onOpenChange={setPdfModalOpen}
           invoice={selectedInvoice}
         />
-      </SidebarInset>
+      </div>
+      <MobileBottomNav />
     </SidebarProvider>
   );
 }

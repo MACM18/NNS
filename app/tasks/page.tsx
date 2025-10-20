@@ -9,6 +9,7 @@ import {
   Clock,
   RefreshCw,
 } from "lucide-react";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import {
   Card,
   CardContent,
@@ -33,6 +34,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useDataCache } from "@/contexts/data-cache-context";
+import type { TaskRecord } from "@/types/tasks";
 
 export default function TasksPage() {
   const { user, loading } = useAuth();
@@ -104,160 +106,174 @@ export default function TasksPage() {
     return <AuthWrapper />;
   }
 
-  const handleAddSuccess = () => {
-    fetchTasksForPeriod(dateFilter); // Refresh data after adding task
+  const handleAddSuccess = (newTask: TaskRecord) => {
+    // Update cache immediately for stats and local state
+    const existingTasks = (cache.tasks.data as TaskRecord[]) || [];
+    const dedupedTasksMap = new Map<string, TaskRecord>();
+    [newTask, ...existingTasks].forEach((task) => {
+      dedupedTasksMap.set(task.id, task);
+    });
+    const dedupedTasks = Array.from(dedupedTasksMap.values());
+
+    updateCache("tasks", { data: dedupedTasks });
+    setRefreshTrigger((prev) => prev + 1);
+    fetchTasksForPeriod(dateFilter);
   };
 
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <div className='flex-1 flex flex-col min-h-screen w-full'>
         <Header />
 
-        <main className='flex-1 space-y-6 p-6'>
-          {/* Page Header */}
-          <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
-            <div>
-              <h1 className='text-3xl font-bold'>Task Management</h1>
-              <p className='text-muted-foreground'>
-                Manage telecom installation and upgrade tasks
-              </p>
-            </div>
-            <div className='flex gap-2'>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => fetchTasksForPeriod(dateFilter)}
-                disabled={isRefreshing}
-              >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${
-                    isRefreshing ? "animate-spin" : ""
-                  }`}
-                />
-                Refresh
-              </Button>
-              <Select
-                value={dateFilter}
-                onValueChange={(value: any) => setDateFilter(value)}
-              >
-                <SelectTrigger className='w-[180px]'>
-                  <SelectValue placeholder='Select period' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='today'>Today</SelectItem>
-                  <SelectItem value='week'>This Week</SelectItem>
-                  <SelectItem value='month'>This Month</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                onClick={() => setAddTaskModalOpen(true)}
-                className='gap-2'
-              >
-                <Plus className='h-4 w-4' />
-                Add Task
-              </Button>
-            </div>
-          </div>
-
-          {/* Stats Cards */}
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Pending Tasks
-                </CardTitle>
-                <Clock className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>
-                  {tasks.filter((task) => task.status === "pending").length}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  {
-                    tasks.filter((task) => {
-                      if (task.status !== "pending") return false;
-                      const createdAt = new Date(task.created_at);
-                      const now = new Date();
-                      const yesterday = new Date(
-                        now.getFullYear(),
-                        now.getMonth(),
-                        now.getDate() - 1
-                      );
-                      return (
-                        createdAt.getFullYear() === yesterday.getFullYear() &&
-                        createdAt.getMonth() === yesterday.getMonth() &&
-                        createdAt.getDate() === yesterday.getDate()
-                      );
-                    }).length
-                  }{" "}
-                  from yesterday
+        <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-6 overflow-x-hidden'>
+          <div className='w-full max-w-7xl mx-auto space-y-6'>
+            {/* Page Header */}
+            <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
+              <div>
+                <h1 className='text-3xl font-bold'>Task Management</h1>
+                <p className='text-muted-foreground'>
+                  Manage telecom installation and upgrade tasks
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+              <div className='flex gap-2'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => fetchTasksForPeriod(dateFilter)}
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${
+                      isRefreshing ? "animate-spin" : ""
+                    }`}
+                  />
+                  Refresh
+                </Button>
+                <Select
+                  value={dateFilter}
+                  onValueChange={(value: any) => setDateFilter(value)}
+                >
+                  <SelectTrigger className='w-[180px]'>
+                    <SelectValue placeholder='Select period' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='today'>Today</SelectItem>
+                    <SelectItem value='week'>This Week</SelectItem>
+                    <SelectItem value='month'>This Month</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={() => setAddTaskModalOpen(true)}
+                  className='gap-2'
+                >
+                  <Plus className='h-4 w-4' />
+                  Add Task
+                </Button>
+              </div>
+            </div>
 
+            {/* Stats Cards */}
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Pending Tasks
+                  </CardTitle>
+                  <Clock className='h-4 w-4 text-muted-foreground' />
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>
+                    {tasks.filter((task) => task.status === "pending").length}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    {
+                      tasks.filter((task) => {
+                        if (task.status !== "pending") return false;
+                        const createdAt = new Date(task.created_at);
+                        const now = new Date();
+                        const yesterday = new Date(
+                          now.getFullYear(),
+                          now.getMonth(),
+                          now.getDate() - 1
+                        );
+                        return (
+                          createdAt.getFullYear() === yesterday.getFullYear() &&
+                          createdAt.getMonth() === yesterday.getMonth() &&
+                          createdAt.getDate() === yesterday.getDate()
+                        );
+                      }).length
+                    }{" "}
+                    from yesterday
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Accepted Tasks
+                  </CardTitle>
+                  <CheckCircle className='h-4 w-4 text-muted-foreground' />
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>
+                    {tasks.filter((task) => task.status === "accepted").length}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>In progress</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Completed Tasks
+                  </CardTitle>
+                  <Calendar className='h-4 w-4 text-muted-foreground' />
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>
+                    {tasks.filter((task) => task.status === "completed").length}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>This month</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Rejected Tasks
+                  </CardTitle>
+                  <XCircle className='h-4 w-4 text-muted-foreground' />
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>
+                    {tasks.filter((task) => task.status === "rejected").length}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    Tasks rejected
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Task Management Table */}
             <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Accepted Tasks
-                </CardTitle>
-                <CheckCircle className='h-4 w-4 text-muted-foreground' />
+              <CardHeader>
+                <CardTitle>Task Management</CardTitle>
+                <CardDescription>
+                  Manage telecom installation tasks with Accept/Reject actions
+                  and completion tracking
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className='text-2xl font-bold'>
-                  {tasks.filter((task) => task.status === "accepted").length}
-                </div>
-                <p className='text-xs text-muted-foreground'>In progress</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Completed Tasks
-                </CardTitle>
-                <Calendar className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>
-                  {tasks.filter((task) => task.status === "completed").length}
-                </div>
-                <p className='text-xs text-muted-foreground'>This month</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Rejected Tasks
-                </CardTitle>
-                <XCircle className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>
-                  {tasks.filter((task) => task.status === "rejected").length}
-                </div>
-                <p className='text-xs text-muted-foreground'>Tasks rejected</p>
+                <TaskManagementTable
+                  refreshTrigger={refreshTrigger}
+                  dateFilter={dateFilter}
+                />
               </CardContent>
             </Card>
           </div>
-
-          {/* Task Management Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Task Management</CardTitle>
-              <CardDescription>
-                Manage telecom installation tasks with Accept/Reject actions and
-                completion tracking
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TaskManagementTable
-                refreshTrigger={refreshTrigger}
-                dateFilter={dateFilter}
-              />
-            </CardContent>
-          </Card>
         </main>
 
         {/* Add Task Modal */}
@@ -266,7 +282,8 @@ export default function TasksPage() {
           onOpenChange={setAddTaskModalOpen}
           onSuccess={handleAddSuccess}
         />
-      </SidebarInset>
+      </div>
+      <MobileBottomNav />
     </SidebarProvider>
   );
 }

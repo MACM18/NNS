@@ -43,11 +43,12 @@ import {
 } from "@/components/ui/command";
 
 import { cn } from "@/lib/utils";
+import type { TaskRecord } from "@/types/tasks";
 
 interface AddTaskModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (task: TaskRecord) => void;
 }
 interface DPSuggestion {
   dp: string;
@@ -133,7 +134,7 @@ export function AddTaskModal({
         task_date: formData.task_date,
         telephone_no: formData.telephone_no,
         dp: formData.dp,
-        contact_no: formData.contact_no,
+        contact_no: formData.contact_no || null,
         customer_name: formData.customer_name,
         address: formData.address,
         connection_type_new: formData.connection_type_new,
@@ -143,9 +144,17 @@ export function AddTaskModal({
         notes: formData.notes || null,
       };
 
-      const { error } = await supabase.from("tasks").insert([insertData]);
+      const { data: insertedTask, error } = await supabase
+        .from("tasks")
+        .insert([insertData])
+        .select()
+        .single();
 
       if (error) throw error;
+
+      if (!insertedTask) {
+        throw new Error("Task created but no data returned from Supabase.");
+      }
 
       addNotification({
         title: "Success",
@@ -154,7 +163,32 @@ export function AddTaskModal({
         category: "system",
       });
 
-      onSuccess();
+      const normalizedTask: TaskRecord = {
+        id: insertedTask.id as string,
+        task_date: insertedTask.task_date as string,
+        telephone_no: insertedTask.telephone_no as string,
+        dp: insertedTask.dp as string,
+        contact_no: (insertedTask.contact_no as string | null) ?? null,
+        customer_name: insertedTask.customer_name as string,
+        address: insertedTask.address as string,
+        status: insertedTask.status as string,
+        connection_type_new: insertedTask.connection_type_new as string,
+        connection_services:
+          (insertedTask.connection_services as string[] | null) ?? [],
+        notes: (insertedTask.notes as string | null) ?? null,
+        created_at: insertedTask.created_at as string,
+        created_by: (insertedTask.created_by as string | null) ?? null,
+        rejection_reason:
+          (insertedTask.rejection_reason as string | null) ?? null,
+        rejected_by: (insertedTask.rejected_by as string | null) ?? null,
+        rejected_at: (insertedTask.rejected_at as string | null) ?? null,
+        completed_at: (insertedTask.completed_at as string | null) ?? null,
+        completed_by: (insertedTask.completed_by as string | null) ?? null,
+        line_details_id:
+          (insertedTask.line_details_id as string | null) ?? null,
+      };
+
+      onSuccess(normalizedTask);
       onOpenChange(false);
 
       // Reset form
@@ -256,19 +290,21 @@ export function AddTaskModal({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-2xl max-h-[90vh] overflow-y-auto'>
+      <DialogContent className='max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6'>
         <DialogHeader>
-          <DialogTitle>Add New Task</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className='text-lg sm:text-xl'>Add New Task</DialogTitle>
+          <DialogDescription className='text-sm'>
             Enter the details for a new telecom installation task.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className='space-y-6'>
+        <form onSubmit={handleSubmit} className='space-y-4 sm:space-y-6'>
           {/* Basic Information */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Task Information</h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
+              Task Information
+            </h3>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4'>
               <div>
                 <Label htmlFor='task_date'>Date</Label>
                 <Input
@@ -373,9 +409,11 @@ export function AddTaskModal({
           </div>
 
           {/* Customer Information */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Customer Information</h3>
-            <div className='grid grid-cols-1 gap-4'>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
+              Customer Information
+            </h3>
+            <div className='grid grid-cols-1 gap-3 sm:gap-4'>
               <div>
                 <Label htmlFor='customer_name'>Customer Name</Label>
                 <Input
@@ -400,9 +438,11 @@ export function AddTaskModal({
           </div>
 
           {/* Service Configuration */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Service Configuration</h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
+              Service Configuration
+            </h3>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4'>
               <div>
                 <Label htmlFor='connection_type_new'>Type</Label>
                 <Select
@@ -423,8 +463,10 @@ export function AddTaskModal({
             </div>
 
             <div>
-              <Label>Connection Services</Label>
-              <div className='grid grid-cols-3 gap-4 mt-2'>
+              <Label className='text-sm sm:text-base'>
+                Connection Services
+              </Label>
+              <div className='grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-2'>
                 {connectionServices.map((service) => (
                   <div key={service.id} className='flex items-center space-x-2'>
                     <Checkbox
@@ -465,15 +507,20 @@ export function AddTaskModal({
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className='flex-col sm:flex-row gap-2 sm:gap-0'>
             <Button
               type='button'
               variant='outline'
               onClick={() => onOpenChange(false)}
+              className='w-full sm:w-auto'
             >
               Cancel
             </Button>
-            <Button type='submit' disabled={loading}>
+            <Button
+              type='submit'
+              disabled={loading}
+              className='w-full sm:w-auto'
+            >
               {loading ? "Adding..." : "Add Task"}
             </Button>
           </DialogFooter>
