@@ -6,11 +6,33 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { NotificationProvider } from "@/contexts/notification-context";
 import { DataCacheProvider } from "@/contexts/data-cache-context";
 import { Toaster } from "@/components/ui/toaster";
+import { PWAInitializer } from "@/components/pwa/pwa-initializer";
 
 export const metadata: Metadata = {
-  title: "NNS Telecom Dashboard",
-  description: "Telecom Management System",
+  title: {
+    default: "NNS Telecom Dashboard",
+    template: "%s | NNS Telecom",
+  },
+  description: "AI-powered telecom management platform for fiber optic operations.",
+  applicationName: "NNS Telecom Dashboard",
   generator: "v0.dev",
+  manifest: "/manifest.webmanifest",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  ],
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "NNS Telecom Dashboard",
+  },
+  icons: {
+    icon: [
+      { url: "/placeholder-logo.png", type: "image/png", sizes: "192x192" },
+      { url: "/placeholder-logo.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/placeholder-logo.png", type: "image/png", sizes: "192x192" }],
+  },
 };
 
 export default function RootLayout({
@@ -32,6 +54,7 @@ export default function RootLayout({
               <DataCacheProvider>
                 {children}
                 <Toaster />
+                <PWAInitializer />
               </DataCacheProvider>
             </NotificationProvider>
           </AuthProvider>

@@ -488,7 +488,7 @@ export function TaskManagementTable({
   return (
     <div className='space-y-4'>
       {/* Search and Filter Controls */}
-      <div className='flex flex-col sm:flex-row gap-4'>
+  <div className='flex flex-col gap-4 sm:flex-row'>
         <div className='relative flex-1'>
           <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
           <Input
@@ -499,7 +499,7 @@ export function TaskManagementTable({
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className='w-[150px]'>
+          <SelectTrigger className='w-full sm:w-[150px]'>
             <SelectValue placeholder='Status' />
           </SelectTrigger>
           <SelectContent>
@@ -511,7 +511,7 @@ export function TaskManagementTable({
           </SelectContent>
         </Select>
         <Select value={sortField} onValueChange={setSortField}>
-          <SelectTrigger className='w-[180px]'>
+          <SelectTrigger className='w-full sm:w-[180px]'>
             <SelectValue placeholder='Sort by' />
           </SelectTrigger>
           <SelectContent>
@@ -523,6 +523,7 @@ export function TaskManagementTable({
         </Select>
         <Button
           variant='outline'
+          className='w-full sm:w-auto'
           onClick={() =>
             setSortDirection(sortDirection === "asc" ? "desc" : "asc")
           }
@@ -537,8 +538,9 @@ export function TaskManagementTable({
       </div>
 
       {/* Table */}
-      <div className='border rounded-lg'>
-        <Table>
+      <div className='overflow-hidden rounded-lg border'>
+        <div className='w-full overflow-x-auto'>
+          <Table className='min-w-[960px]'>
           <TableHeader>
             <TableRow>
               <TableHead
@@ -664,7 +666,7 @@ export function TaskManagementTable({
                           <Eye className='h-3 w-3' />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className='w-[800px]'>
+                      <PopoverContent className='w-[min(90vw,48rem)]'>
                         <ExpandedRowContent item={item} />
                       </PopoverContent>
                     </Popover>
@@ -732,7 +734,8 @@ export function TaskManagementTable({
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
 
       {filteredData.length === 0 && (

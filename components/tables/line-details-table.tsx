@@ -75,12 +75,13 @@ export function LineDetailsTable({ refreshTrigger, dateFilter }: LineDetailsTabl
 
       if (error) throw error
 
-      setData(lineDetails || [])
+  setData((lineDetails ?? []).map((item) => item as unknown as LineDetail))
     } catch (error: any) {
       addNotification({
         title: "Error",
         message: "Failed to fetch line details",
         type: "error",
+        category: "system",
       })
     } finally {
       setLoading(false)
@@ -153,7 +154,7 @@ export function LineDetailsTable({ refreshTrigger, dateFilter }: LineDetailsTabl
   return (
     <div className="space-y-4">
       {/* Search and Filter Controls */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -164,7 +165,7 @@ export function LineDetailsTable({ refreshTrigger, dateFilter }: LineDetailsTabl
           />
         </div>
         <Select value={sortField} onValueChange={setSortField}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>
@@ -174,7 +175,11 @@ export function LineDetailsTable({ refreshTrigger, dateFilter }: LineDetailsTabl
             <SelectItem value="date">Installation Date</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}>
+        <Button
+          variant="outline"
+          className="w-full sm:w-auto"
+          onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+        >
           {sortDirection === "asc" ? "↑" : "↓"}
         </Button>
       </div>
@@ -185,8 +190,9 @@ export function LineDetailsTable({ refreshTrigger, dateFilter }: LineDetailsTabl
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg">
-        <Table>
+      <div className="overflow-hidden rounded-lg border">
+        <div className="w-full overflow-x-auto">
+          <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
               <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort("name")}>
@@ -213,29 +219,28 @@ export function LineDetailsTable({ refreshTrigger, dateFilter }: LineDetailsTabl
           </TableHeader>
           <TableBody>
             {filteredData.map((item) => (
-              <>
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell>{item.telephone_no}</TableCell>
-                  <TableCell className="max-w-xs truncate">{item.address}</TableCell>
-                  <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-96">
-                        <ExpandedRowContent item={item} />
-                      </PopoverContent>
-                    </Popover>
-                  </TableCell>
-                </TableRow>
-              </>
+              <TableRow key={item.id}>
+                <TableCell className="font-medium">{item.name}</TableCell>
+                <TableCell>{item.telephone_no}</TableCell>
+                <TableCell className="max-w-xs truncate">{item.address}</TableCell>
+                <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[min(22rem,100vw-4rem)] sm:w-96">
+                      <ExpandedRowContent item={item} />
+                    </PopoverContent>
+                  </Popover>
+                </TableCell>
+              </TableRow>
             ))}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
 
       {filteredData.length === 0 && (
