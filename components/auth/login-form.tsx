@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Icons } from "@/components/icons";
 import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -25,6 +26,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const supabase = getSupabaseClient();
   const router = useRouter();
 
@@ -60,6 +62,32 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setOauthLoading(true);
+    try {
+      const redirectTo =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/auth/callback`
+          : undefined;
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: redirectTo ? { redirectTo } : undefined,
+      });
+
+      if (error) throw error;
+    } catch (error: any) {
+      toast({
+        title: "Google Sign-In failed",
+        description: error.message ?? "Please try again.",
+        variant: "destructive",
+        duration: 4000,
+      });
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
   return (
     <div className='min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900'>
       <Card className='w-full max-w-md'>
@@ -68,7 +96,32 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
           <CardDescription>Sign in to your telecom dashboard</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className='space-y-4'>
+          <div className='space-y-4'>
+            <Button
+              type='button'
+              variant='outline'
+              className='w-full flex items-center justify-center gap-2'
+              onClick={handleGoogleSignIn}
+              disabled={loading || oauthLoading}
+            >
+              {oauthLoading ? (
+                <>
+                  <Icons.spinner className='h-4 w-4 animate-spin' />
+                  <span>Redirecting...</span>
+                </>
+              ) : (
+                <>
+                  <Icons.google className='h-4 w-4' />
+                  <span>Continue with Google</span>
+                </>
+              )}
+            </Button>
+            <div className='text-center text-sm text-muted-foreground'>
+              or sign in with your email
+            </div>
+          </div>
+
+          <form onSubmit={handleLogin} className='space-y-4 mt-6'>
             <div>
               <Label htmlFor='email'>Email</Label>
               <Input
@@ -94,7 +147,11 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
                 </Button>
               </div>
             </div>
-            <Button type='submit' className='w-full' disabled={loading}>
+            <Button
+              type='submit'
+              className='w-full'
+              disabled={loading || oauthLoading}
+            >
               {loading ? "Signing in..." : "Sign In"}
             </Button>
 

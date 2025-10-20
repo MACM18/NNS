@@ -42,6 +42,12 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
 - Key tables: `line_details`, `tasks`, `inventory_items`, `drum_tracking`, `invoices`, `profiles`
 - Enforced rules: DP regex, wastage ≤ 20%, drum quantity checks, power warnings, serial validation
 
+## Authentication
+
+- Email/password flows use Supabase; see `LoginForm` for client handling and `AuthProvider` for session management
+- Google OAuth is available via Supabase: enable the Google provider in the Supabase dashboard and add `https://<your-domain>/auth/callback` (plus local `http://localhost:3000/auth/callback`) to the redirect URLs
+- The `/auth/callback` page exchanges the Supabase OAuth code for a session and redirects to the dashboard once complete
+
 ## Google Sheets Import (Admin/Moderator)
 
 - API: `POST /api/import-lines` with `{ sheetUrl, sheetName, month, year }`
