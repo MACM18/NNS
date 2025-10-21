@@ -128,9 +128,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     });
 
+    // Handle page visibility changes to refresh session when tab becomes visible
+    const handleVisibilityChange = async () => {
+      if (!isMounted()) return;
+      
+      if (!document.hidden) {
+        // Page became visible, refresh the session
+        try {
+          const {
+            data: { session },
+            error,
+          } = await supabase.auth.getSession();
+
+          if (error) {
+            console.error("Error refreshing session on visibility change:", error);
+            return;
+          }
+
+          // If no session, try to refresh
+          if (!session) {
+            const { data: refreshData, error: refreshError } =
+              await supabase.auth.refreshSession();
+            if (refreshError) {
+              console.warn("Unable to refresh session on visibility change:", refreshError.message);
+            }
+            await applySession(refreshData?.session ?? null, isMounted);
+          } else {
+            await applySession(session, isMounted);
+          }
+        } catch (err) {
+          console.error("Error handling visibility change:", err);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [applySession]);
 
