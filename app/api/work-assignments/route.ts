@@ -6,6 +6,16 @@ import { supabaseServer } from "@/lib/supabase-server";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;")
+    .replace(/\//g, "&#x2F;");
+}
+
 type AuthorizedContext = {
   userId: string;
   role: string;
@@ -215,7 +225,9 @@ export async function GET(req: NextRequest) {
     );
   } catch (error: any) {
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to load assignments" }),
+      JSON.stringify({
+        error: escapeHtml(error.message) || "Failed to load assignments",
+      }),
       { status: 500 }
     );
   }
@@ -262,7 +274,9 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ id: data?.id }), { status: 201 });
   } catch (error: any) {
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to assign worker" }),
+      JSON.stringify({
+        error: escapeHtml(error.message) || "Failed to assign worker",
+      }),
       { status: 500 }
     );
   }
@@ -293,7 +307,9 @@ export async function DELETE(req: NextRequest) {
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   } catch (error: any) {
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to remove assignment" }),
+      JSON.stringify({
+        error: escapeHtml(error.message) || "Failed to remove assignment",
+      }),
       { status: 500 }
     );
   }
