@@ -30,6 +30,27 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Don't cache HTML pages to avoid blank page issues
+  const url = new URL(request.url);
+  const isHTMLRequest =
+    request.headers.get("accept")?.includes("text/html") ||
+    url.pathname.endsWith(".html") ||
+    (!url.pathname.includes(".") && url.pathname !== "/manifest.webmanifest");
+
+  if (isHTMLRequest) {
+    // Always fetch HTML from network
+    event.respondWith(
+      fetch(request).catch(() => {
+        // Only use cache as fallback for HTML
+        return caches.match(request).then((cachedResponse) => {
+          return cachedResponse || caches.match("/");
+        });
+      })
+    );
+    return;
+  }
+
+  // For static assets, use cache-first strategy
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -54,7 +75,7 @@ self.addEventListener("fetch", (event) => {
 
           return response;
         })
-        .catch(() => caches.match("/"));
+        .catch(() => caches.match(request));
     })
   );
 });

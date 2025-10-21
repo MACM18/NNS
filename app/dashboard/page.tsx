@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
+import { usePageVisibility } from "@/hooks/use-page-visibility";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Header } from "@/components/layout/header";
@@ -98,6 +99,14 @@ export default function Dashboard() {
       }
     }
   }, [user, selectedDate]);
+
+  // Refresh data when page becomes visible again
+  usePageVisibility(() => {
+    if (user) {
+      console.log("Page became visible, refreshing dashboard data");
+      fetchDashboardData();
+    }
+  }, [user]);
 
   const fetchDashboardData = async () => {
     setIsRefreshing(true);
