@@ -290,19 +290,21 @@ export function AddTaskModal({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-2xl max-h-[90vh] overflow-y-auto'>
+      <DialogContent className='max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6'>
         <DialogHeader>
-          <DialogTitle>Add New Task</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className='text-lg sm:text-xl'>Add New Task</DialogTitle>
+          <DialogDescription className='text-sm'>
             Enter the details for a new telecom installation task.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className='space-y-6'>
+        <form onSubmit={handleSubmit} className='space-y-4 sm:space-y-6'>
           {/* Basic Information */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Task Information</h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
+              Task Information
+            </h3>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4'>
               <div>
                 <Label htmlFor='task_date'>Date</Label>
                 <Input
@@ -407,9 +409,11 @@ export function AddTaskModal({
           </div>
 
           {/* Customer Information */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Customer Information</h3>
-            <div className='grid grid-cols-1 gap-4'>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
+              Customer Information
+            </h3>
+            <div className='grid grid-cols-1 gap-3 sm:gap-4'>
               <div>
                 <Label htmlFor='customer_name'>Customer Name</Label>
                 <Input
@@ -434,9 +438,11 @@ export function AddTaskModal({
           </div>
 
           {/* Service Configuration */}
-          <div className='space-y-4'>
-            <h3 className='text-lg font-medium'>Service Configuration</h3>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <div className='space-y-3 sm:space-y-4'>
+            <h3 className='text-base sm:text-lg font-medium'>
+              Service Configuration
+            </h3>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4'>
               <div>
                 <Label htmlFor='connection_type_new'>Type</Label>
                 <Select
@@ -457,8 +463,10 @@ export function AddTaskModal({
             </div>
 
             <div>
-              <Label>Connection Services</Label>
-              <div className='grid grid-cols-3 gap-4 mt-2'>
+              <Label className='text-sm sm:text-base'>
+                Connection Services
+              </Label>
+              <div className='grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-2'>
                 {connectionServices.map((service) => (
                   <div key={service.id} className='flex items-center space-x-2'>
                     <Checkbox
@@ -499,15 +507,20 @@ export function AddTaskModal({
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className='flex-col sm:flex-row gap-2 sm:gap-0'>
             <Button
               type='button'
               variant='outline'
               onClick={() => onOpenChange(false)}
+              className='w-full sm:w-auto'
             >
               Cancel
             </Button>
-            <Button type='submit' disabled={loading}>
+            <Button
+              type='submit'
+              disabled={loading}
+              className='w-full sm:w-auto'
+            >
               {loading ? "Adding..." : "Add Task"}
             </Button>
           </DialogFooter>

@@ -488,7 +488,7 @@ export function TaskManagementTable({
   return (
     <div className='space-y-4'>
       {/* Search and Filter Controls */}
-      <div className='flex flex-col sm:flex-row gap-4'>
+      <div className='flex flex-col gap-4 sm:flex-row'>
         <div className='relative flex-1'>
           <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
           <Input
@@ -499,7 +499,7 @@ export function TaskManagementTable({
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className='w-[150px]'>
+          <SelectTrigger className='w-full sm:w-[150px]'>
             <SelectValue placeholder='Status' />
           </SelectTrigger>
           <SelectContent>
@@ -511,7 +511,7 @@ export function TaskManagementTable({
           </SelectContent>
         </Select>
         <Select value={sortField} onValueChange={setSortField}>
-          <SelectTrigger className='w-[180px]'>
+          <SelectTrigger className='w-full sm:w-[180px]'>
             <SelectValue placeholder='Sort by' />
           </SelectTrigger>
           <SelectContent>
@@ -523,6 +523,7 @@ export function TaskManagementTable({
         </Select>
         <Button
           variant='outline'
+          className='w-full sm:w-auto'
           onClick={() =>
             setSortDirection(sortDirection === "asc" ? "desc" : "asc")
           }
@@ -537,202 +538,204 @@ export function TaskManagementTable({
       </div>
 
       {/* Table */}
-      <div className='border rounded-lg'>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead
-                className='cursor-pointer hover:bg-muted/50'
-                onClick={() => handleSort("task_date")}
-              >
-                Date
-                {sortField === "task_date" && (
-                  <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${
-                      sortDirection === "asc" ? "rotate-180" : ""
-                    }`}
-                  />
-                )}
-              </TableHead>
-              <TableHead
-                className='cursor-pointer hover:bg-muted/50'
-                onClick={() => handleSort("customer_name")}
-              >
-                Customer
-                {sortField === "customer_name" && (
-                  <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${
-                      sortDirection === "asc" ? "rotate-180" : ""
-                    }`}
-                  />
-                )}
-              </TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>DP</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Services</TableHead>
-              <TableHead
-                className='cursor-pointer hover:bg-muted/50'
-                onClick={() => handleSort("status")}
-              >
-                Status
-                {sortField === "status" && (
-                  <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${
-                      sortDirection === "asc" ? "rotate-180" : ""
-                    }`}
-                  />
-                )}
-              </TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredData.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>
-                  {new Date(item.task_date).toLocaleDateString()}
-                </TableCell>
-                <TableCell className='font-medium'>
-                  {item.customer_name}
-                </TableCell>
-                <TableCell>{item.telephone_no}</TableCell>
-                <TableCell>
-                  <Badge variant='outline' className='font-mono text-xs'>
-                    {item.dp}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {getConnectionTypeBadge(item.connection_type_new)}
-                </TableCell>
-                <TableCell>
-                  <div className='flex flex-wrap gap-1'>
-                    {item.connection_services?.slice(0, 2).map((service) => (
-                      <Badge
-                        key={service}
-                        variant='outline'
-                        className='text-xs'
-                      >
-                        {service.replace("_", " ")}
-                      </Badge>
-                    ))}
-                    {item.connection_services?.length > 2 && (
-                      <Badge variant='outline' className='text-xs'>
-                        +{item.connection_services.length - 2}
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>{getStatusBadge(item.status)}</TableCell>
-                <TableCell>
-                  <div className='flex gap-2'>
-                    {item.status === "pending" && (
-                      <>
-                        <Button
-                          size='sm'
-                          onClick={() => handleAcceptTask(item.id)}
-                          className='h-8'
-                        >
-                          <Check className='h-3 w-3' />
-                        </Button>
-                        <Button
-                          size='sm'
-                          variant='destructive'
-                          onClick={() => {
-                            setSelectedTask(item);
-                            setRejectModalOpen(true);
-                          }}
-                          className='h-8'
-                        >
-                          <X className='h-3 w-3' />
-                        </Button>
-                      </>
-                    )}
-                    {item.status === "accepted" && (
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        onClick={() => handleCompleteTask(item.id)}
-                        className='h-8'
-                      >
-                        Complete
-                      </Button>
-                    )}
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant='ghost' size='sm' className='h-8'>
-                          <Eye className='h-3 w-3' />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className='w-[800px]'>
-                        <ExpandedRowContent item={item} />
-                      </PopoverContent>
-                    </Popover>
-                    {(role === "admin" || role === "moderator") && (
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        onClick={() => {
-                          setEditTask(item);
-                          setEditModalOpen(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                    )}
-                    {role === "admin" && (
-                      <>
-                        <Popover
-                          open={deletePopoverOpen === item.id}
-                          onOpenChange={(open) =>
-                            setDeletePopoverOpen(open ? item.id : null)
-                          }
-                        >
-                          <PopoverTrigger asChild>
-                            <Button
-                              size='sm'
-                              variant='destructive'
-                              className='gap-1'
-                              onClick={() => setDeletePopoverOpen(item.id)}
-                            >
-                              <Trash2 className='h-4 w-4' /> Delete
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className='w-56'>
-                            <div className='flex flex-col gap-2'>
-                              <span>
-                                Are you sure you want to delete this task?
-                              </span>
-                              <div className='flex gap-2 justify-end'>
-                                <Button
-                                  size='sm'
-                                  variant='outline'
-                                  onClick={() => setDeletePopoverOpen(null)}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  size='sm'
-                                  variant='destructive'
-                                  onClick={async () => {
-                                    await handleDeleteTask(item.id);
-                                    setDeletePopoverOpen(null);
-                                  }}
-                                >
-                                  Delete
-                                </Button>
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
+      <div className='overflow-hidden rounded-lg border'>
+        <div className='w-full overflow-x-auto'>
+          <Table className='min-w-[960px]'>
+            <TableHeader>
+              <TableRow>
+                <TableHead
+                  className='cursor-pointer hover:bg-muted/50'
+                  onClick={() => handleSort("task_date")}
+                >
+                  Date
+                  {sortField === "task_date" && (
+                    <ChevronDown
+                      className={`inline ml-1 h-4 w-4 ${
+                        sortDirection === "asc" ? "rotate-180" : ""
+                      }`}
+                    />
+                  )}
+                </TableHead>
+                <TableHead
+                  className='cursor-pointer hover:bg-muted/50'
+                  onClick={() => handleSort("customer_name")}
+                >
+                  Customer
+                  {sortField === "customer_name" && (
+                    <ChevronDown
+                      className={`inline ml-1 h-4 w-4 ${
+                        sortDirection === "asc" ? "rotate-180" : ""
+                      }`}
+                    />
+                  )}
+                </TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>DP</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Services</TableHead>
+                <TableHead
+                  className='cursor-pointer hover:bg-muted/50'
+                  onClick={() => handleSort("status")}
+                >
+                  Status
+                  {sortField === "status" && (
+                    <ChevronDown
+                      className={`inline ml-1 h-4 w-4 ${
+                        sortDirection === "asc" ? "rotate-180" : ""
+                      }`}
+                    />
+                  )}
+                </TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filteredData.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    {new Date(item.task_date).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className='font-medium'>
+                    {item.customer_name}
+                  </TableCell>
+                  <TableCell>{item.telephone_no}</TableCell>
+                  <TableCell>
+                    <Badge variant='outline' className='font-mono text-xs'>
+                      {item.dp}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {getConnectionTypeBadge(item.connection_type_new)}
+                  </TableCell>
+                  <TableCell>
+                    <div className='flex flex-wrap gap-1'>
+                      {item.connection_services?.slice(0, 2).map((service) => (
+                        <Badge
+                          key={service}
+                          variant='outline'
+                          className='text-xs'
+                        >
+                          {service.replace("_", " ")}
+                        </Badge>
+                      ))}
+                      {item.connection_services?.length > 2 && (
+                        <Badge variant='outline' className='text-xs'>
+                          +{item.connection_services.length - 2}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>{getStatusBadge(item.status)}</TableCell>
+                  <TableCell>
+                    <div className='flex gap-2'>
+                      {item.status === "pending" && (
+                        <>
+                          <Button
+                            size='sm'
+                            onClick={() => handleAcceptTask(item.id)}
+                            className='h-8'
+                          >
+                            <Check className='h-3 w-3' />
+                          </Button>
+                          <Button
+                            size='sm'
+                            variant='destructive'
+                            onClick={() => {
+                              setSelectedTask(item);
+                              setRejectModalOpen(true);
+                            }}
+                            className='h-8'
+                          >
+                            <X className='h-3 w-3' />
+                          </Button>
+                        </>
+                      )}
+                      {item.status === "accepted" && (
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          onClick={() => handleCompleteTask(item.id)}
+                          className='h-8'
+                        >
+                          Complete
+                        </Button>
+                      )}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant='ghost' size='sm' className='h-8'>
+                            <Eye className='h-3 w-3' />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className='w-[min(90vw,48rem)]'>
+                          <ExpandedRowContent item={item} />
+                        </PopoverContent>
+                      </Popover>
+                      {(role === "admin" || role === "moderator") && (
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          onClick={() => {
+                            setEditTask(item);
+                            setEditModalOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      {role === "admin" && (
+                        <>
+                          <Popover
+                            open={deletePopoverOpen === item.id}
+                            onOpenChange={(open) =>
+                              setDeletePopoverOpen(open ? item.id : null)
+                            }
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                size='sm'
+                                variant='destructive'
+                                className='gap-1'
+                                onClick={() => setDeletePopoverOpen(item.id)}
+                              >
+                                <Trash2 className='h-4 w-4' /> Delete
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className='w-56'>
+                              <div className='flex flex-col gap-2'>
+                                <span>
+                                  Are you sure you want to delete this task?
+                                </span>
+                                <div className='flex gap-2 justify-end'>
+                                  <Button
+                                    size='sm'
+                                    variant='outline'
+                                    onClick={() => setDeletePopoverOpen(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    size='sm'
+                                    variant='destructive'
+                                    onClick={async () => {
+                                      await handleDeleteTask(item.id);
+                                      setDeletePopoverOpen(null);
+                                    }}
+                                  >
+                                    Delete
+                                  </Button>
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {filteredData.length === 0 && (

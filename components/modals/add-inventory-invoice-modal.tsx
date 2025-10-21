@@ -432,28 +432,30 @@ export function AddInventoryInvoiceModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto'>
+      <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto p-4 sm:p-6'>
         <DialogHeader>
-          <DialogTitle>Add Inventory Invoice</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className='text-lg sm:text-xl'>
+            Add Inventory Invoice
+          </DialogTitle>
+          <DialogDescription className='text-sm'>
             Create a new inventory receipt with automatic stock updates and drum
             tracking.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className='space-y-6'>
+        <form onSubmit={handleSubmit} className='space-y-4 sm:space-y-6'>
           {/* Invoice Header */}
           <Card>
-            <CardHeader>
-              <CardTitle className='flex items-center justify-between'>
-                Invoice Information
-                <Badge variant='outline' className='font-mono'>
+            <CardHeader className='p-4 sm:p-6'>
+              <CardTitle className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-base sm:text-lg'>
+                <span>Invoice Information</span>
+                <Badge variant='outline' className='font-mono text-xs'>
                   {autoInvoiceNumber}
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className='space-y-4'>
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <CardContent className='space-y-3 sm:space-y-4 p-4 sm:p-6'>
+              <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4'>
                 <div>
                   <Label htmlFor='warehouse'>Warehouse</Label>
                   <Input
@@ -552,13 +554,13 @@ export function AddInventoryInvoiceModal({
 
           {/* Invoice Items */}
           <Card>
-            <CardHeader>
-              <CardTitle className='flex items-center justify-between'>
-                Invoice Items
+            <CardHeader className='p-4 sm:p-6'>
+              <CardTitle className='flex items-center justify-between text-base sm:text-lg'>
+                <span>Invoice Items</span>
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className='space-y-4'>
+            <CardContent className='p-4 sm:p-6'>
+              <div className='space-y-3 sm:space-y-4'>
                 {invoiceItems.map((item, index) => {
                   const selectedItem = inventoryItems.find(
                     (inv) => inv.id === item.item_id
@@ -570,99 +572,119 @@ export function AddInventoryInvoiceModal({
                   return (
                     <div
                       key={item.id}
-                      className='grid grid-cols-12 gap-2 items-end'
+                      className='space-y-3 p-3 sm:p-4 border rounded-lg bg-muted/30'
                     >
-                      <div className='col-span-3'>
-                        <Label>Item</Label>
-                        <Select
-                          value={item.item_id}
-                          onValueChange={(value) =>
-                            handleItemChange(index, "item_id", value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder='Select item' />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {inventoryItems.map((invItem) => (
-                              <SelectItem key={invItem.id} value={invItem.id}>
-                                {invItem.name} ({invItem.unit})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className='col-span-3'>
-                        <Label>Description</Label>
-                        <Input
-                          value={item.description}
-                          onChange={(e) =>
-                            handleItemChange(
-                              index,
-                              "description",
-                              e.target.value
-                            )
-                          }
-                          placeholder='Item description'
-                        />
-                      </div>
-                      <div className='col-span-1'>
-                        <Label>Unit</Label>
-                        <Input
-                          value={item.unit}
-                          onChange={(e) =>
-                            handleItemChange(index, "unit", e.target.value)
-                          }
-                          placeholder='Unit'
-                          readOnly
-                        />
-                      </div>
-                      <div className='col-span-2'>
-                        <Label>Qty Requested</Label>
-                        <Input
-                          type='number'
-                          min='0'
-                          step='0.01'
-                          value={item.quantity_requested || ""}
-                          onChange={(e) =>
-                            handleItemChange(
-                              index,
-                              "quantity_requested",
-                              e.target.value === "" ? "" : e.target.value
-                            )
-                          }
-                        />
-                      </div>
-                      <div className='col-span-2'>
-                        <Label>Qty Issued</Label>
-                        <Input
-                          type='number'
-                          min='0'
-                          step='0.01'
-                          value={item.quantity_issued || ""}
-                          onChange={(e) =>
-                            handleItemChange(
-                              index,
-                              "quantity_issued",
-                              e.target.value === "" ? "" : e.target.value
-                            )
-                          }
-                        />
-                      </div>
-                      <div className='col-span-1'>
-                        <Button
-                          type='button'
-                          variant='outline'
-                          size='sm'
-                          onClick={() => removeRow(index)}
-                          disabled={invoiceItems.length === 1}
-                        >
-                          <Trash2 className='h-4 w-4' />
-                        </Button>
+                      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3'>
+                        <div className='sm:col-span-2 lg:col-span-1'>
+                          <Label className='text-xs sm:text-sm'>Item</Label>
+                          <Select
+                            value={item.item_id}
+                            onValueChange={(value) =>
+                              handleItemChange(index, "item_id", value)
+                            }
+                          >
+                            <SelectTrigger className='text-xs sm:text-sm'>
+                              <SelectValue placeholder='Select item' />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {inventoryItems.map((invItem) => (
+                                <SelectItem
+                                  key={invItem.id}
+                                  value={invItem.id}
+                                  className='text-xs sm:text-sm'
+                                >
+                                  {invItem.name} ({invItem.unit})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className='sm:col-span-2'>
+                          <Label className='text-xs sm:text-sm'>
+                            Description
+                          </Label>
+                          <Input
+                            value={item.description}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "description",
+                                e.target.value
+                              )
+                            }
+                            placeholder='Item description'
+                            className='text-xs sm:text-sm'
+                          />
+                        </div>
+                        <div>
+                          <Label className='text-xs sm:text-sm'>Unit</Label>
+                          <Input
+                            value={item.unit}
+                            onChange={(e) =>
+                              handleItemChange(index, "unit", e.target.value)
+                            }
+                            placeholder='Unit'
+                            readOnly
+                            className='text-xs sm:text-sm bg-muted'
+                          />
+                        </div>
+                        <div>
+                          <Label className='text-xs sm:text-sm'>
+                            Qty Requested
+                          </Label>
+                          <Input
+                            type='number'
+                            min='0'
+                            step='0.01'
+                            value={item.quantity_requested || ""}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "quantity_requested",
+                                e.target.value === "" ? "" : e.target.value
+                              )
+                            }
+                            className='text-xs sm:text-sm'
+                          />
+                        </div>
+                        <div>
+                          <Label className='text-xs sm:text-sm'>
+                            Qty Issued
+                          </Label>
+                          <Input
+                            type='number'
+                            min='0'
+                            step='0.01'
+                            value={item.quantity_issued || ""}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "quantity_issued",
+                                e.target.value === "" ? "" : e.target.value
+                              )
+                            }
+                            className='text-xs sm:text-sm'
+                          />
+                        </div>
+                        <div className='flex items-end'>
+                          <Button
+                            type='button'
+                            variant='outline'
+                            size='sm'
+                            onClick={() => removeRow(index)}
+                            disabled={invoiceItems.length === 1}
+                            className='w-full sm:w-auto'
+                          >
+                            <Trash2 className='h-4 w-4 mr-2' />
+                            <span className='sm:hidden'>Remove</span>
+                          </Button>
+                        </div>
                       </div>
                       {isDropWireCable && (
-                        <div className='col-span-12 mt-2 flex gap-2 items-center'>
-                          <Label>Drum Number</Label>
+                        <div className='flex flex-col gap-2 pt-2 border-t'>
+                          <Label className='text-xs sm:text-sm'>
+                            Drum Number
+                          </Label>
                           <Input
                             value={item.drum_number || ""}
                             onChange={(e) =>
@@ -673,7 +695,7 @@ export function AddInventoryInvoiceModal({
                               )
                             }
                             placeholder='Enter drum number'
-                            className='max-w-xs'
+                            className='text-xs sm:text-sm'
                             required
                           />
                         </div>
@@ -683,25 +705,25 @@ export function AddInventoryInvoiceModal({
                 })}
               </div>
 
-              <div className='mt-4 flex flex-row-reverse justify-start gap-4 items-center'>
+              <div className='mt-3 sm:mt-4 flex flex-col sm:flex-row-reverse sm:justify-start gap-2 sm:gap-4 items-stretch sm:items-center'>
                 <Button
                   type='button'
                   size='sm'
                   onClick={addNewRow}
-                  className='gap-2'
+                  className='gap-2 w-full sm:w-auto'
                 >
                   <Plus className='h-4 w-4' />
                   Add Item
                 </Button>
                 {invoiceItems.length > 1 && (
-                  <span className='text-sm text-muted-foreground'>
-                    Click "Add Item" to create a new row
+                  <span className='text-xs sm:text-sm text-muted-foreground text-center sm:text-left'>
+                    Click &quot;Add Item&quot; to create a new row
                   </span>
                 )}
               </div>
-              <Separator className='my-4' />
+              <Separator className='my-3 sm:my-4' />
 
-              <div className='text-sm text-muted-foreground'>
+              <div className='text-xs sm:text-sm text-muted-foreground space-y-1'>
                 <p>
                   <strong>Total Items:</strong>{" "}
                   {
@@ -720,15 +742,20 @@ export function AddInventoryInvoiceModal({
             </CardContent>
           </Card>
 
-          <DialogFooter>
+          <DialogFooter className='flex-col sm:flex-row gap-2 sm:gap-0'>
             <Button
               type='button'
               variant='outline'
               onClick={() => onOpenChange(false)}
+              className='w-full sm:w-auto'
             >
               Cancel
             </Button>
-            <Button type='submit' disabled={loading}>
+            <Button
+              type='submit'
+              disabled={loading}
+              className='w-full sm:w-auto'
+            >
               {loading ? "Creating Invoice..." : "Create Invoice"}
             </Button>
           </DialogFooter>

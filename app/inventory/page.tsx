@@ -14,6 +14,7 @@ import {
   ToggleLeft,
   ToggleRight,
 } from "lucide-react";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import {
   Card,
   CardContent,
@@ -670,753 +671,882 @@ export default function InventoryPage() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <div className='flex-1 flex flex-col min-h-screen w-full'>
         <Header />
-        <main className='flex-1 space-y-6 p-6'>
-          {/* Page Header */}
-          <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
-            <div>
-              <h1 className='text-3xl font-bold'>Inventory Management</h1>
-              <p className='text-muted-foreground'>
-                Manage stock receipts, drum tracking, and waste reporting
-              </p>
-            </div>
-            <div className='flex gap-2'>
-              <Button
-                onClick={() => setAddWasteModalOpen(true)}
-                variant='outline'
-                className='gap-2'
-              >
-                <TrendingDown className='h-4 w-4' />
-                Record Waste
-              </Button>
-              <Button
-                onClick={() => setAddInvoiceModalOpen(true)}
-                className='gap-2'
-              >
-                <Plus className='h-4 w-4' />
-                Add Invoice
-              </Button>
-              {(role === "admin" || role === "moderator") && (
+        <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-6 overflow-x-hidden'>
+          <div className='w-full max-w-7xl mx-auto space-y-6'>
+            {/* Page Header */}
+            <div className='flex flex-col gap-4'>
+              <div>
+                <h1 className='text-2xl sm:text-3xl font-bold'>
+                  Inventory Management
+                </h1>
+                <p className='text-sm sm:text-base text-muted-foreground'>
+                  Manage stock receipts, drum tracking, and waste reporting
+                </p>
+              </div>
+              <div className='flex flex-col sm:flex-row gap-2'>
                 <Button
-                  onClick={() => setManageItemsModalOpen(true)}
-                  variant='secondary'
-                  className='gap-2'
+                  onClick={() => setAddWasteModalOpen(true)}
+                  variant='outline'
+                  className='w-full sm:w-auto gap-2'
                 >
-                  <Package className='h-4 w-4' />
-                  Manage Item List
+                  <TrendingDown className='h-4 w-4' />
+                  <span className='sm:inline'>Record Waste</span>
                 </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Stats Cards */}
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Total Items
-                </CardTitle>
-                <Package className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>
-                  {loadingData ? "..." : stats.totalItems}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  Active inventory items
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Low Stock Alerts
-                </CardTitle>
-                <AlertTriangle className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={`text-2xl font-bold ${
-                    stats.lowStockAlerts > 0 ? "text-orange-600" : ""
-                  }`}
+                <Button
+                  onClick={() => setAddInvoiceModalOpen(true)}
+                  className='w-full sm:w-auto gap-2'
                 >
-                  {loadingData ? "..." : stats.lowStockAlerts}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  Items below reorder level
-                </p>
-              </CardContent>
-            </Card>
+                  <Plus className='h-4 w-4' />
+                  <span className='sm:inline'>Add Invoice</span>
+                </Button>
+                {(role === "admin" || role === "moderator") && (
+                  <Button
+                    onClick={() => setManageItemsModalOpen(true)}
+                    variant='secondary'
+                    className='w-full sm:w-auto gap-2'
+                  >
+                    <Package className='h-4 w-4' />
+                    <span className='sm:inline'>Manage Items</span>
+                  </Button>
+                )}
+              </div>
+            </div>
 
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Active Drums
-                </CardTitle>
-                <BarChart3 className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>
-                  {loadingData ? "..." : stats.activeDrums}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  Cable drums in use
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Monthly Waste
-                </CardTitle>
-                <TrendingDown className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>
-                  {loadingData ? "..." : `${stats.monthlyWastePercentage}%`}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  Of total inventory
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Main Content Tabs */}
-          <Tabs defaultValue='invoices' className='space-y-6'>
-            <TabsList>
-              <TabsTrigger value='invoices'>Invoices</TabsTrigger>
-              <TabsTrigger value='stock'>Stock Levels</TabsTrigger>
-              <TabsTrigger value='drums'>Drum Tracking</TabsTrigger>
-              <TabsTrigger value='waste'>Waste Reports</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value='invoices'>
+            {/* Stats Cards */}
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
               <Card>
-                <CardHeader>
-                  <CardTitle>Recent Invoices</CardTitle>
-                  <CardDescription>
-                    Material receipts and stock updates
-                  </CardDescription>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Total Items
+                  </CardTitle>
+                  <Package className='h-4 w-4 text-muted-foreground' />
                 </CardHeader>
                 <CardContent>
-                  {loadingData ? (
-                    <div className='text-center py-8'>
-                      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                      <p className='text-muted-foreground mt-2'>
-                        Loading invoices...
-                      </p>
-                    </div>
-                  ) : invoices.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Invoice Number</TableHead>
-                          <TableHead>Warehouse</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Items</TableHead>
-                          <TableHead>Issued By</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className='w-20 text-center'>
-                            <span className='sr-only'>Actions</span>
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {invoices.map((invoice) => (
-                          <React.Fragment key={invoice.id}>
-                            <TableRow>
-                              <TableCell className='font-mono text-sm'>
-                                {invoice.invoice_number}
-                              </TableCell>
-                              <TableCell>{invoice.warehouse}</TableCell>
-                              <TableCell>
-                                {new Date(invoice.date).toLocaleDateString()}
-                              </TableCell>
-                              <TableCell>{invoice.total_items}</TableCell>
-                              <TableCell>{invoice.issued_by}</TableCell>
-                              <TableCell>
-                                {getStatusBadge(invoice.status)}
-                              </TableCell>
-                              <TableCell className='text-center align-middle'>
-                                <div className='flex gap-1 justify-center items-center min-h-[32px]'>
-                                  <Button
-                                    size='sm'
-                                    variant='outline'
-                                    onClick={async () => {
-                                      if (expandedInvoiceId === invoice.id) {
-                                        setExpandedInvoiceId(null);
-                                      } else {
-                                        setExpandedInvoiceId(invoice.id);
-                                        await fetchInvoiceItems(invoice.id);
-                                      }
-                                    }}
-                                  >
-                                    <Eye className='h-4 w-4' />
-                                  </Button>
-                                  {(role === "admin" ||
-                                    role === "moderator") && (
-                                    <Button
-                                      size='sm'
-                                      variant='secondary'
-                                      onClick={async () => {
-                                        if (!invoiceItems[invoice.id]) {
-                                          await fetchInvoiceItems(invoice.id);
-                                        }
-                                        setSelectedInvoice(invoice);
-                                        setEditInvoiceModalOpen(true);
-                                      }}
-                                    >
-                                      Edit
-                                    </Button>
-                                  )}
-                                  {role === "admin" && (
-                                    <Button
-                                      size='sm'
-                                      variant='destructive'
-                                      onClick={() => {
-                                        setInvoiceToDelete(invoice);
-                                        setDeleteConfirmOpen(true);
-                                      }}
-                                    >
-                                      Delete
-                                    </Button>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                            {expandedInvoiceId === invoice.id && (
-                              <TableRow>
-                                <TableCell
-                                  colSpan={7}
-                                  className='bg-muted/30 p-0'
-                                >
-                                  <div className='p-6'>
-                                    <h4 className='font-semibold mb-2'>
-                                      Invoice Items
-                                    </h4>
-                                    {invoiceItems[invoice.id] &&
-                                    invoiceItems[invoice.id].length > 0 ? (
-                                      <Table>
-                                        <TableHeader>
-                                          <TableRow>
-                                            <TableHead>Description</TableHead>
-                                            <TableHead>Qty Requested</TableHead>
-                                            <TableHead>Qty Issued</TableHead>
-                                            <TableHead>Unit</TableHead>
-                                          </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                          {invoiceItems[invoice.id].map(
-                                            (item) => (
-                                              <TableRow key={item.id}>
-                                                <TableCell>
-                                                  {item.description}
-                                                </TableCell>
-                                                <TableCell>
-                                                  {item.quantity_requested}
-                                                </TableCell>
-                                                <TableCell>
-                                                  {item.quantity_issued}
-                                                </TableCell>
-                                                <TableCell>
-                                                  {item.unit}
-                                                </TableCell>
-                                              </TableRow>
-                                            )
-                                          )}
-                                        </TableBody>
-                                      </Table>
-                                    ) : (
-                                      <div className='text-muted-foreground'>
-                                        No items found for this invoice.
-                                      </div>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <div className='text-center py-8 text-muted-foreground'>
-                      <Package className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                      <p>No invoices found</p>
-                      <p className='text-sm'>
-                        Create your first invoice to get started
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value='stock'>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Current Stock Levels</CardTitle>
-                  <CardDescription>
-                    Real-time inventory status with reorder alerts
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingData ? (
-                    <div className='text-center py-8'>
-                      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                      <p className='text-muted-foreground mt-2'>
-                        Loading stock levels...
-                      </p>
-                    </div>
-                  ) : inventoryItems.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Item Name</TableHead>
-                          <TableHead>Current Stock</TableHead>
-                          <TableHead>Unit</TableHead>
-                          <TableHead>Reorder Level</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Last Updated</TableHead>
-                          <TableHead className='text-right'>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {inventoryItems.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell className='font-medium'>
-                              {item.name}
-                            </TableCell>
-                            <TableCell>{item.current_stock}</TableCell>
-                            <TableCell>{item.unit}</TableCell>
-                            <TableCell>{item.reorder_level || 0}</TableCell>
-                            <TableCell>
-                              {getStockStatus(
-                                item.current_stock,
-                                item.reorder_level || 0
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {item.last_updated
-                                ? new Date(
-                                    item.last_updated
-                                  ).toLocaleDateString()
-                                : "N/A"}
-                            </TableCell>
-                            <TableCell className='text-right'>
-                              {role === "admin" && (
-                                <Button
-                                  size='icon'
-                                  variant='ghost'
-                                  aria-label='Edit Item'
-                                  className='p-1 h-7 w-7'
-                                  onClick={() => {
-                                    setSelectedItem(item);
-                                    setEditItemModalOpen(true);
-                                  }}
-                                >
-                                  <Pencil className='h-4 w-4' />
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <div className='text-center py-8 text-muted-foreground'>
-                      <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                      <p>No inventory items found</p>
-                      <p className='text-sm'>
-                        Add items through invoices to track stock levels
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value='drums'>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Drum Tracking</CardTitle>
-                  <CardDescription>
-                    Cable drum usage and remaining quantities with enhanced
-                    tracking logic
-                  </CardDescription>
-                  <div className='flex items-center gap-2 mt-4'>
-                    <Button
-                      variant='outline'
-                      size='sm'
-                      onClick={() => setShowInactiveDrums(!showInactiveDrums)}
-                      className='gap-2'
-                    >
-                      {showInactiveDrums ? (
-                        <ToggleRight className='h-4 w-4' />
-                      ) : (
-                        <ToggleLeft className='h-4 w-4' />
-                      )}
-                      {showInactiveDrums
-                        ? "Hide Inactive Drums"
-                        : "Show Inactive Drums"}
-                    </Button>
+                  <div className='text-2xl font-bold'>
+                    {loadingData ? "..." : stats.totalItems}
                   </div>
+                  <p className='text-xs text-muted-foreground'>
+                    Active inventory items
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Low Stock Alerts
+                  </CardTitle>
+                  <AlertTriangle className='h-4 w-4 text-muted-foreground' />
                 </CardHeader>
                 <CardContent>
-                  {loadingData ? (
-                    <div className='text-center py-8'>
-                      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                      <p className='text-muted-foreground mt-2'>
-                        Loading drum tracking...
-                      </p>
-                    </div>
-                  ) : drums.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Drum Number</TableHead>
-                          <TableHead>Item</TableHead>
-                          <TableHead>Initial Qty</TableHead>
-                          <TableHead>Current Qty</TableHead>
-                          <TableHead>Usage %</TableHead>
-                          <TableHead>Received Date</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className='w-32 text-center'>
-                            Actions
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {drums
-                          .filter(
-                            (drum) =>
-                              showInactiveDrums || drum.status !== "inactive"
-                          )
-                          .map((drum) => {
-                            const displayQuantity =
-                              drum.calculated_current_quantity ?? 0;
-                            const displayStatus =
-                              drum.calculated_status ?? drum.status;
-                            const totalUsed = drum.total_used ?? 0;
-                            const totalWastage = drum.total_wastage ?? 0;
-                            const usagePercentage =
-                              drum.initial_quantity > 0
-                                ? (
-                                    ((totalUsed + totalWastage) /
-                                      drum.initial_quantity) *
-                                    100
-                                  ).toFixed(1)
-                                : "0.0";
+                  <div
+                    className={`text-2xl font-bold ${
+                      stats.lowStockAlerts > 0 ? "text-orange-600" : ""
+                    }`}
+                  >
+                    {loadingData ? "..." : stats.lowStockAlerts}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    Items below reorder level
+                  </p>
+                </CardContent>
+              </Card>
 
-                            return (
-                              <TableRow key={drum.id}>
-                                <TableCell className='font-mono'>
-                                  {drum.drum_number}
-                                </TableCell>
-                                <TableCell>{drum.item_name || "-"}</TableCell>
-                                <TableCell>{drum.initial_quantity}m</TableCell>
-                                <TableCell>
-                                  <div className='flex flex-col'>
-                                    <span className='text-blue-600 font-medium'>
-                                      {displayQuantity.toFixed(1)}m
-                                    </span>
-                                    <span className='text-xs text-muted-foreground'>
-                                      (Calculated)
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className='flex items-center gap-2'>
-                                    <span>{usagePercentage}%</span>
-                                    <div className='w-16 h-2 bg-gray-200 rounded-full overflow-hidden'>
-                                      <div
-                                        className={`h-full transition-all ${
-                                          Number(usagePercentage) > 80
-                                            ? "bg-red-500"
-                                            : Number(usagePercentage) > 60
-                                            ? "bg-orange-500"
-                                            : "bg-green-500"
-                                        }`}
-                                        style={{
-                                          width: `${Math.min(
-                                            100,
-                                            Number(usagePercentage)
-                                          )}%`,
-                                        }}
-                                      />
-                                    </div>
-                                  </div>
-                                  {drum.usage_count && drum.usage_count > 0 && (
-                                    <div className='text-xs text-muted-foreground mt-1'>
-                                      {drum.usage_count} installation
-                                      {drum.usage_count !== 1 ? "s" : ""}
-                                      {totalWastage > 0 && (
-                                        <>
-                                          <span className='text-orange-600'>
-                                            {" "}
-                                            • {totalWastage.toFixed(1)}m waste
-                                          </span>
-                                          {drum.wastage_calculation_method ===
-                                            "manual_override" && (
-                                            <span className='text-blue-600'>
-                                              {" "}
-                                              (manual)
-                                            </span>
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Active Drums
+                  </CardTitle>
+                  <BarChart3 className='h-4 w-4 text-muted-foreground' />
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>
+                    {loadingData ? "..." : stats.activeDrums}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    Cable drums in use
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    Monthly Waste
+                  </CardTitle>
+                  <TrendingDown className='h-4 w-4 text-muted-foreground' />
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>
+                    {loadingData ? "..." : `${stats.monthlyWastePercentage}%`}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    Of total inventory
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Content Tabs */}
+            <Tabs defaultValue='invoices' className='space-y-6'>
+              <TabsList className='w-full grid grid-cols-2 sm:grid-cols-4 gap-1 h-auto p-1'>
+                <TabsTrigger value='invoices' className='text-xs sm:text-sm'>
+                  Invoices
+                </TabsTrigger>
+                <TabsTrigger value='stock' className='text-xs sm:text-sm'>
+                  Stock
+                </TabsTrigger>
+                <TabsTrigger value='drums' className='text-xs sm:text-sm'>
+                  Drums
+                </TabsTrigger>
+                <TabsTrigger value='waste' className='text-xs sm:text-sm'>
+                  Waste
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value='invoices'>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent Invoices</CardTitle>
+                    <CardDescription>
+                      Material receipts and stock updates
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingData ? (
+                      <div className='text-center py-8'>
+                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+                        <p className='text-muted-foreground mt-2'>
+                          Loading invoices...
+                        </p>
+                      </div>
+                    ) : invoices.length > 0 ? (
+                      <div className='overflow-x-auto -mx-4 sm:mx-0'>
+                        <div className='inline-block min-w-full align-middle'>
+                          <div className='overflow-hidden'>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className='min-w-[120px]'>
+                                    Invoice Number
+                                  </TableHead>
+                                  <TableHead className='min-w-[100px]'>
+                                    Warehouse
+                                  </TableHead>
+                                  <TableHead className='min-w-[100px]'>
+                                    Date
+                                  </TableHead>
+                                  <TableHead className='min-w-[60px]'>
+                                    Items
+                                  </TableHead>
+                                  <TableHead className='min-w-[100px]'>
+                                    Issued By
+                                  </TableHead>
+                                  <TableHead className='min-w-[80px]'>
+                                    Status
+                                  </TableHead>
+                                  <TableHead className='min-w-[120px] text-center'>
+                                    <span className='sr-only'>Actions</span>
+                                  </TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {invoices.map((invoice) => (
+                                  <React.Fragment key={invoice.id}>
+                                    <TableRow>
+                                      <TableCell className='font-mono text-sm'>
+                                        {invoice.invoice_number}
+                                      </TableCell>
+                                      <TableCell>{invoice.warehouse}</TableCell>
+                                      <TableCell>
+                                        {new Date(
+                                          invoice.date
+                                        ).toLocaleDateString()}
+                                      </TableCell>
+                                      <TableCell>
+                                        {invoice.total_items}
+                                      </TableCell>
+                                      <TableCell>{invoice.issued_by}</TableCell>
+                                      <TableCell>
+                                        {getStatusBadge(invoice.status)}
+                                      </TableCell>
+                                      <TableCell className='text-center align-middle'>
+                                        <div className='flex gap-1 justify-center items-center min-h-[32px]'>
+                                          <Button
+                                            size='sm'
+                                            variant='outline'
+                                            onClick={async () => {
+                                              if (
+                                                expandedInvoiceId === invoice.id
+                                              ) {
+                                                setExpandedInvoiceId(null);
+                                              } else {
+                                                setExpandedInvoiceId(
+                                                  invoice.id
+                                                );
+                                                await fetchInvoiceItems(
+                                                  invoice.id
+                                                );
+                                              }
+                                            }}
+                                          >
+                                            <Eye className='h-4 w-4' />
+                                          </Button>
+                                          {(role === "admin" ||
+                                            role === "moderator") && (
+                                            <Button
+                                              size='sm'
+                                              variant='secondary'
+                                              onClick={async () => {
+                                                if (!invoiceItems[invoice.id]) {
+                                                  await fetchInvoiceItems(
+                                                    invoice.id
+                                                  );
+                                                }
+                                                setSelectedInvoice(invoice);
+                                                setEditInvoiceModalOpen(true);
+                                              }}
+                                            >
+                                              Edit
+                                            </Button>
                                           )}
-                                          {drum.wastage_calculation_method ===
-                                            "smart_segments" && (
-                                            <span className='text-green-600'>
-                                              {" "}
-                                              (smart)
-                                            </span>
+                                          {role === "admin" && (
+                                            <Button
+                                              size='sm'
+                                              variant='destructive'
+                                              onClick={() => {
+                                                setInvoiceToDelete(invoice);
+                                                setDeleteConfirmOpen(true);
+                                              }}
+                                            >
+                                              Delete
+                                            </Button>
                                           )}
-                                        </>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                    {expandedInvoiceId === invoice.id && (
+                                      <TableRow>
+                                        <TableCell
+                                          colSpan={7}
+                                          className='bg-muted/30 p-0'
+                                        >
+                                          <div className='p-6'>
+                                            <h4 className='font-semibold mb-2'>
+                                              Invoice Items
+                                            </h4>
+                                            {invoiceItems[invoice.id] &&
+                                            invoiceItems[invoice.id].length >
+                                              0 ? (
+                                              <Table>
+                                                <TableHeader>
+                                                  <TableRow>
+                                                    <TableHead>
+                                                      Description
+                                                    </TableHead>
+                                                    <TableHead>
+                                                      Qty Requested
+                                                    </TableHead>
+                                                    <TableHead>
+                                                      Qty Issued
+                                                    </TableHead>
+                                                    <TableHead>Unit</TableHead>
+                                                  </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                  {invoiceItems[invoice.id].map(
+                                                    (item) => (
+                                                      <TableRow key={item.id}>
+                                                        <TableCell>
+                                                          {item.description}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                          {
+                                                            item.quantity_requested
+                                                          }
+                                                        </TableCell>
+                                                        <TableCell>
+                                                          {item.quantity_issued}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                          {item.unit}
+                                                        </TableCell>
+                                                      </TableRow>
+                                                    )
+                                                  )}
+                                                </TableBody>
+                                              </Table>
+                                            ) : (
+                                              <div className='text-muted-foreground'>
+                                                No items found for this invoice.
+                                              </div>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                  </React.Fragment>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className='text-center py-8 text-muted-foreground'>
+                        <Package className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                        <p>No invoices found</p>
+                        <p className='text-sm'>
+                          Create your first invoice to get started
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value='stock'>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Current Stock Levels</CardTitle>
+                    <CardDescription>
+                      Real-time inventory status with reorder alerts
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingData ? (
+                      <div className='text-center py-8'>
+                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+                        <p className='text-muted-foreground mt-2'>
+                          Loading stock levels...
+                        </p>
+                      </div>
+                    ) : inventoryItems.length > 0 ? (
+                      <div className='overflow-x-auto -mx-4 sm:mx-0'>
+                        <div className='inline-block min-w-full align-middle'>
+                          <div className='overflow-hidden'>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className='min-w-[150px]'>
+                                    Item Name
+                                  </TableHead>
+                                  <TableHead className='min-w-[100px]'>
+                                    Current Stock
+                                  </TableHead>
+                                  <TableHead className='min-w-[60px]'>
+                                    Unit
+                                  </TableHead>
+                                  <TableHead className='min-w-[100px]'>
+                                    Reorder Level
+                                  </TableHead>
+                                  <TableHead className='min-w-[100px]'>
+                                    Status
+                                  </TableHead>
+                                  <TableHead className='min-w-[120px]'>
+                                    Last Updated
+                                  </TableHead>
+                                  <TableHead className='min-w-[80px] text-right'>
+                                    Actions
+                                  </TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {inventoryItems.map((item) => (
+                                  <TableRow key={item.id}>
+                                    <TableCell className='font-medium'>
+                                      {item.name}
+                                    </TableCell>
+                                    <TableCell>{item.current_stock}</TableCell>
+                                    <TableCell>{item.unit}</TableCell>
+                                    <TableCell>
+                                      {item.reorder_level || 0}
+                                    </TableCell>
+                                    <TableCell>
+                                      {getStockStatus(
+                                        item.current_stock,
+                                        item.reorder_level || 0
                                       )}
-                                      {drum.remaining_cable !== undefined &&
-                                        drum.remaining_cable > 0 && (
-                                          <span className='text-gray-600'>
-                                            {" "}
-                                            • {drum.remaining_cable.toFixed(1)}m
-                                            remaining
-                                          </span>
-                                        )}
-                                      {drum.status === "inactive" &&
-                                        drum.remaining_cable &&
-                                        drum.remaining_cable > 0 && (
-                                          <span className='text-red-600'>
-                                            {" "}
-                                            (added to waste)
-                                          </span>
-                                        )}
-                                    </div>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  <div className='flex flex-col'>
-                                    <span>
-                                      {drum.received_date
+                                    </TableCell>
+                                    <TableCell>
+                                      {item.last_updated
                                         ? new Date(
-                                            drum.received_date
+                                            item.last_updated
                                           ).toLocaleDateString()
                                         : "N/A"}
-                                    </span>
-                                    {drum.last_usage_date && (
-                                      <span className='text-xs text-muted-foreground'>
-                                        Last used:{" "}
-                                        {new Date(
-                                          drum.last_usage_date
-                                        ).toLocaleDateString()}
-                                      </span>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className='flex flex-col gap-1'>
-                                    {role === "admin" ||
-                                    role === "moderator" ? (
-                                      <Select
-                                        value={displayStatus}
-                                        onValueChange={(value) =>
-                                          updateDrumStatus(
-                                            drum.id,
-                                            value,
-                                            drum.drum_number
-                                          )
-                                        }
-                                      >
-                                        <SelectTrigger className='w-[100px] h-7 text-xs'>
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value='active'>
-                                            Active
-                                          </SelectItem>
-                                          <SelectItem value='inactive'>
-                                            Inactive
-                                          </SelectItem>
-                                          <SelectItem value='empty'>
-                                            Empty
-                                          </SelectItem>
-                                          <SelectItem value='maintenance'>
-                                            Maintenance
-                                          </SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    ) : (
-                                      getStatusBadge(displayStatus)
-                                    )}
-                                    {displayStatus !== drum.status && (
-                                      <Badge
-                                        variant='outline'
-                                        className='text-xs'
-                                      >
-                                        DB: {drum.status}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className='text-center align-middle'>
-                                  <div className='flex gap-1 justify-center items-center min-h-[32px]'>
-                                    <Button
-                                      size='icon'
-                                      variant='outline'
-                                      aria-label='View Usage Details'
-                                      className='p-1 h-7 w-7 bg-transparent'
-                                      onClick={() => {
-                                        setSelectedDrumForUsage(drum);
-                                        setDrumUsageModalOpen(true);
-                                      }}
-                                    >
-                                      <Cable className='h-4 w-4' />
-                                    </Button>
-                                    {(role === "admin" ||
-                                      role === "moderator") && (
-                                      <>
+                                    </TableCell>
+                                    <TableCell className='text-right'>
+                                      {role === "admin" && (
                                         <Button
                                           size='icon'
                                           variant='ghost'
-                                          aria-label='Edit Drum'
+                                          aria-label='Edit Item'
                                           className='p-1 h-7 w-7'
                                           onClick={() => {
-                                            setSelectedDrum(drum);
-                                            setEditDrumModalOpen(true);
+                                            setSelectedItem(item);
+                                            setEditItemModalOpen(true);
                                           }}
                                         >
                                           <Pencil className='h-4 w-4' />
                                         </Button>
-                                        {displayQuantity !==
-                                          drum.current_quantity && (
-                                          <Button
-                                            size='icon'
-                                            variant='secondary'
-                                            aria-label='Sync Database'
-                                            className='p-1 h-7 w-7'
-                                            onClick={() =>
-                                              syncDrumQuantity(drum)
-                                            }
-                                          >
-                                            <Package className='h-4 w-4' />
-                                          </Button>
-                                        )}
-                                      </>
-                                    )}
-                                    {role === "admin" && (
-                                      <Button
-                                        size='icon'
-                                        variant='ghost'
-                                        aria-label='Delete Drum'
-                                        className='p-1 h-7 w-7'
-                                        onClick={() => {
-                                          setDrumToDelete(drum);
-                                          setDeleteDrumConfirmOpen(true);
-                                        }}
-                                      >
-                                        <Trash className='h-4 w-4 text-red-500' />
-                                      </Button>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <div className='text-center py-8 text-muted-foreground'>
-                      <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                      <p>No drums found</p>
-                      <p className='text-sm'>
-                        Add cable drums through invoices to track usage
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className='text-center py-8 text-muted-foreground'>
+                        <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                        <p>No inventory items found</p>
+                        <p className='text-sm'>
+                          Add items through invoices to track stock levels
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-            <TabsContent value='waste'>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Waste Reports</CardTitle>
-                  <CardDescription>
-                    Track reported waste and reasons
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingData ? (
-                    <div className='text-center py-8'>
-                      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                      <p className='text-muted-foreground mt-2'>
-                        Loading waste reports...
-                      </p>
+              <TabsContent value='drums'>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Drum Tracking</CardTitle>
+                    <CardDescription>
+                      Cable drum usage and remaining quantities with enhanced
+                      tracking logic
+                    </CardDescription>
+                    <div className='flex items-center gap-2 mt-4'>
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        onClick={() => setShowInactiveDrums(!showInactiveDrums)}
+                        className='gap-2'
+                      >
+                        {showInactiveDrums ? (
+                          <ToggleRight className='h-4 w-4' />
+                        ) : (
+                          <ToggleLeft className='h-4 w-4' />
+                        )}
+                        {showInactiveDrums
+                          ? "Hide Inactive Drums"
+                          : "Show Inactive Drums"}
+                      </Button>
                     </div>
-                  ) : wasteReports.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Item</TableHead>
-                          <TableHead>Quantity</TableHead>
-                          <TableHead>Reason</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Reported By</TableHead>
-                          {role === "admin" && (
-                            <TableHead className='w-20 text-center'>
-                              Actions
-                            </TableHead>
-                          )}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {wasteReports.map((waste) => (
-                          <TableRow key={waste.id}>
-                            <TableCell>{waste.item_name || "-"}</TableCell>
-                            <TableCell>{waste.quantity}</TableCell>
-                            <TableCell>{waste.waste_reason}</TableCell>
-                            <TableCell>
-                              {waste.waste_date
-                                ? new Date(
-                                    waste.waste_date
-                                  ).toLocaleDateString()
-                                : "N/A"}
-                            </TableCell>
-                            <TableCell>{waste.full_name}</TableCell>
-                            {role === "admin" && (
-                              <TableCell className='text-center'>
-                                <Button
-                                  size='icon'
-                                  variant='ghost'
-                                  aria-label='Delete Waste'
-                                  className='p-1 h-7 w-7'
-                                  onClick={() => {
-                                    setWasteToDelete(waste);
-                                    setDeleteWasteConfirmOpen(true);
-                                  }}
-                                >
-                                  <Trash className='h-4 w-4 text-red-500' />
-                                </Button>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <div className='text-center py-8 text-muted-foreground'>
-                      <TrendingDown className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                      <p>No waste reports found</p>
-                      <p className='text-sm'>
-                        Record waste to track inventory loss
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingData ? (
+                      <div className='text-center py-8'>
+                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+                        <p className='text-muted-foreground mt-2'>
+                          Loading drum tracking...
+                        </p>
+                      </div>
+                    ) : drums.length > 0 ? (
+                      <div className='overflow-x-auto -mx-4 sm:mx-0'>
+                        <div className='inline-block min-w-full align-middle'>
+                          <div className='overflow-hidden'>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className='min-w-[120px]'>
+                                    Drum Number
+                                  </TableHead>
+                                  <TableHead className='min-w-[150px]'>
+                                    Item
+                                  </TableHead>
+                                  <TableHead className='min-w-[90px]'>
+                                    Initial Qty
+                                  </TableHead>
+                                  <TableHead className='min-w-[100px]'>
+                                    Current Qty
+                                  </TableHead>
+                                  <TableHead className='min-w-[140px]'>
+                                    Usage %
+                                  </TableHead>
+                                  <TableHead className='min-w-[120px]'>
+                                    Received Date
+                                  </TableHead>
+                                  <TableHead className='min-w-[120px]'>
+                                    Status
+                                  </TableHead>
+                                  <TableHead className='min-w-[150px] text-center'>
+                                    Actions
+                                  </TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {drums
+                                  .filter(
+                                    (drum) =>
+                                      showInactiveDrums ||
+                                      drum.status !== "inactive"
+                                  )
+                                  .map((drum) => {
+                                    const displayQuantity =
+                                      drum.calculated_current_quantity ?? 0;
+                                    const displayStatus =
+                                      drum.calculated_status ?? drum.status;
+                                    const totalUsed = drum.total_used ?? 0;
+                                    const totalWastage =
+                                      drum.total_wastage ?? 0;
+                                    const usagePercentage =
+                                      drum.initial_quantity > 0
+                                        ? (
+                                            ((totalUsed + totalWastage) /
+                                              drum.initial_quantity) *
+                                            100
+                                          ).toFixed(1)
+                                        : "0.0";
+
+                                    return (
+                                      <TableRow key={drum.id}>
+                                        <TableCell className='font-mono'>
+                                          {drum.drum_number}
+                                        </TableCell>
+                                        <TableCell>
+                                          {drum.item_name || "-"}
+                                        </TableCell>
+                                        <TableCell>
+                                          {drum.initial_quantity}m
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className='flex flex-col'>
+                                            <span className='text-blue-600 font-medium'>
+                                              {displayQuantity.toFixed(1)}m
+                                            </span>
+                                            <span className='text-xs text-muted-foreground'>
+                                              (Calculated)
+                                            </span>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className='flex items-center gap-2'>
+                                            <span>{usagePercentage}%</span>
+                                            <div className='w-16 h-2 bg-gray-200 rounded-full overflow-hidden'>
+                                              <div
+                                                className={`h-full transition-all ${
+                                                  Number(usagePercentage) > 80
+                                                    ? "bg-red-500"
+                                                    : Number(usagePercentage) >
+                                                      60
+                                                    ? "bg-orange-500"
+                                                    : "bg-green-500"
+                                                }`}
+                                                style={{
+                                                  width: `${Math.min(
+                                                    100,
+                                                    Number(usagePercentage)
+                                                  )}%`,
+                                                }}
+                                              />
+                                            </div>
+                                          </div>
+                                          {drum.usage_count &&
+                                            drum.usage_count > 0 && (
+                                              <div className='text-xs text-muted-foreground mt-1'>
+                                                {drum.usage_count} installation
+                                                {drum.usage_count !== 1
+                                                  ? "s"
+                                                  : ""}
+                                                {totalWastage > 0 && (
+                                                  <>
+                                                    <span className='text-orange-600'>
+                                                      {" "}
+                                                      •{" "}
+                                                      {totalWastage.toFixed(1)}m
+                                                      waste
+                                                    </span>
+                                                    {drum.wastage_calculation_method ===
+                                                      "manual_override" && (
+                                                      <span className='text-blue-600'>
+                                                        {" "}
+                                                        (manual)
+                                                      </span>
+                                                    )}
+                                                    {drum.wastage_calculation_method ===
+                                                      "smart_segments" && (
+                                                      <span className='text-green-600'>
+                                                        {" "}
+                                                        (smart)
+                                                      </span>
+                                                    )}
+                                                  </>
+                                                )}
+                                                {drum.remaining_cable !==
+                                                  undefined &&
+                                                  drum.remaining_cable > 0 && (
+                                                    <span className='text-gray-600'>
+                                                      {" "}
+                                                      •{" "}
+                                                      {drum.remaining_cable.toFixed(
+                                                        1
+                                                      )}
+                                                      m remaining
+                                                    </span>
+                                                  )}
+                                                {drum.status === "inactive" &&
+                                                  drum.remaining_cable &&
+                                                  drum.remaining_cable > 0 && (
+                                                    <span className='text-red-600'>
+                                                      {" "}
+                                                      (added to waste)
+                                                    </span>
+                                                  )}
+                                              </div>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className='flex flex-col'>
+                                            <span>
+                                              {drum.received_date
+                                                ? new Date(
+                                                    drum.received_date
+                                                  ).toLocaleDateString()
+                                                : "N/A"}
+                                            </span>
+                                            {drum.last_usage_date && (
+                                              <span className='text-xs text-muted-foreground'>
+                                                Last used:{" "}
+                                                {new Date(
+                                                  drum.last_usage_date
+                                                ).toLocaleDateString()}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className='flex flex-col gap-1'>
+                                            {role === "admin" ||
+                                            role === "moderator" ? (
+                                              <Select
+                                                value={displayStatus}
+                                                onValueChange={(value) =>
+                                                  updateDrumStatus(
+                                                    drum.id,
+                                                    value,
+                                                    drum.drum_number
+                                                  )
+                                                }
+                                              >
+                                                <SelectTrigger className='w-[100px] h-7 text-xs'>
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value='active'>
+                                                    Active
+                                                  </SelectItem>
+                                                  <SelectItem value='inactive'>
+                                                    Inactive
+                                                  </SelectItem>
+                                                  <SelectItem value='empty'>
+                                                    Empty
+                                                  </SelectItem>
+                                                  <SelectItem value='maintenance'>
+                                                    Maintenance
+                                                  </SelectItem>
+                                                </SelectContent>
+                                              </Select>
+                                            ) : (
+                                              getStatusBadge(displayStatus)
+                                            )}
+                                            {displayStatus !== drum.status && (
+                                              <Badge
+                                                variant='outline'
+                                                className='text-xs'
+                                              >
+                                                DB: {drum.status}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className='text-center align-middle'>
+                                          <div className='flex gap-1 justify-center items-center min-h-[32px]'>
+                                            <Button
+                                              size='icon'
+                                              variant='outline'
+                                              aria-label='View Usage Details'
+                                              className='p-1 h-7 w-7 bg-transparent'
+                                              onClick={() => {
+                                                setSelectedDrumForUsage(drum);
+                                                setDrumUsageModalOpen(true);
+                                              }}
+                                            >
+                                              <Cable className='h-4 w-4' />
+                                            </Button>
+                                            {(role === "admin" ||
+                                              role === "moderator") && (
+                                              <>
+                                                <Button
+                                                  size='icon'
+                                                  variant='ghost'
+                                                  aria-label='Edit Drum'
+                                                  className='p-1 h-7 w-7'
+                                                  onClick={() => {
+                                                    setSelectedDrum(drum);
+                                                    setEditDrumModalOpen(true);
+                                                  }}
+                                                >
+                                                  <Pencil className='h-4 w-4' />
+                                                </Button>
+                                                {displayQuantity !==
+                                                  drum.current_quantity && (
+                                                  <Button
+                                                    size='icon'
+                                                    variant='secondary'
+                                                    aria-label='Sync Database'
+                                                    className='p-1 h-7 w-7'
+                                                    onClick={() =>
+                                                      syncDrumQuantity(drum)
+                                                    }
+                                                  >
+                                                    <Package className='h-4 w-4' />
+                                                  </Button>
+                                                )}
+                                              </>
+                                            )}
+                                            {role === "admin" && (
+                                              <Button
+                                                size='icon'
+                                                variant='ghost'
+                                                aria-label='Delete Drum'
+                                                className='p-1 h-7 w-7'
+                                                onClick={() => {
+                                                  setDrumToDelete(drum);
+                                                  setDeleteDrumConfirmOpen(
+                                                    true
+                                                  );
+                                                }}
+                                              >
+                                                <Trash className='h-4 w-4 text-red-500' />
+                                              </Button>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className='text-center py-8 text-muted-foreground'>
+                        <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                        <p>No drums found</p>
+                        <p className='text-sm'>
+                          Add cable drums through invoices to track usage
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value='waste'>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Waste Reports</CardTitle>
+                    <CardDescription>
+                      Track reported waste and reasons
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingData ? (
+                      <div className='text-center py-8'>
+                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
+                        <p className='text-muted-foreground mt-2'>
+                          Loading waste reports...
+                        </p>
+                      </div>
+                    ) : wasteReports.length > 0 ? (
+                      <div className='overflow-x-auto -mx-4 sm:mx-0'>
+                        <div className='inline-block min-w-full align-middle'>
+                          <div className='overflow-hidden'>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className='min-w-[150px]'>
+                                    Item
+                                  </TableHead>
+                                  <TableHead className='min-w-[80px]'>
+                                    Quantity
+                                  </TableHead>
+                                  <TableHead className='min-w-[200px]'>
+                                    Reason
+                                  </TableHead>
+                                  <TableHead className='min-w-[100px]'>
+                                    Date
+                                  </TableHead>
+                                  <TableHead className='min-w-[120px]'>
+                                    Reported By
+                                  </TableHead>
+                                  {role === "admin" && (
+                                    <TableHead className='min-w-[80px] text-center'>
+                                      Actions
+                                    </TableHead>
+                                  )}
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {wasteReports.map((waste) => (
+                                  <TableRow key={waste.id}>
+                                    <TableCell>
+                                      {waste.item_name || "-"}
+                                    </TableCell>
+                                    <TableCell>{waste.quantity}</TableCell>
+                                    <TableCell>{waste.waste_reason}</TableCell>
+                                    <TableCell>
+                                      {waste.waste_date
+                                        ? new Date(
+                                            waste.waste_date
+                                          ).toLocaleDateString()
+                                        : "N/A"}
+                                    </TableCell>
+                                    <TableCell>{waste.full_name}</TableCell>
+                                    {role === "admin" && (
+                                      <TableCell className='text-center'>
+                                        <Button
+                                          size='icon'
+                                          variant='ghost'
+                                          aria-label='Delete Waste'
+                                          className='p-1 h-7 w-7'
+                                          onClick={() => {
+                                            setWasteToDelete(waste);
+                                            setDeleteWasteConfirmOpen(true);
+                                          }}
+                                        >
+                                          <Trash className='h-4 w-4 text-red-500' />
+                                        </Button>
+                                      </TableCell>
+                                    )}
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className='text-center py-8 text-muted-foreground'>
+                        <TrendingDown className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                        <p>No waste reports found</p>
+                        <p className='text-sm'>
+                          Record waste to track inventory loss
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
         </main>
 
         {/* Modals */}
@@ -1644,7 +1774,8 @@ export default function InventoryPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </SidebarInset>
+      </div>
+      <MobileBottomNav />
     </SidebarProvider>
   );
 }

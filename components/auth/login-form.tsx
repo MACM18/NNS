@@ -162,7 +162,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
                   onClick={onSwitchToRegister}
                   className='text-sm'
                 >
-                  Don't have an account? Sign up
+                  Don&apos;t have an account? Sign up
                 </Button>
               </div>
             )}
