@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePageVisibility } from "@/hooks/use-page-visibility";
 import {
   Calendar,
   CheckCircle,
@@ -68,6 +69,15 @@ export default function LineDetailsPage() {
       fetchLineStats();
     }
   }, []);
+
+  // Refresh data when page becomes visible again
+  usePageVisibility(() => {
+    if (user) {
+      console.log("Page became visible, refreshing lines data");
+      fetchLineStats();
+      setRefreshTrigger((prev) => prev + 1);
+    }
+  }, [user]);
 
   const fetchLineStats = async () => {
     setIsRefreshing(true);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePageVisibility } from "@/hooks/use-page-visibility";
 import {
   Plus,
   FileText,
@@ -212,6 +213,14 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     if (user && !cache.invoices.lastUpdated) {
+      refreshData();
+    }
+  }, [user]);
+
+  // Refresh data when page becomes visible again
+  usePageVisibility(() => {
+    if (user) {
+      console.log("Page became visible, refreshing invoices data");
       refreshData();
     }
   }, [user]);

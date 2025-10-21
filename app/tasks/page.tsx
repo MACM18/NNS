@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePageVisibility } from "@/hooks/use-page-visibility";
 import {
   Plus,
   Calendar,
@@ -93,6 +94,15 @@ export default function TasksPage() {
     fetchTasksForPeriod(dateFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFilter]);
+
+  // Refresh data when page becomes visible again
+  usePageVisibility(() => {
+    if (user) {
+      console.log("Page became visible, refreshing tasks data");
+      fetchTasksForPeriod(dateFilter);
+      setRefreshTrigger((prev) => prev + 1);
+    }
+  }, [user, dateFilter]);
 
   if (loading) {
     return (

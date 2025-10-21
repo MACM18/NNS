@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { usePageVisibility } from "@/hooks/use-page-visibility";
 import {
   Plus,
   Package,
@@ -269,6 +270,14 @@ export default function InventoryPage() {
       fetchAllData();
     }
   }, [user, refreshTrigger]);
+
+  // Refresh data when page becomes visible again
+  usePageVisibility(() => {
+    if (user) {
+      console.log("Page became visible, refreshing inventory data");
+      fetchAllData();
+    }
+  }, [user]);
 
   const fetchAllData = async () => {
     setLoadingData(true);
