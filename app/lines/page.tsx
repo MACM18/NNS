@@ -35,6 +35,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useDataCache } from "@/contexts/data-cache-context";
 import { Button } from "@/components/ui/button";
+import { LinesSkeleton } from "@/components/skeletons/lines-skeleton";
 
 interface LineStats {
   total: number;
@@ -127,15 +128,7 @@ export default function LineDetailsPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className='flex items-center justify-center min-h-screen'>
-        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary'></div>
-      </div>
-    );
-  }
-
-  if (!user) {
+  if (!user && !loading) {
     return <AuthWrapper />;
   }
 
@@ -172,6 +165,9 @@ export default function LineDetailsPage() {
         <Header />
 
         <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-6 overflow-x-hidden'>
+          {loading ? (
+            <LinesSkeleton />
+          ) : (
           <div className='w-full max-w-7xl mx-auto space-y-6'>
             {/* Page Header */}
             <div className='flex flex-col gap-4'>
@@ -333,6 +329,7 @@ export default function LineDetailsPage() {
               </CardContent>
             </Card>
           </div>
+          )}
         </main>
 
         {/* Assignee Management Modal */}
