@@ -42,6 +42,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useDataCache } from "@/contexts/data-cache-context";
 import { min } from "date-fns";
+import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 
 interface GeneratedInvoice {
   id: string;
@@ -448,12 +449,7 @@ export default function InvoicesPage() {
                   </CardHeader>
                   <CardContent>
                     {isRefreshing ? (
-                      <div className='text-center py-8'>
-                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                        <p className='mt-2 text-sm text-muted-foreground'>
-                          Loading invoices...
-                        </p>
-                      </div>
+                      <TableSkeleton columns={7} rows={6} />
                     ) : invoices.length === 0 ? (
                       <div className='text-center py-8 text-muted-foreground'>
                         <FileText className='h-12 w-12 mx-auto mb-4 opacity-50' />

@@ -67,6 +67,8 @@ import {
   calculateLegacyWastage,
   type DrumUsage,
 } from "@/lib/drum-wastage-calculator";
+import { TableSkeleton } from "@/components/skeletons/table-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface InventoryStats {
   totalItems: number;
@@ -733,12 +735,21 @@ export default function InventoryPage() {
                   <Package className='h-4 w-4 text-muted-foreground' />
                 </CardHeader>
                 <CardContent>
-                  <div className='text-2xl font-bold'>
-                    {loadingData ? "..." : stats.totalItems}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Active inventory items
-                  </p>
+                  {loadingData ? (
+                    <>
+                      <Skeleton className="h-8 w-16 mb-2" />
+                      <Skeleton className="h-3 w-32" />
+                    </>
+                  ) : (
+                    <>
+                      <div className='text-2xl font-bold'>
+                        {stats.totalItems}
+                      </div>
+                      <p className='text-xs text-muted-foreground'>
+                        Active inventory items
+                      </p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -750,16 +761,25 @@ export default function InventoryPage() {
                   <AlertTriangle className='h-4 w-4 text-muted-foreground' />
                 </CardHeader>
                 <CardContent>
-                  <div
-                    className={`text-2xl font-bold ${
-                      stats.lowStockAlerts > 0 ? "text-orange-600" : ""
-                    }`}
-                  >
-                    {loadingData ? "..." : stats.lowStockAlerts}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Items below reorder level
-                  </p>
+                  {loadingData ? (
+                    <>
+                      <Skeleton className="h-8 w-16 mb-2" />
+                      <Skeleton className="h-3 w-32" />
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        className={`text-2xl font-bold ${
+                          stats.lowStockAlerts > 0 ? "text-orange-600" : ""
+                        }`}
+                      >
+                        {stats.lowStockAlerts}
+                      </div>
+                      <p className='text-xs text-muted-foreground'>
+                        Items below reorder level
+                      </p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -771,12 +791,21 @@ export default function InventoryPage() {
                   <BarChart3 className='h-4 w-4 text-muted-foreground' />
                 </CardHeader>
                 <CardContent>
-                  <div className='text-2xl font-bold'>
-                    {loadingData ? "..." : stats.activeDrums}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Cable drums in use
-                  </p>
+                  {loadingData ? (
+                    <>
+                      <Skeleton className="h-8 w-16 mb-2" />
+                      <Skeleton className="h-3 w-32" />
+                    </>
+                  ) : (
+                    <>
+                      <div className='text-2xl font-bold'>
+                        {stats.activeDrums}
+                      </div>
+                      <p className='text-xs text-muted-foreground'>
+                        Cable drums in use
+                      </p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -788,12 +817,21 @@ export default function InventoryPage() {
                   <TrendingDown className='h-4 w-4 text-muted-foreground' />
                 </CardHeader>
                 <CardContent>
-                  <div className='text-2xl font-bold'>
-                    {loadingData ? "..." : `${stats.monthlyWastePercentage}%`}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Of total inventory
-                  </p>
+                  {loadingData ? (
+                    <>
+                      <Skeleton className="h-8 w-16 mb-2" />
+                      <Skeleton className="h-3 w-32" />
+                    </>
+                  ) : (
+                    <>
+                      <div className='text-2xl font-bold'>
+                        {`${stats.monthlyWastePercentage}%`}
+                      </div>
+                      <p className='text-xs text-muted-foreground'>
+                        Of total inventory
+                      </p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -825,12 +863,7 @@ export default function InventoryPage() {
                   </CardHeader>
                   <CardContent>
                     {loadingData ? (
-                      <div className='text-center py-8'>
-                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                        <p className='text-muted-foreground mt-2'>
-                          Loading invoices...
-                        </p>
-                      </div>
+                      <TableSkeleton columns={7} rows={6} />
                     ) : invoices.length > 0 ? (
                       <div className='overflow-x-auto -mx-4 sm:mx-0'>
                         <div className='inline-block min-w-full align-middle'>
@@ -1026,12 +1059,7 @@ export default function InventoryPage() {
                   </CardHeader>
                   <CardContent>
                     {loadingData ? (
-                      <div className='text-center py-8'>
-                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                        <p className='text-muted-foreground mt-2'>
-                          Loading stock levels...
-                        </p>
-                      </div>
+                      <TableSkeleton columns={7} rows={6} />
                     ) : inventoryItems.length > 0 ? (
                       <div className='overflow-x-auto -mx-4 sm:mx-0'>
                         <div className='inline-block min-w-full align-middle'>
@@ -1150,12 +1178,7 @@ export default function InventoryPage() {
                   </CardHeader>
                   <CardContent>
                     {loadingData ? (
-                      <div className='text-center py-8'>
-                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                        <p className='text-muted-foreground mt-2'>
-                          Loading drum tracking...
-                        </p>
-                      </div>
+                      <TableSkeleton columns={8} rows={6} />
                     ) : drums.length > 0 ? (
                       <div className='overflow-x-auto -mx-4 sm:mx-0'>
                         <div className='inline-block min-w-full align-middle'>
@@ -1468,12 +1491,7 @@ export default function InventoryPage() {
                   </CardHeader>
                   <CardContent>
                     {loadingData ? (
-                      <div className='text-center py-8'>
-                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                        <p className='text-muted-foreground mt-2'>
-                          Loading waste reports...
-                        </p>
-                      </div>
+                      <TableSkeleton columns={role === "admin" ? 6 : 5} rows={6} />
                     ) : wasteReports.length > 0 ? (
                       <div className='overflow-x-auto -mx-4 sm:mx-0'>
                         <div className='inline-block min-w-full align-middle'>
