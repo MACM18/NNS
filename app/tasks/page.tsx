@@ -39,7 +39,7 @@ import type { TaskRecord } from "@/types/tasks";
 import { TasksSkeleton } from "@/components/skeletons/tasks-skeleton";
 
 export default function TasksPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, isGoogleUser } = useAuth();
   const [addTaskModalOpen, setAddTaskModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [dateFilter, setDateFilter] = useState<"today" | "week" | "month">(
@@ -172,6 +172,8 @@ export default function TasksPage() {
                 <Button
                   onClick={() => setAddTaskModalOpen(true)}
                   className='gap-2'
+                  disabled={isGoogleUser}
+                  title={isGoogleUser ? 'Google users cannot add tasks' : 'Add Task'}
                 >
                   <Plus className='h-4 w-4' />
                   Add Task

@@ -156,7 +156,7 @@ export function LineDetailsTable({
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
-  const { role } = useAuth();
+  const { role, isGoogleUser } = useAuth();
 
   const toTelephoneLinePayload = useCallback(
     (line: LineDetail | null): TelephoneLineModalPayload | null => {
@@ -892,6 +892,8 @@ export function LineDetailsTable({
                           variant='outline'
                           size='sm'
                           onClick={() => handleEditLine(line)}
+                          disabled={isGoogleUser}
+                          title={isGoogleUser ? 'Google users cannot edit lines' : 'Edit line'}
                         >
                           <Edit2 className='h-4 w-4 mr-1' /> Edit
                         </Button>
@@ -902,6 +904,8 @@ export function LineDetailsTable({
                           variant='destructive'
                           size='sm'
                           onClick={() => handleDeleteLine(line)}
+                          disabled={isGoogleUser}
+                          title={isGoogleUser ? 'Google users cannot delete lines' : 'Delete line'}
                         >
                           <Trash2 className='h-4 w-4 mr-1' /> Delete
                         </Button>
@@ -914,6 +918,8 @@ export function LineDetailsTable({
                             variant='outline'
                             size='sm'
                             onClick={() => handleCompleteLine(line.id)}
+                            disabled={isGoogleUser}
+                            title={isGoogleUser ? 'Google users cannot complete lines' : 'Complete line'}
                           >
                             Complete
                           </Button>

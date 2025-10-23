@@ -21,8 +21,8 @@ export default function UsersPage() {
 
   return (
     <DashboardLayout>
-      <div className='max-w-3xl mx-auto py-12'>
-        <h1 className='text-3xl font-bold mb-6'>Users Management</h1>
+      <div className='w-full max-w-6xl mx-auto py-6 sm:py-12 px-4 sm:px-6'>
+        <h1 className='text-2xl sm:text-3xl font-bold mb-4 sm:mb-6'>Users Management</h1>
         <UserManagementTabs />
       </div>
     </DashboardLayout>

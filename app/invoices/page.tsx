@@ -67,7 +67,7 @@ interface InvoiceStats {
 }
 
 export default function InvoicesPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, isGoogleUser } = useAuth();
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
@@ -348,6 +348,8 @@ export default function InvoicesPage() {
                   onClick={() => setSettingsModalOpen(true)}
                   variant='outline'
                   className='gap-2'
+                  disabled={isGoogleUser}
+                  title={isGoogleUser ? 'Google users cannot change settings' : 'Settings'}
                 >
                   <Settings className='h-4 w-4' />
                   Settings
@@ -355,6 +357,8 @@ export default function InvoicesPage() {
                 <Button
                   onClick={() => setGenerateModalOpen(true)}
                   className='gap-2'
+                  disabled={isGoogleUser}
+                  title={isGoogleUser ? 'Google users cannot generate invoices' : 'Generate Invoices'}
                 >
                   <Plus className='h-4 w-4' />
                   Generate Invoices

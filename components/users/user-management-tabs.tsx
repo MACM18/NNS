@@ -42,9 +42,20 @@ export function UserManagementTabs() {
     const supabase = getSupabaseClient();
     // Fetch all profiles (active users)
     const { data: profiles } = await supabase.from("profiles").select("*");
-    setActiveUsers(profiles || []);
     // Fetch all auth users
     const { data: authUsers } = await supabase.auth.admin.listUsers();
+    
+    // Merge profiles with auth user data to get provider info
+    const activeWithProvider = (profiles || []).map((profile: any) => {
+      const authUser = authUsers?.users.find((u) => u.id === profile.id);
+      return {
+        ...profile,
+        provider: authUser?.app_metadata?.provider || 'email',
+        identities: authUser?.identities || []
+      };
+    });
+    
+    setActiveUsers(activeWithProvider);
     // Pending = users in auth but not in profiles
     const pending = (authUsers?.users || []).filter(
       (u) =>
@@ -121,15 +132,15 @@ export function UserManagementTabs() {
 
   return (
     <Tabs defaultValue='active' className='w-full'>
-      <TabsList className='mb-4 flex justify-between'>
-        <div>
-          <TabsTrigger value='active'>Active Users</TabsTrigger>
-          <TabsTrigger value='pending'>Pending Approvals</TabsTrigger>
-        </div>
-        <Button size='sm' onClick={() => setShowCreateModal(true)}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <TabsList className='w-full sm:w-auto'>
+          <TabsTrigger value='active' className="flex-1 sm:flex-initial">Active Users</TabsTrigger>
+          <TabsTrigger value='pending' className="flex-1 sm:flex-initial">Pending Approvals</TabsTrigger>
+        </TabsList>
+        <Button size='sm' onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
           <UserPlus className='mr-2 h-4 w-4' /> Create User
         </Button>
-      </TabsList>
+      </div>
       <TabsContent value='active'>
         <Card>
           <CardHeader>
@@ -143,29 +154,48 @@ export function UserManagementTabs() {
                 <table className='min-w-full border rounded-md text-sm'>
                   <thead>
                     <tr className='bg-muted text-muted-foreground'>
-                      <th className='px-4 py-2 text-left font-semibold'>
+                      <th className='px-2 sm:px-4 py-2 text-left font-semibold'>
                         Name
                       </th>
-                      <th className='px-4 py-2 text-left font-semibold'>
+                      <th className='px-2 sm:px-4 py-2 text-left font-semibold hidden sm:table-cell'>
                         Email
                       </th>
-                      <th className='px-4 py-2 text-center font-semibold'>
+                      <th className='px-2 sm:px-4 py-2 text-center font-semibold hidden md:table-cell'>
+                        Provider
+                      </th>
+                      <th className='px-2 sm:px-4 py-2 text-center font-semibold'>
                         Details
                       </th>
-                      <th className='px-4 py-2 text-center font-semibold'>
+                      <th className='px-2 sm:px-4 py-2 text-center font-semibold'>
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {activeUsers.map((user) => (
+                    {activeUsers.map((user) => {
+                      const isGoogleUser = user.provider === 'google' || user.identities?.some((id: any) => id.provider === 'google');
+                      return (
                       <tr
                         key={user.id}
                         className='border-b hover:bg-accent transition-colors group'
                       >
-                        <td className='px-4 py-2'>{user.full_name}</td>
-                        <td className='px-4 py-2'>{user.email}</td>
-                        <td className='px-4 py-2 text-center'>
+                        <td className='px-2 sm:px-4 py-2'>
+                          <div className="flex flex-col">
+                            <span>{user.full_name}</span>
+                            <span className="text-xs text-muted-foreground sm:hidden">{user.email}</span>
+                          </div>
+                        </td>
+                        <td className='px-2 sm:px-4 py-2 hidden sm:table-cell'>{user.email}</td>
+                        <td className='px-2 sm:px-4 py-2 text-center hidden md:table-cell'>
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
+                            isGoogleUser 
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                          }`}>
+                            {isGoogleUser ? '🔵 Google' : '📧 Email'}
+                          </span>
+                        </td>
+                        <td className='px-2 sm:px-4 py-2 text-center'>
                           <Popover>
                             <PopoverTrigger asChild>
                               <Button
@@ -183,6 +213,12 @@ export function UserManagementTabs() {
                                 </div>
                                 <div className='text-xs text-muted-foreground'>
                                   {user.email}
+                                </div>
+                                <div className='flex items-center gap-2 mt-2'>
+                                  <span className='font-medium'>Provider:</span>
+                                  <span className='capitalize'>
+                                    {isGoogleUser ? 'Google OAuth' : 'Email/Password'}
+                                  </span>
                                 </div>
                                 <div className='flex items-center gap-2 mt-2'>
                                   <span className='font-medium'>Role:</span>
@@ -212,13 +248,15 @@ export function UserManagementTabs() {
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className='px-4 py-2 text-center'>
-                          <div className='flex items-center justify-center gap-2'>
+                        <td className='px-2 sm:px-4 py-2 text-center'>
+                          <div className='flex flex-col sm:flex-row items-center justify-center gap-2'>
                             <Button
                               size='icon'
                               variant='outline'
                               onClick={() => setEditUser(user)}
                               aria-label='Edit user'
+                              disabled={isGoogleUser}
+                              title={isGoogleUser ? 'Google users cannot be edited' : 'Edit user'}
                             >
                               <Pencil className='h-4 w-4' />
                             </Button>
@@ -227,7 +265,7 @@ export function UserManagementTabs() {
                               onChange={(e) =>
                                 handleRoleChange(user, e.target.value)
                               }
-                              className='border rounded px-2 py-1 text-sm bg-background'
+                              className='border rounded px-2 py-1 text-xs sm:text-sm bg-background w-full sm:w-auto'
                             >
                               <option value='user'>User</option>
                               <option value='employee'>Employee</option>
@@ -271,7 +309,7 @@ export function UserManagementTabs() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>

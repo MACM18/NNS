@@ -16,6 +16,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   role: string | null;
+  isGoogleUser: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -26,6 +27,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -55,12 +57,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (session?.user) {
         setUser(session.user);
+        // Check if user is a Google OAuth user
+        const googleProvider = session.user.app_metadata?.provider === 'google' || 
+                               session.user.identities?.some((id) => id.provider === 'google');
+        setIsGoogleUser(googleProvider || false);
         const roleValue = await fetchUserProfile(session.user.id);
         if (!isMounted()) return;
         setRole(roleValue?.toLowerCase?.() || "user");
       } else {
         setUser(null);
         setRole(null);
+        setIsGoogleUser(false);
       }
     },
     [fetchUserProfile]
@@ -180,6 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       } else {
         setUser(null);
         setRole(null);
+        setIsGoogleUser(false);
         router.push("/");
       }
     } finally {
@@ -188,7 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, role, signOut }}>
+    <AuthContext.Provider value={{ user, loading, role, isGoogleUser, signOut }}>
       {children}
     </AuthContext.Provider>
   );
