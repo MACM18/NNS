@@ -255,8 +255,6 @@ export function UserManagementTabs() {
                               variant='outline'
                               onClick={() => setEditUser(user)}
                               aria-label='Edit user'
-                              disabled={isGoogleUser}
-                              title={isGoogleUser ? 'Google users cannot be edited' : 'Edit user'}
                             >
                               <Pencil className='h-4 w-4' />
                             </Button>

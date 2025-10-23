@@ -105,7 +105,7 @@ export function TaskManagementTable({
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
-  const { user, profile, role, isGoogleUser } = useAuth();
+  const { user, profile, role } = useAuth();
 
   useEffect(() => {
     fetchData();
@@ -672,8 +672,6 @@ export function TaskManagementTable({
                             setEditTask(item);
                             setEditModalOpen(true);
                           }}
-                          disabled={isGoogleUser}
-                          title={isGoogleUser ? 'Google users cannot edit tasks' : 'Edit task'}
                         >
                           Edit
                         </Button>
@@ -690,8 +688,6 @@ export function TaskManagementTable({
                               <Button
                                 size='sm'
                                 variant='destructive'
-                                disabled={isGoogleUser}
-                                title={isGoogleUser ? 'Google users cannot delete tasks' : 'Delete task'}
                                 className='gap-1'
                                 onClick={() => setDeletePopoverOpen(item.id)}
                               >

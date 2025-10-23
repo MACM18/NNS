@@ -223,7 +223,7 @@ const calculateDrumMetrics = (drum: any, usageData: any[]) => {
 };
 
 export default function InventoryPage() {
-  const { user, loading, role, isGoogleUser } = useAuth();
+  const { user, loading, role } = useAuth();
   const [addInvoiceModalOpen, setAddInvoiceModalOpen] = useState(false);
   const [addWasteModalOpen, setAddWasteModalOpen] = useState(false);
   const [manageItemsModalOpen, setManageItemsModalOpen] = useState(false);
@@ -701,8 +701,6 @@ export default function InventoryPage() {
                   onClick={() => setAddWasteModalOpen(true)}
                   variant='outline'
                   className='w-full sm:w-auto gap-2'
-                  disabled={isGoogleUser}
-                  title={isGoogleUser ? 'Google users cannot record waste' : 'Record Waste'}
                 >
                   <TrendingDown className='h-4 w-4' />
                   <span className='sm:inline'>Record Waste</span>
@@ -710,8 +708,6 @@ export default function InventoryPage() {
                 <Button
                   onClick={() => setAddInvoiceModalOpen(true)}
                   className='w-full sm:w-auto gap-2'
-                  disabled={isGoogleUser}
-                  title={isGoogleUser ? 'Google users cannot add invoices' : 'Add Invoice'}
                 >
                   <Plus className='h-4 w-4' />
                   <span className='sm:inline'>Add Invoice</span>
@@ -721,8 +717,6 @@ export default function InventoryPage() {
                     onClick={() => setManageItemsModalOpen(true)}
                     variant='secondary'
                     className='w-full sm:w-auto gap-2'
-                    disabled={isGoogleUser}
-                    title={isGoogleUser ? 'Google users cannot manage items' : 'Manage Items'}
                   >
                     <Package className='h-4 w-4' />
                     <span className='sm:inline'>Manage Items</span>
