@@ -224,7 +224,7 @@ export function GenerateMonthlyInvoicesModal({
         type: "B" as const,
         percentage: 10,
         lines: lines, // All lines
-        totalAmount: totalAmount - Math.round(totalAmount * 0.9), // Remainder to ensure 100%
+        totalAmount: totalAmount - Math.round(totalAmount * 0.9), // Use remainder to ensure exact 100% coverage without rounding errors
         invoiceNumber: `${baseInvoiceNumber}/B`,
       },
     ];
