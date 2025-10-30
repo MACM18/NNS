@@ -64,7 +64,7 @@ CREATE TABLE public.generated_invoices (
   invoice_number text NOT NULL,
   month integer CHECK (month >= 1 AND month <= 12),
   year integer,
-  invoice_type text CHECK (invoice_type = ANY (ARRAY['A'::text, 'B'::text, 'C'::text])),
+  invoice_type text CHECK (invoice_type = ANY (ARRAY['A'::text, 'B'::text])),
   total_amount numeric,
   pdf_url text,
   created_at timestamp with time zone DEFAULT now(),

@@ -47,7 +47,7 @@ import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 interface GeneratedInvoice {
   id: string;
   invoice_number: string;
-  invoice_type: "A" | "B" | "C";
+  invoice_type: "A" | "B";
   month: number;
   year: number;
   job_month: string;
@@ -444,7 +444,7 @@ export default function InvoicesPage() {
                   <CardHeader>
                     <CardTitle>Generated Invoices</CardTitle>
                     <CardDescription>
-                      Monthly invoices with A/B/C distribution (90%/5%/5%)
+                      Monthly invoices with A/B distribution (90%/10%)
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
