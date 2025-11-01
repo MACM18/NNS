@@ -130,6 +130,7 @@ export default function InvoicesPage() {
       const { data, error } = await supabase
         .from("generated_invoices")
         .select("*")
+        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -160,6 +161,7 @@ export default function InvoicesPage() {
       const { data: monthlyInvoices, error: monthlyError } = await supabase
         .from("generated_invoices")
         .select("*")
+        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
         .eq("month", currentMonth)
         .eq("year", currentYear);
 
@@ -258,6 +260,10 @@ export default function InvoicesPage() {
   };
 
   const getInvoiceTypeBadge = (type: string) => {
+    // Only display A and B type invoices
+    if (type !== "A" && type !== "B") {
+      return null;
+    }
     return (
       <Badge
         variant={type === "A" ? "default" : "secondary"}

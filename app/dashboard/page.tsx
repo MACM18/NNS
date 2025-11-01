@@ -185,12 +185,14 @@ export default function Dashboard() {
       const { data: currentInvoices } = await supabase
         .from("generated_invoices")
         .select("total_amount")
+        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
         .gte("job_month", currentMonthStartDate)
         .lte("job_month", currentMonthEndDate);
 
       const { data: previousInvoices } = await supabase
         .from("generated_invoices")
         .select("total_amount")
+        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
         .gte("job_month", previousMonthStartDate)
         .lte("job_month", previousMonthEndDate);
 

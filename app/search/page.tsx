@@ -224,7 +224,10 @@ export default function SearchPage() {
 
       // Search Invoices
       if (searchFilters.categories.includes("invoice")) {
-        let invoiceQuery = supabase.from("generated_invoices").select("*");
+        let invoiceQuery = supabase
+          .from("generated_invoices")
+          .select("*")
+          .in("invoice_type", ["A", "B"]); // Only fetch A and B type invoices
 
         if (searchFilters.query.trim()) {
           invoiceQuery = invoiceQuery.or(
