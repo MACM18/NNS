@@ -12,7 +12,7 @@ import {
 
 interface InvoiceData {
   invoiceNumber: string;
-  invoiceType: "A" | "B" | "C";
+  invoiceType: "A" | "B";
   invoiceDate: string;
   jobMonth: string;
   lines: Array<{
