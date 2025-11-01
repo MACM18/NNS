@@ -177,6 +177,7 @@ export function Header() {
         const { data: invoices } = await supabase
           .from("generated_invoices")
           .select("id, invoice_number, customer_name, total_amount")
+          .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
           .ilike("invoice_number", `%${query}%`)
           .limit(3);
 
