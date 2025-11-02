@@ -37,6 +37,12 @@ export default function LandingPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
+  // Redirect authenticated users to dashboard
+  if (!loading && user) {
+    router.push("/dashboard");
+    return null;
+  }
+
   const handleAuthAction = () => {
     if (user) {
       router.push("/dashboard");

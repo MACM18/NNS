@@ -42,11 +42,12 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useDataCache } from "@/contexts/data-cache-context";
 import { min } from "date-fns";
+import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 
 interface GeneratedInvoice {
   id: string;
   invoice_number: string;
-  invoice_type: "A" | "B" | "C";
+  invoice_type: "A" | "B";
   month: number;
   year: number;
   job_month: string;
@@ -129,6 +130,7 @@ export default function InvoicesPage() {
       const { data, error } = await supabase
         .from("generated_invoices")
         .select("*")
+        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -159,6 +161,7 @@ export default function InvoicesPage() {
       const { data: monthlyInvoices, error: monthlyError } = await supabase
         .from("generated_invoices")
         .select("*")
+        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
         .eq("month", currentMonth)
         .eq("year", currentYear);
 
@@ -257,6 +260,10 @@ export default function InvoicesPage() {
   };
 
   const getInvoiceTypeBadge = (type: string) => {
+    // Only display A and B type invoices
+    if (type !== "A" && type !== "B") {
+      return null;
+    }
     return (
       <Badge
         variant={type === "A" ? "default" : "secondary"}
@@ -435,17 +442,12 @@ export default function InvoicesPage() {
                   <CardHeader>
                     <CardTitle>Generated Invoices</CardTitle>
                     <CardDescription>
-                      Monthly invoices with A/B/C distribution (90%/5%/5%)
+                      Monthly invoices with A/B distribution (90%/10%)
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     {isRefreshing ? (
-                      <div className='text-center py-8'>
-                        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-                        <p className='mt-2 text-sm text-muted-foreground'>
-                          Loading invoices...
-                        </p>
-                      </div>
+                      <TableSkeleton columns={7} rows={6} />
                     ) : invoices.length === 0 ? (
                       <div className='text-center py-8 text-muted-foreground'>
                         <FileText className='h-12 w-12 mx-auto mb-4 opacity-50' />

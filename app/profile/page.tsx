@@ -22,6 +22,7 @@ import { useNotification } from "@/contexts/notification-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRouter } from "next/navigation";
+import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 export default function ProfilePage() {
   const { user, profile, loading } = useAuth();
@@ -35,15 +36,7 @@ export default function ProfilePage() {
   });
   const route = useRouter();
 
-  if (loading) {
-    return (
-      <div className='flex items-center justify-center min-h-screen'>
-        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary'></div>
-      </div>
-    );
-  }
-
-  if (!user) {
+  if (!user && !loading) {
     return <AuthWrapper />;
   }
 
@@ -85,6 +78,9 @@ export default function ProfilePage() {
         <Header />
 
         <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-6 overflow-x-hidden'>
+          {loading ? (
+            <PageSkeleton />
+          ) : (
           <div className='w-full max-w-7xl mx-auto space-y-6'>
             <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
               <div>
@@ -293,6 +289,7 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
           </div>
+          )}
         </main>
       </div>
       <MobileBottomNav />

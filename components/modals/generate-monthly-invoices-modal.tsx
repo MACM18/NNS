@@ -48,7 +48,7 @@ interface LineDetail {
 }
 
 interface InvoicePreview {
-  type: "A" | "B" | "C";
+  type: "A" | "B";
   percentage: number;
   lines: LineDetail[];
   totalAmount: number;
@@ -211,7 +211,7 @@ export function GenerateMonthlyInvoicesModal({
       -2
     )}/${monthName}`;
 
-    // Always generate 3 invoices: A (90%), B (5%), C (5%)
+    // Always generate 2 invoices: A (90%), B (10%)
     const previews: InvoicePreview[] = [
       {
         type: "A" as const,
@@ -222,27 +222,17 @@ export function GenerateMonthlyInvoicesModal({
       },
       {
         type: "B" as const,
-        percentage: 5,
+        percentage: 10,
         lines: lines, // All lines
-        totalAmount: Math.round(totalAmount * 0.05),
+        totalAmount: totalAmount - Math.round(totalAmount * 0.9), // Use remainder to ensure exact 100% coverage without rounding errors
         invoiceNumber: `${baseInvoiceNumber}/B`,
-      },
-      {
-        type: "C" as const,
-        percentage: 5,
-        lines: lines, // All lines
-        totalAmount:
-          totalAmount -
-          Math.round(totalAmount * 0.9) -
-          Math.round(totalAmount * 0.05), // Remainder to ensure 100%
-        invoiceNumber: `${baseInvoiceNumber}/C`,
       },
     ];
 
     setInvoicePreviews(previews);
   };
 
-  const generateInvoiceNumber = (type: "A" | "B" | "C"): string => {
+  const generateInvoiceNumber = (type: "A" | "B"): string => {
     const monthName =
       months.find((m) => m.value === selectedMonth)?.label || "Unknown";
     return `S/Southern/HR/NC/${selectedYear.slice(-2)}/${monthName}/${type}`;
@@ -347,7 +337,7 @@ export function GenerateMonthlyInvoicesModal({
         <DialogHeader>
           <DialogTitle>Generate Monthly Invoices</DialogTitle>
           <DialogDescription>
-            Generate 3 monthly invoices (A=90%, B=5%, C=5%) based on completed
+            Generate 2 monthly invoices (A=90%, B=10%) based on completed
             line installations.
           </DialogDescription>
         </DialogHeader>

@@ -51,6 +51,7 @@ import {
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useTheme } from "next-themes";
+import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 export default function SettingsPage() {
   const { user, profile, loading } = useAuth();
@@ -354,8 +355,7 @@ export default function SettingsPage() {
     }));
   };
 
-
-  if (!user) {
+  if (!user && !loading) {
     return <AuthWrapper />;
   }
 
@@ -366,6 +366,9 @@ export default function SettingsPage() {
         <Header />
 
         <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-6 overflow-x-hidden'>
+          {loading ? (
+            <PageSkeleton />
+          ) : (
           <div className='w-full max-w-7xl mx-auto space-y-6'>
             <div className='flex flex-col sm:flex-row items-start sm:items-center gap-4'>
               <SettingsIcon className='h-8 w-8' />
@@ -1305,6 +1308,7 @@ export default function SettingsPage() {
               </TabsContent>
             </Tabs>
           </div>
+          )}
         </main>
       </div>
       <MobileBottomNav />

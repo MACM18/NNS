@@ -27,6 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
+import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 
 interface LineDetail {
   id: string;
@@ -167,16 +168,7 @@ export function LineDetailsTable({
   );
 
   if (loading) {
-    return (
-      <div className='flex items-center justify-center h-64'>
-        <div className='text-center'>
-          <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-          <p className='mt-2 text-sm text-muted-foreground'>
-            Loading line details...
-          </p>
-        </div>
-      </div>
-    );
+    return <TableSkeleton columns={6} rows={8} />;
   }
 
   return (

@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Header } from "@/components/layout/header"
 import { useAuth } from "@/contexts/auth-context"
 import { AuthWrapper } from "@/components/auth/auth-wrapper"
+import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 
 export default function SearchDetailsLayout({
   children,
@@ -15,7 +16,7 @@ export default function SearchDetailsLayout({
 }) {
   const { user, loading } = useAuth()
 
-  if (!user) {
+  if (!user && !loading) {
     return <AuthWrapper />
   }
 
@@ -24,7 +25,13 @@ export default function SearchDetailsLayout({
       <AppSidebar />
       <SidebarInset>
         <Header />
-        {children}
+        {loading ? (
+          <div className="p-4 md:p-6 lg:p-8">
+            <PageSkeleton />
+          </div>
+        ) : (
+          children
+        )}
       </SidebarInset>
     </SidebarProvider>
   )

@@ -30,6 +30,7 @@ import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-mo
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { supabase } from "@/lib/supabase";
 import { useDataCache } from "@/contexts/data-cache-context";
+import { DashboardSkeleton } from "@/components/skeletons/dashboard-skeleton";
 
 interface DashboardStats {
   totalLines: number;
@@ -184,12 +185,14 @@ export default function Dashboard() {
       const { data: currentInvoices } = await supabase
         .from("generated_invoices")
         .select("total_amount")
+        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
         .gte("job_month", currentMonthStartDate)
         .lte("job_month", currentMonthEndDate);
 
       const { data: previousInvoices } = await supabase
         .from("generated_invoices")
         .select("total_amount")
+        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
         .gte("job_month", previousMonthStartDate)
         .lte("job_month", previousMonthEndDate);
 
@@ -290,7 +293,7 @@ export default function Dashboard() {
     return `${sign}${change.toFixed(1)}%`;
   };
 
-  if (!user) {
+  if (!user && !loading) {
     return null; // Will redirect to auth
   }
 
@@ -331,6 +334,9 @@ export default function Dashboard() {
       <div className='flex-1 flex flex-col min-h-screen w-full'>
         <Header />
         <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-4 overflow-x-hidden'>
+          {loading ? (
+            <DashboardSkeleton />
+          ) : (
           <div className='w-full max-w-7xl mx-auto space-y-4'>
             <div className='flex flex-col gap-4'>
               <h2 className='text-2xl sm:text-3xl font-bold tracking-tight'>
@@ -509,6 +515,7 @@ export default function Dashboard() {
               </Card>
             </div>
           </div>
+          )}
         </main>
       </div>
       <MobileBottomNav />

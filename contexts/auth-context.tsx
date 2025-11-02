@@ -28,10 +28,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const fetchUserProfile = useCallback(async (userId: string) => {
+  const fetchUserProfile = useCallback(async (userId: string, userEmail: string, userName: string | null) => {
     try {
       const { data: profile, error } = await supabase
         .from("profiles")
@@ -40,6 +41,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         .single();
 
       if (error) {
+        // If profile doesn't exist, create it
+        if (error.code === 'PGRST116') {
+          console.log("Profile not found, creating new profile for user:", userId);
+          const { data: newProfile, error: insertError } = await supabase
+            .from("profiles")
+            .insert({
+              id: userId,
+              email: userEmail,
+              full_name: userName || userEmail,
+              role: "user",
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .select("role")
+            .single();
+
+          if (insertError) {
+            console.error("Error creating user profile:", insertError);
+            return "user";
+          }
+
+          return (newProfile?.role as string) || "user";
+        }
         console.error("Error fetching user profile:", error);
         return { role: "user", profile: null };
       }
@@ -60,15 +84,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (session?.user) {
         setUser(session.user);
-        const { role: roleValue, profile: profileData } =
-          await fetchUserProfile(session.user.id);
+        // Check if user is a Google OAuth user
+        const googleProvider = session.user.app_metadata?.provider === 'google' || 
+                               session.user.identities?.some((id) => id.provider === 'google');
+        setIsGoogleUser(googleProvider || false);
+        
+        // Get user name from metadata
+        const userName = session.user.user_metadata?.full_name || 
+                        session.user.user_metadata?.name || 
+                        null;
+        
+        const roleValue = await fetchUserProfile(
+          session.user.id, 
+          session.user.email || '', 
+          userName
+        );
         if (!isMounted()) return;
         setRole(roleValue?.toLowerCase?.() || "user");
         setProfile(profileData);
       } else {
         setUser(null);
         setRole(null);
-        setProfile(null);
+        setIsGoogleUser(false);
       }
     },
     [fetchUserProfile]
@@ -194,7 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       } else {
         setUser(null);
         setRole(null);
-        setProfile(null);
+        setIsGoogleUser(false);
         router.push("/");
       }
     } finally {

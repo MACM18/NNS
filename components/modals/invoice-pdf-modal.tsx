@@ -17,7 +17,7 @@ import { useNotification } from "@/contexts/notification-context";
 interface GeneratedInvoice {
   id: string;
   invoice_number: string;
-  invoice_type: "A" | "B" | "C";
+  invoice_type: "A" | "B";
   month: number;
   year: number;
   job_month: string;

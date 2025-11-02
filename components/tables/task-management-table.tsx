@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dialog";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
+import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import { useAuth } from "@/contexts/auth-context";
 import { EditTaskModal } from "@/components/modals/edit-task-modal";
 import { toast } from "@/hooks/use-toast";
@@ -475,14 +476,7 @@ export function TaskManagementTable({
   );
 
   if (loading) {
-    return (
-      <div className='flex items-center justify-center h-64'>
-        <div className='text-center'>
-          <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-          <p className='mt-2 text-sm text-muted-foreground'>Loading tasks...</p>
-        </div>
-      </div>
-    );
+    return <TableSkeleton columns={7} rows={8} />;
   }
 
   return (
