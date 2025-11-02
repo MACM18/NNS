@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 
 interface AuthContextType {
   user: User | null;
+  profile: any | null;
   loading: boolean;
   role: string | null;
   signOut: () => Promise<void>;
@@ -25,6 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<any | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -33,19 +35,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const { data: profile, error } = await supabase
         .from("profiles")
-        .select("role")
+        .select("*")
         .eq("id", userId)
         .single();
 
       if (error) {
         console.error("Error fetching user profile:", error);
-        return "user";
+        return { role: "user", profile: null };
       }
 
-      return (profile?.role as string) || "user";
+      return { 
+        role: (profile?.role as string) || "user", 
+        profile: profile 
+      };
     } catch (error) {
       console.error("Error fetching user profile:", error);
-      return "user";
+      return { role: "user", profile: null };
     }
   }, []);
 
@@ -55,12 +60,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (session?.user) {
         setUser(session.user);
-        const roleValue = await fetchUserProfile(session.user.id);
+        const { role: roleValue, profile: profileData } = await fetchUserProfile(session.user.id);
         if (!isMounted()) return;
         setRole(roleValue?.toLowerCase?.() || "user");
+        setProfile(profileData);
       } else {
         setUser(null);
         setRole(null);
+        setProfile(null);
       }
     },
     [fetchUserProfile]
@@ -180,6 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       } else {
         setUser(null);
         setRole(null);
+        setProfile(null);
         router.push("/");
       }
     } finally {
@@ -188,7 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, role, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, role, signOut }}>
       {children}
     </AuthContext.Provider>
   );

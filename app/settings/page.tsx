@@ -255,10 +255,11 @@ export default function SettingsPage() {
       };
 
       if (existing) {
+        const existingId = (existing as { id: number }).id;
         const { error } = await supabase
           .from("company_settings")
           .update(settingsData)
-          .eq("id", existing.id);
+          .eq("id", existingId);
         if (error) throw error;
       } else {
         const { error } = await supabase
@@ -353,13 +354,6 @@ export default function SettingsPage() {
     }));
   };
 
-  if (loading) {
-    return (
-      <div className='flex items-center justify-center min-h-screen'>
-        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary'></div>
-      </div>
-    );
-  }
 
   if (!user) {
     return <AuthWrapper />;
