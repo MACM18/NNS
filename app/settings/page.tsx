@@ -256,10 +256,11 @@ export default function SettingsPage() {
       };
 
       if (existing) {
+        const existingId = (existing as { id: number }).id;
         const { error } = await supabase
           .from("company_settings")
           .update(settingsData)
-          .eq("id", existing.id);
+          .eq("id", existingId);
         if (error) throw error;
       } else {
         const { error } = await supabase

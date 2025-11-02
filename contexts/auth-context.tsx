@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 
 interface AuthContextType {
   user: User | null;
+  profile: any | null;
   loading: boolean;
   role: string | null;
   signOut: () => Promise<void>;
@@ -25,6 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<any | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -34,7 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const { data: profile, error } = await supabase
         .from("profiles")
-        .select("role")
+        .select("*")
         .eq("id", userId)
         .single();
 
@@ -63,13 +65,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           return (newProfile?.role as string) || "user";
         }
         console.error("Error fetching user profile:", error);
-        return "user";
+        return { role: "user", profile: null };
       }
 
-      return (profile?.role as string) || "user";
+      return {
+        role: (profile?.role as string) || "user",
+        profile: profile,
+      };
     } catch (error) {
       console.error("Error fetching user profile:", error);
-      return "user";
+      return { role: "user", profile: null };
     }
   }, []);
 
@@ -96,6 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         );
         if (!isMounted()) return;
         setRole(roleValue?.toLowerCase?.() || "user");
+        setProfile(profileData);
       } else {
         setUser(null);
         setRole(null);
@@ -170,7 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Handle page visibility changes to refresh session when tab becomes visible
     const handleVisibilityChange = async () => {
       if (!isMounted()) return;
-      
+
       if (!document.hidden) {
         // Page became visible, refresh the session
         try {
@@ -180,7 +186,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           } = await supabase.auth.getSession();
 
           if (error) {
-            console.error("Error refreshing session on visibility change:", error);
+            console.error(
+              "Error refreshing session on visibility change:",
+              error
+            );
             return;
           }
 
@@ -189,7 +198,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const { data: refreshData, error: refreshError } =
               await supabase.auth.refreshSession();
             if (refreshError) {
-              console.warn("Unable to refresh session on visibility change:", refreshError.message);
+              console.warn(
+                "Unable to refresh session on visibility change:",
+                refreshError.message
+              );
             }
             await applySession(refreshData?.session ?? null, isMounted);
           } else {
@@ -228,7 +240,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, role, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, role, signOut }}>
       {children}
     </AuthContext.Provider>
   );
