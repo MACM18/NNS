@@ -187,7 +187,10 @@ export default function CareersPage() {
                     Manage job vacancies and career opportunities
                   </p>
                 </div>
-                <Button onClick={() => setShowAddModal(true)} className='w-full sm:w-auto'>
+                <Button
+                  onClick={() => setShowAddModal(true)}
+                  className='w-full sm:w-auto'
+                >
                   <Plus className='mr-2 h-4 w-4' />
                   Add Job Vacancy
                 </Button>
@@ -217,7 +220,9 @@ export default function CareersPage() {
                     <DropdownMenuItem onClick={() => setStatusFilter("active")}>
                       Active
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setStatusFilter("disabled")}>
+                    <DropdownMenuItem
+                      onClick={() => setStatusFilter("disabled")}
+                    >
                       Disabled
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -229,7 +234,8 @@ export default function CareersPage() {
               <CardHeader>
                 <CardTitle>Job Vacancies ({jobVacancies.length})</CardTitle>
                 <CardDescription>
-                  Manage your company&apos;s job openings and career opportunities
+                  Manage your company&apos;s job openings and career
+                  opportunities
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -245,10 +251,18 @@ export default function CareersPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Job Title</TableHead>
-                          <TableHead className='hidden sm:table-cell'>Department</TableHead>
-                          <TableHead className='hidden md:table-cell'>Location</TableHead>
-                          <TableHead className='hidden lg:table-cell'>Type</TableHead>
-                          <TableHead className='hidden xl:table-cell'>End Date</TableHead>
+                          <TableHead className='hidden sm:table-cell'>
+                            Department
+                          </TableHead>
+                          <TableHead className='hidden md:table-cell'>
+                            Location
+                          </TableHead>
+                          <TableHead className='hidden lg:table-cell'>
+                            Type
+                          </TableHead>
+                          <TableHead className='hidden xl:table-cell'>
+                            End Date
+                          </TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Actions</TableHead>
                         </TableRow>
@@ -260,7 +274,9 @@ export default function CareersPage() {
                               <div className='flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2'>
                                 <div className='flex items-center space-x-2'>
                                   <Briefcase className='h-4 w-4 text-muted-foreground flex-shrink-0' />
-                                  <span className='font-medium'>{job.title}</span>
+                                  <span className='font-medium'>
+                                    {job.title}
+                                  </span>
                                 </div>
                                 <div className='sm:hidden text-xs text-muted-foreground'>
                                   {job.department && `${job.department} • `}
@@ -269,7 +285,9 @@ export default function CareersPage() {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className='hidden sm:table-cell'>{job.department || "Not specified"}</TableCell>
+                            <TableCell className='hidden sm:table-cell'>
+                              {job.department || "Not specified"}
+                            </TableCell>
                             <TableCell className='hidden md:table-cell'>
                               <div className='flex items-center space-x-1'>
                                 <MapPin className='h-3 w-3 text-muted-foreground' />
@@ -277,7 +295,9 @@ export default function CareersPage() {
                               </div>
                             </TableCell>
                             <TableCell className='hidden lg:table-cell'>
-                              <Badge variant='outline'>{job.employment_type}</Badge>
+                              <Badge variant='outline'>
+                                {job.employment_type}
+                              </Badge>
                             </TableCell>
                             <TableCell className='hidden xl:table-cell'>
                               <div className='flex flex-col items-start gap-1'>
@@ -285,14 +305,21 @@ export default function CareersPage() {
                                   <Calendar className='h-3 w-3 text-muted-foreground' />
                                   <span
                                     className={
-                                      isJobExpired(job.end_date) ? "text-red-600" : ""
+                                      isJobExpired(job.end_date)
+                                        ? "text-red-600"
+                                        : ""
                                     }
                                   >
-                                    {new Date(job.end_date).toLocaleDateString()}
+                                    {new Date(
+                                      job.end_date
+                                    ).toLocaleDateString()}
                                   </span>
                                 </div>
                                 {isJobExpired(job.end_date) && (
-                                  <Badge variant='destructive' className='text-xs'>
+                                  <Badge
+                                    variant='destructive'
+                                    className='text-xs'
+                                  >
                                     Expired
                                   </Badge>
                                 )}
@@ -301,7 +328,9 @@ export default function CareersPage() {
                             <TableCell>
                               <Badge
                                 variant={
-                                  job.status === "active" ? "default" : "secondary"
+                                  job.status === "active"
+                                    ? "default"
+                                    : "secondary"
                                 }
                               >
                                 {job.status}

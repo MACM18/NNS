@@ -44,9 +44,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return { role: "user", profile: null };
       }
 
-      return { 
-        role: (profile?.role as string) || "user", 
-        profile: profile 
+      return {
+        role: (profile?.role as string) || "user",
+        profile: profile,
       };
     } catch (error) {
       console.error("Error fetching user profile:", error);
@@ -60,7 +60,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (session?.user) {
         setUser(session.user);
-        const { role: roleValue, profile: profileData } = await fetchUserProfile(session.user.id);
+        const { role: roleValue, profile: profileData } =
+          await fetchUserProfile(session.user.id);
         if (!isMounted()) return;
         setRole(roleValue?.toLowerCase?.() || "user");
         setProfile(profileData);
@@ -138,7 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Handle page visibility changes to refresh session when tab becomes visible
     const handleVisibilityChange = async () => {
       if (!isMounted()) return;
-      
+
       if (!document.hidden) {
         // Page became visible, refresh the session
         try {
@@ -148,7 +149,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           } = await supabase.auth.getSession();
 
           if (error) {
-            console.error("Error refreshing session on visibility change:", error);
+            console.error(
+              "Error refreshing session on visibility change:",
+              error
+            );
             return;
           }
 
@@ -157,7 +161,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const { data: refreshData, error: refreshError } =
               await supabase.auth.refreshSession();
             if (refreshError) {
-              console.warn("Unable to refresh session on visibility change:", refreshError.message);
+              console.warn(
+                "Unable to refresh session on visibility change:",
+                refreshError.message
+              );
             }
             await applySession(refreshData?.session ?? null, isMounted);
           } else {
