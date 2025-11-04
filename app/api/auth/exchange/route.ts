@@ -14,9 +14,10 @@ export async function POST(req: Request) {
     const cookieStore = await cookies();
 
     // Create a server-side Supabase client with cookie helpers so we can set HttpOnly cookies
+    // IMPORTANT: use the anon key here so the client-side cookie helpers behave like a normal client
     const authClient = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           get(name: string) {
@@ -54,6 +55,13 @@ export async function POST(req: Request) {
       );
     }
 
+    // Debug: log that we received a session (no secrets)
+    // eslint-disable-next-line no-console
+    console.debug(
+      "[api/auth/exchange] received session for user:",
+      session.user?.id ?? "(unknown)"
+    );
+
     // Set the session cookies via the auth client which uses our cookies helper
     const setRes = await authClient.auth.setSession({
       access_token: session.access_token,
@@ -69,6 +77,17 @@ export async function POST(req: Request) {
         { error: setRes.error.message },
         { status: 500 }
       );
+    }
+
+    // Debug: show which cookies are present after setSession (names only)
+    try {
+      // eslint-disable-next-line no-console
+      console.debug(
+        "[api/auth/exchange] Cookies after setSession:",
+        cookieStore.getAll().map((c) => c.name)
+      );
+    } catch (e) {
+      // ignore
     }
 
     // Success — respond OK. Client will redirect to the app landing.
