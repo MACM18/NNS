@@ -21,13 +21,28 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
     }
   }
 
-  // Provide cookies integration to createServerClient only when cookieStore is available
-  const clientOptions: any = {};
-  if (cookieStore) {
-    clientOptions.cookies = {
+  // Create a safe cookie store (fallback to no-op methods) so the
+  // Supabase client never tries to call `.get` on a null value.
+  const safeCookieStore =
+    (cookieStore as any) ||
+    ({
+      get: (_name: string) => undefined,
+      set: (_name: string, _value: string, _options?: any) => undefined,
+      remove: (_name: string, _options?: any) => undefined,
+      getAll: () => [] as any[],
+    } as {
+      get?: (name: string) => { value?: string } | undefined;
+      set?: (name: string, value: string, options?: any) => void;
+      remove?: (name: string, options?: any) => void;
+      getAll?: () => Array<{ name: string }>;
+    });
+
+  const clientOptions: any = {
+    cookies: {
       get(name: string) {
         try {
-          return cookieStore?.get(name)?.value;
+          const res = safeCookieStore.get?.(name as any);
+          return res?.value;
         } catch (error) {
           console.error(`[authorize] Failed to get cookie '${name}':`, error);
           return undefined;
@@ -35,14 +50,23 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
       },
       set(name: string, value: string, options: any) {
         try {
-          cookieStore?.set(name, value, options);
+          if (typeof safeCookieStore.set === "function") {
+            safeCookieStore.set(name as any, value, options);
+          }
         } catch (error) {
           console.error(`[authorize] Failed to set cookie '${name}':`, error);
         }
       },
       remove(name: string, options: any) {
         try {
-          cookieStore?.set(name, "", { ...(options || {}), maxAge: 0 });
+          if (typeof safeCookieStore.remove === "function") {
+            safeCookieStore.remove(name as any, options);
+          } else if (typeof safeCookieStore.set === "function") {
+            safeCookieStore.set(name as any, "", {
+              ...(options || {}),
+              maxAge: 0,
+            });
+          }
         } catch (error) {
           console.error(
             `[authorize] Failed to remove cookie '${name}':`,
@@ -50,8 +74,8 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
           );
         }
       },
-    };
-  }
+    },
+  };
 
   const authClient = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
