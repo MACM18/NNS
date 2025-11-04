@@ -32,17 +32,24 @@ function AuthCallbackContent() {
           return;
         }
 
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
+        // POST the code to our server-side exchange endpoint which will set HttpOnly cookies
+        const resp = await fetch("/api/auth/exchange", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
           toast({
             title: "Google Sign-In failed",
-            description: error.message ?? "Unable to complete sign-in.",
+            description: result?.error ?? "Unable to complete sign-in.",
             variant: "destructive",
           });
           router.replace("/login");
           return;
         }
 
+        // Exchange succeeded server-side and cookies were set; redirect home
         router.replace("/");
       } catch (error: any) {
         toast({
