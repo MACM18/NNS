@@ -17,6 +17,7 @@ import {
   LogOut,
   Building2,
   CalendarDays,
+  Zap,
 } from "lucide-react";
 
 import {
@@ -79,6 +80,13 @@ const navItems = [
     title: "Content",
     url: "/content",
     icon: BookOpen,
+    // admin and moderator
+    roles: ["admin", "moderator"],
+  },
+  {
+    title: "Integrations",
+    url: "/integrations",
+    icon: Zap,
     // admin and moderator
     roles: ["admin", "moderator"],
   },
