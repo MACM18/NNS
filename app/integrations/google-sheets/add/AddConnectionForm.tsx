@@ -31,7 +31,9 @@ const months = [
   { value: "12", label: "December" },
 ];
 
-const years = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
+const years = Array.from({ length: 6 }, (_, i) =>
+  String(new Date().getFullYear() - i)
+);
 
 export default function AddConnectionForm({ action }: Props) {
   const [month, setMonth] = useState<string>("");
@@ -39,16 +41,44 @@ export default function AddConnectionForm({ action }: Props) {
   const [sheetUrl, setSheetUrl] = useState<string>("");
   const [sheetName, setSheetName] = useState<string>("");
 
+  // Client-side pre-submit validation to avoid accidental submission of the page URL
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+    if (!sheetUrl || sheetUrl.trim() === "") {
+      e.preventDefault();
+      // eslint-disable-next-line no-alert
+      alert("Please enter the Google Sheet URL before submitting.");
+      return;
+    }
+    // Basic check to avoid accidentally submitting the current page URL
+    try {
+      const parsed = new URL(sheetUrl);
+      const path = parsed.pathname || "";
+      if (
+        parsed.hostname === window.location.hostname &&
+        path.startsWith("/integrations")
+      ) {
+        e.preventDefault();
+        // eslint-disable-next-line no-alert
+        alert(
+          "It looks like you pasted the integration page URL. Please paste the Google Sheet URL (docs.google.com/spreadsheets/...)."
+        );
+        return;
+      }
+    } catch {
+      // If URL parsing fails, let server-side validation handle it
+    }
+  };
+
   return (
-    <div className="max-w-2xl mx-auto p-4">
-      <form action={action} className="grid gap-4">
-        <div className="grid grid-cols-2 gap-4">
+    <div className='max-w-2xl mx-auto p-4'>
+      <form action={action} onSubmit={handleSubmit} className='grid gap-4'>
+        <div className='grid grid-cols-2 gap-4'>
           <div>
             <Label>Month</Label>
-            <input name="month" type="hidden" value={month} />
+            <input name='month' type='hidden' value={month} />
             <Select onValueChange={(v) => setMonth(v)} value={month}>
               <SelectTrigger>
-                <SelectValue placeholder="Select month" />
+                <SelectValue placeholder='Select month' />
               </SelectTrigger>
               <SelectContent>
                 {months.map((m) => (
@@ -61,10 +91,10 @@ export default function AddConnectionForm({ action }: Props) {
           </div>
           <div>
             <Label>Year</Label>
-            <input name="year" type="hidden" value={year} />
+            <input name='year' type='hidden' value={year} />
             <Select onValueChange={(v) => setYear(v)} value={year}>
               <SelectTrigger>
-                <SelectValue placeholder="Select year" />
+                <SelectValue placeholder='Select year' />
               </SelectTrigger>
               <SelectContent>
                 {years.map((y) => (
@@ -80,9 +110,9 @@ export default function AddConnectionForm({ action }: Props) {
         <div>
           <Label>Google Sheet URL</Label>
           <Input
-            name="sheet_url"
-            type="url"
-            placeholder="https://docs.google.com/spreadsheets/d/..."
+            name='sheet_url'
+            type='url'
+            placeholder='https://docs.google.com/spreadsheets/d/...'
             value={sheetUrl}
             onChange={(e) => setSheetUrl(e.target.value)}
             required
@@ -92,23 +122,23 @@ export default function AddConnectionForm({ action }: Props) {
         <div>
           <Label>Sheet Name (Tab)</Label>
           <Input
-            name="sheet_name"
-            type="text"
-            placeholder="Sheet tab name (optional)"
+            name='sheet_name'
+            type='text'
+            placeholder='Sheet tab name (optional)'
             value={sheetName}
             onChange={(e) => setSheetName(e.target.value)}
           />
         </div>
 
         {/* Hidden inputs to submit controlled Select values */}
-        <input type="hidden" name="month" value={month} />
-        <input type="hidden" name="year" value={year} />
+        <input type='hidden' name='month' value={month} />
+        <input type='hidden' name='year' value={year} />
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" asChild>
-            <a href="/integrations/google-sheets">Cancel</a>
+        <div className='flex justify-end gap-2'>
+          <Button variant='outline' asChild>
+            <a href='/integrations/google-sheets'>Cancel</a>
           </Button>
-          <Button type="submit">Connect Sheet</Button>
+          <Button type='submit'>Connect Sheet</Button>
         </div>
       </form>
     </div>
