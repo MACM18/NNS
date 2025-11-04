@@ -31,12 +31,58 @@ async function authorize(): Promise<AuthContext> {
 
   // Try to get the logged-in user (reads cookies/server session)
   const { data: userRes, error: userErr } = await authClient.auth.getUser();
+  // If getUser fails or returns no user, attempt to recover by checking session and refreshing
   if (userErr) {
-    throw new Error("Unable to retrieve user");
+    // Log cookie names for debugging (don't log values)
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("[authorize] getUser error:", userErr.message);
+      // eslint-disable-next-line no-console
+      console.debug(
+        "[authorize] Cookies available:",
+        cookieStore.getAll().map((c) => c.name)
+      );
+    } catch (e) {
+      // ignore
+    }
   }
-  const user = userRes?.user;
+
+  let user = userRes?.user;
   if (!user) {
-    throw new Error("Unauthorized");
+    // Try reading session directly
+    try {
+      const {
+        data: { session },
+        error: sessionErr,
+      } = await authClient.auth.getSession();
+      if (sessionErr) {
+        // eslint-disable-next-line no-console
+        console.debug("[authorize] getSession error:", sessionErr.message);
+      }
+      if (session?.user) user = session.user;
+
+      // If still no user, attempt a refresh (this may succeed if refresh token cookie present)
+      if (!user) {
+        const { data: refreshed, error: refreshErr } =
+          await authClient.auth.refreshSession();
+        if (refreshErr) {
+          // eslint-disable-next-line no-console
+          console.debug(
+            "[authorize] refreshSession error:",
+            refreshErr.message
+          );
+        }
+        if (refreshed?.session?.user) user = refreshed.session.user;
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.debug("[authorize] session recovery failed:", e);
+    }
+  }
+
+  if (!user) {
+    // No usable session found
+    throw new Error("Unable to retrieve user");
   }
 
   const { data: profile, error: profileErr } = await supabaseServer
