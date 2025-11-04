@@ -10,7 +10,16 @@ type AuthContext = { userId: string; role: string };
 
 // Accept an optional access token to authenticate without relying on cookies.
 async function authorize(accessToken?: string): Promise<AuthContext> {
-  const cookieStore = await cookies();
+  let cookieStore: Awaited<ReturnType<typeof cookies>> | null = null;
+
+  try {
+    cookieStore = await cookies();
+  } catch (error) {
+    console.error("[authorize] Failed to get cookies:", error);
+    if (!accessToken) {
+      throw new Error("Unable to access cookies and no access token provided");
+    }
+  }
 
   const authClient = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,13 +27,29 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value;
+          try {
+            return cookieStore?.get(name)?.value;
+          } catch (error) {
+            console.error(`[authorize] Failed to get cookie '${name}':`, error);
+            return undefined;
+          }
         },
         set(name: string, value: string, options: any) {
-          cookieStore.set(name, value, options);
+          try {
+            cookieStore?.set(name, value, options);
+          } catch (error) {
+            console.error(`[authorize] Failed to set cookie '${name}':`, error);
+          }
         },
         remove(name: string, options: any) {
-          cookieStore.set(name, "", { ...(options || {}), maxAge: 0 });
+          try {
+            cookieStore?.set(name, "", { ...(options || {}), maxAge: 0 });
+          } catch (error) {
+            console.error(
+              `[authorize] Failed to remove cookie '${name}':`,
+              error
+            );
+          }
         },
       },
     }
@@ -32,44 +57,68 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
 
   // If an explicit access token was provided, verify it directly without cookies
   if (accessToken) {
-    const { data, error } = await supabaseServer.auth.getUser(accessToken);
-    if (error || !data?.user) {
-      throw new Error("Unable to retrieve user");
-    }
-    const user = data.user;
-    const { data: profile, error: profileErr } = await supabaseServer
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    try {
+      const { data, error } = await supabaseServer.auth.getUser(accessToken);
+      if (error || !data?.user) {
+        throw new Error(
+          `Unable to retrieve user: ${error?.message || "No user data"}`
+        );
+      }
+      const user = data.user;
+      const { data: profile, error: profileErr } = await supabaseServer
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
 
-    if (profileErr) {
-      throw new Error("Profile lookup failed");
-    }
+      if (profileErr) {
+        throw new Error(`Profile lookup failed: ${profileErr.message}`);
+      }
 
-    const role = (profile?.role || "").toLowerCase();
-    if (!ALLOWED_ROLES.includes(role)) {
-      throw new Error("Forbidden");
-    }
+      const role = (profile?.role || "").toLowerCase();
+      if (!ALLOWED_ROLES.includes(role)) {
+        throw new Error("Forbidden: insufficient permissions");
+      }
 
-    return { userId: user.id, role };
+      return { userId: user.id, role };
+    } catch (error) {
+      console.error("[authorize] Access token validation failed:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("Access token validation failed");
+    }
+  }
+
+  // If no cookieStore available and no access token, fail early
+  if (!cookieStore) {
+    throw new Error("Unable to access authentication cookies");
   }
 
   // Try to get the logged-in user (reads cookies/server session)
-  const { data: userRes, error: userErr } = await authClient.auth.getUser();
+  let userRes: any = null;
+  let userErr: any = null;
+
+  try {
+    const result = await authClient.auth.getUser();
+    userRes = result.data;
+    userErr = result.error;
+  } catch (error) {
+    userErr = error;
+    console.error("[authorize] getUser threw exception:", error);
+  }
+
   // If getUser fails or returns no user, attempt to recover by checking session and refreshing
   if (userErr) {
     // Log cookie names for debugging (don't log values)
     try {
-      // eslint-disable-next-line no-console
-      console.log("[authorize] getUser error:", userErr.message);
-      // eslint-disable-next-line no-console
+      console.log("[authorize] getUser error:", userErr.message || userErr);
+      const availableCookies = cookieStore.getAll?.() || [];
       console.log(
         "[authorize] Cookies available:",
-        cookieStore.getAll().map((c) => c.name)
+        availableCookies.map((c) => c.name)
       );
     } catch (e) {
-      // ignore
+      console.warn("[authorize] Failed to log cookie info:", e);
     }
   }
 
@@ -82,7 +131,6 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
         error: sessionErr,
       } = await authClient.auth.getSession();
       if (sessionErr) {
-        // eslint-disable-next-line no-console
         console.log("[authorize] getSession error:", sessionErr.message);
       }
       if (session?.user) user = session.user;
@@ -92,35 +140,40 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
         const { data: refreshed, error: refreshErr } =
           await authClient.auth.refreshSession();
         if (refreshErr) {
-          // eslint-disable-next-line no-console
           console.log("[authorize] refreshSession error:", refreshErr.message);
         }
         if (refreshed?.session?.user) user = refreshed.session.user;
       }
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.log("[authorize] session recovery failed:", e);
     }
   }
 
   if (!user) {
     // No usable session found
-    throw new Error("Unable to retrieve user");
+    throw new Error("Unable to retrieve user session. Please log in again.");
   }
 
-  const { data: profile, error: profileErr } = await supabaseServer
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  let profile: any = null;
+  try {
+    const { data: profileData, error: profileErr } = await supabaseServer
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
-  if (profileErr) {
-    throw new Error("Profile lookup failed");
+    if (profileErr) {
+      throw new Error(`Profile lookup failed: ${profileErr.message}`);
+    }
+    profile = profileData;
+  } catch (error) {
+    console.error("[authorize] Profile fetch failed:", error);
+    throw new Error("Failed to fetch user profile");
   }
 
   const role = (profile?.role || "").toLowerCase();
   if (!ALLOWED_ROLES.includes(role)) {
-    throw new Error("Forbidden");
+    throw new Error("Forbidden: insufficient permissions for this operation");
   }
 
   return { userId: user.id, role };
@@ -137,95 +190,129 @@ export async function createConnection(
   accessToken?: string
 ) {
   "use server";
-  const auth = await authorize(accessToken);
 
-  const {
-    month,
-    year,
-    sheet_url,
-    sheet_name = null,
-    sheet_tab = null,
-  } = payload;
+  try {
+    const auth = await authorize(accessToken);
 
-  if (!month || !year || !sheet_url) {
-    throw new Error("month, year and sheet_url are required");
+    const {
+      month,
+      year,
+      sheet_url,
+      sheet_name = null,
+      sheet_tab = null,
+    } = payload;
+
+    // Input validation
+    if (!month || !year || !sheet_url) {
+      throw new Error("month, year and sheet_url are required");
+    }
+    if (Number.isNaN(Number(month)) || Number.isNaN(Number(year))) {
+      throw new Error("Invalid month or year format");
+    }
+    if (month < 1 || month > 12) {
+      throw new Error("Month must be between 1 and 12");
+    }
+    if (year < 2000 || year > 2100) {
+      throw new Error("Year must be between 2000 and 2100");
+    }
+
+    // Validate sheet URL format
+    const spreadsheetId = extractSpreadsheetId(sheet_url);
+    if (!spreadsheetId) {
+      throw new Error("Invalid Google Sheets URL format");
+    }
+
+    const { data, error } = await supabaseServer
+      .from("google_sheet_connections")
+      .insert({
+        month: Number(month),
+        year: Number(year),
+        sheet_url: sheet_url,
+        sheet_name: sheet_name,
+        sheet_tab: sheet_tab,
+        created_by: auth.userId,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("[createConnection] Database error:", error);
+      // Handle specific database errors
+      if (error.code === "23505") {
+        // Unique constraint violation
+        throw new Error("A connection for this month and year already exists");
+      }
+      throw new Error(error.message || "Failed to create connection");
+    }
+
+    if (!data?.id) {
+      throw new Error("Failed to create connection: no ID returned");
+    }
+
+    return { id: data.id };
+  } catch (error) {
+    console.error("[createConnection] Error:", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Unknown error occurred while creating connection");
   }
-  if (Number.isNaN(Number(month)) || Number.isNaN(Number(year))) {
-    throw new Error("Invalid month or year");
-  }
-
-  const { data, error } = await supabaseServer
-    .from("google_sheet_connections")
-    .insert({
-      month: Number(month),
-      year: Number(year),
-      sheet_url: sheet_url,
-      sheet_name: sheet_name,
-      sheet_tab: sheet_tab,
-      created_by: auth.userId,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    // Bubble up meaningful DB errors
-    throw new Error(error.message || "Failed to create connection");
-  }
-
-  return { id: data?.id };
 }
 
 // Helper server action to accept FormData from a <form action=> submission in the App Router.
 export async function createConnectionFromForm(formData: FormData) {
   "use server";
-  // Debug: log incoming form data keys only (never values/tokens)
+
   try {
-    // eslint-disable-next-line no-console
-    console.log("[createConnectionFromForm] Received FormData (keys only)");
-    for (const entry of Array.from(formData.keys())) {
-      if (entry === "sb_access_token") continue; // never log tokens
-      // eslint-disable-next-line no-console
-      console.log("   ", entry);
+    // Debug: log incoming form data keys only (never values/tokens)
+    try {
+      console.log("[createConnectionFromForm] Received FormData (keys only)");
+      for (const entry of Array.from(formData.keys())) {
+        if (entry === "sb_access_token") continue; // never log tokens
+        console.log("   ", entry);
+      }
+    } catch (e) {
+      console.warn("[createConnectionFromForm] Failed to dump FormData:", e);
     }
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("[createConnectionFromForm] Failed to dump FormData:", e);
-  }
 
-  const monthRaw = formData.get("month");
-  const yearRaw = formData.get("year");
-  const sheet_url = String(formData.get("sheet_url") || "");
-  const sheet_name = formData.get("sheet_name")
-    ? String(formData.get("sheet_name"))
-    : null;
-  const sheet_tab = formData.get("sheet_tab")
-    ? String(formData.get("sheet_tab"))
-    : null;
-  const accessToken = formData.get("sb_access_token")
-    ? String(formData.get("sb_access_token"))
-    : undefined;
+    const monthRaw = formData.get("month");
+    const yearRaw = formData.get("year");
+    const sheet_url = String(formData.get("sheet_url") || "");
+    const sheet_name = formData.get("sheet_name")
+      ? String(formData.get("sheet_name"))
+      : null;
+    const sheet_tab = formData.get("sheet_tab")
+      ? String(formData.get("sheet_tab"))
+      : null;
+    const accessToken = formData.get("sb_access_token")
+      ? String(formData.get("sb_access_token"))
+      : undefined;
 
-  const month = Number(monthRaw);
-  const year = Number(yearRaw);
+    // Input validation
+    if (!monthRaw || !yearRaw || !sheet_url) {
+      return { ok: false, error: "month, year and sheet_url are required" };
+    }
 
-  if (!month || !year || !sheet_url) {
-    return { ok: false, error: "month, year and sheet_url are required" };
-  }
+    const month = Number(monthRaw);
+    const year = Number(yearRaw);
 
-  try {
+    if (Number.isNaN(month) || Number.isNaN(year)) {
+      return { ok: false, error: "Invalid month or year format" };
+    }
+
     const result = await createConnection(
       {
         month,
         year,
-        sheet_url,
-        sheet_name,
-        sheet_tab,
+        sheet_url: sheet_url.trim(),
+        sheet_name: sheet_name?.trim() || null,
+        sheet_tab: sheet_tab?.trim() || null,
       },
       accessToken
     );
     return { ok: true, id: result.id };
-  } catch (e: any) {
-    const msg = e?.message || String(e);
+  } catch (error: any) {
+    console.error("[createConnectionFromForm] Error:", error);
+    const msg = error?.message || String(error);
     const normalized = /generated column/i.test(msg)
       ? "One or more generated fields (F1/G1/Total) cannot be set explicitly."
       : msg;
@@ -238,19 +325,54 @@ export async function deleteConnection(
   accessToken?: string
 ) {
   "use server";
-  const auth = await authorize(accessToken);
 
-  if (!connectionId) throw new Error("connectionId is required");
+  try {
+    const auth = await authorize(accessToken);
 
-  // Optionally, ensure the user is the owner or admin - for now admin/moderator can delete any
-  const { error } = await supabaseServer
-    .from("google_sheet_connections")
-    .delete()
-    .eq("id", connectionId);
+    if (!connectionId) {
+      throw new Error("connectionId is required");
+    }
 
-  if (error) throw new Error(error.message || "Failed to delete connection");
+    // Validate connectionId format (basic UUID check)
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(connectionId)) {
+      throw new Error("Invalid connection ID format");
+    }
 
-  return { ok: true };
+    // Check if connection exists first
+    const { data: existing, error: fetchErr } = await supabaseServer
+      .from("google_sheet_connections")
+      .select("id, created_by")
+      .eq("id", connectionId)
+      .single();
+
+    if (fetchErr) {
+      if (fetchErr.code === "PGRST116") {
+        // No rows found
+        throw new Error("Connection not found");
+      }
+      throw new Error(`Failed to verify connection: ${fetchErr.message}`);
+    }
+
+    // Optionally, ensure the user is the owner or admin - for now admin/moderator can delete any
+    const { error } = await supabaseServer
+      .from("google_sheet_connections")
+      .delete()
+      .eq("id", connectionId);
+
+    if (error) {
+      console.error("[deleteConnection] Database error:", error);
+      throw new Error(error.message || "Failed to delete connection");
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.error("[deleteConnection] Error:", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Unknown error occurred while deleting connection");
+  }
 }
 
 export async function syncConnection(
@@ -258,439 +380,656 @@ export async function syncConnection(
   accessToken?: string
 ) {
   "use server";
-  const auth = await authorize(accessToken);
 
-  if (!connectionId) throw new Error("connectionId is required");
-
-  // Fetch connection
-  const { data: conn, error: fetchErr } = await supabaseServer
-    .from("google_sheet_connections")
-    .select("id, month, year, sheet_url, sheet_name, sheet_tab, sheet_id")
-    .single();
-
-  if (fetchErr)
-    throw new Error(fetchErr.message || "Failed to fetch connection");
-  const month: number = Number(conn.month);
-  const year: number = Number(conn.year);
-  const sheetTab = (conn.sheet_tab || "All").toString();
-  const spreadsheetId =
-    conn.sheet_id || extractSpreadsheetId(conn.sheet_url || "");
-  if (!spreadsheetId)
-    throw new Error("Unable to determine spreadsheetId from URL or sheet_id");
-
-  // Initialize Google Sheets API
-  const sheets = await getSheetsClient();
-  const range = `${sheetTab}!B1:AZ`;
-  const readRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range,
-    valueRenderOption: "UNFORMATTED_VALUE",
-    dateTimeRenderOption: "FORMATTED_STRING",
-  });
-  const values = readRes.data.values || [];
-  if (!values.length) {
-    throw new Error(`No data found in tab '${sheetTab}'`);
-  }
-
-  const headers = (values[0] || []).map((h) => (h ?? "").toString().trim());
-  validateHeaders(headers);
-
-  // Build index map for quick access
-  const idx = headerIndex(headers);
-
-  // Collect rows (skip header)
-  const rows = values
-    .slice(1)
-    .filter((r) => (r[idx.number] ?? "").toString().trim() !== "");
-
-  // Map to normalized objects
-  const sheetRows = rows.map((r) => mapSheetRow(r, idx));
-
-  // Filter month in sheetRows if needed; prefer trusting the sheet month
-  // We'll still restrict DB queries to month range for safety
-  const { start, end } = monthStartEnd(month, year);
-
-  // Fetch existing project lines for these numbers within the month window
-  const numbers = Array.from(
-    new Set(sheetRows.map((x) => x.telephone_no).filter(Boolean))
-  );
-  const existingLines = await fetchExistingLines(numbers, start, end);
-  const existingByPhone = new Map<string, any>();
-  for (const line of existingLines) {
-    if (line.telephone_no) existingByPhone.set(line.telephone_no, line);
-  }
-
-  // Upsert lines from sheet -> project (prefer bulk; fallback to row-by-row if unique constraint missing)
-  const linePayloads = sheetRows.map((row) => ({
-    ...sheetToLinePayload(row),
-    status: "completed",
-  }));
-
-  let upsertedLines: Array<{ id: string; telephone_no: string }> | null = null;
-  let upsertedCount = 0;
-  const bulkRes = await supabaseServer
-    .from("line_details")
-    .upsert(linePayloads, { onConflict: "telephone_no,date" })
-    .select("id, telephone_no");
-
-  if (bulkRes.error) {
-    const msg = (bulkRes.error.message || "").toLowerCase();
-    const missingConstraint =
-      msg.includes("conflict") && msg.includes("constraint");
-    if (!missingConstraint) {
-      throw bulkRes.error;
-    }
-    // Fallback: row-by-row
-    for (const row of sheetRows) {
-      const existing = row.telephone_no
-        ? existingByPhone.get(row.telephone_no)
-        : undefined;
-      if (existing) {
-        const { error: updErr } = await supabaseServer
-          .from("line_details")
-          .update(sheetToLinePayload(row))
-          .eq("id", existing.id);
-        if (updErr) throw updErr;
-        upsertedCount++;
-        await ensureTaskForLine(existing.id, row);
-      } else {
-        const insertPayload = {
-          ...sheetToLinePayload(row),
-          status: "completed",
-        };
-        const { data: ins, error: insErr } = await supabaseServer
-          .from("line_details")
-          .insert(insertPayload)
-          .select("id")
-          .single();
-        if (insErr) throw insErr;
-        upsertedCount++;
-        await ensureTaskForLine(ins!.id, row);
-      }
-    }
-  } else {
-    upsertedLines = bulkRes.data || [];
-    upsertedCount = upsertedLines.length;
-
-    // Ensure tasks exist for all lines (bulk operation)
-    const telephoneNos = (upsertedLines || [])
-      .map((l) => l.telephone_no)
-      .filter(Boolean);
-    if (telephoneNos.length > 0) {
-      const { data: existingTasks, error: taskQueryErr } = await supabaseServer
-        .from("tasks")
-        .select("line_details_id, telephone_no")
-        .in("telephone_no", telephoneNos);
-      if (taskQueryErr) throw taskQueryErr;
-      const existingLineIds = new Set(
-        (existingTasks || []).map((t) => t.line_details_id)
-      );
-      const lineIdMap = new Map<string, string>();
-      for (const line of upsertedLines || []) {
-        if (line.telephone_no) lineIdMap.set(line.telephone_no, line.id);
-      }
-      const newTasks = sheetRows
-        .filter((row) => {
-          const lineId = lineIdMap.get(row.telephone_no);
-          return lineId && !existingLineIds.has(lineId);
-        })
-        .map((row) => {
-          const lineId = lineIdMap.get(row.telephone_no)!;
-          return {
-            telephone_no: row.telephone_no,
-            dp: row.dp,
-            address: row.address,
-            customer_name: row.name,
-            status: "completed",
-            line_details_id: lineId,
-            task_date: row.date || new Date().toISOString().slice(0, 10),
-            created_by: null,
-          };
-        });
-      if (newTasks.length > 0) {
-        const { error: taskInsertErr } = await supabaseServer
-          .from("tasks")
-          .insert(newTasks);
-        if (taskInsertErr) throw taskInsertErr;
-      }
-    }
-  }
-
-  // Project -> Sheet: append project lines that are missing in the sheet for this month
-  const { data: monthLines, error: monthErr } = await supabaseServer
-    .from("line_details")
-    .select("*")
-    .gte("date", start)
-    .lte("date", end);
-  if (monthErr) throw monthErr;
-
-  const sheetNumbersSet = new Set(numbers);
-  const missingInSheet = (monthLines || []).filter(
-    (l: any) => l.telephone_no && !sheetNumbersSet.has(l.telephone_no)
-  );
-
-  if (missingInSheet.length > 0) {
-    const appendRows = missingInSheet.map((l) =>
-      buildSheetRowFromLine(l, headers)
-    );
-    // Append starting at column B
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: `${sheetTab}!B1`,
-      valueInputOption: "USER_ENTERED",
-      insertDataOption: "INSERT_ROWS",
-      requestBody: { values: appendRows },
-    });
-  }
-
-  // Drum Usage: create usage rows for lines that have drum numbers
-  let drumUsageInserted = 0;
-  let drumsRecalculated = 0;
   try {
-    const linesWithDrum = (monthLines || []).filter(
-      (l: any) => l.drum_number || l.drum_number_new
-    );
-    if (linesWithDrum.length) {
-      const drumNumbers = Array.from(
-        new Set(
-          linesWithDrum
-            .map((l: any) => l.drum_number || l.drum_number_new)
-            .filter(Boolean)
-        )
+    const auth = await authorize(accessToken);
+
+    if (!connectionId) {
+      throw new Error("connectionId is required");
+    }
+
+    // Validate connectionId format
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(connectionId)) {
+      throw new Error("Invalid connection ID format");
+    }
+
+    // Fetch connection with better error handling
+    let conn: any;
+    try {
+      const { data: connData, error: fetchErr } = await supabaseServer
+        .from("google_sheet_connections")
+        .select("id, month, year, sheet_url, sheet_name, sheet_tab, sheet_id")
+        .eq("id", connectionId)
+        .single();
+
+      if (fetchErr) {
+        if (fetchErr.code === "PGRST116") {
+          throw new Error("Connection not found");
+        }
+        throw new Error(`Failed to fetch connection: ${fetchErr.message}`);
+      }
+      conn = connData;
+    } catch (error) {
+      console.error("[syncConnection] Failed to fetch connection:", error);
+      throw error;
+    }
+
+    const month: number = Number(conn.month);
+    const year: number = Number(conn.year);
+    const sheetTab = (conn.sheet_tab || "All").toString();
+    const spreadsheetId =
+      conn.sheet_id || extractSpreadsheetId(conn.sheet_url || "");
+
+    if (!spreadsheetId) {
+      throw new Error("Unable to determine spreadsheetId from URL or sheet_id");
+    }
+
+    // Initialize Google Sheets API with error handling
+    let sheets: any;
+    try {
+      sheets = await getSheetsClient();
+    } catch (error) {
+      console.error(
+        "[syncConnection] Failed to initialize Google Sheets client:",
+        error
       );
-      if (drumNumbers.length) {
-        const { data: drums, error: drumsErr } = await supabaseServer
-          .from("drum_tracking")
-          .select("id, drum_number, item_id, current_quantity, status")
-          .in("drum_number", drumNumbers);
-        if (drumsErr) throw drumsErr;
+      throw new Error(
+        `Google Sheets API initialization failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
 
-        const drumByNumber = new Map<string, any>();
-        for (const d of drums || []) drumByNumber.set(d.drum_number, d);
+    // Fetch sheet data with comprehensive error handling
+    let values: any[] = [];
+    try {
+      const range = `${sheetTab}!B1:AZ`;
+      const readRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range,
+        valueRenderOption: "UNFORMATTED_VALUE",
+        dateTimeRenderOption: "FORMATTED_STRING",
+      });
+      values = readRes.data.values || [];
+    } catch (error: any) {
+      console.error("[syncConnection] Failed to read sheet data:", error);
+      if (error.code === 400) {
+        throw new Error(
+          `Invalid sheet or range. Please check that tab '${sheetTab}' exists and is accessible.`
+        );
+      } else if (error.code === 403) {
+        throw new Error(
+          "Access denied. Please ensure the service account has access to this Google Sheet."
+        );
+      } else if (error.code === 404) {
+        throw new Error(
+          "Sheet not found. Please check the sheet URL and try again."
+        );
+      }
+      throw new Error(
+        `Failed to read sheet data: ${error.message || "Unknown error"}`
+      );
+    }
 
-        // Candidate usages
-        const candidates = linesWithDrum
-          .map((l: any) => {
-            const num = l.drum_number || l.drum_number_new;
-            const drum = num ? drumByNumber.get(num) : null;
-            if (!drum) return null;
-            return {
-              drum_id: drum.id,
-              line_details_id: l.id,
-              quantity_used:
-                Number(l.total_cable) ||
-                Math.abs(
-                  Number(l.cable_end || 0) - Number(l.cable_start || 0)
-                ) ||
-                0,
-              usage_date: l.date,
-              cable_start_point: Number(l.cable_start || 0),
-              cable_end_point: Number(l.cable_end || 0),
-            };
-          })
-          .filter(Boolean) as Array<{
-          drum_id: string;
-          line_details_id: string;
-          quantity_used: number;
-          usage_date: string;
-          cable_start_point: number;
-          cable_end_point: number;
-        }>;
+    if (!values.length) {
+      throw new Error(
+        `No data found in tab '${sheetTab}'. Please ensure the sheet contains data.`
+      );
+    }
 
-        if (candidates.length) {
-          // Avoid duplicates by existing line_details_id
-          const ids = candidates.map((c) => c.line_details_id);
-          const { data: existingUsages, error: existErr } = await supabaseServer
-            .from("drum_usage")
-            .select("line_details_id")
-            .in("line_details_id", ids);
-          if (existErr) throw existErr;
-          const existingSet = new Set(
-            (existingUsages || []).map((u: any) => u.line_details_id)
+    // Validate headers with better error reporting
+    const headers = (values[0] || []).map((h: any) =>
+      (h ?? "").toString().trim()
+    );
+    try {
+      validateHeaders(headers);
+    } catch (error) {
+      console.error("[syncConnection] Header validation failed:", error);
+      throw new Error(
+        `Sheet format validation failed: ${
+          error instanceof Error ? error.message : "Invalid headers"
+        }`
+      );
+    }
+
+    // Build index map for quick access
+    const idx = headerIndex(headers);
+
+    // Collect rows (skip header) with error handling
+    const rows = values.slice(1).filter((r) => {
+      try {
+        return (r[idx.number] ?? "").toString().trim() !== "";
+      } catch (error) {
+        console.warn("[syncConnection] Error filtering row:", error);
+        return false;
+      }
+    });
+
+    // Map to normalized objects with error handling
+    let sheetRows: any[] = [];
+    try {
+      sheetRows = rows.map((r, index) => {
+        try {
+          return mapSheetRow(r, idx);
+        } catch (error) {
+          console.warn(
+            `[syncConnection] Error mapping row ${index + 2}:`,
+            error
           );
-          const toInsert = candidates.filter(
-            (c) => !existingSet.has(c.line_details_id)
+          throw new Error(
+            `Invalid data in row ${index + 2}: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`
           );
+        }
+      });
+    } catch (error) {
+      throw error;
+    }
 
-          if (toInsert.length) {
-            const { error: insDUerr } = await supabaseServer
-              .from("drum_usage")
-              .insert(toInsert);
-            if (insDUerr) throw insDUerr;
-            drumUsageInserted = toInsert.length;
+    // Filter month in sheetRows if needed; prefer trusting the sheet month
+    // We'll still restrict DB queries to month range for safety
+    const { start, end } = monthStartEnd(month, year);
 
-            // Recalculate current quantities per drum using smart wastage
-            const affectedDrumIds = Array.from(
-              new Set(toInsert.map((c) => c.drum_id))
+    // Fetch existing project lines for these numbers within the month window
+    const numbers = Array.from(
+      new Set(sheetRows.map((x) => x.telephone_no).filter(Boolean))
+    );
+
+    let existingLines: any[] = [];
+    try {
+      existingLines = await fetchExistingLines(numbers, start, end);
+    } catch (error) {
+      console.error("[syncConnection] Failed to fetch existing lines:", error);
+      throw new Error(
+        `Failed to fetch existing data: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+
+    const existingByPhone = new Map<string, any>();
+    for (const line of existingLines) {
+      if (line.telephone_no) existingByPhone.set(line.telephone_no, line);
+    }
+
+    // Upsert lines from sheet -> project (prefer bulk; fallback to row-by-row if unique constraint missing)
+    const linePayloads = sheetRows.map((row) => ({
+      ...sheetToLinePayload(row),
+      status: "completed",
+    }));
+
+    let upsertedLines: Array<{ id: string; telephone_no: string }> | null =
+      null;
+    let upsertedCount = 0;
+
+    try {
+      const bulkRes = await supabaseServer
+        .from("line_details")
+        .upsert(linePayloads, { onConflict: "telephone_no,date" })
+        .select("id, telephone_no");
+
+      if (bulkRes.error) {
+        const msg = (bulkRes.error.message || "").toLowerCase();
+        const missingConstraint =
+          msg.includes("conflict") && msg.includes("constraint");
+        if (!missingConstraint) {
+          throw bulkRes.error;
+        }
+
+        // Fallback: row-by-row with error handling
+        console.log(
+          "[syncConnection] Bulk upsert failed, falling back to row-by-row"
+        );
+        for (const [index, row] of sheetRows.entries()) {
+          try {
+            const existing = row.telephone_no
+              ? existingByPhone.get(row.telephone_no)
+              : undefined;
+            if (existing) {
+              const { error: updErr } = await supabaseServer
+                .from("line_details")
+                .update(sheetToLinePayload(row))
+                .eq("id", existing.id);
+              if (updErr) throw updErr;
+              upsertedCount++;
+              await ensureTaskForLine(existing.id, row);
+            } else {
+              const insertPayload = {
+                ...sheetToLinePayload(row),
+                status: "completed",
+              };
+              const { data: ins, error: insErr } = await supabaseServer
+                .from("line_details")
+                .insert(insertPayload)
+                .select("id")
+                .single();
+              if (insErr) throw insErr;
+              upsertedCount++;
+              await ensureTaskForLine(ins!.id, row);
+            }
+          } catch (error) {
+            console.error(
+              `[syncConnection] Error processing row ${index + 1}:`,
+              error
             );
-            for (const drumId of affectedDrumIds) {
-              const drum = (drums || []).find((d: any) => d.id === drumId);
-              if (!drum) continue;
-              // Get drum capacity from inventory_items via item_id
-              let capacity = 0;
-              if (drum.item_id) {
-                const { data: item, error: itemErr } = await supabaseServer
-                  .from("inventory_items")
-                  .select("drum_size")
-                  .eq("id", drum.item_id)
-                  .single();
-                if (!itemErr && item?.drum_size)
-                  capacity = Number(item.drum_size) || 0;
-              }
+            throw new Error(
+              `Failed to process sheet row ${index + 1}: ${
+                error instanceof Error ? error.message : "Unknown error"
+              }`
+            );
+          }
+        }
+      } else {
+        upsertedLines = bulkRes.data || [];
+        upsertedCount = upsertedLines.length;
 
-              // Fetch all usages for this drum
-              const { data: usages, error: uErr } = await supabaseServer
+        // Ensure tasks exist for all lines (bulk operation) with error handling
+        try {
+          const telephoneNos = (upsertedLines || [])
+            .map((l) => l.telephone_no)
+            .filter(Boolean);
+          if (telephoneNos.length > 0) {
+            const { data: existingTasks, error: taskQueryErr } =
+              await supabaseServer
+                .from("tasks")
+                .select("line_details_id, telephone_no")
+                .in("telephone_no", telephoneNos);
+            if (taskQueryErr) throw taskQueryErr;
+
+            const existingLineIds = new Set(
+              (existingTasks || []).map((t) => t.line_details_id)
+            );
+            const lineIdMap = new Map<string, string>();
+            for (const line of upsertedLines || []) {
+              if (line.telephone_no) lineIdMap.set(line.telephone_no, line.id);
+            }
+            const newTasks = sheetRows
+              .filter((row) => {
+                const lineId = lineIdMap.get(row.telephone_no);
+                return lineId && !existingLineIds.has(lineId);
+              })
+              .map((row) => {
+                const lineId = lineIdMap.get(row.telephone_no)!;
+                return {
+                  telephone_no: row.telephone_no,
+                  dp: row.dp,
+                  address: row.address,
+                  customer_name: row.name,
+                  status: "completed",
+                  line_details_id: lineId,
+                  task_date: row.date || new Date().toISOString().slice(0, 10),
+                  created_by: null,
+                };
+              });
+            if (newTasks.length > 0) {
+              const { error: taskInsertErr } = await supabaseServer
+                .from("tasks")
+                .insert(newTasks);
+              if (taskInsertErr) throw taskInsertErr;
+            }
+          }
+        } catch (error) {
+          console.error("[syncConnection] Task creation failed:", error);
+          // Don't fail the entire sync for task creation issues
+          console.warn("Continuing sync despite task creation failure");
+        }
+      }
+    } catch (error) {
+      console.error("[syncConnection] Line upsert failed:", error);
+      throw new Error(
+        `Failed to sync sheet data: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+
+    // Project -> Sheet: append project lines that are missing in the sheet for this month
+    let missingInSheet: any[] = [];
+    try {
+      const { data: monthLines, error: monthErr } = await supabaseServer
+        .from("line_details")
+        .select("*")
+        .gte("date", start)
+        .lte("date", end);
+      if (monthErr) throw monthErr;
+
+      const sheetNumbersSet = new Set(numbers);
+      missingInSheet = (monthLines || []).filter(
+        (l: any) => l.telephone_no && !sheetNumbersSet.has(l.telephone_no)
+      );
+
+      if (missingInSheet.length > 0) {
+        try {
+          const appendRows = missingInSheet.map((l) =>
+            buildSheetRowFromLine(l, headers)
+          );
+          // Append starting at column B
+          await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: `${sheetTab}!B1`,
+            valueInputOption: "USER_ENTERED",
+            insertDataOption: "INSERT_ROWS",
+            requestBody: { values: appendRows },
+          });
+        } catch (error) {
+          console.error(
+            "[syncConnection] Failed to append missing lines to sheet:",
+            error
+          );
+          // Don't fail the entire sync for sheet append issues
+          console.warn("Continuing sync despite sheet append failure");
+        }
+      }
+    } catch (error) {
+      console.error("[syncConnection] Failed to process missing lines:", error);
+      // Don't fail the entire sync for this step
+      console.warn("Continuing sync despite missing lines processing failure");
+    }
+
+    // Drum Usage: create usage rows for lines that have drum numbers
+    let drumUsageInserted = 0;
+    let drumsRecalculated = 0;
+    try {
+      const { data: monthLines, error: monthErr } = await supabaseServer
+        .from("line_details")
+        .select("*")
+        .gte("date", start)
+        .lte("date", end);
+      if (monthErr) throw monthErr;
+
+      const linesWithDrum = (monthLines || []).filter(
+        (l: any) => l.drum_number || l.drum_number_new
+      );
+      if (linesWithDrum.length) {
+        const drumNumbers = Array.from(
+          new Set(
+            linesWithDrum
+              .map((l: any) => l.drum_number || l.drum_number_new)
+              .filter(Boolean)
+          )
+        );
+        if (drumNumbers.length) {
+          const { data: drums, error: drumsErr } = await supabaseServer
+            .from("drum_tracking")
+            .select("id, drum_number, item_id, current_quantity, status")
+            .in("drum_number", drumNumbers);
+          if (drumsErr) throw drumsErr;
+
+          const drumByNumber = new Map<string, any>();
+          for (const d of drums || []) drumByNumber.set(d.drum_number, d);
+
+          // Candidate usages
+          const candidates = linesWithDrum
+            .map((l: any) => {
+              const num = l.drum_number || l.drum_number_new;
+              const drum = num ? drumByNumber.get(num) : null;
+              if (!drum) return null;
+              return {
+                drum_id: drum.id,
+                line_details_id: l.id,
+                quantity_used:
+                  Number(l.total_cable) ||
+                  Math.abs(
+                    Number(l.cable_end || 0) - Number(l.cable_start || 0)
+                  ) ||
+                  0,
+                usage_date: l.date,
+                cable_start_point: Number(l.cable_start || 0),
+                cable_end_point: Number(l.cable_end || 0),
+              };
+            })
+            .filter(Boolean) as Array<{
+            drum_id: string;
+            line_details_id: string;
+            quantity_used: number;
+            usage_date: string;
+            cable_start_point: number;
+            cable_end_point: number;
+          }>;
+
+          if (candidates.length) {
+            // Avoid duplicates by existing line_details_id
+            const ids = candidates.map((c) => c.line_details_id);
+            const { data: existingUsages, error: existErr } =
+              await supabaseServer
                 .from("drum_usage")
-                .select("id, cable_start_point, cable_end_point, usage_date")
-                .eq("drum_id", drumId);
-              if (uErr) continue;
+                .select("line_details_id")
+                .in("line_details_id", ids);
+            if (existErr) throw existErr;
+            const existingSet = new Set(
+              (existingUsages || []).map((u: any) => u.line_details_id)
+            );
+            const toInsert = candidates.filter(
+              (c) => !existingSet.has(c.line_details_id)
+            );
 
-              if (capacity > 0) {
-                const result = calculateSmartWastage(
-                  (usages || []).map((u: any) => ({
-                    id: u.id,
-                    cable_start_point: Number(u.cable_start_point || 0),
-                    cable_end_point: Number(u.cable_end_point || 0),
-                    usage_date: u.usage_date,
-                  })),
-                  capacity,
-                  undefined,
-                  drum.status
-                );
-                // Update current_quantity to reflect calculated current
-                await supabaseServer
-                  .from("drum_tracking")
-                  .update({
-                    current_quantity: result.calculatedCurrentQuantity,
-                  })
-                  .eq("id", drumId);
-                drumsRecalculated++;
+            if (toInsert.length) {
+              const { error: insDUerr } = await supabaseServer
+                .from("drum_usage")
+                .insert(toInsert);
+              if (insDUerr) throw insDUerr;
+              drumUsageInserted = toInsert.length;
+
+              // Recalculate current quantities per drum using smart wastage
+              const affectedDrumIds = Array.from(
+                new Set(toInsert.map((c) => c.drum_id))
+              );
+              for (const drumId of affectedDrumIds) {
+                const drum = (drums || []).find((d: any) => d.id === drumId);
+                if (!drum) continue;
+                // Get drum capacity from inventory_items via item_id
+                let capacity = 0;
+                if (drum.item_id) {
+                  const { data: item, error: itemErr } = await supabaseServer
+                    .from("inventory_items")
+                    .select("drum_size")
+                    .eq("id", drum.item_id)
+                    .single();
+                  if (!itemErr && item?.drum_size)
+                    capacity = Number(item.drum_size) || 0;
+                }
+
+                // Fetch all usages for this drum
+                const { data: usages, error: uErr } = await supabaseServer
+                  .from("drum_usage")
+                  .select("id, cable_start_point, cable_end_point, usage_date")
+                  .eq("drum_id", drumId);
+                if (uErr) continue;
+
+                if (capacity > 0) {
+                  const result = calculateSmartWastage(
+                    (usages || []).map((u: any) => ({
+                      id: u.id,
+                      cable_start_point: Number(u.cable_start_point || 0),
+                      cable_end_point: Number(u.cable_end_point || 0),
+                      usage_date: u.usage_date,
+                    })),
+                    capacity,
+                    undefined,
+                    drum.status
+                  );
+                  // Update current_quantity to reflect calculated current
+                  await supabaseServer
+                    .from("drum_tracking")
+                    .update({
+                      current_quantity: result.calculatedCurrentQuantity,
+                    })
+                    .eq("id", drumId);
+                  drumsRecalculated++;
+                }
               }
             }
           }
         }
       }
+    } catch (e) {
+      console.warn("Drum usage sync skipped:", (e as Error).message);
     }
-  } catch (e) {
-    console.warn("Drum usage sync skipped:", (e as Error).message);
-  }
 
-  // Also process the 'Drum Number' tab bidirectionally if present
-  let drumProcessed = 0;
-  let drumAppended = 0;
-  try {
-    const drumTab = "Drum Number";
-    const drumRange = `${drumTab}!B1:AZ`;
-    const drumRes = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: drumRange,
-      valueRenderOption: "UNFORMATTED_VALUE",
-      dateTimeRenderOption: "FORMATTED_STRING",
-    });
-    const drumValues = drumRes.data.values || [];
-    if (drumValues.length) {
-      const drumHeaders = (drumValues[0] || []).map((h) =>
-        (h ?? "").toString().trim()
-      );
-      validateDrumHeaders(drumHeaders);
-      const dIdx = headerIndexDrum(drumHeaders);
-      const drumRowsRaw = drumValues
-        .slice(1)
-        .filter((r) => (r[dIdx.tp] ?? "").toString().trim() !== "");
-      const drumRows = drumRowsRaw.map((r) => mapDrumRow(r, dIdx));
-
-      // Build a telephone_no -> latest line mapping for this month window
-      const monthLinesByPhone = new Map<string, any[]>();
-      for (const l of monthLines || []) {
-        if (!l.telephone_no) continue;
-        const key = l.telephone_no;
-        const arr = monthLinesByPhone.get(key) || [];
-        arr.push(l);
-        monthLinesByPhone.set(key, arr);
-      }
-      const pickLatest = (arr: any[]) => {
-        return arr.sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        )[0];
-      };
-
-      // Prepare updates for line_details by primary key id
-      const updates: any[] = [];
-      for (const r of drumRows) {
-        const arr = monthLinesByPhone.get(r.tp);
-        if (!arr || arr.length === 0) continue;
-        const target = pickLatest(arr);
-        const update: any = { id: target.id };
-        if (r.dw_dp) update.dp = r.dw_dp;
-        if (typeof r.dw_c_hook === "number") update.c_hook = r.dw_c_hook;
-        if (r.dw_cus) update.name = r.dw_cus;
-        if (r.drum_number) update.drum_number = r.drum_number;
-        updates.push(update);
-      }
-
-      if (updates.length > 0) {
-        const { error: updErr } = await supabaseServer
-          .from("line_details")
-          .upsert(updates, { onConflict: "id" });
-        if (updErr) throw updErr;
-        drumProcessed += updates.length;
-      }
-
-      // Project -> Drum sheet: append missing entries for this month
-      const drumTPs = new Set(drumRows.map((r) => r.tp).filter(Boolean));
-      const missingInDrum = (monthLines || []).filter(
-        (l: any) => l.telephone_no && !drumTPs.has(l.telephone_no)
-      );
-      if (missingInDrum.length > 0) {
-        const drumAppendRows = missingInDrum.map((l) =>
-          buildDrumSheetRowFromLine(l, drumHeaders)
+    // Also process the 'Drum Number' tab bidirectionally if present
+    let drumProcessed = 0;
+    let drumAppended = 0;
+    try {
+      const drumTab = "Drum Number";
+      const drumRange = `${drumTab}!B1:AZ`;
+      const drumRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: drumRange,
+        valueRenderOption: "UNFORMATTED_VALUE",
+        dateTimeRenderOption: "FORMATTED_STRING",
+      });
+      const drumValues = drumRes.data.values || [];
+      if (drumValues.length) {
+        const drumHeaders = (drumValues[0] || []).map((h: any) =>
+          (h ?? "").toString().trim()
         );
-        await sheets.spreadsheets.values.append({
-          spreadsheetId,
-          range: `${drumTab}!B1`,
-          valueInputOption: "USER_ENTERED",
-          insertDataOption: "INSERT_ROWS",
-          requestBody: { values: drumAppendRows },
-        });
-        drumAppended = drumAppendRows.length;
+        validateDrumHeaders(drumHeaders);
+        const dIdx = headerIndexDrum(drumHeaders);
+        const drumRowsRaw = drumValues
+          .slice(1)
+          .filter((r: any) => (r[dIdx.tp] ?? "").toString().trim() !== "");
+        const drumRows = drumRowsRaw.map((r: any) => mapDrumRow(r, dIdx));
+
+        // Build a telephone_no -> latest line mapping for this month window
+        const { data: monthLines, error: monthErr } = await supabaseServer
+          .from("line_details")
+          .select("*")
+          .gte("date", start)
+          .lte("date", end);
+        if (monthErr) throw monthErr;
+
+        const monthLinesByPhone = new Map<string, any[]>();
+        for (const l of monthLines || []) {
+          if (!l.telephone_no) continue;
+          const key = l.telephone_no;
+          const arr = monthLinesByPhone.get(key) || [];
+          arr.push(l);
+          monthLinesByPhone.set(key, arr);
+        }
+        const pickLatest = (arr: any[]) => {
+          return arr.sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          )[0];
+        };
+
+        // Prepare updates for line_details by primary key id
+        const updates: any[] = [];
+        for (const r of drumRows) {
+          const arr = monthLinesByPhone.get(r.tp);
+          if (!arr || arr.length === 0) continue;
+          const target = pickLatest(arr);
+          const update: any = { id: target.id };
+          if (r.dw_dp) update.dp = r.dw_dp;
+          if (typeof r.dw_c_hook === "number") update.c_hook = r.dw_c_hook;
+          if (r.dw_cus) update.name = r.dw_cus;
+          if (r.drum_number) update.drum_number = r.drum_number;
+          updates.push(update);
+        }
+
+        if (updates.length > 0) {
+          const { error: updErr } = await supabaseServer
+            .from("line_details")
+            .upsert(updates, { onConflict: "id" });
+          if (updErr) throw updErr;
+          drumProcessed += updates.length;
+        }
+
+        // Project -> Drum sheet: append missing entries for this month
+        const drumTPs = new Set(drumRows.map((r: any) => r.tp).filter(Boolean));
+        const missingInDrum = (monthLines || []).filter(
+          (l: any) => l.telephone_no && !drumTPs.has(l.telephone_no)
+        );
+        if (missingInDrum.length > 0) {
+          const drumAppendRows = missingInDrum.map((l) =>
+            buildDrumSheetRowFromLine(l, drumHeaders)
+          );
+          await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: `${drumTab}!B1`,
+            valueInputOption: "USER_ENTERED",
+            insertDataOption: "INSERT_ROWS",
+            requestBody: { values: drumAppendRows },
+          });
+          drumAppended = drumAppendRows.length;
+        }
       }
+    } catch (e) {
+      // If tab is missing or validation fails, don't fail the entire sync
+      console.warn("Drum Number tab sync skipped:", (e as Error).message);
     }
-  } catch (e) {
-    // If tab is missing or validation fails, don't fail the entire sync
-    console.warn("Drum Number tab sync skipped:", (e as Error).message);
+
+    // Update connection status
+    const now = new Date().toISOString();
+    const totalProcessed =
+      sheetRows.length +
+      missingInSheet.length +
+      drumProcessed +
+      drumAppended +
+      drumUsageInserted;
+
+    try {
+      const { data, error: updateErr } = await supabaseServer
+        .from("google_sheet_connections")
+        .update({
+          last_synced: now,
+          status: "active",
+          record_count: totalProcessed,
+        })
+        .eq("id", connectionId)
+        .select("id, last_synced, status, record_count")
+        .single();
+
+      if (updateErr) {
+        console.error(
+          "[syncConnection] Failed to update sync status:",
+          updateErr
+        );
+        throw new Error(updateErr.message || "Failed to update sync status");
+      }
+
+      return {
+        connection: data,
+        upserted: upsertedCount,
+        appended: missingInSheet.length,
+        drumProcessed,
+        drumAppended,
+        drumUsageInserted,
+        drumsRecalculated,
+      };
+    } catch (error) {
+      console.error("[syncConnection] Final status update failed:", error);
+      throw new Error(
+        `Sync completed but failed to update status: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  } catch (error) {
+    console.error("[syncConnection] Error:", error);
+
+    // Try to update connection status to error state
+    try {
+      await supabaseServer
+        .from("google_sheet_connections")
+        .update({
+          status: "error",
+          last_synced: new Date().toISOString(),
+        })
+        .eq("id", connectionId);
+    } catch (statusError) {
+      console.error(
+        "[syncConnection] Failed to update error status:",
+        statusError
+      );
+    }
+
+    throw error instanceof Error
+      ? error
+      : new Error("Unknown error occurred during sync");
   }
-
-  // Update connection status
-  const now = new Date().toISOString();
-  const totalProcessed =
-    sheetRows.length +
-    missingInSheet.length +
-    drumProcessed +
-    drumAppended +
-    drumUsageInserted;
-  const { data, error: updateErr } = await supabaseServer
-    .from("google_sheet_connections")
-    .update({
-      last_synced: now,
-      status: "active",
-      record_count: totalProcessed,
-    })
-    .eq("id", connectionId)
-    .select("id, last_synced, status, record_count")
-    .single();
-
-  if (updateErr)
-    throw new Error(updateErr.message || "Failed to update sync status");
-
-  return {
-    connection: data,
-    upserted: upsertedCount,
-    appended: missingInSheet.length,
-    drumProcessed,
-    drumAppended,
-    drumUsageInserted,
-    drumsRecalculated,
-  };
 }
 
 // Helpers
@@ -703,27 +1042,53 @@ function extractSpreadsheetId(url: string): string | null {
 async function getSheetsClient() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+
   if (!email || !keyRaw) {
-    throw new Error("Google service account credentials are not configured");
+    throw new Error(
+      "Google service account credentials are not configured. Please check GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_KEY environment variables."
+    );
   }
 
   // Parse the full key.json content and extract the private_key
   let key: string;
   try {
     const creds = JSON.parse(keyRaw);
+    if (!creds.private_key) {
+      throw new Error("Invalid JSON credentials: missing private_key field");
+    }
     key = creds.private_key;
   } catch (e) {
     // Fallback: if it's not JSON, assume it's the raw key with escaped newlines
     key = keyRaw.replace(/\\n/g, "\n");
+
+    // Validate that it looks like a private key
+    if (
+      !key.includes("-----BEGIN PRIVATE KEY-----") &&
+      !key.includes("-----BEGIN RSA PRIVATE KEY-----")
+    ) {
+      throw new Error(
+        "Invalid private key format. Expected PEM format starting with -----BEGIN PRIVATE KEY-----"
+      );
+    }
   }
 
-  const auth = new google.auth.JWT({
-    email,
-    key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-  await auth.authorize();
-  return google.sheets({ version: "v4", auth });
+  try {
+    const auth = new google.auth.JWT({
+      email,
+      key,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+
+    await auth.authorize();
+    return google.sheets({ version: "v4", auth });
+  } catch (error) {
+    console.error("[getSheetsClient] Authentication failed:", error);
+    throw new Error(
+      `Google Sheets API authentication failed: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
 }
 
 function requiredHeaders(): string[] {
@@ -1131,80 +1496,117 @@ function monthStartEnd(month: number, year: number) {
 // Form wrappers for use as <form action={...}> server actions
 export async function deleteConnectionFromForm(formData: FormData) {
   "use server";
-  const connectionId = String(formData.get("connectionId") || "");
-  const accessToken = formData.get("sb_access_token")
-    ? String(formData.get("sb_access_token"))
-    : undefined;
-  if (!connectionId) throw new Error("connectionId is required");
-  const result = await deleteConnection(connectionId, accessToken);
 
-  // redirect back to list
-  const { redirect } = await import("next/navigation");
-  redirect(`/integrations/google-sheets`);
+  try {
+    const connectionId = String(formData.get("connectionId") || "");
+    const accessToken = formData.get("sb_access_token")
+      ? String(formData.get("sb_access_token"))
+      : undefined;
 
-  return result;
+    if (!connectionId) {
+      throw new Error("connectionId is required");
+    }
+
+    const result = await deleteConnection(connectionId, accessToken);
+
+    // redirect back to list
+    const { redirect } = await import("next/navigation");
+    redirect(`/integrations/google-sheets`);
+
+    return result;
+  } catch (error) {
+    console.error("[deleteConnectionFromForm] Error:", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Failed to delete connection");
+  }
 }
 
 export async function syncConnectionFromForm(formData: FormData) {
   "use server";
-  const connectionId = String(formData.get("connectionId") || "");
-  const accessToken = formData.get("sb_access_token")
-    ? String(formData.get("sb_access_token"))
-    : undefined;
-  if (!connectionId) throw new Error("connectionId is required");
-  const result = await syncConnection(connectionId, accessToken);
 
-  // redirect back to list (or stay)
-  const { redirect } = await import("next/navigation");
-  redirect(`/integrations/google-sheets`);
+  try {
+    const connectionId = String(formData.get("connectionId") || "");
+    const accessToken = formData.get("sb_access_token")
+      ? String(formData.get("sb_access_token"))
+      : undefined;
 
-  return result;
+    if (!connectionId) {
+      throw new Error("connectionId is required");
+    }
+
+    const result = await syncConnection(connectionId, accessToken);
+
+    // redirect back to list (or stay)
+    const { redirect } = await import("next/navigation");
+    redirect(`/integrations/google-sheets`);
+
+    return result;
+  } catch (error) {
+    console.error("[syncConnectionFromForm] Error:", error);
+    // Return error result instead of throwing for form handling
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Sync failed with unknown error",
+    };
+  }
 }
 
 // Dev-only helper: check presence/format of integration-related env vars.
 // Protected with authorize() so only admin/moderator can call.
 export async function checkIntegrationEnv() {
   "use server";
-  // ensure caller is authorized
-  await authorize();
 
-  const result: Record<string, any> = {};
+  try {
+    // ensure caller is authorized
+    await authorize();
 
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  result.GOOGLE_SERVICE_ACCOUNT_EMAIL_present = Boolean(email);
-  result.GOOGLE_SERVICE_ACCOUNT_KEY_present = Boolean(keyRaw);
-  // determine likely format without exposing the key
-  if (!keyRaw) {
-    result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "missing";
-  } else {
-    try {
-      const parsed = JSON.parse(keyRaw);
-      result.GOOGLE_SERVICE_ACCOUNT_KEY_format = parsed?.private_key
-        ? "json-with-private_key"
-        : "json-unknown";
-    } catch (e) {
-      if (keyRaw.includes("\\n") || keyRaw.includes("-----BEGIN")) {
-        result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "pem-escaped-or-raw";
-      } else {
-        result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "raw";
+    const result: Record<string, any> = {};
+
+    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    result.GOOGLE_SERVICE_ACCOUNT_EMAIL_present = Boolean(email);
+    result.GOOGLE_SERVICE_ACCOUNT_KEY_present = Boolean(keyRaw);
+
+    // determine likely format without exposing the key
+    if (!keyRaw) {
+      result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "missing";
+    } else {
+      try {
+        const parsed = JSON.parse(keyRaw);
+        result.GOOGLE_SERVICE_ACCOUNT_KEY_format = parsed?.private_key
+          ? "json-with-private_key"
+          : "json-unknown";
+      } catch (e) {
+        if (keyRaw.includes("\\n") || keyRaw.includes("-----BEGIN")) {
+          result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "pem-escaped-or-raw";
+        } else {
+          result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "raw";
+        }
       }
     }
+
+    result.SUPABASE_SERVICE_ROLE_KEY_present = Boolean(
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    result.NEXT_PUBLIC_SUPABASE_ANON_KEY_present = Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+    result.NEXT_PUBLIC_SUPABASE_URL_present = Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_URL
+    );
+
+    // log for server-side diagnostics (no sensitive values)
+    console.log("[checkIntegrationEnv] result:", result);
+
+    return result;
+  } catch (error) {
+    console.error("[checkIntegrationEnv] Error:", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Failed to check integration environment");
   }
-
-  result.SUPABASE_SERVICE_ROLE_KEY_present = Boolean(
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-  result.NEXT_PUBLIC_SUPABASE_ANON_KEY_present = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
-  result.NEXT_PUBLIC_SUPABASE_URL_present = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL
-  );
-
-  // log for server-side diagnostics (no sensitive values)
-  // eslint-disable-next-line no-console
-  console.log("[checkIntegrationEnv] result:", result);
-
-  return result;
 }
