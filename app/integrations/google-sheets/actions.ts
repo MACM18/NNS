@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { supabaseServer } from "@/lib/supabase-server";
 import { google } from "googleapis";
+import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -307,6 +308,109 @@ export async function syncConnection(connectionId: string) {
     });
   }
 
+  // Drum Usage: create usage rows for lines that have drum numbers
+  let drumUsageInserted = 0;
+  let drumsRecalculated = 0;
+  try {
+    const linesWithDrum = (monthLines || []).filter((l: any) => (l.drum_number || l.drum_number_new));
+    if (linesWithDrum.length) {
+      const drumNumbers = Array.from(new Set(linesWithDrum.map((l: any) => (l.drum_number || l.drum_number_new)).filter(Boolean)));
+      if (drumNumbers.length) {
+        const { data: drums, error: drumsErr } = await supabaseServer
+          .from("drum_tracking")
+          .select("id, drum_number, item_id, current_quantity, status")
+          .in("drum_number", drumNumbers);
+        if (drumsErr) throw drumsErr;
+
+        const drumByNumber = new Map<string, any>();
+        for (const d of drums || []) drumByNumber.set(d.drum_number, d);
+
+        // Candidate usages
+        const candidates = linesWithDrum
+          .map((l: any) => {
+            const num = l.drum_number || l.drum_number_new;
+            const drum = num ? drumByNumber.get(num) : null;
+            if (!drum) return null;
+            return {
+              drum_id: drum.id,
+              line_details_id: l.id,
+              quantity_used: Number(l.total_cable) || Math.abs(Number(l.cable_end || 0) - Number(l.cable_start || 0)) || 0,
+              usage_date: l.date,
+              cable_start_point: Number(l.cable_start || 0),
+              cable_end_point: Number(l.cable_end || 0),
+            };
+          })
+          .filter(Boolean) as Array<{ drum_id: string; line_details_id: string; quantity_used: number; usage_date: string; cable_start_point: number; cable_end_point: number }>;
+
+        if (candidates.length) {
+          // Avoid duplicates by existing line_details_id
+          const ids = candidates.map((c) => c.line_details_id);
+          const { data: existingUsages, error: existErr } = await supabaseServer
+            .from("drum_usage")
+            .select("line_details_id")
+            .in("line_details_id", ids);
+          if (existErr) throw existErr;
+          const existingSet = new Set((existingUsages || []).map((u: any) => u.line_details_id));
+          const toInsert = candidates.filter((c) => !existingSet.has(c.line_details_id));
+
+          if (toInsert.length) {
+            const { error: insDUerr } = await supabaseServer
+              .from("drum_usage")
+              .insert(toInsert);
+            if (insDUerr) throw insDUerr;
+            drumUsageInserted = toInsert.length;
+
+            // Recalculate current quantities per drum using smart wastage
+            const affectedDrumIds = Array.from(new Set(toInsert.map((c) => c.drum_id)));
+            for (const drumId of affectedDrumIds) {
+              const drum = (drums || []).find((d: any) => d.id === drumId);
+              if (!drum) continue;
+              // Get drum capacity from inventory_items via item_id
+              let capacity = 0;
+              if (drum.item_id) {
+                const { data: item, error: itemErr } = await supabaseServer
+                  .from("inventory_items")
+                  .select("drum_size")
+                  .eq("id", drum.item_id)
+                  .single();
+                if (!itemErr && item?.drum_size) capacity = Number(item.drum_size) || 0;
+              }
+
+              // Fetch all usages for this drum
+              const { data: usages, error: uErr } = await supabaseServer
+                .from("drum_usage")
+                .select("id, cable_start_point, cable_end_point, usage_date")
+                .eq("drum_id", drumId);
+              if (uErr) continue;
+
+              if (capacity > 0) {
+                const result = calculateSmartWastage(
+                  (usages || []).map((u: any) => ({
+                    id: u.id,
+                    cable_start_point: Number(u.cable_start_point || 0),
+                    cable_end_point: Number(u.cable_end_point || 0),
+                    usage_date: u.usage_date,
+                  })),
+                  capacity,
+                  undefined,
+                  drum.status
+                );
+                // Update current_quantity to reflect calculated current
+                await supabaseServer
+                  .from("drum_tracking")
+                  .update({ current_quantity: result.calculatedCurrentQuantity })
+                  .eq("id", drumId);
+                drumsRecalculated++;
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Drum usage sync skipped:", (e as Error).message);
+  }
+
   // Also process the 'Drum Number' tab bidirectionally if present
   let drumProcessed = 0;
   let drumAppended = 0;
@@ -384,7 +488,7 @@ export async function syncConnection(connectionId: string) {
 
   // Update connection status
   const now = new Date().toISOString();
-  const totalProcessed = sheetRows.length + missingInSheet.length + drumProcessed + drumAppended;
+  const totalProcessed = sheetRows.length + missingInSheet.length + drumProcessed + drumAppended + drumUsageInserted;
   const { data, error: updateErr } = await supabaseServer
     .from("google_sheet_connections")
     .update({ last_synced: now, status: "active", record_count: totalProcessed })
@@ -394,7 +498,7 @@ export async function syncConnection(connectionId: string) {
 
   if (updateErr) throw new Error(updateErr.message || "Failed to update sync status");
 
-  return { connection: data, upserted: upsertedCount, appended: missingInSheet.length, drumProcessed, drumAppended };
+  return { connection: data, upserted: upsertedCount, appended: missingInSheet.length, drumProcessed, drumAppended, drumUsageInserted, drumsRecalculated };
 }
 
 // Helpers
