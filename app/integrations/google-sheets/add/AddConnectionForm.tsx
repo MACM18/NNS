@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { getSupabaseClient } from "@/lib/supabase";
 
 type Props = {
   action: (formData: FormData) => Promise<any>;
@@ -40,6 +41,26 @@ export default function AddConnectionForm({ action }: Props) {
   const [year, setYear] = useState<string>(String(new Date().getFullYear()));
   const [sheetUrl, setSheetUrl] = useState<string>("");
   const [sheetName, setSheetName] = useState<string>("");
+  const [accessToken, setAccessToken] = useState<string>("");
+
+  // Fetch a short-lived access token so server actions can authenticate without cookies
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!cancelled) {
+          setAccessToken(data.session?.access_token ?? "");
+        }
+      } catch {
+        if (!cancelled) setAccessToken("");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Client-side pre-submit validation to avoid accidental submission of the page URL
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
@@ -133,6 +154,8 @@ export default function AddConnectionForm({ action }: Props) {
         {/* Hidden inputs to submit controlled Select values */}
         <input type='hidden' name='month' value={month} />
         <input type='hidden' name='year' value={year} />
+        {/* Provide Supabase access token for secure, cookie-less auth on the server action */}
+        <input type='hidden' name='sb_access_token' value={accessToken} />
 
         <div className='flex justify-end gap-2'>
           <Button variant='outline' asChild>

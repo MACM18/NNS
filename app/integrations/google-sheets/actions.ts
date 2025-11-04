@@ -8,7 +8,8 @@ const ALLOWED_ROLES = ["admin", "moderator"];
 
 type AuthContext = { userId: string; role: string };
 
-async function authorize(): Promise<AuthContext> {
+// Accept an optional access token to authenticate without relying on cookies.
+async function authorize(accessToken?: string): Promise<AuthContext> {
   const cookieStore = await cookies();
 
   const authClient = createServerClient(
@@ -28,6 +29,31 @@ async function authorize(): Promise<AuthContext> {
       },
     }
   );
+
+  // If an explicit access token was provided, verify it directly without cookies
+  if (accessToken) {
+    const { data, error } = await supabaseServer.auth.getUser(accessToken);
+    if (error || !data?.user) {
+      throw new Error("Unable to retrieve user");
+    }
+    const user = data.user;
+    const { data: profile, error: profileErr } = await supabaseServer
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr) {
+      throw new Error("Profile lookup failed");
+    }
+
+    const role = (profile?.role || "").toLowerCase();
+    if (!ALLOWED_ROLES.includes(role)) {
+      throw new Error("Forbidden");
+    }
+
+    return { userId: user.id, role };
+  }
 
   // Try to get the logged-in user (reads cookies/server session)
   const { data: userRes, error: userErr } = await authClient.auth.getUser();
@@ -100,15 +126,18 @@ async function authorize(): Promise<AuthContext> {
   return { userId: user.id, role };
 }
 
-export async function createConnection(payload: {
-  month: number;
-  year: number;
-  sheet_url: string;
-  sheet_name?: string | null;
-  sheet_tab?: string | null;
-}) {
+export async function createConnection(
+  payload: {
+    month: number;
+    year: number;
+    sheet_url: string;
+    sheet_name?: string | null;
+    sheet_tab?: string | null;
+  },
+  accessToken?: string
+) {
   "use server";
-  const auth = await authorize();
+  const auth = await authorize(accessToken);
 
   const {
     month,
@@ -152,10 +181,11 @@ export async function createConnectionFromForm(formData: FormData) {
   // Debug: log incoming form data keys/values to help diagnose client issues
   try {
     // eslint-disable-next-line no-console
-    console.log("[createConnectionFromForm] Received FormData:");
-    for (const entry of Array.from(formData.entries())) {
+    console.log("[createConnectionFromForm] Received FormData (keys only)");
+    for (const entry of Array.from(formData.keys())) {
+      if (entry === "sb_access_token") continue; // never log tokens
       // eslint-disable-next-line no-console
-      console.log("   ", entry[0], "=>", entry[1]);
+      console.log("   ", entry);
     }
   } catch (e) {
     // eslint-disable-next-line no-console
@@ -170,6 +200,9 @@ export async function createConnectionFromForm(formData: FormData) {
   const sheet_tab = formData.get("sheet_tab")
     ? String(formData.get("sheet_tab"))
     : null;
+  const accessToken = formData.get("sb_access_token")
+    ? String(formData.get("sb_access_token"))
+    : undefined;
 
   const month = Number(monthRaw);
   const year = Number(yearRaw);
@@ -178,13 +211,16 @@ export async function createConnectionFromForm(formData: FormData) {
     throw new Error("month, year and sheet_url are required");
   }
 
-  const result = await createConnection({
-    month,
-    year,
-    sheet_url,
-    sheet_name,
-    sheet_tab,
-  });
+  const result = await createConnection(
+    {
+      month,
+      year,
+      sheet_url,
+      sheet_name,
+      sheet_tab,
+    },
+    accessToken
+  );
 
   // After creating, redirect back to the list page
   const { redirect } = await import("next/navigation");
@@ -193,9 +229,12 @@ export async function createConnectionFromForm(formData: FormData) {
   return result;
 }
 
-export async function deleteConnection(connectionId: string) {
+export async function deleteConnection(
+  connectionId: string,
+  accessToken?: string
+) {
   "use server";
-  const auth = await authorize();
+  const auth = await authorize(accessToken);
 
   if (!connectionId) throw new Error("connectionId is required");
 
@@ -210,9 +249,12 @@ export async function deleteConnection(connectionId: string) {
   return { ok: true };
 }
 
-export async function syncConnection(connectionId: string) {
+export async function syncConnection(
+  connectionId: string,
+  accessToken?: string
+) {
   "use server";
-  const auth = await authorize();
+  const auth = await authorize(accessToken);
 
   if (!connectionId) throw new Error("connectionId is required");
 
@@ -1091,8 +1133,11 @@ function monthStartEnd(month: number, year: number) {
 export async function deleteConnectionFromForm(formData: FormData) {
   "use server";
   const connectionId = String(formData.get("connectionId") || "");
+  const accessToken = formData.get("sb_access_token")
+    ? String(formData.get("sb_access_token"))
+    : undefined;
   if (!connectionId) throw new Error("connectionId is required");
-  const result = await deleteConnection(connectionId);
+  const result = await deleteConnection(connectionId, accessToken);
 
   // redirect back to list
   const { redirect } = await import("next/navigation");
@@ -1104,8 +1149,11 @@ export async function deleteConnectionFromForm(formData: FormData) {
 export async function syncConnectionFromForm(formData: FormData) {
   "use server";
   const connectionId = String(formData.get("connectionId") || "");
+  const accessToken = formData.get("sb_access_token")
+    ? String(formData.get("sb_access_token"))
+    : undefined;
   if (!connectionId) throw new Error("connectionId is required");
-  const result = await syncConnection(connectionId);
+  const result = await syncConnection(connectionId, accessToken);
 
   // redirect back to list (or stay)
   const { redirect } = await import("next/navigation");
