@@ -1116,3 +1116,51 @@ export async function syncConnectionFromForm(formData: FormData) {
 
   return result;
 }
+
+// Dev-only helper: check presence/format of integration-related env vars.
+// Protected with authorize() so only admin/moderator can call.
+export async function checkIntegrationEnv() {
+  "use server";
+  // ensure caller is authorized
+  await authorize();
+
+  const result: Record<string, any> = {};
+
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  result.GOOGLE_SERVICE_ACCOUNT_EMAIL_present = Boolean(email);
+  result.GOOGLE_SERVICE_ACCOUNT_KEY_present = Boolean(keyRaw);
+  // determine likely format without exposing the key
+  if (!keyRaw) {
+    result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "missing";
+  } else {
+    try {
+      const parsed = JSON.parse(keyRaw);
+      result.GOOGLE_SERVICE_ACCOUNT_KEY_format = parsed?.private_key
+        ? "json-with-private_key"
+        : "json-unknown";
+    } catch (e) {
+      if (keyRaw.includes("\\n") || keyRaw.includes("-----BEGIN")) {
+        result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "pem-escaped-or-raw";
+      } else {
+        result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "raw";
+      }
+    }
+  }
+
+  result.SUPABASE_SERVICE_ROLE_KEY_present = Boolean(
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+  result.NEXT_PUBLIC_SUPABASE_ANON_KEY_present = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+  result.NEXT_PUBLIC_SUPABASE_URL_present = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL
+  );
+
+  // log for server-side diagnostics (no sensitive values)
+  // eslint-disable-next-line no-console
+  console.debug("[checkIntegrationEnv] result:", result);
+
+  return result;
+}
