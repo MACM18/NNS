@@ -32,51 +32,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const fetchUserProfile = useCallback(async (userId: string, userEmail: string, userName: string | null) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
+  const fetchUserProfile = useCallback(
+    async (userId: string, userEmail: string, userName: string | null) => {
+      try {
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", userId)
+          .single();
 
-      if (error) {
-        // If profile doesn't exist, create it
-        if (error.code === 'PGRST116') {
-          console.log("Profile not found, creating new profile for user:", userId);
-          const { data: newProfile, error: insertError } = await supabase
-            .from("profiles")
-            .insert({
-              id: userId,
-              email: userEmail,
-              full_name: userName || userEmail,
-              role: "user",
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .select("role")
-            .single();
+        if (error) {
+          // If profile doesn't exist, create it
+          if (error.code === "PGRST116") {
+            console.log(
+              "Profile not found, creating new profile for user:",
+              userId
+            );
+            const { data: newProfile, error: insertError } = await supabase
+              .from("profiles")
+              .insert({
+                id: userId,
+                email: userEmail,
+                full_name: userName || userEmail,
+                role: "user",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .select("*")
+              .single();
 
-          if (insertError) {
-            console.error("Error creating user profile:", insertError);
-            return "user";
+            if (insertError) {
+              console.error("Error creating user profile:", insertError);
+              return { role: "user", profile: null };
+            }
+
+            return {
+              role: (newProfile?.role as string) || "user",
+              profile: newProfile,
+            };
           }
-
-          return (newProfile?.role as string) || "user";
+          console.error("Error fetching user profile:", error);
+          return { role: "user", profile: null };
         }
+
+        return {
+          role: (profile?.role as string) || "user",
+          profile: profile,
+        };
+      } catch (error) {
         console.error("Error fetching user profile:", error);
         return { role: "user", profile: null };
       }
-
-      return {
-        role: (profile?.role as string) || "user",
-        profile: profile,
-      };
-    } catch (error) {
-      console.error("Error fetching user profile:", error);
-      return { role: "user", profile: null };
-    }
-  }, []);
+    },
+    []
+  );
 
   const applySession = useCallback(
     async (session: Session | null, isMounted: () => boolean) => {
@@ -85,23 +94,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (session?.user) {
         setUser(session.user);
         // Check if user is a Google OAuth user
-        const googleProvider = session.user.app_metadata?.provider === 'google' || 
-                               session.user.identities?.some((id) => id.provider === 'google');
+        const googleProvider =
+          session.user.app_metadata?.provider === "google" ||
+          session.user.identities?.some((id) => id.provider === "google");
         setIsGoogleUser(googleProvider || false);
-        
+
         // Get user name from metadata
-        const userName = session.user.user_metadata?.full_name || 
-                        session.user.user_metadata?.name || 
-                        null;
-        
+        const userName =
+          session.user.user_metadata?.full_name ||
+          session.user.user_metadata?.name ||
+          null;
+
         const roleValue = await fetchUserProfile(
-          session.user.id, 
-          session.user.email || '', 
+          session.user.id,
+          session.user.email || "",
           userName
         );
         if (!isMounted()) return;
-        setRole(roleValue?.toLowerCase?.() || "user");
-        setProfile(profileData);
+        setRole(roleValue.role?.toLowerCase?.() || "user");
+        setProfile(roleValue.profile);
       } else {
         setUser(null);
         setRole(null);
@@ -122,10 +133,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           data: { session },
           error,
         } = await supabase.auth.getSession();
-
-        if (error) {
-          console.error("Error retrieving session:", error);
-        }
 
         let activeSession = session;
         if (!activeSession) {

@@ -49,7 +49,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
         duration: 3000,
       });
       // Redirect or perform any additional actions after successful login
-      router.push("/dashboard");
+      router.push("/");
     } catch (error: any) {
       toast({
         title: "Error",

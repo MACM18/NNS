@@ -43,7 +43,7 @@ function AuthCallbackContent() {
           return;
         }
 
-        router.replace("/dashboard");
+        router.replace("/");
       } catch (error: any) {
         toast({
           title: "Google Sign-In failed",

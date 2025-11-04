@@ -73,11 +73,17 @@ export default function Dashboard() {
   const recentActivities = cache.dashboard?.activities || [];
   const router = useRouter();
 
+  // Auth check - redirect unauthenticated users
   useEffect(() => {
     if (!loading && !user) {
       router.push("/auth");
     }
   }, [user, loading, router]);
+
+  // Early return for unauthenticated users
+  if (!user && !loading) {
+    return null;
+  }
 
   useEffect(() => {
     if (user && selectedDate) {
@@ -293,10 +299,6 @@ export default function Dashboard() {
     return `${sign}${change.toFixed(1)}%`;
   };
 
-  if (!user && !loading) {
-    return null; // Will redirect to auth
-  }
-
   const dashboardStats = [
     {
       title: "Total Lines",
@@ -337,184 +339,186 @@ export default function Dashboard() {
           {loading ? (
             <DashboardSkeleton />
           ) : (
-          <div className='w-full max-w-7xl mx-auto space-y-4'>
-            <div className='flex flex-col gap-4'>
-              <h2 className='text-2xl sm:text-3xl font-bold tracking-tight'>
-                Dashboard
-              </h2>
-              <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-2'>
-                <MonthYearPicker
-                  date={selectedDate}
-                  onDateChange={setSelectedDate}
-                />
-                <Button
-                  variant='outline'
-                  size='sm'
-                  onClick={fetchDashboardData}
-                  disabled={isRefreshing}
-                  className='w-full sm:w-auto'
-                >
-                  <RefreshCw
-                    className={`mr-2 h-4 w-4 ${
-                      isRefreshing ? "animate-spin" : ""
-                    }`}
+            <div className='w-full max-w-7xl mx-auto space-y-4'>
+              <div className='flex flex-col gap-4'>
+                <h2 className='text-2xl sm:text-3xl font-bold tracking-tight'>
+                  Dashboard
+                </h2>
+                <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-2'>
+                  <MonthYearPicker
+                    date={selectedDate}
+                    onDateChange={setSelectedDate}
                   />
-                  Refresh
-                </Button>
-                <Button
-                  onClick={() => setOpenTelephoneLineModal(true)}
-                  className='w-full sm:w-auto'
-                >
-                  <Plus className='mr-2 h-4 w-4' />
-                  Add Line
-                </Button>
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    onClick={fetchDashboardData}
+                    disabled={isRefreshing}
+                    className='w-full sm:w-auto'
+                  >
+                    <RefreshCw
+                      className={`mr-2 h-4 w-4 ${
+                        isRefreshing ? "animate-spin" : ""
+                      }`}
+                    />
+                    Refresh
+                  </Button>
+                  <Button
+                    onClick={() => setOpenTelephoneLineModal(true)}
+                    className='w-full sm:w-auto'
+                  >
+                    <Plus className='mr-2 h-4 w-4' />
+                    Add Line
+                  </Button>
+                </div>
               </div>
-            </div>
 
-            {/* Stats Grid */}
-            <div className='grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
-              {dashboardStats.map((stat, index) => (
-                <Card key={index}>
-                  <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                    <CardTitle className='text-sm font-medium'>
-                      {stat.title}
-                    </CardTitle>
-                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
+              {/* Stats Grid */}
+              <div className='grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
+                {dashboardStats.map((stat, index) => (
+                  <Card key={index}>
+                    <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                      <CardTitle className='text-sm font-medium'>
+                        {stat.title}
+                      </CardTitle>
+                      <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                    </CardHeader>
+                    <CardContent>
+                      <div className='text-2xl font-bold'>
+                        {isRefreshing ? (
+                          <div className='h-8 w-20 bg-gray-200 animate-pulse rounded'></div>
+                        ) : (
+                          stat.value
+                        )}
+                      </div>
+                      <p className='text-xs text-muted-foreground'>
+                        <span
+                          className={
+                            stat.change.startsWith("+")
+                              ? "text-green-600"
+                              : stat.change.startsWith("-")
+                              ? "text-red-600"
+                              : "text-gray-600"
+                          }
+                        >
+                          {isRefreshing ? "..." : stat.change}
+                        </span>{" "}
+                        from last month
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <div className='grid gap-4 grid-cols-1 lg:grid-cols-7'>
+                {/* Recent Activities */}
+                <Card className='lg:col-span-4'>
+                  <CardHeader>
+                    <CardTitle>Recent Activities</CardTitle>
+                    <CardDescription>
+                      Latest updates from your telecom operations
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className='text-2xl font-bold'>
+                    <div className='space-y-4'>
                       {isRefreshing ? (
-                        <div className='h-8 w-20 bg-gray-200 animate-pulse rounded'></div>
+                        Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className='flex items-center space-x-4'>
+                            <div className='flex-1 space-y-2'>
+                              <div className='h-4 bg-gray-200 animate-pulse rounded w-3/4'></div>
+                              <div className='h-3 bg-gray-200 animate-pulse rounded w-1/2'></div>
+                            </div>
+                            <div className='h-6 w-16 bg-gray-200 animate-pulse rounded'></div>
+                          </div>
+                        ))
+                      ) : recentActivities.length > 0 ? (
+                        recentActivities.map((activity) => (
+                          <div
+                            key={activity.id}
+                            className='flex items-center space-x-4'
+                          >
+                            <div className='flex-1 space-y-1'>
+                              <p className='text-sm font-medium leading-none'>
+                                {activity.action}
+                              </p>
+                              <p className='text-sm text-muted-foreground'>
+                                {activity.location}
+                              </p>
+                            </div>
+                            <div className='flex items-center space-x-2'>
+                              <Badge
+                                variant={
+                                  activity.status === "completed"
+                                    ? "default"
+                                    : activity.status === "in_progress"
+                                    ? "secondary"
+                                    : activity.status === "pending"
+                                    ? "destructive"
+                                    : "outline"
+                                }
+                              >
+                                {activity.status}
+                              </Badge>
+                              <span className='text-xs text-muted-foreground'>
+                                {activity.time}
+                              </span>
+                            </div>
+                          </div>
+                        ))
                       ) : (
-                        stat.value
+                        <p className='text-sm text-muted-foreground text-center py-4'>
+                          No recent activities found
+                        </p>
                       )}
                     </div>
-                    <p className='text-xs text-muted-foreground'>
-                      <span
-                        className={
-                          stat.change.startsWith("+")
-                            ? "text-green-600"
-                            : stat.change.startsWith("-")
-                            ? "text-red-600"
-                            : "text-gray-600"
-                        }
-                      >
-                        {isRefreshing ? "..." : stat.change}
-                      </span>{" "}
-                      from last month
-                    </p>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
 
-            <div className='grid gap-4 grid-cols-1 lg:grid-cols-7'>
-              {/* Recent Activities */}
-              <Card className='lg:col-span-4'>
-                <CardHeader>
-                  <CardTitle>Recent Activities</CardTitle>
-                  <CardDescription>
-                    Latest updates from your telecom operations
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className='space-y-4'>
-                    {isRefreshing ? (
-                      Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className='flex items-center space-x-4'>
-                          <div className='flex-1 space-y-2'>
-                            <div className='h-4 bg-gray-200 animate-pulse rounded w-3/4'></div>
-                            <div className='h-3 bg-gray-200 animate-pulse rounded w-1/2'></div>
-                          </div>
-                          <div className='h-6 w-16 bg-gray-200 animate-pulse rounded'></div>
-                        </div>
-                      ))
-                    ) : recentActivities.length > 0 ? (
-                      recentActivities.map((activity) => (
-                        <div
-                          key={activity.id}
-                          className='flex items-center space-x-4'
-                        >
-                          <div className='flex-1 space-y-1'>
-                            <p className='text-sm font-medium leading-none'>
-                              {activity.action}
-                            </p>
-                            <p className='text-sm text-muted-foreground'>
-                              {activity.location}
-                            </p>
-                          </div>
-                          <div className='flex items-center space-x-2'>
-                            <Badge
-                              variant={
-                                activity.status === "completed"
-                                  ? "default"
-                                  : activity.status === "in_progress"
-                                  ? "secondary"
-                                  : activity.status === "pending"
-                                  ? "destructive"
-                                  : "outline"
-                              }
-                            >
-                              {activity.status}
-                            </Badge>
-                            <span className='text-xs text-muted-foreground'>
-                              {activity.time}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className='text-sm text-muted-foreground text-center py-4'>
-                        No recent activities found
-                      </p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Quick Actions */}
-              <Card className='lg:col-span-3'>
-                <CardHeader>
-                  <CardTitle>Quick Actions</CardTitle>
-                  <CardDescription>Common tasks and shortcuts</CardDescription>
-                </CardHeader>
-                <CardContent className='space-y-4'>
-                  <Button
-                    className='w-full justify-between'
-                    variant='outline'
-                    onClick={() => router.push("/lines")}
-                  >
-                    Add New Line Details
-                    <ArrowRight className='h-4 w-4' />
-                  </Button>
-                  <Button
-                    className='w-full justify-between'
-                    variant='outline'
-                    onClick={() => router.push("/reports")}
-                  >
-                    Generate Monthly Report
-                    <ArrowRight className='h-4 w-4' />
-                  </Button>
-                  <Button
-                    className='w-full justify-between'
-                    variant='outline'
-                    onClick={() => router.push("/inventory")}
-                  >
-                    Update Inventory
-                    <ArrowRight className='h-4 w-4' />
-                  </Button>
-                  <Button
-                    className='w-full justify-between'
-                    variant='outline'
-                    onClick={() => router.push("/tasks")}
-                  >
-                    Review Pending Tasks
-                    <ArrowRight className='h-4 w-4' />
-                  </Button>
-                </CardContent>
-              </Card>
+                {/* Quick Actions */}
+                <Card className='lg:col-span-3'>
+                  <CardHeader>
+                    <CardTitle>Quick Actions</CardTitle>
+                    <CardDescription>
+                      Common tasks and shortcuts
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className='space-y-4'>
+                    <Button
+                      className='w-full justify-between'
+                      variant='outline'
+                      onClick={() => router.push("/lines")}
+                    >
+                      Add New Line Details
+                      <ArrowRight className='h-4 w-4' />
+                    </Button>
+                    <Button
+                      className='w-full justify-between'
+                      variant='outline'
+                      onClick={() => router.push("/reports")}
+                    >
+                      Generate Monthly Report
+                      <ArrowRight className='h-4 w-4' />
+                    </Button>
+                    <Button
+                      className='w-full justify-between'
+                      variant='outline'
+                      onClick={() => router.push("/inventory")}
+                    >
+                      Update Inventory
+                      <ArrowRight className='h-4 w-4' />
+                    </Button>
+                    <Button
+                      className='w-full justify-between'
+                      variant='outline'
+                      onClick={() => router.push("/tasks")}
+                    >
+                      Review Pending Tasks
+                      <ArrowRight className='h-4 w-4' />
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-          </div>
           )}
         </main>
       </div>
