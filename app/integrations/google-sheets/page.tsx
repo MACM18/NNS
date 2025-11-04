@@ -1,10 +1,6 @@
-"use client";
-
-import { useState, useEffect } from "react";
+import { supabaseServer } from "@/lib/supabase-server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -14,139 +10,65 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { FileSpreadsheet, Plus, Trash2, ExternalLink, Calendar, RefreshCw } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
-import { useRouter } from "next/navigation";
+import { FileSpreadsheet, ExternalLink, Calendar } from "lucide-react";
 import Link from "next/link";
+import ConnectionActions from "./components/ConnectionActions";
+import { deleteConnectionFromForm, syncConnectionFromForm } from "@/app/integrations/google-sheets/actions";
 
-interface SheetConnection {
+interface SheetConnectionRow {
   id: string;
-  month: string;
+  month: number | string;
   year: number;
-  sheetUrl: string;
-  sheetName: string;
-  lastSynced: string;
-  status: "active" | "error" | "syncing";
-  recordCount?: number;
+  sheet_url: string;
+  sheet_name: string | null;
+  sheet_tab: string | null;
+  last_synced: string | null;
+  status: string | null;
+  record_count: number | null;
+  created_at: string;
 }
 
-// Mock data - will be replaced with actual API calls
-const mockConnections: SheetConnection[] = [
-  {
-    id: "1",
-    month: "October",
-    year: 2024,
-    sheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
-    sheetName: "October NNS Data",
-    lastSynced: "2024-10-28T10:30:00Z",
-    status: "active",
-    recordCount: 142,
-  },
-  {
-    id: "2",
-    month: "September",
-    year: 2024,
-    sheetUrl: "https://docs.google.com/spreadsheets/d/def456/edit",
-    sheetName: "September NNS Lines",
-    lastSynced: "2024-09-30T15:45:00Z",
-    status: "active",
-    recordCount: 128,
-  },
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
-export default function GoogleSheetsPage() {
-  const { role, loading } = useAuth();
-  const router = useRouter();
-  const [connections, setConnections] = useState<SheetConnection[]>(mockConnections);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+async function fetchConnections(page = 1, pageSize = 10) {
+  const supabase = supabaseServer;
 
-  // Form state
-  const [formData, setFormData] = useState({
-    month: "",
-    year: new Date().getFullYear().toString(),
-    sheetUrl: "",
-    sheetName: "",
-  });
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-  useEffect(() => {
-    // Only admin and moderator can access integrations
-    if (!loading && role && !["admin", "moderator"].includes(role.toLowerCase())) {
-      router.push("/dashboard");
-    }
-  }, [role, loading, router]);
+  const { data, error, count } = await supabase
+    .from("google_sheet_connections")
+    .select(
+      `id, month, year, sheet_url, sheet_name, sheet_tab, last_synced, status, record_count, created_at`,
+      { count: "exact" }
+    )
+    .order("created_at", { ascending: false })
+    .range(from, to);
 
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
+  if (error) {
+    console.error("Error fetching sheet connections:", error.message);
+    return { rows: [] as SheetConnectionRow[], total: 0 };
+  }
 
-  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+  return { rows: (data as SheetConnectionRow[]) || [], total: count ?? 0 };
+}
 
-  const handleAddConnection = () => {
-    // TODO: Implement actual API call
-    const newConnection: SheetConnection = {
-      id: Date.now().toString(),
-      month: formData.month,
-      year: parseInt(formData.year),
-      sheetUrl: formData.sheetUrl,
-      sheetName: formData.sheetName,
-      lastSynced: new Date().toISOString(),
-      status: "active",
-      recordCount: 0,
-    };
-
-    setConnections([newConnection, ...connections]);
-    setIsAddDialogOpen(false);
-    setFormData({
-      month: "",
-      year: new Date().getFullYear().toString(),
-      sheetUrl: "",
-      sheetName: "",
-    });
-  };
-
-  const handleDeleteConnection = (id: string) => {
-    // TODO: Implement actual API call
-    setConnections(connections.filter(conn => conn.id !== id));
-  };
-
-  const handleSyncConnection = (id: string) => {
-    // TODO: Implement actual API call
-    setConnections(connections.map(conn => 
-      conn.id === id ? { ...conn, status: "syncing" as const } : conn
-    ));
-
-    // Simulate sync
-    setTimeout(() => {
-      setConnections(connections.map(conn => 
-        conn.id === id ? { 
-          ...conn, 
-          status: "active" as const, 
-          lastSynced: new Date().toISOString() 
-        } : conn
-      ));
-    }, 2000);
-  };
-
-  const formatDate = (dateString: string) => {
+function formatDate(dateString: string | null | undefined) {
+  if (!dateString) return "-";
+  try {
     return new Date(dateString).toLocaleString("en-US", {
       month: "short",
       day: "numeric",
@@ -154,42 +76,33 @@ export default function GoogleSheetsPage() {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
-
-  const getStatusBadge = (status: SheetConnection["status"]) => {
-    switch (status) {
-      case "active":
-        return <Badge variant="default" className="bg-green-500">Active</Badge>;
-      case "error":
-        return <Badge variant="destructive">Error</Badge>;
-      case "syncing":
-        return <Badge variant="secondary">Syncing...</Badge>;
-      default:
-        return <Badge variant="outline">Unknown</Badge>;
-    }
-  };
-
-  // Pagination
-  const totalPages = Math.ceil(connections.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentConnections = connections.slice(startIndex, endIndex);
-
-  if (loading) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2 mb-8"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
-        </div>
-      </div>
-    );
+  } catch (e) {
+    return dateString;
   }
+}
 
-  if (!role || !["admin", "moderator"].includes(role.toLowerCase())) {
-    return null;
+function getStatusBadge(status: string | null) {
+  switch ((status || "").toLowerCase()) {
+    case "active":
+      return <Badge variant="default" className="bg-green-500">Active</Badge>;
+    case "error":
+      return <Badge variant="destructive">Error</Badge>;
+    case "syncing":
+      return <Badge variant="secondary">Syncing...</Badge>;
+    default:
+      return <Badge variant="outline">{status ?? "Unknown"}</Badge>;
   }
+}
+
+export default async function GoogleSheetsPage({ searchParams }: { searchParams?: { page?: string } }) {
+  const currentPage = parseInt((searchParams?.page as string) || "1", 10) || 1;
+  const pageSize = 10;
+
+  const { rows, total } = await fetchConnections(currentPage, pageSize);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startIndex = (currentPage - 1) * pageSize + 1;
+  const endIndex = Math.min(currentPage * pageSize, total || rows.length);
 
   return (
     <div className="container mx-auto p-6">
@@ -212,97 +125,15 @@ export default function GoogleSheetsPage() {
               Connect Google Sheets to sync line installation data for each month
             </p>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Connection
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[525px]">
-              <DialogHeader>
-                <DialogTitle>Connect Google Sheet</DialogTitle>
-                <DialogDescription>
-                  Link a Google Sheet to a specific month for data synchronization
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="month">Month</Label>
-                    <Select
-                      value={formData.month}
-                      onValueChange={(value) => setFormData({ ...formData, month: value })}
-                    >
-                      <SelectTrigger id="month">
-                        <SelectValue placeholder="Select month" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {months.map((month) => (
-                          <SelectItem key={month} value={month}>
-                            {month}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="year">Year</Label>
-                    <Select
-                      value={formData.year}
-                      onValueChange={(value) => setFormData({ ...formData, year: value })}
-                    >
-                      <SelectTrigger id="year">
-                        <SelectValue placeholder="Select year" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {years.map((year) => (
-                          <SelectItem key={year} value={year.toString()}>
-                            {year}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sheetUrl">Google Sheet URL</Label>
-                  <Input
-                    id="sheetUrl"
-                    placeholder="https://docs.google.com/spreadsheets/d/..."
-                    value={formData.sheetUrl}
-                    onChange={(e) => setFormData({ ...formData, sheetUrl: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sheetName">Sheet Name (Tab)</Label>
-                  <Input
-                    id="sheetName"
-                    placeholder="e.g., October NNS Data"
-                    value={formData.sheetName}
-                    onChange={(e) => setFormData({ ...formData, sheetName: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    The name of the specific tab/sheet within the Google Sheets document
-                  </p>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsAddDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleAddConnection}
-                  disabled={!formData.month || !formData.year || !formData.sheetUrl || !formData.sheetName}
-                >
-                  Connect Sheet
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+
+          <div>
+            {/* Link to future client-side add connection UI (not implemented here) */}
+            <Button asChild>
+              <Link href="/integrations/google-sheets/add" className="gap-2">
+                <span className="inline-flex items-center gap-2">Add Connection</span>
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -315,16 +146,17 @@ export default function GoogleSheetsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {connections.length === 0 ? (
+          {rows.length === 0 ? (
             <div className="text-center py-12">
               <FileSpreadsheet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No connections yet</h3>
               <p className="text-muted-foreground mb-4">
                 Get started by connecting your first Google Sheet
               </p>
-              <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Connection
+              <Button asChild>
+                <Link href="/integrations/google-sheets/add" className="gap-2">
+                  Add Connection
+                </Link>
               </Button>
             </div>
           ) : (
@@ -341,79 +173,57 @@ export default function GoogleSheetsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {currentConnections.map((connection) => (
-                    <TableRow key={connection.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {connection.month} {connection.year}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <a
-                          href={connection.sheetUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 hover:underline text-blue-600"
-                        >
-                          {connection.sheetName}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(connection.status)}</TableCell>
-                      <TableCell>{connection.recordCount || 0}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {formatDate(connection.lastSynced)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSyncConnection(connection.id)}
-                            disabled={connection.status === "syncing"}
-                            className="gap-2"
+                  {rows.map((connection) => {
+                    const monthLabel = typeof connection.month === "number" ? MONTHS[connection.month - 1] : String(connection.month);
+                    return (
+                      <TableRow key={connection.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            {monthLabel} {connection.year}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <a
+                            href={connection.sheet_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 hover:underline text-blue-600"
                           >
-                            <RefreshCw className={`h-4 w-4 ${connection.status === "syncing" ? "animate-spin" : ""}`} />
-                            Sync
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteConnection(connection.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            {connection.sheet_name ?? connection.sheet_url}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(connection.status)}</TableCell>
+                        <TableCell>{connection.record_count ?? 0}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {formatDate(connection.last_synced)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <ConnectionActions
+                            connectionId={connection.id}
+                            deleteAction={deleteConnectionFromForm}
+                            syncAction={syncConnectionFromForm}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
 
-              {/* Pagination */}
+              {/* Pagination (server-side via query param `?page=`) */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
                   <div className="text-sm text-muted-foreground">
-                    Showing {startIndex + 1} to {Math.min(endIndex, connections.length)} of {connections.length} connections
+                    Showing {startIndex} to {endIndex} of {total} connections
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                      disabled={currentPage === 1}
-                    >
-                      Previous
+                    <Button variant="outline" size="sm" disabled={currentPage === 1} asChild>
+                      <Link href={`/integrations/google-sheets?page=${currentPage - 1}`}>Previous</Link>
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                    >
-                      Next
+                    <Button variant="outline" size="sm" disabled={currentPage === totalPages} asChild>
+                      <Link href={`/integrations/google-sheets?page=${currentPage + 1}`}>Next</Link>
                     </Button>
                   </div>
                 </div>
