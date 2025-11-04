@@ -178,7 +178,7 @@ export async function createConnection(
 // Helper server action to accept FormData from a <form action=> submission in the App Router.
 export async function createConnectionFromForm(formData: FormData) {
   "use server";
-  // Debug: log incoming form data keys/values to help diagnose client issues
+  // Debug: log incoming form data keys only (never values/tokens)
   try {
     // eslint-disable-next-line no-console
     console.log("[createConnectionFromForm] Received FormData (keys only)");
@@ -191,6 +191,7 @@ export async function createConnectionFromForm(formData: FormData) {
     // eslint-disable-next-line no-console
     console.warn("[createConnectionFromForm] Failed to dump FormData:", e);
   }
+
   const monthRaw = formData.get("month");
   const yearRaw = formData.get("year");
   const sheet_url = String(formData.get("sheet_url") || "");
@@ -208,25 +209,28 @@ export async function createConnectionFromForm(formData: FormData) {
   const year = Number(yearRaw);
 
   if (!month || !year || !sheet_url) {
-    throw new Error("month, year and sheet_url are required");
+    return { ok: false, error: "month, year and sheet_url are required" };
   }
 
-  const result = await createConnection(
-    {
-      month,
-      year,
-      sheet_url,
-      sheet_name,
-      sheet_tab,
-    },
-    accessToken
-  );
-
-  // After creating, redirect back to the list page
-  const { redirect } = await import("next/navigation");
-  redirect(`/integrations/google-sheets`);
-
-  return result;
+  try {
+    const result = await createConnection(
+      {
+        month,
+        year,
+        sheet_url,
+        sheet_name,
+        sheet_tab,
+      },
+      accessToken
+    );
+    return { ok: true, id: result.id };
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    const normalized = /generated column/i.test(msg)
+      ? "One or more generated fields (F1/G1/Total) cannot be set explicitly."
+      : msg;
+    return { ok: false, error: normalized };
+  }
 }
 
 export async function deleteConnection(
@@ -262,7 +266,6 @@ export async function syncConnection(
   const { data: conn, error: fetchErr } = await supabaseServer
     .from("google_sheet_connections")
     .select("id, month, year, sheet_url, sheet_name, sheet_tab, sheet_id")
-    .eq("id", connectionId)
     .single();
 
   if (fetchErr)
@@ -277,8 +280,6 @@ export async function syncConnection(
 
   // Initialize Google Sheets API
   const sheets = await getSheetsClient();
-
-  // Read header + data from the 'All' tab (starting from column B)
   const range = `${sheetTab}!B1:AZ`;
   const readRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
@@ -934,9 +935,7 @@ function sheetToLinePayload(r: any) {
     cable_start: r.cable_start,
     cable_middle: r.cable_middle,
     cable_end: r.cable_end,
-    f1: r.f1,
-    g1: r.g1,
-    total_cable: r.total_cable,
+    // Do not set generated columns (f1, g1, total_cable)
     retainers: r.retainers,
     l_hook: r.l_hook,
     nut_bolt: r.nut_bolt,

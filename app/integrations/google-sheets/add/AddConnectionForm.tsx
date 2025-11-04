@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useActionState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,16 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { getSupabaseClient } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import { useNotification } from "@/contexts/notification-context";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 type Props = {
   action: (formData: FormData) => Promise<any>;
@@ -37,11 +47,17 @@ const years = Array.from({ length: 6 }, (_, i) =>
 );
 
 export default function AddConnectionForm({ action }: Props) {
+  const router = useRouter();
+  const { addNotification } = useNotification();
   const [month, setMonth] = useState<string>("");
   const [year, setYear] = useState<string>(String(new Date().getFullYear()));
   const [sheetUrl, setSheetUrl] = useState<string>("");
   const [sheetName, setSheetName] = useState<string>("");
   const [accessToken, setAccessToken] = useState<string>("");
+  const [validationOpen, setValidationOpen] = useState(false);
+  const [validationMessage, setValidationMessage] = useState("");
+
+  const [result, formAction, pending] = useActionState(action as any, null);
 
   // Fetch a short-lived access token so server actions can authenticate without cookies
   useEffect(() => {
@@ -66,8 +82,10 @@ export default function AddConnectionForm({ action }: Props) {
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
     if (!sheetUrl || sheetUrl.trim() === "") {
       e.preventDefault();
-      // eslint-disable-next-line no-alert
-      alert("Please enter the Google Sheet URL before submitting.");
+      setValidationMessage(
+        "Please enter the Google Sheet URL before submitting."
+      );
+      setValidationOpen(true);
       return;
     }
     // Basic check to avoid accidentally submitting the current page URL
@@ -79,10 +97,10 @@ export default function AddConnectionForm({ action }: Props) {
         path.startsWith("/integrations")
       ) {
         e.preventDefault();
-        // eslint-disable-next-line no-alert
-        alert(
+        setValidationMessage(
           "It looks like you pasted the integration page URL. Please paste the Google Sheet URL (docs.google.com/spreadsheets/...)."
         );
+        setValidationOpen(true);
         return;
       }
     } catch {
@@ -90,13 +108,33 @@ export default function AddConnectionForm({ action }: Props) {
     }
   };
 
+  // Respond to server action results to show toast and navigate
+  useEffect(() => {
+    if (!result) return;
+    if ((result as any).ok) {
+      addNotification({
+        title: "Sheet connected",
+        message: "Google Sheet connection created successfully.",
+        type: "success",
+        category: "system",
+      });
+      router.replace("/integrations/google-sheets");
+    } else if ((result as any).error) {
+      addNotification({
+        title: "Failed to connect sheet",
+        message: String((result as any).error),
+        type: "error",
+        category: "system",
+      });
+    }
+  }, [result, addNotification, router]);
+
   return (
     <div className='max-w-2xl mx-auto p-4'>
-      <form action={action} onSubmit={handleSubmit} className='grid gap-4'>
+      <form action={formAction} onSubmit={handleSubmit} className='grid gap-4'>
         <div className='grid grid-cols-2 gap-4'>
           <div>
             <Label>Month</Label>
-            <input name='month' type='hidden' value={month} />
             <Select onValueChange={(v) => setMonth(v)} value={month}>
               <SelectTrigger>
                 <SelectValue placeholder='Select month' />
@@ -112,7 +150,6 @@ export default function AddConnectionForm({ action }: Props) {
           </div>
           <div>
             <Label>Year</Label>
-            <input name='year' type='hidden' value={year} />
             <Select onValueChange={(v) => setYear(v)} value={year}>
               <SelectTrigger>
                 <SelectValue placeholder='Select year' />
@@ -161,9 +198,24 @@ export default function AddConnectionForm({ action }: Props) {
           <Button variant='outline' asChild>
             <a href='/integrations/google-sheets'>Cancel</a>
           </Button>
-          <Button type='submit'>Connect Sheet</Button>
+          <Button type='submit' disabled={pending}>
+            {pending ? "Connecting..." : "Connect Sheet"}
+          </Button>
         </div>
       </form>
+
+      {/* Validation dialog */}
+      <Dialog open={validationOpen} onOpenChange={setValidationOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Check your input</DialogTitle>
+            <DialogDescription>{validationMessage}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setValidationOpen(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
