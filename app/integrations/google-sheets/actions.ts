@@ -733,7 +733,7 @@ function requiredHeaders(): string[] {
     "Power (DP)",
     "Power (inbox)",
     "Name",
-    "Addras",
+    "Address",
     "Cable Start",
     "Cable Middle",
     "Cable End",
@@ -778,7 +778,7 @@ function validateHeaders(headers: string[]) {
   const lower = headers.map((h) => h.toLowerCase());
   const req = requiredHeaders();
   for (const h of req) {
-    const alt = h === "Addras" ? ["Addras", "Address"] : [h];
+    const alt = h === "Address" ? ["Addras", "Address"] : [h];
     const ok = alt.some((a) => lower.includes(a.toLowerCase()));
     if (!ok) {
       throw new Error(`Missing required column '${h}' in sheet header`);
@@ -804,7 +804,7 @@ function headerIndex(headers: string[]) {
     power_dp: pick("Power (DP)"),
     power_inbox: pick("Power (inbox)"),
     name: pick("Name"),
-    address: pick("Addras", ["Address"]),
+    address: pick("Address", ["Address"]),
     cable_start: pick("Cable Start"),
     cable_middle: pick("Cable Middle"),
     cable_end: pick("Cable End"),
