@@ -17,6 +17,7 @@ import {
   LogOut,
   Building2,
   CalendarDays,
+  Plug,
 } from "lucide-react";
 
 import {
@@ -86,6 +87,13 @@ const navItems = [
     title: "Careers",
     url: "/careers",
     icon: Briefcase,
+    // admin and moderator
+    roles: ["admin", "moderator"],
+  },
+  {
+    title: "Integrations",
+    url: "/integrations",
+    icon: Plug,
     // admin and moderator
     roles: ["admin", "moderator"],
   },
