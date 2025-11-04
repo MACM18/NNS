@@ -90,8 +90,15 @@ export async function POST(req: Request) {
       // ignore
     }
 
-    // Success — respond OK. Client will redirect to the app landing.
-    return NextResponse.json({ ok: true });
+    // Success — respond OK and return the cookie names written (no values) so the client can verify
+    let cookieNames: string[] = [];
+    try {
+      cookieNames = cookieStore.getAll().map((c) => c.name);
+    } catch (e) {
+      // ignore
+    }
+
+    return NextResponse.json({ ok: true, cookies: cookieNames });
   } catch (err: any) {
     // eslint-disable-next-line no-console
     console.error("[api/auth/exchange] unexpected error:", err?.message || err);

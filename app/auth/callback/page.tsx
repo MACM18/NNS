@@ -39,6 +39,10 @@ function AuthCallbackContent() {
           body: JSON.stringify({ code }),
         });
         const result = await resp.json();
+        // Debug: log exchange result (includes cookie names written by server if successful)
+        // eslint-disable-next-line no-console
+        console.debug("[auth/callback] exchange result:", result);
+
         if (!resp.ok) {
           toast({
             title: "Google Sign-In failed",
