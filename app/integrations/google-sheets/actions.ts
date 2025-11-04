@@ -198,65 +198,87 @@ export async function syncConnection(connectionId: string) {
     if (line.telephone_no) existingByPhone.set(line.telephone_no, line);
   }
 
-  // Upsert lines from sheet -> project (bulk operation)
+  // Upsert lines from sheet -> project (prefer bulk; fallback to row-by-row if unique constraint missing)
   const linePayloads = sheetRows.map((row) => ({
     ...sheetToLinePayload(row),
     status: "completed",
   }));
 
-  const { data: upsertedLines, error: upsertErr } = await supabaseServer
+  let upsertedLines: Array<{ id: string; telephone_no: string }> | null = null;
+  let upsertedCount = 0;
+  const bulkRes = await supabaseServer
     .from("line_details")
     .upsert(linePayloads, { onConflict: "telephone_no,date" })
     .select("id, telephone_no");
 
-  if (upsertErr) throw upsertErr;
-
-  const upsertedCount = upsertedLines?.length || 0;
-
-  // Ensure tasks exist for all lines (bulk operation)
-  const telephoneNos = (upsertedLines || []).map(l => l.telephone_no).filter(Boolean);
-  if (telephoneNos.length > 0) {
-    // Find existing tasks for these lines
-    const { data: existingTasks, error: taskQueryErr } = await supabaseServer
-      .from("tasks")
-      .select("line_details_id")
-      .in("telephone_no", telephoneNos);
-
-    if (taskQueryErr) throw taskQueryErr;
-
-    const existingLineIds = new Set((existingTasks || []).map(t => t.line_details_id));
-
-    // Create tasks for lines that don't have them
-    const lineIdMap = new Map<string, string>();
-    for (const line of upsertedLines || []) {
-      if (line.telephone_no) lineIdMap.set(line.telephone_no, line.id);
+  if (bulkRes.error) {
+    const msg = (bulkRes.error.message || "").toLowerCase();
+    const missingConstraint = msg.includes("conflict") && msg.includes("constraint");
+    if (!missingConstraint) {
+      throw bulkRes.error;
     }
+    // Fallback: row-by-row
+    for (const row of sheetRows) {
+      const existing = row.telephone_no ? existingByPhone.get(row.telephone_no) : undefined;
+      if (existing) {
+        const { error: updErr } = await supabaseServer
+          .from("line_details")
+          .update(sheetToLinePayload(row))
+          .eq("id", existing.id);
+        if (updErr) throw updErr;
+        upsertedCount++;
+        await ensureTaskForLine(existing.id, row);
+      } else {
+        const insertPayload = { ...sheetToLinePayload(row), status: "completed" };
+        const { data: ins, error: insErr } = await supabaseServer
+          .from("line_details")
+          .insert(insertPayload)
+          .select("id")
+          .single();
+        if (insErr) throw insErr;
+        upsertedCount++;
+        await ensureTaskForLine(ins!.id, row);
+      }
+    }
+  } else {
+    upsertedLines = bulkRes.data || [];
+    upsertedCount = upsertedLines.length;
 
-    const newTasks = sheetRows
-      .filter(row => {
-        const lineId = lineIdMap.get(row.telephone_no);
-        return lineId && !existingLineIds.has(lineId);
-      })
-      .map(row => {
-        const lineId = lineIdMap.get(row.telephone_no)!;
-        return {
-          telephone_no: row.telephone_no,
-          dp: row.dp,
-          address: row.address,
-          customer_name: row.name,
-          status: "completed",
-          line_details_id: lineId,
-          task_date: row.date || new Date().toISOString().slice(0, 10),
-          created_by: null,
-        };
-      });
-
-    if (newTasks.length > 0) {
-      const { error: taskInsertErr } = await supabaseServer
+    // Ensure tasks exist for all lines (bulk operation)
+    const telephoneNos = (upsertedLines || []).map((l) => l.telephone_no).filter(Boolean);
+    if (telephoneNos.length > 0) {
+      const { data: existingTasks, error: taskQueryErr } = await supabaseServer
         .from("tasks")
-        .insert(newTasks);
-
-      if (taskInsertErr) throw taskInsertErr;
+        .select("line_details_id, telephone_no")
+        .in("telephone_no", telephoneNos);
+      if (taskQueryErr) throw taskQueryErr;
+      const existingLineIds = new Set((existingTasks || []).map((t) => t.line_details_id));
+      const lineIdMap = new Map<string, string>();
+      for (const line of upsertedLines || []) {
+        if (line.telephone_no) lineIdMap.set(line.telephone_no, line.id);
+      }
+      const newTasks = sheetRows
+        .filter((row) => {
+          const lineId = lineIdMap.get(row.telephone_no);
+          return lineId && !existingLineIds.has(lineId);
+        })
+        .map((row) => {
+          const lineId = lineIdMap.get(row.telephone_no)!;
+          return {
+            telephone_no: row.telephone_no,
+            dp: row.dp,
+            address: row.address,
+            customer_name: row.name,
+            status: "completed",
+            line_details_id: lineId,
+            task_date: row.date || new Date().toISOString().slice(0, 10),
+            created_by: null,
+          };
+        });
+      if (newTasks.length > 0) {
+        const { error: taskInsertErr } = await supabaseServer.from("tasks").insert(newTasks);
+        if (taskInsertErr) throw taskInsertErr;
+      }
     }
   }
 
@@ -285,9 +307,84 @@ export async function syncConnection(connectionId: string) {
     });
   }
 
+  // Also process the 'Drum Number' tab bidirectionally if present
+  let drumProcessed = 0;
+  let drumAppended = 0;
+  try {
+    const drumTab = "Drum Number";
+    const drumRange = `${drumTab}!B1:AZ`;
+    const drumRes = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: drumRange,
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    });
+    const drumValues = drumRes.data.values || [];
+    if (drumValues.length) {
+      const drumHeaders = (drumValues[0] || []).map((h) => (h ?? "").toString().trim());
+      validateDrumHeaders(drumHeaders);
+      const dIdx = headerIndexDrum(drumHeaders);
+      const drumRowsRaw = drumValues.slice(1).filter((r) => (r[dIdx.tp] ?? "").toString().trim() !== "");
+      const drumRows = drumRowsRaw.map((r) => mapDrumRow(r, dIdx));
+
+      // Build a telephone_no -> latest line mapping for this month window
+      const monthLinesByPhone = new Map<string, any[]>();
+      for (const l of monthLines || []) {
+        if (!l.telephone_no) continue;
+        const key = l.telephone_no;
+        const arr = monthLinesByPhone.get(key) || [];
+        arr.push(l);
+        monthLinesByPhone.set(key, arr);
+      }
+      const pickLatest = (arr: any[]) => {
+        return arr.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      };
+
+      // Prepare updates for line_details by primary key id
+      const updates: any[] = [];
+      for (const r of drumRows) {
+        const arr = monthLinesByPhone.get(r.tp);
+        if (!arr || arr.length === 0) continue;
+        const target = pickLatest(arr);
+        const update: any = { id: target.id };
+        if (r.dw_dp) update.dp = r.dw_dp;
+        if (typeof r.dw_c_hook === "number") update.c_hook = r.dw_c_hook;
+        if (r.dw_cus) update.name = r.dw_cus;
+        if (r.drum_number) update.drum_number = r.drum_number;
+        updates.push(update);
+      }
+
+      if (updates.length > 0) {
+        const { error: updErr } = await supabaseServer
+          .from("line_details")
+          .upsert(updates, { onConflict: "id" });
+        if (updErr) throw updErr;
+        drumProcessed += updates.length;
+      }
+
+      // Project -> Drum sheet: append missing entries for this month
+      const drumTPs = new Set(drumRows.map((r) => r.tp).filter(Boolean));
+      const missingInDrum = (monthLines || []).filter((l: any) => l.telephone_no && !drumTPs.has(l.telephone_no));
+      if (missingInDrum.length > 0) {
+        const drumAppendRows = missingInDrum.map((l) => buildDrumSheetRowFromLine(l, drumHeaders));
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `${drumTab}!B1`,
+          valueInputOption: "USER_ENTERED",
+          insertDataOption: "INSERT_ROWS",
+          requestBody: { values: drumAppendRows },
+        });
+        drumAppended = drumAppendRows.length;
+      }
+    }
+  } catch (e) {
+    // If tab is missing or validation fails, don't fail the entire sync
+    console.warn("Drum Number tab sync skipped:", (e as Error).message);
+  }
+
   // Update connection status
   const now = new Date().toISOString();
-  const totalProcessed = sheetRows.length + missingInSheet.length;
+  const totalProcessed = sheetRows.length + missingInSheet.length + drumProcessed + drumAppended;
   const { data, error: updateErr } = await supabaseServer
     .from("google_sheet_connections")
     .update({ last_synced: now, status: "active", record_count: totalProcessed })
@@ -297,7 +394,7 @@ export async function syncConnection(connectionId: string) {
 
   if (updateErr) throw new Error(updateErr.message || "Failed to update sync status");
 
-  return { connection: data, upserted: upsertedCount, appended: missingInSheet.length };
+  return { connection: data, upserted: upsertedCount, appended: missingInSheet.length, drumProcessed, drumAppended };
 }
 
 // Helpers
@@ -663,6 +760,74 @@ function buildSheetRowFromLine(l: any, headers: string[]): any[] {
   row[idx.rj12] = l.rj12;
 
   return row;
+}
+
+// Drum Number tab helpers
+function requiredDrumHeaders(): string[] {
+  return [
+    "NO",
+    "TP",
+    "DW DP",
+    "DW C HOOK",
+    "DW CUS",
+    "DRUM NUMBER",
+  ];
+}
+
+function validateDrumHeaders(headers: string[]) {
+  const lower = headers.map((h) => h.toLowerCase());
+  for (const h of requiredDrumHeaders()) {
+    if (!lower.includes(h.toLowerCase())) {
+      throw new Error(`Missing required column '${h}' in Drum Number header`);
+    }
+  }
+}
+
+function headerIndexDrum(headers: string[]) {
+  const mapLower: Record<string, number> = {};
+  headers.forEach((h, i) => (mapLower[h.toLowerCase()] = i));
+  const pick = (name: string) => mapLower[name.toLowerCase()] ?? -1;
+  return {
+    no: pick("NO"),
+    tp: pick("TP"),
+    dw_dp: pick("DW DP"),
+    dw_c_hook: pick("DW C HOOK"),
+    dw_cus: pick("DW CUS"),
+    drum_number: pick("DRUM NUMBER"),
+  } as const;
+}
+
+function mapDrumRow(row: any[], idx: ReturnType<typeof headerIndexDrum>) {
+  return {
+    no: (row[idx.no] ?? "").toString().trim(),
+    tp: (row[idx.tp] ?? "").toString().trim(),
+    dw_dp: (row[idx.dw_dp] ?? "").toString().trim(),
+    dw_c_hook: toNumber(row[idx.dw_c_hook]),
+    dw_cus: (row[idx.dw_cus] ?? "").toString().trim(),
+    drum_number: (row[idx.drum_number] ?? "").toString().trim(),
+  };
+}
+
+function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
+  const idx = headerIndexDrum(headers);
+  const row = new Array(headers.length);
+  // We don't set NO (sequence) here; Google Sheets will leave it blank or a formula can fill it
+  row[idx.tp] = l.telephone_no;
+  row[idx.dw_dp] = l.dp;
+  row[idx.dw_c_hook] = l.c_hook;
+  row[idx.dw_cus] = l.name;
+  row[idx.drum_number] = l.drum_number ?? l.drum_number_new ?? "";
+  return row;
+}
+
+// Month window helper restored
+function monthStartEnd(month: number, year: number) {
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 0));
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
 }
 
 // Form wrappers for use as <form action={...}> server actions
