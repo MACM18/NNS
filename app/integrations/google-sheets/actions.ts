@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { supabaseServer } from "@/lib/supabase-server";
+import { google } from "googleapis";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -144,27 +145,524 @@ export async function syncConnection(connectionId: string) {
   if (!connectionId) throw new Error("connectionId is required");
 
   // Fetch connection
-  const { data: rows, error: fetchErr } = await supabaseServer
+  const { data: conn, error: fetchErr } = await supabaseServer
     .from("google_sheet_connections")
-    .select("id, month, year, sheet_url, sheet_name, sheet_tab")
+    .select("id, month, year, sheet_url, sheet_name, sheet_tab, sheet_id")
     .eq("id", connectionId)
     .single();
 
   if (fetchErr) throw new Error(fetchErr.message || "Failed to fetch connection");
+  const month: number = Number(conn.month);
+  const year: number = Number(conn.year);
+  const sheetTab = (conn.sheet_tab || "All").toString();
+  const spreadsheetId = conn.sheet_id || extractSpreadsheetId(conn.sheet_url || "");
+  if (!spreadsheetId) throw new Error("Unable to determine spreadsheetId from URL or sheet_id");
 
-  // Placeholder for real sync with Google Sheets API. For now, update last_synced and status.
+  // Initialize Google Sheets API
+  const sheets = await getSheetsClient();
+
+  // Read header + data from the 'All' tab (starting from column B)
+  const range = `${sheetTab}!B1:AZ`;
+  const readRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range,
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const values = readRes.data.values || [];
+  if (!values.length) {
+    throw new Error(`No data found in tab '${sheetTab}'`);
+  }
+
+  const headers = (values[0] || []).map((h) => (h ?? "").toString().trim());
+  validateHeaders(headers);
+
+  // Build index map for quick access
+  const idx = headerIndex(headers);
+
+  // Collect rows (skip header)
+  const rows = values.slice(1).filter((r) => (r[idx.number] ?? "").toString().trim() !== "");
+
+  // Map to normalized objects
+  const sheetRows = rows.map((r) => mapSheetRow(r, idx));
+
+  // Filter month in sheetRows if needed; prefer trusting the sheet month
+  // We'll still restrict DB queries to month range for safety
+  const { start, end } = monthStartEnd(month, year);
+
+  // Fetch existing project lines for these numbers within the month window
+  const numbers = Array.from(new Set(sheetRows.map((x) => x.telephone_no).filter(Boolean)));
+  const existingLines = await fetchExistingLines(numbers, start, end);
+  const existingByPhone = new Map<string, any>();
+  for (const line of existingLines) {
+    if (line.telephone_no) existingByPhone.set(line.telephone_no, line);
+  }
+
+  // Upsert lines from sheet -> project (bulk operation)
+  const linePayloads = sheetRows.map((row) => ({
+    ...sheetToLinePayload(row),
+    status: "completed",
+  }));
+
+  const { data: upsertedLines, error: upsertErr } = await supabaseServer
+    .from("line_details")
+    .upsert(linePayloads, { onConflict: "telephone_no,date" })
+    .select("id, telephone_no");
+
+  if (upsertErr) throw upsertErr;
+
+  const upsertedCount = upsertedLines?.length || 0;
+
+  // Ensure tasks exist for all lines (bulk operation)
+  const telephoneNos = (upsertedLines || []).map(l => l.telephone_no).filter(Boolean);
+  if (telephoneNos.length > 0) {
+    // Find existing tasks for these lines
+    const { data: existingTasks, error: taskQueryErr } = await supabaseServer
+      .from("tasks")
+      .select("line_details_id")
+      .in("telephone_no", telephoneNos);
+
+    if (taskQueryErr) throw taskQueryErr;
+
+    const existingLineIds = new Set((existingTasks || []).map(t => t.line_details_id));
+
+    // Create tasks for lines that don't have them
+    const lineIdMap = new Map<string, string>();
+    for (const line of upsertedLines || []) {
+      if (line.telephone_no) lineIdMap.set(line.telephone_no, line.id);
+    }
+
+    const newTasks = sheetRows
+      .filter(row => {
+        const lineId = lineIdMap.get(row.telephone_no);
+        return lineId && !existingLineIds.has(lineId);
+      })
+      .map(row => {
+        const lineId = lineIdMap.get(row.telephone_no)!;
+        return {
+          telephone_no: row.telephone_no,
+          dp: row.dp,
+          address: row.address,
+          customer_name: row.name,
+          status: "completed",
+          line_details_id: lineId,
+          task_date: row.date || new Date().toISOString().slice(0, 10),
+          created_by: null,
+        };
+      });
+
+    if (newTasks.length > 0) {
+      const { error: taskInsertErr } = await supabaseServer
+        .from("tasks")
+        .insert(newTasks);
+
+      if (taskInsertErr) throw taskInsertErr;
+    }
+  }
+
+  // Project -> Sheet: append project lines that are missing in the sheet for this month
+  const { data: monthLines, error: monthErr } = await supabaseServer
+    .from("line_details")
+    .select("*")
+    .gte("date", start)
+    .lte("date", end);
+  if (monthErr) throw monthErr;
+
+  const sheetNumbersSet = new Set(numbers);
+  const missingInSheet = (monthLines || []).filter((l: any) =>
+    (l.telephone_no && !sheetNumbersSet.has(l.telephone_no))
+  );
+
+  if (missingInSheet.length > 0) {
+    const appendRows = missingInSheet.map((l) => buildSheetRowFromLine(l, headers));
+    // Append starting at column B
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${sheetTab}!B1`,
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: appendRows },
+    });
+  }
+
+  // Update connection status
   const now = new Date().toISOString();
-
+  const totalProcessed = sheetRows.length + missingInSheet.length;
   const { data, error: updateErr } = await supabaseServer
     .from("google_sheet_connections")
-    .update({ last_synced: now, status: "active" })
+    .update({ last_synced: now, status: "active", record_count: totalProcessed })
     .eq("id", connectionId)
     .select("id, last_synced, status, record_count")
     .single();
 
   if (updateErr) throw new Error(updateErr.message || "Failed to update sync status");
 
-  return { connection: data };
+  return { connection: data, upserted: upsertedCount, appended: missingInSheet.length };
+}
+
+// Helpers
+function extractSpreadsheetId(url: string): string | null {
+  if (!url) return null;
+  const m = url.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return m ? m[1] : null;
+}
+
+async function getSheetsClient() {
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!email || !keyRaw) {
+    throw new Error("Google service account credentials are not configured");
+  }
+
+  // Parse the full key.json content and extract the private_key
+  let key: string;
+  try {
+    const creds = JSON.parse(keyRaw);
+    key = creds.private_key;
+  } catch (e) {
+    // Fallback: if it's not JSON, assume it's the raw key with escaped newlines
+    key = keyRaw.replace(/\\n/g, "\n");
+  }
+
+  const auth = new google.auth.JWT({
+    email,
+    key,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+  await auth.authorize();
+  return google.sheets({ version: "v4", auth });
+}
+
+function requiredHeaders(): string[] {
+  return [
+    "Date",
+    "Number",
+    "DP",
+    "Power (DP)",
+    "Power (inbox)",
+    "Name",
+    "Addras",
+    "Cable Start",
+    "Cable Middle",
+    "Cable End",
+    "F1",
+    "G1",
+    "Total",
+    "Retainers",
+    "L-Hook",
+    "Nut&Bolt",
+    "Top-Bolt",
+    "C-Hook",
+    "Fiber-rosatte",
+    "Internal Wire",
+    "S-Rosette",
+    "FAC",
+    "Casing",
+    "C-Tie",
+    "C-Clip",
+    "Conduit",
+    "Tag Tie",
+    "ONT",
+    "Voice Test Number",
+    "STB",
+    "Flexible",
+    "RJ 45",
+    "Cat 5",
+    "Pole-6.7",
+    "Pole-5.6",
+    "Concrete nail",
+    "Roll Plug",
+    "Screw Nail",
+    "Screw Nail 1 1/2",
+    "U-Clip",
+    "Socket",
+    "Bend",
+    "RJ 11",
+    "RJ 12",
+  ];
+}
+
+function validateHeaders(headers: string[]) {
+  const lower = headers.map((h) => h.toLowerCase());
+  const req = requiredHeaders();
+  for (const h of req) {
+    const alt = h === "Addras" ? ["Addras", "Address"] : [h];
+    const ok = alt.some((a) => lower.includes(a.toLowerCase()));
+    if (!ok) {
+      throw new Error(`Missing required column '${h}' in sheet header`);
+    }
+  }
+}
+
+function headerIndex(headers: string[]) {
+  const mapLower: Record<string, number> = {};
+  headers.forEach((h, i) => (mapLower[h.toLowerCase()] = i));
+  const pick = (name: string, alts: string[] = []) => {
+    const candidates = [name, ...alts];
+    for (const c of candidates) {
+      const idx = mapLower[c.toLowerCase()];
+      if (typeof idx === "number") return idx;
+    }
+    return -1;
+  };
+  return {
+    date: pick("Date"),
+    number: pick("Number"),
+    dp: pick("DP"),
+    power_dp: pick("Power (DP)"),
+    power_inbox: pick("Power (inbox)"),
+    name: pick("Name"),
+    address: pick("Addras", ["Address"]),
+    cable_start: pick("Cable Start"),
+    cable_middle: pick("Cable Middle"),
+    cable_end: pick("Cable End"),
+    f1: pick("F1"),
+    g1: pick("G1"),
+    total: pick("Total"),
+    retainers: pick("Retainers"),
+    l_hook: pick("L-Hook"),
+    nut_bolt: pick("Nut&Bolt"),
+    top_bolt: pick("Top-Bolt"),
+    c_hook: pick("C-Hook"),
+    fiber_rosette: pick("Fiber-rosatte", ["Fiber-rosette", "Fiber Rosette"]),
+    internal_wire: pick("Internal Wire"),
+    s_rosette: pick("S-Rosette"),
+    fac: pick("FAC"),
+    casing: pick("Casing"),
+    c_tie: pick("C-Tie"),
+    c_clip: pick("C-Clip"),
+    conduit: pick("Conduit"),
+    tag_tie: pick("Tag Tie"),
+    ont: pick("ONT"),
+    voice_test_no: pick("Voice Test Number"),
+    stb: pick("STB"),
+    flexible: pick("Flexible"),
+    rj45: pick("RJ 45"),
+    cat5: pick("Cat 5"),
+    pole_67: pick("Pole-6.7"),
+    pole: pick("Pole-5.6"),
+    concrete_nail: pick("Concrete nail"),
+    roll_plug: pick("Roll Plug"),
+    screw_nail: pick("Screw Nail"),
+    screw_nail_2: pick("Screw Nail 1 1/2"),
+    u_clip: pick("U-Clip"),
+    socket: pick("Socket"),
+    bend: pick("Bend"),
+    rj11: pick("RJ 11"),
+    rj12: pick("RJ 12"),
+  } as const;
+}
+
+function toNumber(v: any): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function toDateISO(v: any): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+function mapSheetRow(row: any[], idx: ReturnType<typeof headerIndex>) {
+  const cable_start = toNumber(row[idx.cable_start]);
+  const cable_middle = toNumber(row[idx.cable_middle]);
+  const cable_end = toNumber(row[idx.cable_end]);
+  const f1 = row[idx.f1] != null ? toNumber(row[idx.f1]) : Math.abs(cable_start - cable_middle);
+  const g1 = row[idx.g1] != null ? toNumber(row[idx.g1]) : Math.abs(cable_middle - cable_end);
+  const total = row[idx.total] != null ? toNumber(row[idx.total]) : f1 + g1;
+  const screwNailSum = toNumber(row[idx.screw_nail]) + toNumber(row[idx.screw_nail_2]);
+
+  return {
+    date: toDateISO(row[idx.date]),
+    telephone_no: (row[idx.number] ?? "").toString().trim(),
+    dp: (row[idx.dp] ?? "").toString().trim(),
+    power_dp: toNumber(row[idx.power_dp]),
+    power_inbox: toNumber(row[idx.power_inbox]),
+    name: (row[idx.name] ?? "").toString().trim(),
+    address: (row[idx.address] ?? "").toString().trim(),
+    cable_start,
+    cable_middle,
+    cable_end,
+    f1,
+    g1,
+    total_cable: total,
+    retainers: toNumber(row[idx.retainers]),
+    l_hook: toNumber(row[idx.l_hook]),
+    nut_bolt: toNumber(row[idx.nut_bolt]),
+    top_bolt: toNumber(row[idx.top_bolt]),
+    c_hook: toNumber(row[idx.c_hook]),
+    fiber_rosette: toNumber(row[idx.fiber_rosette]),
+    internal_wire: toNumber(row[idx.internal_wire]),
+    s_rosette: toNumber(row[idx.s_rosette]),
+    fac: toNumber(row[idx.fac]),
+    casing: toNumber(row[idx.casing]),
+    c_tie: toNumber(row[idx.c_tie]),
+    c_clip: toNumber(row[idx.c_clip]),
+    conduit: toNumber(row[idx.conduit]),
+    tag_tie: toNumber(row[idx.tag_tie]),
+    ont: (row[idx.ont] ?? "").toString().trim(),
+    voice_test_no: (row[idx.voice_test_no] ?? "").toString().trim(),
+    stb: (row[idx.stb] ?? "").toString().trim(),
+    flexible: toNumber(row[idx.flexible]),
+    rj45: toNumber(row[idx.rj45]),
+    cat5: toNumber(row[idx.cat5]),
+    pole_67: toNumber(row[idx.pole_67]),
+    pole: toNumber(row[idx.pole]),
+    concrete_nail: toNumber(row[idx.concrete_nail]),
+    roll_plug: toNumber(row[idx.roll_plug]),
+    screw_nail: screwNailSum,
+    u_clip: toNumber(row[idx.u_clip]),
+    socket: toNumber(row[idx.socket]),
+    bend: toNumber(row[idx.bend]),
+    rj11: toNumber(row[idx.rj11]),
+    rj12: toNumber(row[idx.rj12]),
+  };
+}
+
+function sheetToLinePayload(r: any) {
+  // Payload matches line_details columns
+  const payload: any = {
+    date: r.date || new Date().toISOString().slice(0, 10),
+    telephone_no: r.telephone_no,
+    phone_number: r.telephone_no,
+    dp: r.dp,
+    power_dp: r.power_dp,
+    power_inbox: r.power_inbox,
+    name: r.name,
+    address: r.address,
+    cable_start: r.cable_start,
+    cable_middle: r.cable_middle,
+    cable_end: r.cable_end,
+    f1: r.f1,
+    g1: r.g1,
+    total_cable: r.total_cable,
+    retainers: r.retainers,
+    l_hook: r.l_hook,
+    nut_bolt: r.nut_bolt,
+    top_bolt: r.top_bolt,
+    c_hook: r.c_hook,
+    fiber_rosette: r.fiber_rosette,
+    internal_wire: r.internal_wire,
+    s_rosette: r.s_rosette,
+    fac: r.fac,
+    casing: r.casing,
+    c_tie: r.c_tie,
+    c_clip: r.c_clip,
+    conduit: r.conduit,
+    tag_tie: r.tag_tie,
+    ont: r.ont,
+    voice_test_no: r.voice_test_no,
+    stb: r.stb,
+    flexible: r.flexible,
+    rj45: r.rj45,
+    cat5: r.cat5,
+    pole_67: r.pole_67,
+    pole: r.pole,
+    concrete_nail: r.concrete_nail,
+    roll_plug: r.roll_plug,
+    screw_nail: r.screw_nail,
+    u_clip: r.u_clip,
+    socket: r.socket,
+    bend: r.bend,
+    rj11: r.rj11,
+    rj12: r.rj12,
+  };
+  return payload;
+}
+
+async function fetchExistingLines(numbers: string[], startISO: string, endISO: string) {
+  if (!numbers.length) return [] as any[];
+  const { data, error } = await supabaseServer
+    .from("line_details")
+    .select("id, telephone_no, date")
+    .in("telephone_no", numbers)
+    .gte("date", startISO)
+    .lte("date", endISO);
+  if (error) throw error;
+  return data || [];
+}
+
+async function ensureTaskForLine(lineId: string, r: any) {
+  // Check if a task exists for this line
+  const { data: existingTask, error: taskErr } = await supabaseServer
+    .from("tasks")
+    .select("id")
+    .eq("line_details_id", lineId)
+    .maybeSingle();
+  if (taskErr) throw taskErr;
+  if (existingTask?.id) return existingTask;
+
+  // Create completed task
+  const { data: created, error: insErr } = await supabaseServer
+    .from("tasks")
+    .insert({
+      telephone_no: r.telephone_no,
+      dp: r.dp,
+      address: r.address,
+      customer_name: r.name,
+      status: "completed",
+      line_details_id: lineId,
+      task_date: r.date || new Date().toISOString().slice(0, 10),
+      created_by: null,
+    })
+    .select("id")
+    .single();
+  if (insErr) throw insErr;
+  return created;
+}
+
+function buildSheetRowFromLine(l: any, headers: string[]): any[] {
+  const idx = headerIndex(headers);
+  const row = new Array(headers.length);
+
+  // Map line fields back to sheet columns
+  row[idx.date] = l.date;
+  row[idx.number] = l.telephone_no;
+  row[idx.dp] = l.dp;
+  row[idx.power_dp] = l.power_dp;
+  row[idx.power_inbox] = l.power_inbox;
+  row[idx.name] = l.name;
+  row[idx.address] = l.address;
+  row[idx.cable_start] = l.cable_start;
+  row[idx.cable_middle] = l.cable_middle;
+  row[idx.cable_end] = l.cable_end;
+  row[idx.f1] = l.f1;
+  row[idx.g1] = l.g1;
+  row[idx.total] = l.total_cable;
+  row[idx.retainers] = l.retainers;
+  row[idx.l_hook] = l.l_hook;
+  row[idx.nut_bolt] = l.nut_bolt;
+  row[idx.top_bolt] = l.top_bolt;
+  row[idx.c_hook] = l.c_hook;
+  row[idx.fiber_rosette] = l.fiber_rosette;
+  row[idx.internal_wire] = l.internal_wire;
+  row[idx.s_rosette] = l.s_rosette;
+  row[idx.fac] = l.fac;
+  row[idx.casing] = l.casing;
+  row[idx.c_tie] = l.c_tie;
+  row[idx.c_clip] = l.c_clip;
+  row[idx.conduit] = l.conduit;
+  row[idx.tag_tie] = l.tag_tie;
+  row[idx.ont] = l.ont;
+  row[idx.voice_test_no] = l.voice_test_no;
+  row[idx.stb] = l.stb;
+  row[idx.flexible] = l.flexible;
+  row[idx.rj45] = l.rj45;
+  row[idx.cat5] = l.cat5;
+  row[idx.pole_67] = l.pole_67;
+  row[idx.pole] = l.pole;
+  row[idx.concrete_nail] = l.concrete_nail;
+  row[idx.roll_plug] = l.roll_plug;
+  row[idx.screw_nail] = l.screw_nail;
+  row[idx.u_clip] = l.u_clip;
+  row[idx.socket] = l.socket;
+  row[idx.bend] = l.bend;
+  row[idx.rj11] = l.rj11;
+  row[idx.rj12] = l.rj12;
+
+  return row;
 }
 
 // Form wrappers for use as <form action={...}> server actions
