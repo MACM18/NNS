@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { supabaseServer } from "@/lib/supabase-server";
+import { supabaseServer } from "../../../lib/supabase-server";
 import { google } from "googleapis";
-import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
+import { calculateSmartWastage } from "../../../lib/drum-wastage-calculator";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -21,38 +21,42 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
     }
   }
 
+  // Provide cookies integration to createServerClient only when cookieStore is available
+  const clientOptions: any = {};
+  if (cookieStore) {
+    clientOptions.cookies = {
+      get(name: string) {
+        try {
+          return cookieStore?.get(name)?.value;
+        } catch (error) {
+          console.error(`[authorize] Failed to get cookie '${name}':`, error);
+          return undefined;
+        }
+      },
+      set(name: string, value: string, options: any) {
+        try {
+          cookieStore?.set(name, value, options);
+        } catch (error) {
+          console.error(`[authorize] Failed to set cookie '${name}':`, error);
+        }
+      },
+      remove(name: string, options: any) {
+        try {
+          cookieStore?.set(name, "", { ...(options || {}), maxAge: 0 });
+        } catch (error) {
+          console.error(
+            `[authorize] Failed to remove cookie '${name}':`,
+            error
+          );
+        }
+      },
+    };
+  }
+
   const authClient = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          try {
-            return cookieStore?.get(name)?.value;
-          } catch (error) {
-            console.error(`[authorize] Failed to get cookie '${name}':`, error);
-            return undefined;
-          }
-        },
-        set(name: string, value: string, options: any) {
-          try {
-            cookieStore?.set(name, value, options);
-          } catch (error) {
-            console.error(`[authorize] Failed to set cookie '${name}':`, error);
-          }
-        },
-        remove(name: string, options: any) {
-          try {
-            cookieStore?.set(name, "", { ...(options || {}), maxAge: 0 });
-          } catch (error) {
-            console.error(
-              `[authorize] Failed to remove cookie '${name}':`,
-              error
-            );
-          }
-        },
-      },
-    }
+    clientOptions
   );
 
   // If an explicit access token was provided, verify it directly without cookies
@@ -266,7 +270,7 @@ export async function createConnectionFromForm(formData: FormData) {
     // Debug: log incoming form data keys only (never values/tokens)
     try {
       console.log("[createConnectionFromForm] Received FormData (keys only)");
-      for (const entry of Array.from(formData.keys())) {
+      for (const entry of Array.from((formData as any).keys())) {
         if (entry === "sb_access_token") continue; // never log tokens
         console.log("   ", entry);
       }
@@ -583,7 +587,8 @@ export async function syncConnection(
         console.log(
           "[syncConnection] Bulk upsert failed, falling back to row-by-row"
         );
-        for (const [index, row] of sheetRows.entries()) {
+        for (let index = 0; index < sheetRows.length; index++) {
+          const row = sheetRows[index];
           try {
             const existing = row.telephone_no
               ? existingByPhone.get(row.telephone_no)
