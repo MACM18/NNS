@@ -7,8 +7,14 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const code = body?.code;
-    if (!code) {
-      return NextResponse.json({ error: "code is required" }, { status: 400 });
+    const access_token = body?.access_token;
+    const refresh_token = body?.refresh_token;
+
+    if (!code && !(access_token && refresh_token)) {
+      return NextResponse.json(
+        { error: "code or tokens are required" },
+        { status: 400 }
+      );
     }
 
     const cookieStore = await cookies();
@@ -34,33 +40,45 @@ export async function POST(req: Request) {
       }
     );
 
-    // Exchange the code for a session using the service-role client
-    const { data, error } = await supabaseServer.auth.exchangeCodeForSession(
-      code
-    );
-    if (error) {
+    // Determine session: either exchange the code, or use direct tokens sent from client
+    let session: any = null;
+    if (code) {
+      // Exchange the code for a session using the service-role client
+      const { data, error } = await supabaseServer.auth.exchangeCodeForSession(
+        code
+      );
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[api/auth/exchange] exchangeCodeForSession error:",
+          error.message
+        );
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      session = (data as any)?.session;
+      if (!session) {
+        return NextResponse.json(
+          { error: "No session returned from exchange" },
+          { status: 500 }
+        );
+      }
+
+      // Debug: log that we received a session (no secrets)
       // eslint-disable-next-line no-console
-      console.error(
-        "[api/auth/exchange] exchangeCodeForSession error:",
-        error.message
+      console.log(
+        "[api/auth/exchange] received session for user:",
+        session.user?.id ?? "(unknown)"
       );
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    } else {
+      // Received tokens directly from client (e.g. fragment parsed by client)
+      session = {
+        access_token: access_token,
+        refresh_token: refresh_token,
+      };
+      // eslint-disable-next-line no-console
+      console.log("[api/auth/exchange] using tokens posted by client");
     }
-
-    const session = (data as any)?.session;
-    if (!session) {
-      return NextResponse.json(
-        { error: "No session returned from exchange" },
-        { status: 500 }
-      );
-    }
-
-    // Debug: log that we received a session (no secrets)
-    // eslint-disable-next-line no-console
-    console.debug(
-      "[api/auth/exchange] received session for user:",
-      session.user?.id ?? "(unknown)"
-    );
 
     // Set the session cookies via the auth client which uses our cookies helper
     const setRes = await authClient.auth.setSession({
@@ -82,7 +100,7 @@ export async function POST(req: Request) {
     // Debug: show which cookies are present after setSession (names only)
     try {
       // eslint-disable-next-line no-console
-      console.debug(
+      console.log(
         "[api/auth/exchange] Cookies after setSession:",
         cookieStore.getAll().map((c) => c.name)
       );

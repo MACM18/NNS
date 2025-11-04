@@ -32,16 +32,50 @@ function AuthCallbackContent() {
           return;
         }
 
-        // POST the code to our server-side exchange endpoint which will set HttpOnly cookies
-        const resp = await fetch("/api/auth/exchange", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code }),
-        });
+        // If the redirect included an authorization code, POST it to our server-side exchange endpoint
+        // If the redirect returned fragment tokens (access_token/refresh_token) we parse them below and POST them instead.
+        const url = new URL(window.location.href);
+        const queryCode = url.searchParams.get("code");
+
+        // Parse fragment tokens (if present)
+        const hash = window.location.hash.substring(1);
+        const hashParams = new URLSearchParams(hash);
+        const fragAccess = hashParams.get("access_token");
+        const fragRefresh = hashParams.get("refresh_token");
+
+        let resp: Response;
+        if (queryCode) {
+          resp = await fetch("/api/auth/exchange", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: queryCode }),
+          });
+        } else if (fragAccess && fragRefresh) {
+          // POST tokens parsed from URL fragment to server to set HttpOnly cookies
+          resp = await fetch("/api/auth/exchange", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              access_token: fragAccess,
+              refresh_token: fragRefresh,
+            }),
+          });
+        } else {
+          // No code or tokens — nothing to exchange
+          toast({
+            title: "Google Sign-In failed",
+            description:
+              "No auth code or tokens were present in the callback URL.",
+            variant: "destructive",
+          });
+          router.replace("/login");
+          return;
+        }
+
         const result = await resp.json();
         // Debug: log exchange result (includes cookie names written by server if successful)
         // eslint-disable-next-line no-console
-        console.debug("[auth/callback] exchange result:", result);
+        console.log("[auth/callback] exchange result:", result);
 
         if (!resp.ok) {
           toast({

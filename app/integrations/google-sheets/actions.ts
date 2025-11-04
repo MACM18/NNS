@@ -36,9 +36,9 @@ async function authorize(): Promise<AuthContext> {
     // Log cookie names for debugging (don't log values)
     try {
       // eslint-disable-next-line no-console
-      console.debug("[authorize] getUser error:", userErr.message);
+      console.log("[authorize] getUser error:", userErr.message);
       // eslint-disable-next-line no-console
-      console.debug(
+      console.log(
         "[authorize] Cookies available:",
         cookieStore.getAll().map((c) => c.name)
       );
@@ -57,7 +57,7 @@ async function authorize(): Promise<AuthContext> {
       } = await authClient.auth.getSession();
       if (sessionErr) {
         // eslint-disable-next-line no-console
-        console.debug("[authorize] getSession error:", sessionErr.message);
+        console.log("[authorize] getSession error:", sessionErr.message);
       }
       if (session?.user) user = session.user;
 
@@ -67,16 +67,13 @@ async function authorize(): Promise<AuthContext> {
           await authClient.auth.refreshSession();
         if (refreshErr) {
           // eslint-disable-next-line no-console
-          console.debug(
-            "[authorize] refreshSession error:",
-            refreshErr.message
-          );
+          console.log("[authorize] refreshSession error:", refreshErr.message);
         }
         if (refreshed?.session?.user) user = refreshed.session.user;
       }
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.debug("[authorize] session recovery failed:", e);
+      console.log("[authorize] session recovery failed:", e);
     }
   }
 
@@ -155,10 +152,10 @@ export async function createConnectionFromForm(formData: FormData) {
   // Debug: log incoming form data keys/values to help diagnose client issues
   try {
     // eslint-disable-next-line no-console
-    console.debug("[createConnectionFromForm] Received FormData:");
+    console.log("[createConnectionFromForm] Received FormData:");
     for (const entry of Array.from(formData.entries())) {
       // eslint-disable-next-line no-console
-      console.debug("   ", entry[0], "=>", entry[1]);
+      console.log("   ", entry[0], "=>", entry[1]);
     }
   } catch (e) {
     // eslint-disable-next-line no-console
@@ -1160,7 +1157,7 @@ export async function checkIntegrationEnv() {
 
   // log for server-side diagnostics (no sensitive values)
   // eslint-disable-next-line no-console
-  console.debug("[checkIntegrationEnv] result:", result);
+  console.log("[checkIntegrationEnv] result:", result);
 
   return result;
 }
