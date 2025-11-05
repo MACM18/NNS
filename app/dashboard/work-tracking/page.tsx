@@ -190,7 +190,9 @@ export default function WorkTrackingCalendarPage() {
     }
 
     if (!user) {
-      const redirect = encodeURIComponent(pathname || "/work-tracking");
+      const redirect = encodeURIComponent(
+        pathname || "/dashboard/work-tracking"
+      );
       router.replace(`/login?redirect=${redirect}`);
     }
   };

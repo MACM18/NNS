@@ -10,9 +10,9 @@ import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { label: "Calendar", href: "/work-tracking" },
-  { label: "Summary", href: "/work-tracking/summary" },
-  { label: "Analytics", href: "/work-tracking/analytics" },
+  { label: "Calendar", href: "/dashboard/work-tracking" },
+  { label: "Summary", href: "/dashboard/work-tracking/summary" },
+  { label: "Analytics", href: "/dashboard/work-tracking/analytics" },
 ];
 
 type WorkTrackingLayoutProps = {

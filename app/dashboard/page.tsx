@@ -486,7 +486,7 @@ export default function Dashboard() {
                     <Button
                       className='w-full justify-between'
                       variant='outline'
-                      onClick={() => router.push("/lines")}
+                      onClick={() => router.push("/dashboard/lines")}
                     >
                       Add New Line Details
                       <ArrowRight className='h-4 w-4' />
@@ -494,7 +494,7 @@ export default function Dashboard() {
                     <Button
                       className='w-full justify-between'
                       variant='outline'
-                      onClick={() => router.push("/reports")}
+                      onClick={() => router.push("/dashboard/reports")}
                     >
                       Generate Monthly Report
                       <ArrowRight className='h-4 w-4' />
@@ -502,7 +502,7 @@ export default function Dashboard() {
                     <Button
                       className='w-full justify-between'
                       variant='outline'
-                      onClick={() => router.push("/inventory")}
+                      onClick={() => router.push("/dashboard/inventory")}
                     >
                       Update Inventory
                       <ArrowRight className='h-4 w-4' />
@@ -510,7 +510,7 @@ export default function Dashboard() {
                     <Button
                       className='w-full justify-between'
                       variant='outline'
-                      onClick={() => router.push("/tasks")}
+                      onClick={() => router.push("/dashboard/tasks")}
                     >
                       Review Pending Tasks
                       <ArrowRight className='h-4 w-4' />

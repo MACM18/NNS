@@ -136,7 +136,9 @@ export default function WorkTrackingSummaryPage() {
     }
 
     if (!user) {
-      const redirect = encodeURIComponent(pathname || "/work-tracking/summary");
+      const redirect = encodeURIComponent(
+        pathname || "/dashboard/work-tracking/summary"
+      );
       router.replace(`/login?redirect=${redirect}`);
     }
   };

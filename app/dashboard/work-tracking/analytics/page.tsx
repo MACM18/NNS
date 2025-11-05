@@ -150,7 +150,7 @@ export default function WorkTrackingAnalyticsPage() {
 
     if (!user) {
       const redirect = encodeURIComponent(
-        pathname || "/work-tracking/analytics"
+        pathname || "/dashboard/work-tracking/analytics"
       );
       router.replace(`/login?redirect=${redirect}`);
     }
