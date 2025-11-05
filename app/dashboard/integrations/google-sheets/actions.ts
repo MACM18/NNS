@@ -1560,3 +1560,91 @@ export async function checkIntegrationEnv(accessToken?: string) {
       : new Error("Failed to check integration environment");
   }
 }
+
+// Test Google service account credentials by attempting to authorize
+export async function testGoogleCredentials(accessToken?: string) {
+  "use server";
+
+  try {
+    // ensure caller is authorized
+    await authorize(accessToken);
+
+    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+
+    if (!email || !keyRaw) {
+      return {
+        success: false,
+        error:
+          "Google service account credentials are not configured. Please check GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_KEY environment variables.",
+      };
+    }
+
+    try {
+      // Try to create and authorize the JWT client
+      let key: string;
+      try {
+        const creds = JSON.parse(keyRaw);
+        if (!creds.private_key) {
+          throw new Error(
+            "Invalid JSON credentials: missing private_key field"
+          );
+        }
+        key = creds.private_key;
+      } catch (e) {
+        // Fallback: if it's not JSON, assume it's the raw key with escaped newlines
+        key = keyRaw.replace(/\\n/g, "\n");
+
+        // Validate that it looks like a private key
+        if (
+          !key.includes("-----BEGIN PRIVATE KEY-----") &&
+          !key.includes("-----BEGIN RSA PRIVATE KEY-----")
+        ) {
+          throw new Error(
+            "Invalid private key format. Expected PEM format starting with -----BEGIN PRIVATE KEY-----"
+          );
+        }
+      }
+
+      const auth = new google.auth.JWT({
+        email,
+        key,
+        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+      });
+
+      // Test authorization
+      await auth.authorize();
+
+      // Try a simple API call to verify access
+      const sheets = google.sheets({ version: "v4", auth });
+
+      // Try to list spreadsheets (this will fail if credentials are invalid)
+      await sheets.spreadsheets.get({
+        spreadsheetId: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms", // Google's public sample spreadsheet
+        fields: "properties.title",
+      });
+
+      return {
+        success: true,
+        message: "Google service account credentials are valid and working.",
+      };
+    } catch (authError: any) {
+      console.error("[testGoogleCredentials] Authorization failed:", authError);
+      return {
+        success: false,
+        error: `Google service account authorization failed: ${
+          authError.message || "Unknown error"
+        }`,
+      };
+    }
+  } catch (error) {
+    console.error("[testGoogleCredentials] Error:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to test Google credentials",
+    };
+  }
+}
