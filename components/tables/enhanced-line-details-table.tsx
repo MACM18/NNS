@@ -600,6 +600,27 @@ export function LineDetailsTable({
   const confirmDeleteLine = async () => {
     if (!selectedLine) return;
     try {
+      // Remove dependent drum usage records that reference this line first
+      const { error: drumError } = await supabase
+        .from("drum_usage")
+        .delete()
+        .eq("line_details_id", selectedLine.id);
+      if (drumError) throw drumError;
+
+      // Remove any line assignees that reference this line
+      const { error: assigneeError } = await supabase
+        .from("line_assignees")
+        .delete()
+        .eq("line_id", selectedLine.id);
+      if (assigneeError) throw assigneeError;
+
+      // Null out any tasks that reference this line to avoid FK violations
+      const { error: taskUpdateError } = await supabase
+        .from("tasks")
+        .update({ line_details_id: null })
+        .eq("line_details_id", selectedLine.id);
+      if (taskUpdateError) throw taskUpdateError;
+
       const { error } = await supabase
         .from("line_details")
         .delete()

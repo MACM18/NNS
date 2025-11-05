@@ -166,6 +166,7 @@ export function TaskManagementTable({
         title: "Error",
         message: "Failed to fetch tasks",
         type: "error",
+        category: "system",
       });
     } finally {
       setLoading(false);
@@ -206,6 +207,7 @@ export function TaskManagementTable({
         title: "Success",
         message: "Task accepted successfully",
         type: "success",
+        category: "task_completed",
       });
 
       fetchData();
@@ -214,6 +216,7 @@ export function TaskManagementTable({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     }
   };
@@ -224,6 +227,7 @@ export function TaskManagementTable({
         title: "Error",
         message: "Please provide a rejection reason",
         type: "error",
+        category: "system",
       });
       return;
     }
@@ -245,6 +249,7 @@ export function TaskManagementTable({
         title: "Success",
         message: "Task rejected successfully",
         type: "success",
+        category: "task_completed",
       });
 
       setRejectModalOpen(false);
@@ -256,6 +261,7 @@ export function TaskManagementTable({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     }
   };
@@ -275,6 +281,7 @@ export function TaskManagementTable({
           message:
             "Line details must be filled before marking task as completed",
           type: "error",
+          category: "system",
         });
         return;
       }
@@ -295,6 +302,7 @@ export function TaskManagementTable({
         title: "Success",
         message: "Task marked as completed",
         type: "success",
+        category: "task_completed",
       });
 
       fetchData();
@@ -303,14 +311,32 @@ export function TaskManagementTable({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     }
   };
 
   const handleDeleteTask = async (taskId: string) => {
     try {
-      const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+      // Fetch the task to see if it's linked to a line_details row
+      const { data: taskRow, error: fetchError } = await supabase
+        .from("tasks")
+        .select("line_details_id")
+        .eq("id", taskId)
+        .single();
+      if (fetchError && fetchError.code !== "PGRST116") throw fetchError;
 
+      // If task is linked to a line_details record, remove any drum_usage rows
+      // that reference that line before deleting the task to avoid FK issues
+      if (taskRow?.line_details_id) {
+        const { error: drumError } = await supabase
+          .from("drum_usage")
+          .delete()
+          .eq("line_details_id", taskRow.line_details_id);
+        if (drumError) throw drumError;
+      }
+
+      const { error } = await supabase.from("tasks").delete().eq("id", taskId);
       if (error) throw error;
 
       toast({

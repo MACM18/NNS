@@ -204,6 +204,7 @@ export function CompanySettingsModal({
           title: "Validation Error",
           message: "Please add at least one pricing tier",
           type: "error",
+          category: "system",
         });
         setLoading(false);
         return;
@@ -250,6 +251,7 @@ export function CompanySettingsModal({
         title: "Success",
         message: "Company settings updated successfully",
         type: "success",
+        category: "system",
       });
 
       onSuccess();
@@ -259,6 +261,7 @@ export function CompanySettingsModal({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     } finally {
       setLoading(false);

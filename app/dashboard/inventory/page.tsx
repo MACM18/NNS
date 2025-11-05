@@ -1582,6 +1582,13 @@ export default function InventoryPage() {
               onClick={async () => {
                 if (invoiceToDelete) {
                   try {
+                    // Delete dependent invoice items first to avoid FK violations
+                    const { error: itemsError } = await supabase
+                      .from("inventory_invoice_items")
+                      .delete()
+                      .eq("invoice_id", invoiceToDelete.id);
+                    if (itemsError) throw itemsError;
+
                     const { error } = await supabase
                       .from("inventory_invoices")
                       .delete()
@@ -1634,6 +1641,13 @@ export default function InventoryPage() {
               onClick={async () => {
                 if (drumToDelete) {
                   try {
+                    // Delete dependent drum_usage rows first to avoid FK violations
+                    const { error: usageError } = await supabase
+                      .from("drum_usage")
+                      .delete()
+                      .eq("drum_id", drumToDelete.id);
+                    if (usageError) throw usageError;
+
                     const { error } = await supabase
                       .from("drum_tracking")
                       .delete()

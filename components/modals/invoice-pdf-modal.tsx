@@ -131,6 +131,7 @@ export function InvoicePDFModal({
         title: "Error",
         message: "Failed to load invoice data",
         type: "error",
+        category: "system",
       });
     } finally {
       setLoading(false);
@@ -214,6 +215,7 @@ export function InvoicePDFModal({
       title: "Download Started",
       message: `Invoice ${invoice.invoice_number} downloaded`,
       type: "success",
+      category: "invoice_generated",
     });
   };
 
