@@ -1461,7 +1461,7 @@ export async function deleteConnectionFromForm(formData: FormData) {
 
     // redirect back to list
     const { redirect } = await import("next/navigation");
-    redirect(`/integrations/google-sheets`);
+    redirect(`/dashboard/integrations/google-sheets`);
 
     return result;
   } catch (error) {
@@ -1489,7 +1489,7 @@ export async function syncConnectionFromForm(formData: FormData) {
 
     // redirect back to list (or stay)
     const { redirect } = await import("next/navigation");
-    redirect(`/integrations/google-sheets`);
+    redirect(`/dashboard/integrations/google-sheets`);
 
     return result;
   } catch (error) {

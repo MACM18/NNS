@@ -98,6 +98,19 @@ export default function ConnectionActions({
     }
   }, [deleteResult, addNotification]);
 
+  const requireAuthOrNotify = (cb: () => void) => {
+    if (!accessToken) {
+      addNotification({
+        title: "Sign in required",
+        message: "Please sign in to perform this action.",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+    cb();
+  };
+
   return (
     <div className='flex items-center justify-end gap-2'>
       <form action={syncFormAction} ref={syncFormRef}>
@@ -107,9 +120,11 @@ export default function ConnectionActions({
           type='button'
           variant='outline'
           size='sm'
-          onClick={() => setOpenSync(true)}
+          onClick={() => requireAuthOrNotify(() => setOpenSync(true))}
+          disabled={!accessToken}
+          title={!accessToken ? "Sign in to sync" : undefined}
         >
-          Sync
+          {accessToken ? "Sync" : "Sign in to sync"}
         </Button>
       </form>
       <form action={deleteFormAction} ref={deleteFormRef}>
@@ -119,9 +134,11 @@ export default function ConnectionActions({
           type='button'
           variant='destructive'
           size='sm'
-          onClick={() => setOpenDelete(true)}
+          onClick={() => requireAuthOrNotify(() => setOpenDelete(true))}
+          disabled={!accessToken}
+          title={!accessToken ? "Sign in to delete" : undefined}
         >
-          Delete
+          {accessToken ? "Delete" : "Sign in to delete"}
         </Button>
       </form>
 
