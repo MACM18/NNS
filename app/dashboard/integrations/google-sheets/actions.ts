@@ -776,7 +776,7 @@ export async function syncConnection(
       );
     }
 
-    // Project -> Sheet: update rows by phone (ignoring leading 034) or append if not found
+    // Project -> Sheet: update rows by phone (ignore leading 034) or fill gap rows, then append with A numbering
     let updatedInSheet = 0;
     let appendedInSheet = 0;
     try {
@@ -788,62 +788,118 @@ export async function syncConnection(
         .lte("date", end);
       if (monthErr) throw monthErr;
 
-      // Build a map of existing sheet numbers (core form without leading 034) to row index
-      const sheetDataRows = values.slice(1); // skip header row
+      // Read column A to detect gaps and get last sequence number
+      const aRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${sheetTab}!A1:A`,
+        valueRenderOption: "UNFORMATTED_VALUE",
+      });
+      const colA: any[] = (aRes.data.values || []).map((r: any) => r?.[0]);
+
+      const sheetDataRows = values.slice(1); // B.. data rows (skip header)
       const core = (v: any) => {
         const s = (v ?? "").toString();
         const digits = s.replace(/\D+/g, "");
         if (!digits) return "";
         return digits.startsWith("034") ? digits.slice(3) : digits;
       };
+      // Map existing sheet core numbers -> sheet row index (1-based)
       const sheetCoreToRow = new Map<string, number>();
       for (let i = 0; i < sheetDataRows.length; i++) {
         const r = sheetDataRows[i];
         const num = r[idx.number];
         const c = core(num);
-        if (c) sheetCoreToRow.set(c, i + 2); // +2 to convert to actual sheet row (header is row 1)
+        if (c) sheetCoreToRow.set(c, i + 2);
       }
 
-      const updates: Array<{ range: string; values: any[][] }> = [];
-      const appends: any[][] = [];
+      // Find gap rows: A filled but B empty
+      const gapRows: number[] = [];
+      for (let j = 2; j <= sheetDataRows.length + 1; j++) {
+        const aVal = colA[j - 1];
+        const bEmpty = !(sheetDataRows[j - 2]?.[idx.number] ?? "")
+          .toString()
+          .trim();
+        if (aVal != null && aVal !== "" && bEmpty) gapRows.push(j);
+      }
+
+      // Last sequence in column A (max numeric value)
+      let lastSeq = 0;
+      for (let j = 1; j < colA.length; j++) {
+        const n = Number(colA[j]);
+        if (Number.isFinite(n)) lastSeq = Math.max(lastSeq, n);
+      }
+
+      const updatesForB: Array<{ range: string; values: any[][] }> = [];
+      const updatesForA: Array<{ range: string; values: any[][] }> = [];
+      const toAppend: any[][] = [];
+
       for (const l of monthLines || []) {
         if (!l?.telephone_no) continue;
         const c = core(l.telephone_no);
-        const rowOut = buildSheetRowFromLine(l, headers);
-        const rowNum = c ? sheetCoreToRow.get(c) : undefined;
-        if (rowNum) {
-          // Update existing row starting at column B
-          updates.push({ range: `${sheetTab}!B${rowNum}`, values: [rowOut] });
-        } else {
-          // Append
-          appends.push(rowOut);
+        const outB = buildSheetRowFromLine(l, headers);
+        const matchedRow = c ? sheetCoreToRow.get(c) : undefined;
+        if (matchedRow) {
+          // Update existing row's B:AZ
+          updatesForB.push({
+            range: `${sheetTab}!B${matchedRow}`,
+            values: [outB],
+          });
+          continue;
         }
+        if (gapRows.length) {
+          // Fill the first available gap row
+          const rowNum = gapRows.shift()!;
+          updatesForB.push({ range: `${sheetTab}!B${rowNum}`, values: [outB] });
+          // If column A is empty, assign next sequence
+          const aExisting = colA[rowNum - 1];
+          if (aExisting == null || aExisting === "") {
+            lastSeq += 1;
+            updatesForA.push({
+              range: `${sheetTab}!A${rowNum}`,
+              values: [[lastSeq]],
+            });
+          }
+          continue;
+        }
+        // No match and no gap -> append later (we will include A numbering)
+        toAppend.push(outB);
       }
 
-      // Perform updates first (batch)
-      if (updates.length) {
-        progress(`Updating ${updates.length} existing rows in sheet`);
+      // Apply updates (B) and A numbering if needed
+      if (updatesForB.length || updatesForA.length) {
+        progress(
+          `Updating ${updatesForB.length} existing/gap rows in sheet` +
+            (updatesForA.length ? ` (+${updatesForA.length} A-cells)` : "")
+        );
+        const data = [...updatesForB, ...updatesForA];
         await sheets.spreadsheets.values.batchUpdate({
           spreadsheetId,
           requestBody: {
             valueInputOption: "USER_ENTERED",
-            data: updates,
+            data,
           },
         });
-        updatedInSheet = updates.length;
+        updatedInSheet = updatesForB.length;
       }
 
-      // Then append new ones
-      if (appends.length) {
-        progress(`Appending ${appends.length} new rows to sheet`);
+      // Append new rows including A numbering
+      if (toAppend.length) {
+        progress(
+          `Appending ${toAppend.length} new rows to sheet with numbering`
+        );
+        // Build rows with [A, ...B..]
+        const rowsWithA = toAppend.map((bRow) => {
+          lastSeq += 1;
+          return [lastSeq, ...bRow];
+        });
         await sheets.spreadsheets.values.append({
           spreadsheetId,
-          range: `${sheetTab}!B1`,
+          range: `${sheetTab}!A1`,
           valueInputOption: "USER_ENTERED",
           insertDataOption: "INSERT_ROWS",
-          requestBody: { values: appends },
+          requestBody: { values: rowsWithA },
         });
-        appendedInSheet = appends.length;
+        appendedInSheet = rowsWithA.length;
       }
     } catch (error) {
       console.error("[syncConnection] Sheet write-back failed:", error);
