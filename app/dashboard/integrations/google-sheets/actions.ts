@@ -638,6 +638,47 @@ export async function syncConnection(
       );
     }
 
+    // Safety-net: ensure tasks exist for all lines we just upserted/updated.
+    // This covers any path that might have missed task creation (bulk upsert, fallback, etc.).
+    try {
+      const { data: finalLines, error: finalErr } = await supabaseServer
+        .from("line_details")
+        .select("id, telephone_no")
+        .in("telephone_no", numbers)
+        .gte("date", start)
+        .lte("date", end);
+      if (finalErr) throw finalErr;
+
+      const rowByPhone = new Map<string, any>(
+        sheetRows.map((r: any) => [r.telephone_no, r])
+      );
+
+      for (const l of finalLines || []) {
+        const row = rowByPhone.get(l.telephone_no);
+        if (!row) continue;
+        try {
+          // ensureTaskForLine will not duplicate tasks if one already exists
+          // and will create a completed task for this line
+          // (we pass the task-related fields via the sheet row)
+          // Note: ignore errors per-line to avoid failing the whole sync
+          // for task creation issues.
+          // eslint-disable-next-line no-await-in-loop
+          await ensureTaskForLine(l.id, row);
+        } catch (e) {
+          console.warn(
+            "[syncConnection] ensureTaskForLine failed for",
+            l.telephone_no,
+            (e as Error).message || e
+          );
+        }
+      }
+    } catch (err) {
+      console.warn(
+        "[syncConnection] Post-upsert task ensure skipped:",
+        (err as Error).message || err
+      );
+    }
+
     // Project -> Sheet: append project lines that are missing in the sheet for this month
     let missingInSheet: any[] = [];
     try {
