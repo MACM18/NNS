@@ -4,10 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { usePageVisibility } from "@/hooks/use-page-visibility";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Header } from "@/components/layout/header";
-import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import {
   Card,
   CardContent,
@@ -58,8 +54,9 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const { cache, updateCache } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const router = useRouter();
 
-  const stats = cache.dashboard?.stats || {
+  const stats: DashboardStats = cache.dashboard?.stats || {
     totalLines: 0,
     activeTasks: 0,
     pendingReviews: 0,
@@ -70,49 +67,41 @@ export default function Dashboard() {
     revenueChange: 0,
   };
 
-  const recentActivities = cache.dashboard?.activities || [];
-  const router = useRouter();
+  const recentActivities: RecentActivity[] = cache.dashboard?.activities || [];
 
-  // Auth check - redirect unauthenticated users
+  // Redirect unauthenticated users
   useEffect(() => {
     if (!loading && !user) {
       router.push("/auth");
     }
   }, [user, loading, router]);
 
-  // Early return for unauthenticated users
-  if (!user && !loading) {
-    return null;
-  }
+  // Early return during redirect
+  if (!user && !loading) return null;
 
+  // Fetch when month changes or cache invalid
   useEffect(() => {
-    if (user && selectedDate) {
-      const lastUpdated = cache.dashboard?.lastUpdated;
-      const cachedMonth = lastUpdated
-        ? `${lastUpdated.getFullYear()}-${(lastUpdated.getMonth() + 1)
-            .toString()
-            .padStart(2, "0")}`
-        : null;
-      const selectedMonth = `${selectedDate.getFullYear()}-${(
-        selectedDate.getMonth() + 1
-      )
-        .toString()
-        .padStart(2, "0")}`;
-      console.log(
-        `Checking cache: selectedMonth=${selectedMonth}, cachedMonth=${cachedMonth}`
-      );
-      if (cachedMonth !== selectedMonth) {
-        fetchDashboardData();
-      }
-    }
-  }, [user, selectedDate]);
-
-  // Refresh data when page becomes visible again
-  usePageVisibility(() => {
-    if (user) {
-      console.log("Page became visible, refreshing dashboard data");
+    if (!user) return;
+    const lastUpdated = cache.dashboard?.lastUpdated as Date | undefined;
+    const cachedMonth = lastUpdated
+      ? `${lastUpdated.getFullYear()}-${(lastUpdated.getMonth() + 1)
+          .toString()
+          .padStart(2, "0")}`
+      : null;
+    const selectedMonthKey = `${selectedDate.getFullYear()}-${(
+      selectedDate.getMonth() + 1
+    )
+      .toString()
+      .padStart(2, "0")}`;
+    if (cachedMonth !== selectedMonthKey) {
       fetchDashboardData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedDate]);
+
+  // Refresh when page becomes visible again
+  usePageVisibility(() => {
+    if (user) fetchDashboardData();
   }, [user]);
 
   const fetchDashboardData = async () => {
@@ -122,6 +111,7 @@ export default function Dashboard() {
       const currentYear = selectedDate.getFullYear();
       const previousMonth = currentMonth === 1 ? 12 : currentMonth - 1;
       const previousYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
       const currentMonthStartDate = `${currentYear}-${currentMonth
         .toString()
         .padStart(2, "0")}-01`;
@@ -133,6 +123,7 @@ export default function Dashboard() {
       const currentMonthEndDate = `${currentYear}-${currentMonth
         .toString()
         .padStart(2, "0")}-${currentMonthLastDay.toString().padStart(2, "0")}`;
+
       const previousMonthStartDate = `${previousYear}-${previousMonth
         .toString()
         .padStart(2, "0")}-01`;
@@ -145,7 +136,7 @@ export default function Dashboard() {
         .toString()
         .padStart(2, "0")}-${previousMonthLastDay.toString().padStart(2, "0")}`;
 
-      // Fetch total lines for selected month
+      // Lines
       const { data: currentLines } = await supabase
         .from("line_details")
         .select("*")
@@ -158,7 +149,7 @@ export default function Dashboard() {
         .gte("created_at", previousMonthStartDate)
         .lte("created_at", previousMonthEndDate);
 
-      // Fetch active tasks for selected month
+      // Active tasks
       const { data: currentTasks } = await supabase
         .from("tasks")
         .select("*")
@@ -173,7 +164,7 @@ export default function Dashboard() {
         .gte("created_at", previousMonthStartDate)
         .lte("created_at", previousMonthEndDate);
 
-      // Fetch pending reviews for selected month
+      // Pending reviews
       const { data: currentReviews } = await supabase
         .from("tasks")
         .select("*")
@@ -186,32 +177,32 @@ export default function Dashboard() {
         .select("*")
         .eq("status", "pending")
         .gte("created_at", previousMonthStartDate)
-        .lte("created_at", currentMonthEndDate);
-      // Fetch monthly revenue for selected month
+        .lte("created_at", previousMonthEndDate);
+
+      // Invoices (A & B)
       const { data: currentInvoices } = await supabase
         .from("generated_invoices")
         .select("total_amount")
-        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
+        .in("invoice_type", ["A", "B"]) // Only A and B
         .gte("job_month", currentMonthStartDate)
         .lte("job_month", currentMonthEndDate);
 
       const { data: previousInvoices } = await supabase
         .from("generated_invoices")
         .select("total_amount")
-        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
+        .in("invoice_type", ["A", "B"]) // Only A and B
         .gte("job_month", previousMonthStartDate)
         .lte("job_month", previousMonthEndDate);
 
-      // Fetch recent activities
+      // Recent activities
       const { data: activities } = await supabase
         .from("tasks")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(5);
 
-      // Format recent activities
       const formattedActivities: RecentActivity[] =
-        activities?.map((task) => ({
+        activities?.map((task: any) => ({
           id: task.id,
           action: `Task: ${task.telephone_no}`,
           location: task.address || "Unknown Location",
@@ -220,7 +211,6 @@ export default function Dashboard() {
           created_at: task.created_at,
         })) || [];
 
-      // Calculate stats and changes
       const totalLines = currentLines?.length || 0;
       const activeTasks = currentTasks?.length || 0;
       const pendingReviews = currentReviews?.length || 0;
@@ -279,7 +269,6 @@ export default function Dashboard() {
     const diffInHours = Math.floor(
       (now.getTime() - date.getTime()) / (1000 * 60 * 60)
     );
-
     if (diffInHours < 1) return "Less than an hour ago";
     if (diffInHours < 24) return `${diffInHours} hours ago`;
     const diffInDays = Math.floor(diffInHours / 24);
@@ -331,206 +320,194 @@ export default function Dashboard() {
   ];
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <div className='flex-1 flex flex-col min-h-screen w-full'>
-        <Header />
-        <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-4 overflow-x-hidden'>
-          {loading ? (
-            <DashboardSkeleton />
-          ) : (
-            <div className='w-full max-w-7xl mx-auto space-y-4'>
-              <div className='flex flex-col gap-4'>
-                <h2 className='text-2xl sm:text-3xl font-bold tracking-tight'>
-                  Dashboard
-                </h2>
-                <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-2'>
-                  <MonthYearPicker
-                    date={selectedDate}
-                    onDateChange={setSelectedDate}
-                  />
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    onClick={fetchDashboardData}
-                    disabled={isRefreshing}
-                    className='w-full sm:w-auto'
-                  >
-                    <RefreshCw
-                      className={`mr-2 h-4 w-4 ${
-                        isRefreshing ? "animate-spin" : ""
-                      }`}
-                    />
-                    Refresh
-                  </Button>
-                  <Button
-                    onClick={() => setOpenTelephoneLineModal(true)}
-                    className='w-full sm:w-auto'
-                  >
-                    <Plus className='mr-2 h-4 w-4' />
-                    Add Line
-                  </Button>
-                </div>
-              </div>
-
-              {/* Stats Grid */}
-              <div className='grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
-                {dashboardStats.map((stat, index) => (
-                  <Card key={index}>
-                    <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                      <CardTitle className='text-sm font-medium'>
-                        {stat.title}
-                      </CardTitle>
-                      <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                    </CardHeader>
-                    <CardContent>
-                      <div className='text-2xl font-bold'>
-                        {isRefreshing ? (
-                          <div className='h-8 w-20 bg-gray-200 animate-pulse rounded'></div>
-                        ) : (
-                          stat.value
-                        )}
-                      </div>
-                      <p className='text-xs text-muted-foreground'>
-                        <span
-                          className={
-                            stat.change.startsWith("+")
-                              ? "text-green-600"
-                              : stat.change.startsWith("-")
-                              ? "text-red-600"
-                              : "text-gray-600"
-                          }
-                        >
-                          {isRefreshing ? "..." : stat.change}
-                        </span>{" "}
-                        from last month
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              <div className='grid gap-4 grid-cols-1 lg:grid-cols-7'>
-                {/* Recent Activities */}
-                <Card className='lg:col-span-4'>
-                  <CardHeader>
-                    <CardTitle>Recent Activities</CardTitle>
-                    <CardDescription>
-                      Latest updates from your telecom operations
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className='space-y-4'>
-                      {isRefreshing ? (
-                        Array.from({ length: 4 }).map((_, i) => (
-                          <div key={i} className='flex items-center space-x-4'>
-                            <div className='flex-1 space-y-2'>
-                              <div className='h-4 bg-gray-200 animate-pulse rounded w-3/4'></div>
-                              <div className='h-3 bg-gray-200 animate-pulse rounded w-1/2'></div>
-                            </div>
-                            <div className='h-6 w-16 bg-gray-200 animate-pulse rounded'></div>
-                          </div>
-                        ))
-                      ) : recentActivities.length > 0 ? (
-                        recentActivities.map((activity) => (
-                          <div
-                            key={activity.id}
-                            className='flex items-center space-x-4'
-                          >
-                            <div className='flex-1 space-y-1'>
-                              <p className='text-sm font-medium leading-none'>
-                                {activity.action}
-                              </p>
-                              <p className='text-sm text-muted-foreground'>
-                                {activity.location}
-                              </p>
-                            </div>
-                            <div className='flex items-center space-x-2'>
-                              <Badge
-                                variant={
-                                  activity.status === "completed"
-                                    ? "default"
-                                    : activity.status === "in_progress"
-                                    ? "secondary"
-                                    : activity.status === "pending"
-                                    ? "destructive"
-                                    : "outline"
-                                }
-                              >
-                                {activity.status}
-                              </Badge>
-                              <span className='text-xs text-muted-foreground'>
-                                {activity.time}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className='text-sm text-muted-foreground text-center py-4'>
-                          No recent activities found
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Quick Actions */}
-                <Card className='lg:col-span-3'>
-                  <CardHeader>
-                    <CardTitle>Quick Actions</CardTitle>
-                    <CardDescription>
-                      Common tasks and shortcuts
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-4'>
-                    <Button
-                      className='w-full justify-between'
-                      variant='outline'
-                      onClick={() => router.push("/dashboard/lines")}
-                    >
-                      Add New Line Details
-                      <ArrowRight className='h-4 w-4' />
-                    </Button>
-                    <Button
-                      className='w-full justify-between'
-                      variant='outline'
-                      onClick={() => router.push("/dashboard/reports")}
-                    >
-                      Generate Monthly Report
-                      <ArrowRight className='h-4 w-4' />
-                    </Button>
-                    <Button
-                      className='w-full justify-between'
-                      variant='outline'
-                      onClick={() => router.push("/dashboard/inventory")}
-                    >
-                      Update Inventory
-                      <ArrowRight className='h-4 w-4' />
-                    </Button>
-                    <Button
-                      className='w-full justify-between'
-                      variant='outline'
-                      onClick={() => router.push("/dashboard/tasks")}
-                    >
-                      Review Pending Tasks
-                      <ArrowRight className='h-4 w-4' />
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
+    <>
+      {loading ? (
+        <DashboardSkeleton />
+      ) : (
+        <>
+          <div className='flex flex-col gap-4'>
+            <h2 className='text-2xl sm:text-3xl font-bold tracking-tight'>
+              Dashboard
+            </h2>
+            <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-2'>
+              <MonthYearPicker
+                date={selectedDate}
+                onDateChange={setSelectedDate}
+              />
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={fetchDashboardData}
+                disabled={isRefreshing}
+                className='w-full sm:w-auto'
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${
+                    isRefreshing ? "animate-spin" : ""
+                  }`}
+                />
+                Refresh
+              </Button>
+              <Button
+                onClick={() => setOpenTelephoneLineModal(true)}
+                className='w-full sm:w-auto'
+              >
+                <Plus className='mr-2 h-4 w-4' />
+                Add Line
+              </Button>
             </div>
-          )}
-        </main>
-      </div>
-      <MobileBottomNav />
+          </div>
+
+          <div className='grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
+            {dashboardStats.map((stat, index) => (
+              <Card key={index}>
+                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                  <CardTitle className='text-sm font-medium'>
+                    {stat.title}
+                  </CardTitle>
+                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>
+                    {isRefreshing ? (
+                      <div className='h-8 w-20 bg-gray-200 animate-pulse rounded'></div>
+                    ) : (
+                      stat.value
+                    )}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    <span
+                      className={
+                        stat.change.startsWith("+")
+                          ? "text-green-600"
+                          : stat.change.startsWith("-")
+                          ? "text-red-600"
+                          : "text-gray-600"
+                      }
+                    >
+                      {isRefreshing ? "..." : stat.change}
+                    </span>{" "}
+                    from last month
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className='grid gap-4 grid-cols-1 lg:grid-cols-7'>
+            <Card className='lg:col-span-4'>
+              <CardHeader>
+                <CardTitle>Recent Activities</CardTitle>
+                <CardDescription>
+                  Latest updates from your telecom operations
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className='space-y-4'>
+                  {isRefreshing ? (
+                    Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className='flex items-center space-x-4'>
+                        <div className='flex-1 space-y-2'>
+                          <div className='h-4 bg-gray-200 animate-pulse rounded w-3/4'></div>
+                          <div className='h-3 bg-gray-200 animate-pulse rounded w-1/2'></div>
+                        </div>
+                        <div className='h-6 w-16 bg-gray-200 animate-pulse rounded'></div>
+                      </div>
+                    ))
+                  ) : recentActivities.length > 0 ? (
+                    recentActivities.map((activity) => (
+                      <div
+                        key={activity.id}
+                        className='flex items-center space-x-4'
+                      >
+                        <div className='flex-1 space-y-1'>
+                          <p className='text-sm font-medium leading-none'>
+                            {activity.action}
+                          </p>
+                          <p className='text-sm text-muted-foreground'>
+                            {activity.location}
+                          </p>
+                        </div>
+                        <div className='flex items-center space-x-2'>
+                          <Badge
+                            variant={
+                              activity.status === "completed"
+                                ? "default"
+                                : activity.status === "in_progress"
+                                ? "secondary"
+                                : activity.status === "pending"
+                                ? "destructive"
+                                : "outline"
+                            }
+                          >
+                            {activity.status}
+                          </Badge>
+                          <span className='text-xs text-muted-foreground'>
+                            {activity.time}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className='text-sm text-muted-foreground text-center py-4'>
+                      No recent activities found
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className='lg:col-span-3'>
+              <CardHeader>
+                <CardTitle>Quick Actions</CardTitle>
+                <CardDescription>Common tasks and shortcuts</CardDescription>
+              </CardHeader>
+              <CardContent className='space-y-4'>
+                <Button
+                  className='w-full justify-between'
+                  variant='outline'
+                  onClick={() => router.push("/dashboard/lines")}
+                >
+                  Add New Line Details
+                  <ArrowRight className='h-4 w-4' />
+                </Button>
+                <Button
+                  className='w-full justify-between'
+                  variant='outline'
+                  onClick={() => router.push("/dashboard/reports")}
+                >
+                  Generate Monthly Report
+                  <ArrowRight className='h-4 w-4' />
+                </Button>
+                <Button
+                  className='w-full justify-between'
+                  variant='outline'
+                  onClick={() => router.push("/dashboard/inventory")}
+                >
+                  Update Inventory
+                  <ArrowRight className='h-4 w-4' />
+                </Button>
+                <Button
+                  className='w-full justify-between'
+                  variant='outline'
+                  onClick={() => router.push("/dashboard/tasks")}
+                >
+                  Review Pending Tasks
+                  <ArrowRight className='h-4 w-4' />
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
       <AddTelephoneLineModal
         open={openTelephoneLineModal}
         onOpenChange={setOpenTelephoneLineModal}
         onSuccess={() => {
           setOpenTelephoneLineModal(false);
-          fetchDashboardData(); // Refresh data after adding new line
+          fetchDashboardData();
         }}
       />
-    </SidebarProvider>
+    </>
   );
 }
