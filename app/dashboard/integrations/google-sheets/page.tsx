@@ -126,7 +126,10 @@ export default async function GoogleSheetsPage({
       {/* Header */}
       <div className='mb-6'>
         <div className='flex items-center gap-2 text-sm text-muted-foreground mb-2'>
-          <Link href='/integrations' className='hover:text-foreground'>
+          <Link
+            href='/dashboard/integrations'
+            className='hover:text-foreground'
+          >
             Integrations
           </Link>
           <span>/</span>
@@ -147,7 +150,10 @@ export default async function GoogleSheetsPage({
           <div>
             {/* Link to future client-side add connection UI (not implemented here) */}
             <Button asChild>
-              <Link href='/integrations/google-sheets/add' className='gap-2'>
+              <Link
+                href='/dashboard/integrations/google-sheets/add'
+                className='gap-2'
+              >
                 <span className='inline-flex items-center gap-2'>
                   Add Connection
                 </span>
@@ -174,7 +180,10 @@ export default async function GoogleSheetsPage({
                 Get started by connecting your first Google Sheet
               </p>
               <Button asChild>
-                <Link href='/integrations/google-sheets/add' className='gap-2'>
+                <Link
+                  href='/dashboard/integrations/google-sheets/add'
+                  className='gap-2'
+                >
                   Add Connection
                 </Link>
               </Button>
@@ -251,7 +260,7 @@ export default async function GoogleSheetsPage({
                       asChild
                     >
                       <Link
-                        href={`/integrations/google-sheets?page=${
+                        href={`/dashboard/integrations/google-sheets?page=${
                           currentPage - 1
                         }`}
                       >
@@ -265,7 +274,7 @@ export default async function GoogleSheetsPage({
                       asChild
                     >
                       <Link
-                        href={`/integrations/google-sheets?page=${
+                        href={`/dashboard/integrations/google-sheets?page=${
                           currentPage + 1
                         }`}
                       >

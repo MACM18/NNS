@@ -94,7 +94,7 @@ export default function AddConnectionForm({ action }: Props) {
       const path = parsed.pathname || "";
       if (
         parsed.hostname === window.location.hostname &&
-        path.startsWith("/integrations")
+        path.startsWith("/dashboard/integrations")
       ) {
         e.preventDefault();
         setValidationMessage(
@@ -118,7 +118,7 @@ export default function AddConnectionForm({ action }: Props) {
         type: "success",
         category: "system",
       });
-      router.replace("/integrations/google-sheets");
+      router.replace("/dashboard/integrations/google-sheets");
     } else if ((result as any).error) {
       addNotification({
         title: "Failed to connect sheet",
@@ -196,7 +196,7 @@ export default function AddConnectionForm({ action }: Props) {
 
         <div className='flex justify-end gap-2'>
           <Button variant='outline' asChild>
-            <a href='/integrations/google-sheets'>Cancel</a>
+            <a href='/dashboard/integrations/google-sheets'>Cancel</a>
           </Button>
           <Button type='submit' disabled={pending}>
             {pending ? "Connecting..." : "Connect Sheet"}
