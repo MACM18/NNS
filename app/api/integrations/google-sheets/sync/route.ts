@@ -1,30 +1,46 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import {
+  createJob,
+  setJobInProgress,
+  setJobDone,
+  setJobError,
+} from "@/lib/sync-job-store";
 import { syncConnection } from "@/app/dashboard/integrations/google-sheets/actions";
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = req.headers.get("authorization") || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : undefined;
-    if (!token) {
-      return NextResponse.json(
-        { error: "Missing bearer token" },
-        { status: 401 }
-      );
-    }
-
-    const body = await req.json().catch(() => null);
-    const connectionId = body?.connectionId as string | undefined;
+    const body = await req.json();
+    const connectionId = String(body.connectionId || "");
+    const accessToken = body.accessToken;
     if (!connectionId) {
       return NextResponse.json(
-        { error: "connectionId is required" },
+        { ok: false, error: "connectionId required" },
         { status: 400 }
       );
     }
 
-    const result = await syncConnection(connectionId, token);
-    return NextResponse.json(result, { status: 200 });
+    const jobId = `job-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    createJob(jobId, "Queued");
+    // mark in-progress quickly
+    setJobInProgress(jobId, "Starting sync");
+
+    // fire-and-wait: run sync in background but still wait to return job id
+    (async () => {
+      try {
+        setJobInProgress(jobId, "Running sync");
+        const result = await syncConnection(connectionId, accessToken);
+        setJobDone(jobId, result);
+      } catch (err: any) {
+        setJobError(jobId, err?.message || String(err));
+      }
+    })();
+
+    return NextResponse.json({ ok: true, jobId });
   } catch (error: any) {
-    const message = error?.message || "Sync failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error?.message || String(error) },
+      { status: 500 }
+    );
   }
 }
