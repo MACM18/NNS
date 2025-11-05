@@ -246,11 +246,19 @@ export async function deleteConnection(
 
 export async function syncConnection(
   connectionId: string,
-  accessToken?: string
+  accessToken?: string,
+  onProgress?: (message: string) => void
 ) {
   "use server";
 
   try {
+    const progress = (m: string) => {
+      try {
+        onProgress?.(m);
+      } catch {}
+    };
+
+    progress("Authorizing");
     const auth = await authorize(accessToken);
 
     if (!connectionId) {
@@ -264,6 +272,7 @@ export async function syncConnection(
       throw new Error("Invalid connection ID format");
     }
 
+    progress("Fetching connection");
     // Fetch connection with better error handling
     let conn: any;
     try {
@@ -312,6 +321,7 @@ export async function syncConnection(
       }
     }
 
+    progress("Initializing Google Sheets client");
     // Initialize Google Sheets API with error handling
     let sheets: any;
     try {
@@ -330,6 +340,7 @@ export async function syncConnection(
 
     let availableTabs: string[] = [];
     try {
+      progress("Verifying sheet metadata");
       const metaRes = await sheets.spreadsheets.get({
         spreadsheetId,
         fields: "sheets.properties.title",
@@ -388,6 +399,7 @@ export async function syncConnection(
     // Fetch sheet data with comprehensive error handling
     let values: any[] = [];
     try {
+      progress("Reading sheet data");
       const range = `${sheetTab}!B1:AZ`;
       const readRes = await sheets.spreadsheets.values.get({
         spreadsheetId,
@@ -427,6 +439,7 @@ export async function syncConnection(
       (h ?? "").toString().trim()
     );
     try {
+      progress("Validating header format");
       validateHeaders(headers);
     } catch (error) {
       console.error("[syncConnection] Header validation failed:", error);
@@ -453,6 +466,7 @@ export async function syncConnection(
     // Map to normalized objects with error handling
     let sheetRows: any[] = [];
     try {
+      progress("Mapping rows");
       sheetRows = rows.map((r, index) => {
         try {
           // pass connection month/year as context so partial dates (e.g. "8/1")
@@ -491,6 +505,7 @@ export async function syncConnection(
 
     let existingLines: any[] = [];
     try {
+      progress("Fetching existing project rows");
       existingLines = await fetchExistingLines(numbers, start, end);
     } catch (error) {
       console.error("[syncConnection] Failed to fetch existing lines:", error);
@@ -593,6 +608,7 @@ export async function syncConnection(
     let upsertedCount = 0;
 
     try {
+      progress("Upserting lines into database");
       const bulkRes = await supabaseServer
         .from("line_details")
         .upsert(linePayloads, { onConflict: "telephone_no,date" })
@@ -660,6 +676,7 @@ export async function syncConnection(
 
         // Ensure tasks exist for all lines (bulk operation) with error handling
         try {
+          progress("Ensuring tasks for lines");
           const telephoneNos = (upsertedLines || [])
             .map((l) => l.telephone_no)
             .filter(Boolean);
@@ -759,9 +776,11 @@ export async function syncConnection(
       );
     }
 
-    // Project -> Sheet: append project lines that are missing in the sheet for this month
-    let missingInSheet: any[] = [];
+    // Project -> Sheet: update rows by phone (ignoring leading 034) or append if not found
+    let updatedInSheet = 0;
+    let appendedInSheet = 0;
     try {
+      progress("Preparing write-back to sheet");
       const { data: monthLines, error: monthErr } = await supabaseServer
         .from("line_details")
         .select("*")
@@ -769,43 +788,73 @@ export async function syncConnection(
         .lte("date", end);
       if (monthErr) throw monthErr;
 
-      const sheetNumbersSet = new Set(numbers);
-      missingInSheet = (monthLines || []).filter(
-        (l: any) => l.telephone_no && !sheetNumbersSet.has(l.telephone_no)
-      );
+      // Build a map of existing sheet numbers (core form without leading 034) to row index
+      const sheetDataRows = values.slice(1); // skip header row
+      const core = (v: any) => {
+        const s = (v ?? "").toString();
+        const digits = s.replace(/\D+/g, "");
+        if (!digits) return "";
+        return digits.startsWith("034") ? digits.slice(3) : digits;
+      };
+      const sheetCoreToRow = new Map<string, number>();
+      for (let i = 0; i < sheetDataRows.length; i++) {
+        const r = sheetDataRows[i];
+        const num = r[idx.number];
+        const c = core(num);
+        if (c) sheetCoreToRow.set(c, i + 2); // +2 to convert to actual sheet row (header is row 1)
+      }
 
-      if (missingInSheet.length > 0) {
-        try {
-          const appendRows = missingInSheet.map((l) =>
-            buildSheetRowFromLine(l, headers)
-          );
-          // Append starting at column B
-          await sheets.spreadsheets.values.append({
-            spreadsheetId,
-            range: `${sheetTab}!B1`,
-            valueInputOption: "USER_ENTERED",
-            insertDataOption: "INSERT_ROWS",
-            requestBody: { values: appendRows },
-          });
-        } catch (error) {
-          console.error(
-            "[syncConnection] Failed to append missing lines to sheet:",
-            error
-          );
-          // Don't fail the entire sync for sheet append issues
-          console.warn("Continuing sync despite sheet append failure");
+      const updates: Array<{ range: string; values: any[][] }> = [];
+      const appends: any[][] = [];
+      for (const l of monthLines || []) {
+        if (!l?.telephone_no) continue;
+        const c = core(l.telephone_no);
+        const rowOut = buildSheetRowFromLine(l, headers);
+        const rowNum = c ? sheetCoreToRow.get(c) : undefined;
+        if (rowNum) {
+          // Update existing row starting at column B
+          updates.push({ range: `${sheetTab}!B${rowNum}`, values: [rowOut] });
+        } else {
+          // Append
+          appends.push(rowOut);
         }
       }
+
+      // Perform updates first (batch)
+      if (updates.length) {
+        progress(`Updating ${updates.length} existing rows in sheet`);
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            valueInputOption: "USER_ENTERED",
+            data: updates,
+          },
+        });
+        updatedInSheet = updates.length;
+      }
+
+      // Then append new ones
+      if (appends.length) {
+        progress(`Appending ${appends.length} new rows to sheet`);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `${sheetTab}!B1`,
+          valueInputOption: "USER_ENTERED",
+          insertDataOption: "INSERT_ROWS",
+          requestBody: { values: appends },
+        });
+        appendedInSheet = appends.length;
+      }
     } catch (error) {
-      console.error("[syncConnection] Failed to process missing lines:", error);
-      // Don't fail the entire sync for this step
-      console.warn("Continuing sync despite missing lines processing failure");
+      console.error("[syncConnection] Sheet write-back failed:", error);
+      console.warn("Continuing sync despite sheet write-back failure");
     }
 
     // Drum Usage: create usage rows for lines that have drum numbers
     let drumUsageInserted = 0;
     let drumsRecalculated = 0;
     try {
+      progress("Processing drum usage");
       const { data: monthLines, error: monthErr } = await supabaseServer
         .from("line_details")
         .select("*")
@@ -946,6 +995,7 @@ export async function syncConnection(
     let drumProcessed = 0;
     let drumAppended = 0;
     try {
+      progress("Syncing Drum Number tab");
       const drumTab = "Drum Number";
       const drumRange = `${drumTab}!B1:AZ`;
       const drumRes = await sheets.spreadsheets.values.get({
@@ -1038,12 +1088,14 @@ export async function syncConnection(
     const now = new Date().toISOString();
     const totalProcessed =
       sheetRows.length +
-      missingInSheet.length +
+      updatedInSheet +
+      appendedInSheet +
       drumProcessed +
       drumAppended +
       drumUsageInserted;
 
     try {
+      progress("Updating connection status");
       const { data, error: updateErr } = await supabaseServer
         .from("google_sheet_connections")
         .update({
@@ -1066,7 +1118,8 @@ export async function syncConnection(
       return {
         connection: data,
         upserted: upsertedCount,
-        appended: missingInSheet.length,
+        appended: appendedInSheet,
+        updatedInSheet,
         drumProcessed,
         drumAppended,
         drumUsageInserted,

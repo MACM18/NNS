@@ -37,7 +37,9 @@ export async function POST(req: NextRequest) {
     (async () => {
       try {
         setJobInProgress(jobId, "Running sync");
-        const result = await syncConnection(connectionId, accessToken);
+        const result = await syncConnection(connectionId, accessToken, (msg) =>
+          setJobInProgress(jobId, msg)
+        );
         setJobDone(jobId, result);
       } catch (err: any) {
         setJobError(jobId, err?.message || String(err));
