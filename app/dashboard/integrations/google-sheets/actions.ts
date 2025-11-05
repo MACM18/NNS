@@ -455,7 +455,9 @@ export async function syncConnection(
     try {
       sheetRows = rows.map((r, index) => {
         try {
-          return mapSheetRow(r, idx);
+          // pass connection month/year as context so partial dates (e.g. "8/1")
+          // are resolved to the correct year/month for this connection
+          return mapSheetRow(r, idx, month, year);
         } catch (error) {
           console.warn(
             `[syncConnection] Error mapping row ${index + 2}:`,
@@ -1166,14 +1168,97 @@ function toNumber(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function toDateISO(v: any): string | null {
+function toDateISO(
+  v: any,
+  monthContext?: number,
+  yearContext?: number
+): string | null {
   if (!v) return null;
-  const d = new Date(v);
+
+  // Handle numeric (Google Sheets serial) values
+  if (typeof v === "number") {
+    // Google Sheets / Excel date serial (days since 1899-12-30)
+    // Convert serial to JS Date
+    const serial = v;
+    // Excel quirk: serial 60 is 1900-02-29 (non-existent) - but Google tends to align; keep simple
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    const d = new Date(epoch.getTime() + serial * 24 * 60 * 60 * 1000);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().slice(0, 10);
+  }
+
+  // If value is a string, try to handle common partial formats
+  const s = String(v).trim();
+
+  // If the string is a simple day number like "1" or "08", use connection month/year
+  if (
+    /^\d{1,2}$/.test(s) &&
+    typeof monthContext === "number" &&
+    typeof yearContext === "number"
+  ) {
+    const day = Number(s);
+    if (day >= 1 && day <= 31) {
+      const dt = new Date(Date.UTC(yearContext, monthContext - 1, day));
+      return dt.toISOString().slice(0, 10);
+    }
+  }
+
+  // If the string is two parts like "8/1" or "1-8", try to resolve using the connection context
+  const twoPart = s.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  if (twoPart && twoPart.length === 3 && typeof yearContext === "number") {
+    const a = Number(twoPart[1]);
+    const b = Number(twoPart[2]);
+
+    let month: number | undefined;
+    let day: number | undefined;
+
+    // Prefer to use the connection month when ambiguous or when user requested cohesion
+    if (typeof monthContext === "number") {
+      // If one of the parts equals the connection month, use the other as day
+      if (a === monthContext) {
+        month = monthContext;
+        day = b;
+      } else if (b === monthContext) {
+        month = monthContext;
+        day = a;
+      } else if (a > 12 && b <= 12) {
+        // a can't be month -> treat as day/month
+        day = a;
+        month = b;
+      } else if (b > 12 && a <= 12) {
+        // b can't be month -> treat as month/day
+        month = a;
+        day = b;
+      } else {
+        // Ambiguous: default to connection month and take the other as day
+        month = monthContext;
+        // choose the part that is plausible as day (<=31), prefer second as day
+        day = b <= 31 ? b : a;
+      }
+    } else {
+      // No context month available: assume mm/dd (month/day)
+      month = a;
+      day = b;
+    }
+
+    if (month && day && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const dt = new Date(Date.UTC(yearContext, month - 1, day));
+      if (!isNaN(dt.getTime())) return dt.toISOString().slice(0, 10);
+    }
+  }
+
+  // Fall back to default Date parsing
+  const d = new Date(s);
   if (isNaN(d.getTime())) return null;
   return d.toISOString().slice(0, 10);
 }
 
-function mapSheetRow(row: any[], idx: ReturnType<typeof headerIndex>) {
+function mapSheetRow(
+  row: any[],
+  idx: ReturnType<typeof headerIndex>,
+  monthContext?: number,
+  yearContext?: number
+) {
   const cable_start = toNumber(row[idx.cable_start]);
   const cable_middle = toNumber(row[idx.cable_middle]);
   const cable_end = toNumber(row[idx.cable_end]);
@@ -1190,7 +1275,7 @@ function mapSheetRow(row: any[], idx: ReturnType<typeof headerIndex>) {
     toNumber(row[idx.screw_nail]) + toNumber(row[idx.screw_nail_2]);
 
   return {
-    date: toDateISO(row[idx.date]),
+    date: toDateISO(row[idx.date], monthContext, yearContext),
     telephone_no: (row[idx.number] ?? "").toString().trim(),
     dp: (row[idx.dp] ?? "").toString().trim(),
     power_dp: toNumber(row[idx.power_dp]),
@@ -1384,7 +1469,8 @@ function buildSheetRowFromLine(l: any, headers: string[]): any[] {
 
 // Drum Number tab helpers
 function requiredDrumHeaders(): string[] {
-  return ["NO", "TP", "DW DP", "DW C HOOK", "DW CUS", "DRUM NUMBER"];
+  // 'NO' (sequence) is optional and can be ignored; we only require the substantive columns
+  return ["TP", "DW DP", "DW C HOOK", "DW CUS", "DRUM NUMBER"];
 }
 
 function validateDrumHeaders(headers: string[]) {
