@@ -118,7 +118,7 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
   }
 
   // If no cookieStore available and no access token, fail early
-  if (!cookieStore) {
+  if (!cookieStore && !accessToken) {
     throw new Error("Unable to access authentication cookies");
   }
 
@@ -140,7 +140,7 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
     // Log cookie names for debugging (don't log values)
     try {
       console.log("[authorize] getUser error:", userErr.message || userErr);
-      const availableCookies = cookieStore.getAll?.() || [];
+      const availableCookies = (safeCookieStore.getAll?.() as any[]) || [];
       console.log(
         "[authorize] Cookies available:",
         availableCookies.map((c) => c.name)
