@@ -87,10 +87,18 @@ export default function ConnectionActions({ connectionId }: Props) {
     }
   };
 
+  const handleSyncComplete = () => {
+    // Refresh the page to show updated connection data
+    router.refresh();
+  };
+
   return (
-    <div className='flex items-center justify-end gap-2'>
+    <div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2'>
       {/* New sync with background job + progress + toasts */}
-      <SyncSheetButton connectionId={connectionId} />
+      <SyncSheetButton
+        connectionId={connectionId}
+        onSyncComplete={handleSyncComplete}
+      />
 
       <Button
         type='button'
@@ -99,6 +107,7 @@ export default function ConnectionActions({ connectionId }: Props) {
         onClick={() => requireAuthOrNotify(() => setOpenDelete(true))}
         disabled={!accessToken}
         title={!accessToken ? "Sign in to delete" : undefined}
+        className='w-full sm:w-auto'
       >
         {accessToken ? "Delete" : "Sign in to delete"}
       </Button>

@@ -114,7 +114,7 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
   const endIndex = Math.min(currentPage * pageSize, total || rows.length);
 
   return (
-    <div className='container mx-auto p-6'>
+    <div className='container mx-auto p-4 md:p-6'>
       {/* Header */}
       <div className='mb-6'>
         <div className='flex items-center gap-2 text-sm text-muted-foreground mb-2'>
@@ -127,21 +127,21 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
           <span>/</span>
           <span>Google Sheets</span>
         </div>
-        <div className='flex items-center justify-between'>
+        <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
           <div>
-            <h1 className='text-3xl font-bold tracking-tight flex items-center gap-3'>
-              <FileSpreadsheet className='h-8 w-8 text-green-600' />
+            <h1 className='text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-3'>
+              <FileSpreadsheet className='h-6 w-6 md:h-8 md:w-8 text-green-600' />
               Google Sheets Integration
             </h1>
-            <p className='text-muted-foreground mt-2'>
+            <p className='text-muted-foreground mt-2 text-sm md:text-base'>
               Connect Google Sheets to sync line installation data for each
               month
             </p>
           </div>
 
-          <div>
+          <div className='w-full md:w-auto'>
             {/* Link to future client-side add connection UI (not implemented here) */}
-            <Button asChild>
+            <Button asChild className='w-full md:w-auto'>
               <Link
                 href='/dashboard/integrations/google-sheets/add'
                 className='gap-2'
@@ -182,65 +182,121 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
             </div>
           ) : (
             <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Sheet Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Records</TableHead>
-                    <TableHead>Last Synced</TableHead>
-                    <TableHead className='text-right'>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((connection) => {
-                    const monthLabel =
-                      typeof connection.month === "number"
-                        ? MONTHS[connection.month - 1]
-                        : String(connection.month);
-                    return (
-                      <TableRow key={connection.id}>
-                        <TableCell className='font-medium'>
-                          <div className='flex items-center gap-2'>
+              {/* Desktop Table */}
+              <div className='hidden md:block overflow-x-auto'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Period</TableHead>
+                      <TableHead>Sheet Name</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Records</TableHead>
+                      <TableHead>Last Synced</TableHead>
+                      <TableHead className='text-right'>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((connection) => {
+                      const monthLabel =
+                        typeof connection.month === "number"
+                          ? MONTHS[connection.month - 1]
+                          : String(connection.month);
+                      return (
+                        <TableRow key={connection.id}>
+                          <TableCell className='font-medium'>
+                            <div className='flex items-center gap-2'>
+                              <Calendar className='h-4 w-4 text-muted-foreground' />
+                              {monthLabel} {connection.year}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <a
+                              href={connection.sheet_url}
+                              target='_blank'
+                              rel='noopener noreferrer'
+                              className='flex items-center gap-2 hover:underline text-blue-600'
+                            >
+                              {connection.sheet_name ?? connection.sheet_url}
+                              <ExternalLink className='h-3 w-3' />
+                            </a>
+                          </TableCell>
+                          <TableCell>
+                            {getStatusBadge(connection.status)}
+                          </TableCell>
+                          <TableCell>{connection.record_count ?? 0}</TableCell>
+                          <TableCell className='text-muted-foreground text-sm'>
+                            {formatDate(connection.last_synced)}
+                          </TableCell>
+                          <TableCell className='text-right'>
+                            <ConnectionActions connectionId={connection.id} />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className='md:hidden space-y-4'>
+                {rows.map((connection) => {
+                  const monthLabel =
+                    typeof connection.month === "number"
+                      ? MONTHS[connection.month - 1]
+                      : String(connection.month);
+                  return (
+                    <Card key={connection.id}>
+                      <CardContent className='pt-6 space-y-3'>
+                        <div className='flex items-start justify-between gap-2'>
+                          <div className='flex items-center gap-2 font-medium'>
                             <Calendar className='h-4 w-4 text-muted-foreground' />
                             {monthLabel} {connection.year}
                           </div>
-                        </TableCell>
-                        <TableCell>
+                          {getStatusBadge(connection.status)}
+                        </div>
+                        <div>
                           <a
                             href={connection.sheet_url}
                             target='_blank'
                             rel='noopener noreferrer'
-                            className='flex items-center gap-2 hover:underline text-blue-600'
+                            className='flex items-center gap-2 hover:underline text-blue-600 text-sm break-all'
                           >
                             {connection.sheet_name ?? connection.sheet_url}
-                            <ExternalLink className='h-3 w-3' />
+                            <ExternalLink className='h-3 w-3 flex-shrink-0' />
                           </a>
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(connection.status)}
-                        </TableCell>
-                        <TableCell>{connection.record_count ?? 0}</TableCell>
-                        <TableCell className='text-muted-foreground text-sm'>
-                          {formatDate(connection.last_synced)}
-                        </TableCell>
-                        <TableCell className='text-right'>
+                        </div>
+                        <div className='flex items-center justify-between text-sm'>
+                          <span className='text-muted-foreground'>
+                            Records:
+                          </span>
+                          <span className='font-medium'>
+                            {connection.record_count ?? 0}
+                          </span>
+                        </div>
+                        <div className='flex items-center justify-between text-sm'>
+                          <span className='text-muted-foreground'>
+                            Last Synced:
+                          </span>
+                          <span className='text-muted-foreground text-xs'>
+                            {formatDate(connection.last_synced)}
+                          </span>
+                        </div>
+                        <div className='pt-2 border-t'>
                           <ConnectionActions connectionId={connection.id} />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
 
               {/* Pagination (server-side via query param `?page=`) */}
               {totalPages > 1 && (
-                <div className='flex items-center justify-between mt-4'>
-                  <div className='text-sm text-muted-foreground'>
+                <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-4 pt-4 border-t'>
+                  <div className='text-sm text-muted-foreground text-center md:text-left'>
                     Showing {startIndex} to {endIndex} of {total} connections
                   </div>
-                  <div className='flex gap-2'>
+                  <div className='flex gap-2 justify-center md:justify-end'>
                     <Button
                       variant='outline'
                       size='sm'

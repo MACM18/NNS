@@ -31,11 +31,11 @@ export default function IntegrationsPage() {
 
   if (loading) {
     return (
-      <div className='container mx-auto p-6'>
+      <div className='container mx-auto p-4 md:p-6'>
         <div className='animate-pulse'>
-          <div className='h-8 bg-gray-200 rounded w-1/4 mb-4'></div>
-          <div className='h-4 bg-gray-200 rounded w-1/2 mb-8'></div>
-          <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
+          <div className='h-8 bg-gray-200 rounded w-3/4 sm:w-1/4 mb-4'></div>
+          <div className='h-4 bg-gray-200 rounded w-full sm:w-1/2 mb-8'></div>
+          <div className='grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3'>
             <div className='h-48 bg-gray-200 rounded'></div>
           </div>
         </div>
@@ -62,19 +62,21 @@ export default function IntegrationsPage() {
         {/* Google Sheets Integration Card */}
         <Card className='hover:shadow-lg transition-shadow cursor-pointer group'>
           <CardHeader>
-            <div className='flex items-center justify-between'>
-              <div className='p-2 bg-green-100 dark:bg-green-900 rounded-lg w-fit'>
-                <FileSpreadsheet className='h-8 w-8 text-green-600 dark:text-green-400' />
+            <div className='flex items-center justify-between gap-2'>
+              <div className='p-2 bg-green-100 dark:bg-green-900 rounded-lg w-fit flex-shrink-0'>
+                <FileSpreadsheet className='h-6 w-6 md:h-8 md:w-8 text-green-600 dark:text-green-400' />
               </div>
               <Link href='/dashboard/integrations/google-sheets'>
                 <Button variant='outline' size='sm' className='gap-2'>
                   <Plus className='h-4 w-4' />
-                  Configure
+                  <span className='hidden sm:inline'>Configure</span>
                 </Button>
               </Link>
             </div>
-            <CardTitle className='mt-4'>Google Sheets</CardTitle>
-            <CardDescription>
+            <CardTitle className='mt-4 text-lg md:text-xl'>
+              Google Sheets
+            </CardTitle>
+            <CardDescription className='text-sm'>
               Sync line installation data with Google Sheets for month-by-month
               tracking and two-way reference
             </CardDescription>
@@ -91,13 +93,13 @@ export default function IntegrationsPage() {
         {/* Placeholder for future integrations */}
         <Card className='border-dashed opacity-60'>
           <CardHeader>
-            <div className='flex items-center justify-center h-full'>
+            <div className='flex items-center justify-center h-full min-h-[200px]'>
               <div className='text-center'>
-                <Plus className='h-12 w-12 mx-auto text-muted-foreground mb-2' />
-                <CardTitle className='text-muted-foreground'>
+                <Plus className='h-10 w-10 md:h-12 md:w-12 mx-auto text-muted-foreground mb-2' />
+                <CardTitle className='text-muted-foreground text-base md:text-lg'>
                   More Integrations
                 </CardTitle>
-                <CardDescription className='mt-2'>
+                <CardDescription className='mt-2 text-sm'>
                   Additional integrations coming soon
                 </CardDescription>
               </div>
