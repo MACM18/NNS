@@ -506,25 +506,77 @@ export async function syncConnection(
       if (line.telephone_no) existingByPhone.set(line.telephone_no, line);
     }
 
-    // De-duplicate sheetRows by telephone_no + date to avoid Postgres 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+    // De-duplicate / merge sheetRows by telephone_no (sheet uses month/day only)
+    // This consolidates duplicates that refer to the same phone even if the
+    // sheet's date column varies in month/day formatting.
     const seen = new Map<string, any>();
-    const duplicates: string[] = [];
+    const mergedKeys: string[] = [];
+
+    const isBlank = (v: any) =>
+      v === null ||
+      v === undefined ||
+      (typeof v === "string" && v.toString().trim() === "");
+    const isNumberLike = (v: any) => Number.isFinite(Number(v));
+    const mergeRows = (a: any, b: any) => {
+      const out: any = { ...a };
+      for (const k of Object.keys(b)) {
+        const bv = b[k];
+        const av = out[k];
+        // Keep telephone_no from existing a (they should be identical)
+        if (k === "telephone_no") continue;
+
+        // For date, prefer existing value unless blank, then accept incoming
+        if (k === "date") {
+          if (isBlank(av) && !isBlank(bv)) out[k] = bv;
+          continue;
+        }
+
+        if (isBlank(bv)) {
+          continue; // nothing incoming -> keep existing
+        }
+
+        // Prefer incoming numeric non-zero values
+        if (isNumberLike(bv)) {
+          const num = Number(bv);
+          if (Number.isFinite(num) && num !== 0) {
+            out[k] = num;
+          } else if (isBlank(av)) {
+            out[k] = num;
+          }
+          continue;
+        }
+
+        // For strings prefer incoming non-empty
+        if (typeof bv === "string") {
+          const s = bv.toString().trim();
+          if (s !== "") out[k] = s;
+          continue;
+        }
+
+        // Fallback: overwrite if incoming not null/undefined
+        out[k] = bv;
+      }
+      return out;
+    };
+
     for (const row of sheetRows) {
       const phone = (row.telephone_no || "").toString().trim();
       const d = (row.date || "").toString().trim();
       const key = `${phone}::${d}`;
       if (!phone) continue; // skip entries without phone here
       if (seen.has(key)) {
-        duplicates.push(key);
-        // prefer the first occurrence; skip subsequent duplicates
+        const existing = seen.get(key);
+        const merged = mergeRows(existing, row);
+        seen.set(key, merged);
+        mergedKeys.push(key);
         continue;
       }
       seen.set(key, row);
     }
-    if (duplicates.length) {
+    if (mergedKeys.length) {
       console.warn(
-        "[syncConnection] Duplicate rows detected in sheet for same telephone_no+date; skipping duplicates:",
-        duplicates.slice(0, 10)
+        "[syncConnection] Merged duplicate rows detected in sheet for same telephone_no+date; merged keys:",
+        mergedKeys.slice(0, 10)
       );
     }
 
