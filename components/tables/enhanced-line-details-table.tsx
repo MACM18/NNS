@@ -153,6 +153,8 @@ export function LineDetailsTable({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedLine, setSelectedLine] = useState<LineDetail | null>(null);
   const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [completeLoading, setCompleteLoading] = useState(false);
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
@@ -564,6 +566,7 @@ export function LineDetailsTable({
 
   const confirmCompleteLine = async () => {
     if (!completingLineId) return;
+    setCompleteLoading(true);
     try {
       const { error } = await supabase
         .from("line_details")
@@ -589,6 +592,8 @@ export function LineDetailsTable({
         type: "error",
         category: "system",
       });
+    } finally {
+      setCompleteLoading(false);
     }
   };
 
@@ -599,6 +604,7 @@ export function LineDetailsTable({
   };
   const confirmDeleteLine = async () => {
     if (!selectedLine) return;
+    setDeleteLoading(true);
     try {
       // Remove dependent drum usage records that reference this line first
       const { error: drumError } = await supabase
@@ -642,6 +648,8 @@ export function LineDetailsTable({
         type: "error",
         category: "system",
       });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -976,11 +984,24 @@ export function LineDetailsTable({
             <Button
               variant='outline'
               onClick={() => setCompleteDialogOpen(false)}
+              disabled={completeLoading}
             >
               Cancel
             </Button>
-            <Button type='button' onClick={confirmCompleteLine}>
-              Confirm
+            <Button
+              type='button'
+              onClick={confirmCompleteLine}
+              disabled={completeLoading}
+              className='gap-2'
+            >
+              {completeLoading ? (
+                <>
+                  <div className='h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent' />
+                  Completing...
+                </>
+              ) : (
+                "Confirm"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1010,6 +1031,7 @@ export function LineDetailsTable({
             <Button
               variant='outline'
               onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleteLoading}
             >
               Cancel
             </Button>
@@ -1017,8 +1039,17 @@ export function LineDetailsTable({
               type='button'
               variant='destructive'
               onClick={confirmDeleteLine}
+              disabled={deleteLoading}
+              className='gap-2'
             >
-              Delete
+              {deleteLoading ? (
+                <>
+                  <div className='h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent' />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

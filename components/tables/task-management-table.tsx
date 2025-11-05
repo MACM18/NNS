@@ -102,6 +102,7 @@ export function TaskManagementTable({
   const [deletePopoverOpen, setDeletePopoverOpen] = useState<string | null>(
     null
   );
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
@@ -318,6 +319,7 @@ export function TaskManagementTable({
   };
 
   const handleDeleteTask = async (taskId: string) => {
+    setDeleteLoading(taskId);
     try {
       // Fetch the task to see if it's linked to a line_details row
       const { data: taskRow, error: fetchError } = await supabase
@@ -383,6 +385,8 @@ export function TaskManagementTable({
         variant: "destructive",
         duration: 4000,
       });
+    } finally {
+      setDeleteLoading(null);
     }
   };
 
@@ -743,8 +747,18 @@ export function TaskManagementTable({
                                 variant='destructive'
                                 className='gap-1'
                                 onClick={() => setDeletePopoverOpen(item.id)}
+                                disabled={deleteLoading === item.id}
                               >
-                                <Trash2 className='h-4 w-4' /> Delete
+                                {deleteLoading === item.id ? (
+                                  <>
+                                    <div className='h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent' />
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Trash2 className='h-4 w-4' /> Delete
+                                  </>
+                                )}
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className='w-56'>
@@ -757,6 +771,7 @@ export function TaskManagementTable({
                                     size='sm'
                                     variant='outline'
                                     onClick={() => setDeletePopoverOpen(null)}
+                                    disabled={deleteLoading === item.id}
                                   >
                                     Cancel
                                   </Button>
@@ -767,8 +782,17 @@ export function TaskManagementTable({
                                       await handleDeleteTask(item.id);
                                       setDeletePopoverOpen(null);
                                     }}
+                                    disabled={deleteLoading === item.id}
+                                    className='gap-2'
                                   >
-                                    Delete
+                                    {deleteLoading === item.id ? (
+                                      <>
+                                        <div className='h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent' />
+                                        Deleting...
+                                      </>
+                                    ) : (
+                                      "Delete"
+                                    )}
                                   </Button>
                                 </div>
                               </div>

@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { RefreshCw, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 
 export default function SyncSheetButton({
   connectionId,
@@ -111,12 +113,59 @@ export default function SyncSheetButton({
     }
   };
 
+  const getStatusBadge = () => {
+    if (!status) return null;
+
+    if (status === "starting" || status === "queued") {
+      return (
+        <Badge variant='secondary' className='gap-1'>
+          <Loader2 className='h-3 w-3 animate-spin' />
+          {status}
+        </Badge>
+      );
+    }
+
+    if (
+      status.toLowerCase().includes("error") ||
+      status.toLowerCase().includes("failed")
+    ) {
+      return (
+        <Badge variant='destructive' className='gap-1'>
+          <AlertCircle className='h-3 w-3' />
+          {status}
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge variant='outline' className='gap-1'>
+        <Loader2 className='h-3 w-3 animate-spin' />
+        {status}
+      </Badge>
+    );
+  };
+
   return (
     <div className='inline-flex items-center gap-2'>
-      <Button onClick={() => void start()} disabled={loading} size='sm'>
-        {loading ? "Syncing…" : "Sync"}
+      <Button
+        onClick={() => void start()}
+        disabled={loading}
+        size='sm'
+        className='gap-2'
+      >
+        {loading ? (
+          <>
+            <Loader2 className='h-4 w-4 animate-spin' />
+            Syncing…
+          </>
+        ) : (
+          <>
+            <RefreshCw className='h-4 w-4' />
+            Sync
+          </>
+        )}
       </Button>
-      {status ? <div style={{ marginTop: 8 }}>{status}</div> : null}
+      {getStatusBadge()}
     </div>
   );
 }
