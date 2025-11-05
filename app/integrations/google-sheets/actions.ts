@@ -1,5 +1,3 @@
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import { supabaseServer } from "../../../lib/supabase-server";
 import { google } from "googleapis";
 import { calculateSmartWastage } from "../../../lib/drum-wastage-calculator";
@@ -8,183 +6,24 @@ const ALLOWED_ROLES = ["admin", "moderator"];
 
 type AuthContext = { userId: string; role: string };
 
-// Accept an optional access token to authenticate without relying on cookies.
+// Token-only authorization: require a Supabase access token from the caller.
 async function authorize(accessToken?: string): Promise<AuthContext> {
-  let cookieStore: Awaited<ReturnType<typeof cookies>> | null = null;
+  if (!accessToken) {
+    throw new Error(
+      "Access token is required. Please include 'sb_access_token' in the form or request."
+    );
+  }
 
   try {
-    cookieStore = await cookies();
-  } catch (error) {
-    console.error("[authorize] Failed to get cookies:", error);
-    if (!accessToken) {
-      throw new Error("Unable to access cookies and no access token provided");
-    }
-  }
-
-  // Create a safe cookie store (fallback to no-op methods) so the
-  // Supabase client never tries to call `.get` on a null value.
-  const safeCookieStore =
-    (cookieStore as any) ||
-    ({
-      get: (_name: string) => undefined,
-      set: (_name: string, _value: string, _options?: any) => undefined,
-      remove: (_name: string, _options?: any) => undefined,
-      getAll: () => [] as any[],
-    } as {
-      get?: (name: string) => { value?: string } | undefined;
-      set?: (name: string, value: string, options?: any) => void;
-      remove?: (name: string, options?: any) => void;
-      getAll?: () => Array<{ name: string }>;
-    });
-
-  const clientOptions: any = {
-    cookies: {
-      get(name: string) {
-        try {
-          const res = safeCookieStore.get?.(name as any);
-          return res?.value;
-        } catch (error) {
-          console.error(`[authorize] Failed to get cookie '${name}':`, error);
-          return undefined;
-        }
-      },
-      set(name: string, value: string, options: any) {
-        try {
-          if (typeof safeCookieStore.set === "function") {
-            safeCookieStore.set(name as any, value, options);
-          }
-        } catch (error) {
-          console.error(`[authorize] Failed to set cookie '${name}':`, error);
-        }
-      },
-      remove(name: string, options: any) {
-        try {
-          if (typeof safeCookieStore.remove === "function") {
-            safeCookieStore.remove(name as any, options);
-          } else if (typeof safeCookieStore.set === "function") {
-            safeCookieStore.set(name as any, "", {
-              ...(options || {}),
-              maxAge: 0,
-            });
-          }
-        } catch (error) {
-          console.error(
-            `[authorize] Failed to remove cookie '${name}':`,
-            error
-          );
-        }
-      },
-    },
-  };
-
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    clientOptions
-  );
-
-  // If an explicit access token was provided, verify it directly without cookies
-  if (accessToken) {
-    try {
-      const { data, error } = await supabaseServer.auth.getUser(accessToken);
-      if (error || !data?.user) {
-        throw new Error(
-          `Unable to retrieve user: ${error?.message || "No user data"}`
-        );
-      }
-      const user = data.user;
-      const { data: profile, error: profileErr } = await supabaseServer
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-
-      if (profileErr) {
-        throw new Error(`Profile lookup failed: ${profileErr.message}`);
-      }
-
-      const role = (profile?.role || "").toLowerCase();
-      if (!ALLOWED_ROLES.includes(role)) {
-        throw new Error("Forbidden: insufficient permissions");
-      }
-
-      return { userId: user.id, role };
-    } catch (error) {
-      console.error("[authorize] Access token validation failed:", error);
-      throw error instanceof Error
-        ? error
-        : new Error("Access token validation failed");
-    }
-  }
-
-  // If no cookieStore available and no access token, fail early
-  if (!cookieStore && !accessToken) {
-    throw new Error("Unable to access authentication cookies");
-  }
-
-  // Try to get the logged-in user (reads cookies/server session)
-  let userRes: any = null;
-  let userErr: any = null;
-
-  try {
-    const result = await authClient.auth.getUser();
-    userRes = result.data;
-    userErr = result.error;
-  } catch (error) {
-    userErr = error;
-    console.error("[authorize] getUser threw exception:", error);
-  }
-
-  // If getUser fails or returns no user, attempt to recover by checking session and refreshing
-  if (userErr) {
-    // Log cookie names for debugging (don't log values)
-    try {
-      console.log("[authorize] getUser error:", userErr.message || userErr);
-      const availableCookies = (safeCookieStore.getAll?.() as any[]) || [];
-      console.log(
-        "[authorize] Cookies available:",
-        availableCookies.map((c) => c.name)
+    const { data, error } = await supabaseServer.auth.getUser(accessToken);
+    if (error || !data?.user) {
+      throw new Error(
+        `Unable to retrieve user: ${error?.message || "No user data"}`
       );
-    } catch (e) {
-      console.warn("[authorize] Failed to log cookie info:", e);
     }
-  }
+    const user = data.user;
 
-  let user = userRes?.user;
-  if (!user) {
-    // Try reading session directly
-    try {
-      const {
-        data: { session },
-        error: sessionErr,
-      } = await authClient.auth.getSession();
-      if (sessionErr) {
-        console.log("[authorize] getSession error:", sessionErr.message);
-      }
-      if (session?.user) user = session.user;
-
-      // If still no user, attempt a refresh (this may succeed if refresh token cookie present)
-      if (!user) {
-        const { data: refreshed, error: refreshErr } =
-          await authClient.auth.refreshSession();
-        if (refreshErr) {
-          console.log("[authorize] refreshSession error:", refreshErr.message);
-        }
-        if (refreshed?.session?.user) user = refreshed.session.user;
-      }
-    } catch (e) {
-      console.log("[authorize] session recovery failed:", e);
-    }
-  }
-
-  if (!user) {
-    // No usable session found
-    throw new Error("Unable to retrieve user session. Please log in again.");
-  }
-
-  let profile: any = null;
-  try {
-    const { data: profileData, error: profileErr } = await supabaseServer
+    const { data: profile, error: profileErr } = await supabaseServer
       .from("profiles")
       .select("role")
       .eq("id", user.id)
@@ -193,18 +32,19 @@ async function authorize(accessToken?: string): Promise<AuthContext> {
     if (profileErr) {
       throw new Error(`Profile lookup failed: ${profileErr.message}`);
     }
-    profile = profileData;
+
+    const role = (profile?.role || "").toLowerCase();
+    if (!ALLOWED_ROLES.includes(role)) {
+      throw new Error("Forbidden: insufficient permissions for this operation");
+    }
+
+    return { userId: user.id, role };
   } catch (error) {
-    console.error("[authorize] Profile fetch failed:", error);
-    throw new Error("Failed to fetch user profile");
+    console.error("[authorize] Access token validation failed:", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Access token validation failed");
   }
-
-  const role = (profile?.role || "").toLowerCase();
-  if (!ALLOWED_ROLES.includes(role)) {
-    throw new Error("Forbidden: insufficient permissions for this operation");
-  }
-
-  return { userId: user.id, role };
 }
 
 export async function createConnection(
@@ -1667,12 +1507,12 @@ export async function syncConnectionFromForm(formData: FormData) {
 
 // Dev-only helper: check presence/format of integration-related env vars.
 // Protected with authorize() so only admin/moderator can call.
-export async function checkIntegrationEnv() {
+export async function checkIntegrationEnv(accessToken?: string) {
   "use server";
 
   try {
     // ensure caller is authorized
-    await authorize();
+    await authorize(accessToken);
 
     const result: Record<string, any> = {};
 
