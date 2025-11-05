@@ -506,8 +506,32 @@ export async function syncConnection(
       if (line.telephone_no) existingByPhone.set(line.telephone_no, line);
     }
 
+    // De-duplicate sheetRows by telephone_no + date to avoid Postgres 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+    const seen = new Map<string, any>();
+    const duplicates: string[] = [];
+    for (const row of sheetRows) {
+      const phone = (row.telephone_no || "").toString().trim();
+      const d = (row.date || "").toString().trim();
+      const key = `${phone}::${d}`;
+      if (!phone) continue; // skip entries without phone here
+      if (seen.has(key)) {
+        duplicates.push(key);
+        // prefer the first occurrence; skip subsequent duplicates
+        continue;
+      }
+      seen.set(key, row);
+    }
+    if (duplicates.length) {
+      console.warn(
+        "[syncConnection] Duplicate rows detected in sheet for same telephone_no+date; skipping duplicates:",
+        duplicates.slice(0, 10)
+      );
+    }
+
+    const dedupedRows = Array.from(seen.values());
+
     // Upsert lines from sheet -> project (prefer bulk; fallback to row-by-row if unique constraint missing)
-    const linePayloads = sheetRows.map((row) => ({
+    const linePayloads = dedupedRows.map((row) => ({
       ...sheetToLinePayload(row),
       status: "completed",
     }));
@@ -523,10 +547,14 @@ export async function syncConnection(
         .select("id, telephone_no");
 
       if (bulkRes.error) {
-        const msg = (bulkRes.error.message || "").toLowerCase();
+        const msgRaw = bulkRes.error.message || "";
+        const msg = msgRaw.toLowerCase();
         const missingConstraint =
           msg.includes("conflict") && msg.includes("constraint");
-        if (!missingConstraint) {
+        const cannotAffectRow =
+          msg.includes("cannot affect row a second time") ||
+          bulkRes.error.code === "21000";
+        if (!missingConstraint && !cannotAffectRow) {
           throw bulkRes.error;
         }
 
