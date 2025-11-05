@@ -2,8 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/delete-old-notifications",
-      "schedule": "0 0 * * 0",
-      "timezone": "UTC"
+      "schedule": "0 0 * * 0"
     }
   ]
 }
