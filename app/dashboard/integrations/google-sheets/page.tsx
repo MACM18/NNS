@@ -1,5 +1,11 @@
 import { supabaseServer } from "@/lib/supabase-server";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,7 +19,10 @@ import {
 import { FileSpreadsheet, ExternalLink, Calendar } from "lucide-react";
 import Link from "next/link";
 import ConnectionActions from "./components/ConnectionActions";
-import { deleteConnectionFromForm, syncConnectionFromForm } from "@/app/integrations/google-sheets/actions";
+import {
+  deleteConnectionFromForm,
+  syncConnectionFromForm,
+} from "@/app/dashboard/integrations/google-sheets/actions";
 
 interface SheetConnectionRow {
   id: string;
@@ -84,17 +93,25 @@ function formatDate(dateString: string | null | undefined) {
 function getStatusBadge(status: string | null) {
   switch ((status || "").toLowerCase()) {
     case "active":
-      return <Badge variant="default" className="bg-green-500">Active</Badge>;
+      return (
+        <Badge variant='default' className='bg-green-500'>
+          Active
+        </Badge>
+      );
     case "error":
-      return <Badge variant="destructive">Error</Badge>;
+      return <Badge variant='destructive'>Error</Badge>;
     case "syncing":
-      return <Badge variant="secondary">Syncing...</Badge>;
+      return <Badge variant='secondary'>Syncing...</Badge>;
     default:
-      return <Badge variant="outline">{status ?? "Unknown"}</Badge>;
+      return <Badge variant='outline'>{status ?? "Unknown"}</Badge>;
   }
 }
 
-export default async function GoogleSheetsPage({ searchParams }: { searchParams?: { page?: string } }) {
+export default async function GoogleSheetsPage({
+  searchParams,
+}: {
+  searchParams?: { page?: string };
+}) {
   const currentPage = parseInt((searchParams?.page as string) || "1", 10) || 1;
   const pageSize = 10;
 
@@ -105,32 +122,35 @@ export default async function GoogleSheetsPage({ searchParams }: { searchParams?
   const endIndex = Math.min(currentPage * pageSize, total || rows.length);
 
   return (
-    <div className="container mx-auto p-6">
+    <div className='container mx-auto p-6'>
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-          <Link href="/integrations" className="hover:text-foreground">
+      <div className='mb-6'>
+        <div className='flex items-center gap-2 text-sm text-muted-foreground mb-2'>
+          <Link href='/integrations' className='hover:text-foreground'>
             Integrations
           </Link>
           <span>/</span>
           <span>Google Sheets</span>
         </div>
-        <div className="flex items-center justify-between">
+        <div className='flex items-center justify-between'>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-              <FileSpreadsheet className="h-8 w-8 text-green-600" />
+            <h1 className='text-3xl font-bold tracking-tight flex items-center gap-3'>
+              <FileSpreadsheet className='h-8 w-8 text-green-600' />
               Google Sheets Integration
             </h1>
-            <p className="text-muted-foreground mt-2">
-              Connect Google Sheets to sync line installation data for each month
+            <p className='text-muted-foreground mt-2'>
+              Connect Google Sheets to sync line installation data for each
+              month
             </p>
           </div>
 
           <div>
             {/* Link to future client-side add connection UI (not implemented here) */}
             <Button asChild>
-              <Link href="/integrations/google-sheets/add" className="gap-2">
-                <span className="inline-flex items-center gap-2">Add Connection</span>
+              <Link href='/integrations/google-sheets/add' className='gap-2'>
+                <span className='inline-flex items-center gap-2'>
+                  Add Connection
+                </span>
               </Link>
             </Button>
           </div>
@@ -147,14 +167,14 @@ export default async function GoogleSheetsPage({ searchParams }: { searchParams?
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <div className="text-center py-12">
-              <FileSpreadsheet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No connections yet</h3>
-              <p className="text-muted-foreground mb-4">
+            <div className='text-center py-12'>
+              <FileSpreadsheet className='h-12 w-12 mx-auto text-muted-foreground mb-4' />
+              <h3 className='text-lg font-semibold mb-2'>No connections yet</h3>
+              <p className='text-muted-foreground mb-4'>
                 Get started by connecting your first Google Sheet
               </p>
               <Button asChild>
-                <Link href="/integrations/google-sheets/add" className="gap-2">
+                <Link href='/integrations/google-sheets/add' className='gap-2'>
                   Add Connection
                 </Link>
               </Button>
@@ -169,37 +189,42 @@ export default async function GoogleSheetsPage({ searchParams }: { searchParams?
                     <TableHead>Status</TableHead>
                     <TableHead>Records</TableHead>
                     <TableHead>Last Synced</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className='text-right'>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map((connection) => {
-                    const monthLabel = typeof connection.month === "number" ? MONTHS[connection.month - 1] : String(connection.month);
+                    const monthLabel =
+                      typeof connection.month === "number"
+                        ? MONTHS[connection.month - 1]
+                        : String(connection.month);
                     return (
                       <TableRow key={connection.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <TableCell className='font-medium'>
+                          <div className='flex items-center gap-2'>
+                            <Calendar className='h-4 w-4 text-muted-foreground' />
                             {monthLabel} {connection.year}
                           </div>
                         </TableCell>
                         <TableCell>
                           <a
                             href={connection.sheet_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 hover:underline text-blue-600"
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            className='flex items-center gap-2 hover:underline text-blue-600'
                           >
                             {connection.sheet_name ?? connection.sheet_url}
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink className='h-3 w-3' />
                           </a>
                         </TableCell>
-                        <TableCell>{getStatusBadge(connection.status)}</TableCell>
+                        <TableCell>
+                          {getStatusBadge(connection.status)}
+                        </TableCell>
                         <TableCell>{connection.record_count ?? 0}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
+                        <TableCell className='text-muted-foreground text-sm'>
                           {formatDate(connection.last_synced)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className='text-right'>
                           <ConnectionActions
                             connectionId={connection.id}
                             deleteAction={deleteConnectionFromForm}
@@ -214,16 +239,38 @@ export default async function GoogleSheetsPage({ searchParams }: { searchParams?
 
               {/* Pagination (server-side via query param `?page=`) */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-muted-foreground">
+                <div className='flex items-center justify-between mt-4'>
+                  <div className='text-sm text-muted-foreground'>
                     Showing {startIndex} to {endIndex} of {total} connections
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={currentPage === 1} asChild>
-                      <Link href={`/integrations/google-sheets?page=${currentPage - 1}`}>Previous</Link>
+                  <div className='flex gap-2'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      disabled={currentPage === 1}
+                      asChild
+                    >
+                      <Link
+                        href={`/integrations/google-sheets?page=${
+                          currentPage - 1
+                        }`}
+                      >
+                        Previous
+                      </Link>
                     </Button>
-                    <Button variant="outline" size="sm" disabled={currentPage === totalPages} asChild>
-                      <Link href={`/integrations/google-sheets?page=${currentPage + 1}`}>Next</Link>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      disabled={currentPage === totalPages}
+                      asChild
+                    >
+                      <Link
+                        href={`/integrations/google-sheets?page=${
+                          currentPage + 1
+                        }`}
+                      >
+                        Next
+                      </Link>
                     </Button>
                   </div>
                 </div>
