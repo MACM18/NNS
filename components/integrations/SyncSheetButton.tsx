@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getSupabaseClient } from "@/lib/supabase";
+import { toast } from "@/hooks/use-toast";
 
 export default function SyncSheetButton({
   connectionId,
@@ -20,14 +22,30 @@ export default function SyncSheetButton({
           const res = await fetch(
             `/api/integrations/google-sheets/sync/status?jobId=${encodeURIComponent(
               jobId
-            )}`
+            )}`,
+            { credentials: "include" }
           );
           const json = await res.json();
           if (json?.ok && json.job) {
             setStatus(json.job.message || json.job.status);
-            if (json.job.status === "done" || json.job.status === "error") {
+            if (json.job.status === "done") {
               setLoading(false);
               setJobId(null);
+              toast({
+                title: "Sync finished",
+                description: json.job.message || "Sync completed",
+                variant: "default",
+              });
+              return;
+            }
+            if (json.job.status === "error") {
+              setLoading(false);
+              setJobId(null);
+              toast({
+                title: "Sync error",
+                description: json.job.message || "An error occurred",
+                variant: "destructive",
+              });
               return;
             }
           } else {
@@ -49,10 +67,15 @@ export default function SyncSheetButton({
     setLoading(true);
     setStatus("starting");
     try {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token ?? null;
+
       const res = await fetch(`/api/integrations/google-sheets/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connectionId }),
+        credentials: "include",
+        body: JSON.stringify({ connectionId, accessToken }),
       });
       const json = await res.json();
       if (json?.ok && json.jobId) {
@@ -61,10 +84,20 @@ export default function SyncSheetButton({
       } else {
         setStatus(json?.error || "start failed");
         setLoading(false);
+        toast({
+          title: "Sync start failed",
+          description: json?.error || "Failed to start sync",
+          variant: "destructive",
+        });
       }
-    } catch (e) {
+    } catch (e: any) {
       setStatus("request failed");
       setLoading(false);
+      toast({
+        title: "Request failed",
+        description: e?.message || "Unable to start sync",
+        variant: "destructive",
+      });
     }
   };
 
