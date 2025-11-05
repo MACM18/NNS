@@ -1209,6 +1209,21 @@ function toNumber(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Normalize telephone numbers from sheet -> project
+// - If contains any letters, return as-is (no changes)
+// - Otherwise, strip non-digits, and if length < 10 and doesn't start with '034', prefix '034'
+//   (common case: 7-digit local numbers need area code '034' to reach 10 digits)
+function normalizeTelephone(raw: any): string {
+  const s = (raw ?? "").toString().trim();
+  if (/[a-zA-Z]/.test(s)) return s; // leave values with letters unchanged
+  const digits = s.replace(/\D+/g, "");
+  if (!digits) return s; // nothing to normalize
+  if (digits.length < 10 && !digits.startsWith("034")) {
+    return `034${digits}`;
+  }
+  return digits;
+}
+
 function toDateISO(
   v: any,
   monthContext?: number,
@@ -1294,12 +1309,41 @@ function toDateISO(
   return d.toISOString().slice(0, 10);
 }
 
+// Enforce that the date's month/year match the google_sheet_connections (month/year),
+// keeping the day part; if the day exceeds the target month's length, clamp to last day.
+function enforceConnectionDate(
+  dateISO: string | null,
+  monthContext?: number,
+  yearContext?: number
+): string | null {
+  if (typeof monthContext !== "number" || typeof yearContext !== "number") {
+    return dateISO;
+  }
+  const day =
+    dateISO && /^\d{4}-\d{2}-\d{2}$/.test(dateISO)
+      ? Math.min(Math.max(parseInt(dateISO.slice(8, 10), 10) || 1, 1), 31)
+      : 1;
+  const lastDay = new Date(Date.UTC(yearContext, monthContext, 0)).getUTCDate();
+  const safeDay = Math.min(day, lastDay);
+  return new Date(Date.UTC(yearContext, monthContext - 1, safeDay))
+    .toISOString()
+    .slice(0, 10);
+}
+
 function mapSheetRow(
   row: any[],
   idx: ReturnType<typeof headerIndex>,
   monthContext?: number,
   yearContext?: number
 ) {
+  const rawNumber = (row[idx.number] ?? "").toString().trim();
+  const normalizedNumber = normalizeTelephone(rawNumber);
+  const rawDate = toDateISO(row[idx.date], monthContext, yearContext);
+  const normalizedDate = enforceConnectionDate(
+    rawDate,
+    monthContext,
+    yearContext
+  );
   const cable_start = toNumber(row[idx.cable_start]);
   const cable_middle = toNumber(row[idx.cable_middle]);
   const cable_end = toNumber(row[idx.cable_end]);
@@ -1316,8 +1360,8 @@ function mapSheetRow(
     toNumber(row[idx.screw_nail]) + toNumber(row[idx.screw_nail_2]);
 
   return {
-    date: toDateISO(row[idx.date], monthContext, yearContext),
-    telephone_no: (row[idx.number] ?? "").toString().trim(),
+    date: normalizedDate,
+    telephone_no: normalizedNumber,
     dp: (row[idx.dp] ?? "").toString().trim(),
     power_dp: toNumber(row[idx.power_dp]),
     power_inbox: toNumber(row[idx.power_inbox]),
@@ -1540,7 +1584,7 @@ function headerIndexDrum(headers: string[]) {
 function mapDrumRow(row: any[], idx: ReturnType<typeof headerIndexDrum>) {
   return {
     no: (row[idx.no] ?? "").toString().trim(),
-    tp: (row[idx.tp] ?? "").toString().trim(),
+    tp: normalizeTelephone((row[idx.tp] ?? "").toString().trim()),
     dw_dp: (row[idx.dw_dp] ?? "").toString().trim(),
     dw_c_hook: toNumber(row[idx.dw_c_hook]),
     dw_cus: (row[idx.dw_cus] ?? "").toString().trim(),
