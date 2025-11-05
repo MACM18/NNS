@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 
 export default function SyncSheetButton({
   connectionId,
@@ -31,9 +32,18 @@ export default function SyncSheetButton({
             if (json.job.status === "done") {
               setLoading(false);
               setJobId(null);
+              const r = json.job.result || {};
+              const details =
+                typeof r === "object"
+                  ? `Upserted ${r.upserted ?? 0}, Appended ${
+                      r.appended ?? 0
+                    }, Drums: updated ${r.drumProcessed ?? 0}, appended ${
+                      r.drumAppended ?? 0
+                    }, usages ${r.drumUsageInserted ?? 0}`
+                  : undefined;
               toast({
                 title: "Sync finished",
-                description: json.job.message || "Sync completed",
+                description: details || json.job.message || "Sync completed",
                 variant: "default",
               });
               return;
@@ -102,14 +112,10 @@ export default function SyncSheetButton({
   };
 
   return (
-    <div>
-      <button
-        className='btn btn-primary'
-        onClick={() => void start()}
-        disabled={loading}
-      >
-        {loading ? "Syncing…" : "Sync now"}
-      </button>
+    <div className='inline-flex items-center gap-2'>
+      <Button onClick={() => void start()} disabled={loading} size='sm'>
+        {loading ? "Syncing…" : "Sync"}
+      </Button>
       {status ? <div style={{ marginTop: 8 }}>{status}</div> : null}
     </div>
   );

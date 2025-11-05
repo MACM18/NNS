@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
+import SyncSheetButton from "@/components/integrations/SyncSheetButton";
 
 type Props = {
   connectionId: string;
@@ -21,9 +22,7 @@ type Props = {
 export default function ConnectionActions({ connectionId }: Props) {
   const [accessToken, setAccessToken] = React.useState("");
   const { addNotification } = useNotification();
-  const [openSync, setOpenSync] = React.useState(false);
   const [openDelete, setOpenDelete] = React.useState(false);
-  const [syncPending, setSyncPending] = React.useState(false);
   const [deletePending, setDeletePending] = React.useState(false);
   const router = useRouter();
 
@@ -54,38 +53,6 @@ export default function ConnectionActions({ connectionId }: Props) {
       return;
     }
     cb();
-  };
-
-  const triggerSync = async () => {
-    setSyncPending(true);
-    try {
-      const res = await fetch("/api/integrations/google-sheets/sync", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ connectionId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Sync failed");
-      addNotification({
-        title: "Sync completed",
-        message: `Processed ${data?.upserted ?? 0} rows.`,
-        type: "success",
-        category: "system",
-      });
-      router.refresh();
-    } catch (e: any) {
-      addNotification({
-        title: "Sync failed",
-        message: e?.message || "Unknown error",
-        type: "error",
-        category: "system",
-      });
-    } finally {
-      setSyncPending(false);
-    }
   };
 
   const triggerDelete = async () => {
@@ -122,16 +89,8 @@ export default function ConnectionActions({ connectionId }: Props) {
 
   return (
     <div className='flex items-center justify-end gap-2'>
-      <Button
-        type='button'
-        variant='outline'
-        size='sm'
-        onClick={() => requireAuthOrNotify(() => setOpenSync(true))}
-        disabled={!accessToken}
-        title={!accessToken ? "Sign in to sync" : undefined}
-      >
-        {accessToken ? "Sync" : "Sign in to sync"}
-      </Button>
+      {/* New sync with background job + progress + toasts */}
+      <SyncSheetButton connectionId={connectionId} />
 
       <Button
         type='button'
@@ -143,33 +102,6 @@ export default function ConnectionActions({ connectionId }: Props) {
       >
         {accessToken ? "Delete" : "Sign in to delete"}
       </Button>
-
-      {/* Sync confirmation dialog */}
-      <Dialog open={openSync} onOpenChange={setOpenSync}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Trigger sync?</DialogTitle>
-            <DialogDescription>
-              This will fetch the latest rows from the Google Sheet and update
-              matching lines.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant='outline' onClick={() => setOpenSync(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                setOpenSync(false);
-                triggerSync();
-              }}
-              disabled={syncPending}
-            >
-              {syncPending ? "Syncing..." : "Confirm"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete confirmation dialog */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
