@@ -258,6 +258,7 @@ export async function createConnection(
         sheet_url: sheet_url,
         sheet_name: sheet_name,
         sheet_tab: sheet_tab,
+        sheet_id: spreadsheetId,
         created_by: auth.userId,
       })
       .select("id")
@@ -446,12 +447,29 @@ export async function syncConnection(
 
     const month: number = Number(conn.month);
     const year: number = Number(conn.year);
-    const sheetTab = (conn.sheet_tab || "All").toString();
+    const storedSheetTab = conn.sheet_tab
+      ? conn.sheet_tab.toString().trim()
+      : null;
+    let sheetTab = storedSheetTab;
     const spreadsheetId =
       conn.sheet_id || extractSpreadsheetId(conn.sheet_url || "");
 
     if (!spreadsheetId) {
       throw new Error("Unable to determine spreadsheetId from URL or sheet_id");
+    }
+
+    if (!conn.sheet_id || conn.sheet_id !== spreadsheetId) {
+      try {
+        await supabaseServer
+          .from("google_sheet_connections")
+          .update({ sheet_id: spreadsheetId })
+          .eq("id", connectionId);
+      } catch (persistErr) {
+        console.warn(
+          "[syncConnection] Failed to persist spreadsheetId:",
+          persistErr
+        );
+      }
     }
 
     // Initialize Google Sheets API with error handling
@@ -468,6 +486,63 @@ export async function syncConnection(
           error instanceof Error ? error.message : "Unknown error"
         }`
       );
+    }
+
+    let availableTabs: string[] = [];
+    try {
+      const metaRes = await sheets.spreadsheets.get({
+        spreadsheetId,
+        fields: "sheets.properties.title",
+      });
+      availableTabs = (metaRes.data.sheets || [])
+        .map((sheet: any) => sheet?.properties?.title)
+        .filter((title: string | undefined): title is string => Boolean(title));
+
+      if (!sheetTab) {
+        if (!availableTabs.length) {
+          throw new Error("No tabs detected in this spreadsheet.");
+        }
+        sheetTab = availableTabs[0];
+        if (!storedSheetTab) {
+          try {
+            await supabaseServer
+              .from("google_sheet_connections")
+              .update({ sheet_tab: sheetTab })
+              .eq("id", connectionId);
+          } catch (persistTabErr) {
+            console.warn(
+              "[syncConnection] Failed to persist default sheet tab:",
+              persistTabErr
+            );
+          }
+        }
+      } else if (!availableTabs.includes(sheetTab)) {
+        const hint = availableTabs.length
+          ? `Available tabs: ${availableTabs.join(", ")}`
+          : "No tabs detected in this spreadsheet.";
+        throw new Error(`Tab '${sheetTab}' not found in spreadsheet. ${hint}`);
+      }
+    } catch (error: any) {
+      console.error("[syncConnection] Failed to verify sheet metadata:", error);
+      if (error?.code === 403) {
+        throw new Error(
+          "Access denied while verifying sheet metadata. Please ensure the service account has at least viewer access."
+        );
+      }
+      if (error?.code === 404) {
+        throw new Error(
+          "Spreadsheet not found while verifying metadata. Please confirm the connection is pointing to the correct sheet."
+        );
+      }
+      throw new Error(
+        `Unable to verify sheet metadata: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+
+    if (!sheetTab) {
+      throw new Error("Failed to resolve a sheet tab to read from.");
     }
 
     // Fetch sheet data with comprehensive error handling
@@ -565,6 +640,12 @@ export async function syncConnection(
     const numbers = Array.from(
       new Set(sheetRows.map((x) => x.telephone_no).filter(Boolean))
     );
+
+    if (numbers.length === 0) {
+      throw new Error(
+        `No telephone numbers found after parsing tab '${sheetTab}'. Please verify the sheet data.`
+      );
+    }
 
     let existingLines: any[] = [];
     try {
