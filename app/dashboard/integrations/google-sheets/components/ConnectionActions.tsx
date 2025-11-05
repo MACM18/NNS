@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useActionState } from "react";
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
@@ -12,24 +12,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useRouter } from "next/navigation";
 
 type Props = {
-  deleteAction: (formData: FormData) => Promise<any>;
-  syncAction: (formData: FormData) => Promise<any>;
   connectionId: string;
 };
 
-export default function ConnectionActions({
-  deleteAction,
-  syncAction,
-  connectionId,
-}: Props) {
+export default function ConnectionActions({ connectionId }: Props) {
   const [accessToken, setAccessToken] = React.useState("");
   const { addNotification } = useNotification();
-  const syncFormRef = React.useRef<HTMLFormElement | null>(null);
-  const deleteFormRef = React.useRef<HTMLFormElement | null>(null);
   const [openSync, setOpenSync] = React.useState(false);
   const [openDelete, setOpenDelete] = React.useState(false);
+  const [syncPending, setSyncPending] = React.useState(false);
+  const [deletePending, setDeletePending] = React.useState(false);
+  const router = useRouter();
+
   React.useEffect(() => {
     const supabase = getSupabaseClient();
     let cancelled = false;
@@ -46,58 +43,6 @@ export default function ConnectionActions({
     };
   }, []);
 
-  // Use action state so we can show toasts based on server action results
-  // @ts-ignore - useActionState typing in this project is flexible
-  const [syncResult, syncFormAction, syncPending] = useActionState(
-    syncAction as any,
-    null
-  );
-  // @ts-ignore
-  const [deleteResult, deleteFormAction, deletePending] = useActionState(
-    deleteAction as any,
-    null
-  );
-
-  // Notify when sync completes
-  useEffect(() => {
-    if (!syncResult) return;
-    if ((syncResult as any).ok) {
-      addNotification({
-        title: "Sync completed",
-        message: "Sheet rows were synced successfully.",
-        type: "success",
-        category: "system",
-      });
-    } else if ((syncResult as any).error) {
-      addNotification({
-        title: "Sync failed",
-        message: String((syncResult as any).error),
-        type: "error",
-        category: "system",
-      });
-    }
-  }, [syncResult, addNotification]);
-
-  // Notify when delete completes
-  useEffect(() => {
-    if (!deleteResult) return;
-    if ((deleteResult as any).ok) {
-      addNotification({
-        title: "Connection deleted",
-        message: "The Google Sheet connection was removed.",
-        type: "success",
-        category: "system",
-      });
-    } else if ((deleteResult as any).error) {
-      addNotification({
-        title: "Delete failed",
-        message: String((deleteResult as any).error),
-        type: "error",
-        category: "system",
-      });
-    }
-  }, [deleteResult, addNotification]);
-
   const requireAuthOrNotify = (cb: () => void) => {
     if (!accessToken) {
       addNotification({
@@ -111,36 +56,93 @@ export default function ConnectionActions({
     cb();
   };
 
+  const triggerSync = async () => {
+    setSyncPending(true);
+    try {
+      const res = await fetch("/api/integrations/google-sheets/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ connectionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Sync failed");
+      addNotification({
+        title: "Sync completed",
+        message: `Processed ${data?.upserted ?? 0} rows.`,
+        type: "success",
+        category: "system",
+      });
+      router.refresh();
+    } catch (e: any) {
+      addNotification({
+        title: "Sync failed",
+        message: e?.message || "Unknown error",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setSyncPending(false);
+    }
+  };
+
+  const triggerDelete = async () => {
+    setDeletePending(true);
+    try {
+      const res = await fetch("/api/integrations/google-sheets/connection", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ connectionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Delete failed");
+      addNotification({
+        title: "Connection deleted",
+        message: "The Google Sheet connection was removed.",
+        type: "success",
+        category: "system",
+      });
+      router.refresh();
+    } catch (e: any) {
+      addNotification({
+        title: "Delete failed",
+        message: e?.message || "Unknown error",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setDeletePending(false);
+    }
+  };
+
   return (
     <div className='flex items-center justify-end gap-2'>
-      <form action={syncFormAction} ref={syncFormRef}>
-        <input type='hidden' name='connectionId' value={connectionId} />
-        <input type='hidden' name='sb_access_token' value={accessToken} />
-        <Button
-          type='button'
-          variant='outline'
-          size='sm'
-          onClick={() => requireAuthOrNotify(() => setOpenSync(true))}
-          disabled={!accessToken}
-          title={!accessToken ? "Sign in to sync" : undefined}
-        >
-          {accessToken ? "Sync" : "Sign in to sync"}
-        </Button>
-      </form>
-      <form action={deleteFormAction} ref={deleteFormRef}>
-        <input type='hidden' name='connectionId' value={connectionId} />
-        <input type='hidden' name='sb_access_token' value={accessToken} />
-        <Button
-          type='button'
-          variant='destructive'
-          size='sm'
-          onClick={() => requireAuthOrNotify(() => setOpenDelete(true))}
-          disabled={!accessToken}
-          title={!accessToken ? "Sign in to delete" : undefined}
-        >
-          {accessToken ? "Delete" : "Sign in to delete"}
-        </Button>
-      </form>
+      <Button
+        type='button'
+        variant='outline'
+        size='sm'
+        onClick={() => requireAuthOrNotify(() => setOpenSync(true))}
+        disabled={!accessToken}
+        title={!accessToken ? "Sign in to sync" : undefined}
+      >
+        {accessToken ? "Sync" : "Sign in to sync"}
+      </Button>
+
+      <Button
+        type='button'
+        variant='destructive'
+        size='sm'
+        onClick={() => requireAuthOrNotify(() => setOpenDelete(true))}
+        disabled={!accessToken}
+        title={!accessToken ? "Sign in to delete" : undefined}
+      >
+        {accessToken ? "Delete" : "Sign in to delete"}
+      </Button>
 
       {/* Sync confirmation dialog */}
       <Dialog open={openSync} onOpenChange={setOpenSync}>
@@ -159,8 +161,7 @@ export default function ConnectionActions({
             <Button
               onClick={() => {
                 setOpenSync(false);
-                // Submit the form which points to the action returned by useActionState
-                syncFormRef.current?.requestSubmit();
+                triggerSync();
               }}
               disabled={syncPending}
             >
@@ -187,7 +188,7 @@ export default function ConnectionActions({
               variant='destructive'
               onClick={() => {
                 setOpenDelete(false);
-                deleteFormRef.current?.requestSubmit();
+                triggerDelete();
               }}
               disabled={deletePending}
             >

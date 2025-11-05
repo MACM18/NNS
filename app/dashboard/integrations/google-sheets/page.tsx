@@ -16,19 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  FileSpreadsheet,
-  ExternalLink,
-  Calendar,
-  TestTube,
-} from "lucide-react";
+import { FileSpreadsheet, ExternalLink, Calendar } from "lucide-react";
 import Link from "next/link";
 import ConnectionActions from "./components/ConnectionActions";
-import {
-  deleteConnectionFromForm,
-  syncConnectionFromForm,
-} from "@/app/dashboard/integrations/google-sheets/actions";
-import TestCredentialsForm from "./components/TestCredentialsForm";
 
 interface SheetConnectionRow {
   id: string;
@@ -240,11 +230,7 @@ export default async function GoogleSheetsPage({
                           {formatDate(connection.last_synced)}
                         </TableCell>
                         <TableCell className='text-right'>
-                          <ConnectionActions
-                            connectionId={connection.id}
-                            deleteAction={deleteConnectionFromForm}
-                            syncAction={syncConnectionFromForm}
-                          />
+                          <ConnectionActions connectionId={connection.id} />
                         </TableCell>
                       </TableRow>
                     );
@@ -292,23 +278,6 @@ export default async function GoogleSheetsPage({
               )}
             </>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Test Credentials */}
-      <Card>
-        <CardHeader>
-          <CardTitle className='flex items-center gap-2'>
-            <TestTube className='h-5 w-5' />
-            Test Google Service Account
-          </CardTitle>
-          <CardDescription>
-            Verify that your Google service account credentials are configured
-            correctly
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TestCredentialsForm />
         </CardContent>
       </Card>
     </div>
