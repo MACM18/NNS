@@ -76,8 +76,7 @@ export default function Dashboard() {
     }
   }, [user, loading, router]);
 
-  // Early return during redirect
-  if (!user && !loading) return null;
+  // Note: Avoid early return before hooks; we'll return null after hooks below
 
   // Fetch when month changes or cache invalid
   useEffect(() => {
@@ -103,6 +102,9 @@ export default function Dashboard() {
   usePageVisibility(() => {
     if (user) fetchDashboardData();
   }, [user]);
+
+  // Early return during redirect (placed after hooks to satisfy rules-of-hooks)
+  if (!user && !loading) return null;
 
   const fetchDashboardData = async () => {
     setIsRefreshing(true);

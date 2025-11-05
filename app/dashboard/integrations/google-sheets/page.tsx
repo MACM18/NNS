@@ -103,11 +103,7 @@ function getStatusBadge(status: string | null) {
   }
 }
 
-export default async function GoogleSheetsPage({
-  searchParams,
-}: {
-  searchParams?: { page?: string };
-}) {
+export default async function GoogleSheetsPage({ searchParams }: any) {
   const currentPage = parseInt((searchParams?.page as string) || "1", 10) || 1;
   const pageSize = 10;
 

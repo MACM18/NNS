@@ -29,9 +29,7 @@ interface SearchDetailsPageProps {
   };
 }
 
-export default async function SearchDetailsPage({
-  params,
-}: SearchDetailsPageProps) {
+export default async function SearchDetailsPage({ params }: any) {
   const { type, id } = params;
   const supabase = getSupabaseClient();
 

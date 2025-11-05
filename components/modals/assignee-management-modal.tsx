@@ -64,7 +64,7 @@ export function AssigneeManagementModal({
 
       if (error) throw error;
 
-      setAllUsers(profiles || []);
+      setAllUsers((profiles as unknown as Profile[]) || []);
     } catch (error: any) {
       addNotification({
         title: "Error",

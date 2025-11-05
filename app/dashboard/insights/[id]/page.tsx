@@ -44,11 +44,7 @@ async function fetchBlog(slug: string): Promise<Blog | null> {
   return data as Blog;
 }
 
-export default async function InsightDetailsPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function InsightDetailsPage({ params }: any) {
   const blog = await fetchBlog(params.id);
 
   if (!blog) {

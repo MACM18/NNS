@@ -160,7 +160,7 @@ export function TaskManagementTable({
 
       if (error) throw error;
 
-      setData(tasks || []);
+      setData((tasks as unknown as Task[]) || []);
     } catch (error: any) {
       addNotification({
         title: "Error",
@@ -269,10 +269,11 @@ export function TaskManagementTable({
   const handleCompleteTask = async (taskId: string) => {
     try {
       // Check if line details exist for this task
+      const tel = data.find((t) => t.id === taskId)?.telephone_no ?? "";
       const { data: lineDetails, error: lineError } = await supabase
         .from("line_details")
         .select("id")
-        .eq("telephone_no", data.find((t) => t.id === taskId)?.telephone_no)
+        .eq("telephone_no", tel)
         .single();
 
       if (lineError || !lineDetails) {
