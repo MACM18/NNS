@@ -1,6 +1,6 @@
-import { supabaseServer } from "../../../lib/supabase-server";
+import { supabaseServer } from "@/lib/supabase-server";
 import { google } from "googleapis";
-import { calculateSmartWastage } from "../../../lib/drum-wastage-calculator";
+import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
