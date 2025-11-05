@@ -124,14 +124,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           session.user.user_metadata?.name ||
           null;
 
-        const roleValue = await getOrCreateProfile(
-          session.user.id,
-          session.user.email || "",
-          userName
-        );
-        if (!isMounted()) return;
-        setRole(roleValue.role?.toLowerCase?.() || "user");
-        setProfile(roleValue.profile as Profile | null);
+        // If profile already loaded for this user, keep current state (avoid network hits)
+        if (profile?.id === session.user.id && role) {
+          return; // keep existing role/profile; session user updated already
+        }
+
+        // Otherwise, fetch/create profile once
+        try {
+          const roleValue = await getOrCreateProfile(
+            session.user.id,
+            session.user.email || "",
+            userName
+          );
+          if (!isMounted()) return;
+          setRole(roleValue.role?.toLowerCase?.() || "user");
+          setProfile(roleValue.profile as Profile | null);
+        } catch (e) {
+          // Keep previous role/profile on error to avoid UX downgrades
+          console.warn(
+            "applySession: profile fetch/create skipped due to error",
+            e
+          );
+        }
       } else {
         setUser(null);
         setRole(null);
@@ -139,7 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setProfile(null);
       }
     },
-    [getOrCreateProfile]
+    [getOrCreateProfile, profile, role]
   );
 
   useEffect(() => {
@@ -182,45 +196,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted()) return;
-      setLoading(true);
+      // Only block UI for explicit sign-in/out transitions
+      const blockUI = event === "SIGNED_IN" || event === "SIGNED_OUT";
+      if (blockUI) setLoading(true);
       try {
         await applySession(session, isMounted);
       } catch (err) {
         console.error("Error handling auth state change:", err);
-        if (isMounted()) {
+        if (isMounted() && blockUI) {
           setUser(null);
           setRole(null);
         }
       } finally {
-        if (isMounted()) {
+        if (isMounted() && blockUI) {
           setLoading(false);
         }
       }
     });
 
-    // Handle page visibility changes to refresh session when tab becomes visible
-    // This performs a silent refresh (no global loading indicator and no toast)
-    const handleVisibilityChange = async () => {
-      if (!isMounted()) return;
-
-      if (!document.hidden) {
-        try {
-          // Silent refresh: do not toggle the global loading state or show toast
-          await refreshSessionInternal({ notify: false, setLoading: false });
-        } catch (err) {
-          console.error("Error handling visibility change:", err);
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [applySession]);
 
@@ -263,6 +261,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [applySession, toast]
   );
+
+  // Idle-staleness hint: after a long inactivity, show a subtle hint and revalidate in background
+  const [lastActive, setLastActive] = useState<number>(() => Date.now());
+  const [staleLocked, setStaleLocked] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Update lastActive on basic user interactions
+    const markActive = () => {
+      setLastActive(Date.now());
+      setStaleLocked(false);
+    };
+    const events: Array<keyof DocumentEventMap> = [
+      "mousemove",
+      "keydown",
+      "click",
+      "touchstart",
+    ];
+    events.forEach((ev) => document.addEventListener(ev, markActive));
+
+    const STALE_MS = 15 * 60 * 1000; // 15 minutes
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      if (now - lastActive >= STALE_MS && !staleLocked) {
+        // Show a small hint and kick off a silent refresh
+        toast({
+          title: "Session might be stale",
+          description: "Revalidating in background…",
+          duration: 2000,
+        });
+        setStaleLocked(true);
+        void refreshSessionInternal({ notify: false, setLoading: false });
+      }
+    }, 60 * 1000); // check every minute
+
+    return () => {
+      events.forEach((ev) => document.removeEventListener(ev, markActive));
+      window.clearInterval(interval);
+    };
+  }, [lastActive, staleLocked, refreshSessionInternal, toast]);
 
   const refreshSession = useCallback(async () => {
     await refreshSessionInternal({ notify: true, setLoading: true });
