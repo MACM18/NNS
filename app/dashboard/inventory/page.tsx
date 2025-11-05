@@ -15,7 +15,6 @@ import {
   ToggleLeft,
   ToggleRight,
 } from "lucide-react";
-import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import {
   Card,
   CardContent,
@@ -41,9 +40,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Header } from "@/components/layout/header";
 import { AddInventoryInvoiceModal } from "@/components/modals/add-inventory-invoice-modal";
 import { AddWasteModal } from "@/components/modals/add-waste-modal";
 import { ManageInventoryItemsModal } from "@/components/modals/manage-inventory-items-modal";
@@ -672,1129 +668,1072 @@ export default function InventoryPage() {
   };
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <div className='flex-1 flex flex-col min-h-screen w-full'>
-        <Header />
-        <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-6 overflow-x-hidden'>
-          <div className='w-full max-w-7xl mx-auto space-y-6'>
-            {/* Page Header */}
-            <div className='flex flex-col gap-4'>
-              <div>
-                <h1 className='text-2xl sm:text-3xl font-bold'>
-                  Inventory Management
-                </h1>
-                <p className='text-sm sm:text-base text-muted-foreground'>
-                  Manage stock receipts, drum tracking, and waste reporting
+    <div className='space-y-6'>
+      {/* Page Header */}
+      <div className='flex flex-col gap-4'>
+        <div>
+          <h1 className='text-2xl sm:text-3xl font-bold'>
+            Inventory Management
+          </h1>
+          <p className='text-sm sm:text-base text-muted-foreground'>
+            Manage stock receipts, drum tracking, and waste reporting
+          </p>
+        </div>
+        <div className='flex flex-col sm:flex-row gap-2'>
+          <Button
+            onClick={() => setAddWasteModalOpen(true)}
+            variant='outline'
+            className='w-full sm:w-auto gap-2'
+          >
+            <TrendingDown className='h-4 w-4' />
+            <span className='sm:inline'>Record Waste</span>
+          </Button>
+          <Button
+            onClick={() => setAddInvoiceModalOpen(true)}
+            className='w-full sm:w-auto gap-2'
+          >
+            <Plus className='h-4 w-4' />
+            <span className='sm:inline'>Add Invoice</span>
+          </Button>
+          {(role === "admin" || role === "moderator") && (
+            <Button
+              onClick={() => setManageItemsModalOpen(true)}
+              variant='secondary'
+              className='w-full sm:w-auto gap-2'
+            >
+              <Package className='h-4 w-4' />
+              <span className='sm:inline'>Manage Items</span>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+        <Card>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Total Items</CardTitle>
+            <Package className='h-4 w-4 text-muted-foreground' />
+          </CardHeader>
+          <CardContent>
+            {loadingData ? (
+              <>
+                <Skeleton className='h-8 w-16 mb-2' />
+                <Skeleton className='h-3 w-32' />
+              </>
+            ) : (
+              <>
+                <div className='text-2xl font-bold'>{stats.totalItems}</div>
+                <p className='text-xs text-muted-foreground'>
+                  Active inventory items
                 </p>
-              </div>
-              <div className='flex flex-col sm:flex-row gap-2'>
-                <Button
-                  onClick={() => setAddWasteModalOpen(true)}
-                  variant='outline'
-                  className='w-full sm:w-auto gap-2'
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>
+              Low Stock Alerts
+            </CardTitle>
+            <AlertTriangle className='h-4 w-4 text-muted-foreground' />
+          </CardHeader>
+          <CardContent>
+            {loadingData ? (
+              <>
+                <Skeleton className='h-8 w-16 mb-2' />
+                <Skeleton className='h-3 w-32' />
+              </>
+            ) : (
+              <>
+                <div
+                  className={`text-2xl font-bold ${
+                    stats.lowStockAlerts > 0 ? "text-orange-600" : ""
+                  }`}
                 >
-                  <TrendingDown className='h-4 w-4' />
-                  <span className='sm:inline'>Record Waste</span>
-                </Button>
-                <Button
-                  onClick={() => setAddInvoiceModalOpen(true)}
-                  className='w-full sm:w-auto gap-2'
-                >
-                  <Plus className='h-4 w-4' />
-                  <span className='sm:inline'>Add Invoice</span>
-                </Button>
-                {(role === "admin" || role === "moderator") && (
-                  <Button
-                    onClick={() => setManageItemsModalOpen(true)}
-                    variant='secondary'
-                    className='w-full sm:w-auto gap-2'
-                  >
-                    <Package className='h-4 w-4' />
-                    <span className='sm:inline'>Manage Items</span>
-                  </Button>
-                )}
-              </div>
-            </div>
+                  {stats.lowStockAlerts}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Items below reorder level
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
-            {/* Stats Cards */}
-            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
-              <Card>
-                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                  <CardTitle className='text-sm font-medium'>
-                    Total Items
-                  </CardTitle>
-                  <Package className='h-4 w-4 text-muted-foreground' />
-                </CardHeader>
-                <CardContent>
-                  {loadingData ? (
-                    <>
-                      <Skeleton className="h-8 w-16 mb-2" />
-                      <Skeleton className="h-3 w-32" />
-                    </>
-                  ) : (
-                    <>
-                      <div className='text-2xl font-bold'>
-                        {stats.totalItems}
-                      </div>
-                      <p className='text-xs text-muted-foreground'>
-                        Active inventory items
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+        <Card>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Active Drums</CardTitle>
+            <BarChart3 className='h-4 w-4 text-muted-foreground' />
+          </CardHeader>
+          <CardContent>
+            {loadingData ? (
+              <>
+                <Skeleton className='h-8 w-16 mb-2' />
+                <Skeleton className='h-3 w-32' />
+              </>
+            ) : (
+              <>
+                <div className='text-2xl font-bold'>{stats.activeDrums}</div>
+                <p className='text-xs text-muted-foreground'>
+                  Cable drums in use
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
-              <Card>
-                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                  <CardTitle className='text-sm font-medium'>
-                    Low Stock Alerts
-                  </CardTitle>
-                  <AlertTriangle className='h-4 w-4 text-muted-foreground' />
-                </CardHeader>
-                <CardContent>
-                  {loadingData ? (
-                    <>
-                      <Skeleton className="h-8 w-16 mb-2" />
-                      <Skeleton className="h-3 w-32" />
-                    </>
-                  ) : (
-                    <>
-                      <div
-                        className={`text-2xl font-bold ${
-                          stats.lowStockAlerts > 0 ? "text-orange-600" : ""
-                        }`}
-                      >
-                        {stats.lowStockAlerts}
-                      </div>
-                      <p className='text-xs text-muted-foreground'>
-                        Items below reorder level
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+        <Card>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Monthly Waste</CardTitle>
+            <TrendingDown className='h-4 w-4 text-muted-foreground' />
+          </CardHeader>
+          <CardContent>
+            {loadingData ? (
+              <>
+                <Skeleton className='h-8 w-16 mb-2' />
+                <Skeleton className='h-3 w-32' />
+              </>
+            ) : (
+              <>
+                <div className='text-2xl font-bold'>
+                  {`${stats.monthlyWastePercentage}%`}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Of total inventory
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-              <Card>
-                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                  <CardTitle className='text-sm font-medium'>
-                    Active Drums
-                  </CardTitle>
-                  <BarChart3 className='h-4 w-4 text-muted-foreground' />
-                </CardHeader>
-                <CardContent>
-                  {loadingData ? (
-                    <>
-                      <Skeleton className="h-8 w-16 mb-2" />
-                      <Skeleton className="h-3 w-32" />
-                    </>
-                  ) : (
-                    <>
-                      <div className='text-2xl font-bold'>
-                        {stats.activeDrums}
-                      </div>
-                      <p className='text-xs text-muted-foreground'>
-                        Cable drums in use
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+      {/* Main Content Tabs */}
+      <Tabs defaultValue='invoices' className='space-y-6'>
+        <TabsList className='w-full grid grid-cols-2 sm:grid-cols-4 gap-1 h-auto p-1'>
+          <TabsTrigger value='invoices' className='text-xs sm:text-sm'>
+            Invoices
+          </TabsTrigger>
+          <TabsTrigger value='stock' className='text-xs sm:text-sm'>
+            Stock
+          </TabsTrigger>
+          <TabsTrigger value='drums' className='text-xs sm:text-sm'>
+            Drums
+          </TabsTrigger>
+          <TabsTrigger value='waste' className='text-xs sm:text-sm'>
+            Waste
+          </TabsTrigger>
+        </TabsList>
 
-              <Card>
-                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                  <CardTitle className='text-sm font-medium'>
-                    Monthly Waste
-                  </CardTitle>
-                  <TrendingDown className='h-4 w-4 text-muted-foreground' />
-                </CardHeader>
-                <CardContent>
-                  {loadingData ? (
-                    <>
-                      <Skeleton className="h-8 w-16 mb-2" />
-                      <Skeleton className="h-3 w-32" />
-                    </>
-                  ) : (
-                    <>
-                      <div className='text-2xl font-bold'>
-                        {`${stats.monthlyWastePercentage}%`}
-                      </div>
-                      <p className='text-xs text-muted-foreground'>
-                        Of total inventory
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Main Content Tabs */}
-            <Tabs defaultValue='invoices' className='space-y-6'>
-              <TabsList className='w-full grid grid-cols-2 sm:grid-cols-4 gap-1 h-auto p-1'>
-                <TabsTrigger value='invoices' className='text-xs sm:text-sm'>
-                  Invoices
-                </TabsTrigger>
-                <TabsTrigger value='stock' className='text-xs sm:text-sm'>
-                  Stock
-                </TabsTrigger>
-                <TabsTrigger value='drums' className='text-xs sm:text-sm'>
-                  Drums
-                </TabsTrigger>
-                <TabsTrigger value='waste' className='text-xs sm:text-sm'>
-                  Waste
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value='invoices'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Recent Invoices</CardTitle>
-                    <CardDescription>
-                      Material receipts and stock updates
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {loadingData ? (
-                      <TableSkeleton columns={7} rows={6} />
-                    ) : invoices.length > 0 ? (
-                      <div className='overflow-x-auto -mx-4 sm:mx-0'>
-                        <div className='inline-block min-w-full align-middle'>
-                          <div className='overflow-hidden'>
-                            <Table>
-                              <TableHeader>
+        <TabsContent value='invoices'>
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Invoices</CardTitle>
+              <CardDescription>
+                Material receipts and stock updates
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingData ? (
+                <TableSkeleton columns={7} rows={6} />
+              ) : invoices.length > 0 ? (
+                <div className='overflow-x-auto -mx-4 sm:mx-0'>
+                  <div className='inline-block min-w-full align-middle'>
+                    <div className='overflow-hidden'>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className='min-w-[120px]'>
+                              Invoice Number
+                            </TableHead>
+                            <TableHead className='min-w-[100px]'>
+                              Warehouse
+                            </TableHead>
+                            <TableHead className='min-w-[100px]'>
+                              Date
+                            </TableHead>
+                            <TableHead className='min-w-[60px]'>
+                              Items
+                            </TableHead>
+                            <TableHead className='min-w-[100px]'>
+                              Issued By
+                            </TableHead>
+                            <TableHead className='min-w-[80px]'>
+                              Status
+                            </TableHead>
+                            <TableHead className='min-w-[120px] text-center'>
+                              <span className='sr-only'>Actions</span>
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invoices.map((invoice) => (
+                            <React.Fragment key={invoice.id}>
+                              <TableRow>
+                                <TableCell className='font-mono text-sm'>
+                                  {invoice.invoice_number}
+                                </TableCell>
+                                <TableCell>{invoice.warehouse}</TableCell>
+                                <TableCell>
+                                  {new Date(invoice.date).toLocaleDateString()}
+                                </TableCell>
+                                <TableCell>{invoice.total_items}</TableCell>
+                                <TableCell>{invoice.issued_by}</TableCell>
+                                <TableCell>
+                                  {getStatusBadge(invoice.status)}
+                                </TableCell>
+                                <TableCell className='text-center align-middle'>
+                                  <div className='flex gap-1 justify-center items-center min-h-[32px]'>
+                                    <Button
+                                      size='sm'
+                                      variant='outline'
+                                      onClick={async () => {
+                                        if (expandedInvoiceId === invoice.id) {
+                                          setExpandedInvoiceId(null);
+                                        } else {
+                                          setExpandedInvoiceId(invoice.id);
+                                          await fetchInvoiceItems(invoice.id);
+                                        }
+                                      }}
+                                    >
+                                      <Eye className='h-4 w-4' />
+                                    </Button>
+                                    {(role === "admin" ||
+                                      role === "moderator") && (
+                                      <Button
+                                        size='sm'
+                                        variant='secondary'
+                                        onClick={async () => {
+                                          if (!invoiceItems[invoice.id]) {
+                                            await fetchInvoiceItems(invoice.id);
+                                          }
+                                          setSelectedInvoice(invoice);
+                                          setEditInvoiceModalOpen(true);
+                                        }}
+                                      >
+                                        Edit
+                                      </Button>
+                                    )}
+                                    {role === "admin" && (
+                                      <Button
+                                        size='sm'
+                                        variant='destructive'
+                                        onClick={() => {
+                                          setInvoiceToDelete(invoice);
+                                          setDeleteConfirmOpen(true);
+                                        }}
+                                      >
+                                        Delete
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                              {expandedInvoiceId === invoice.id && (
                                 <TableRow>
-                                  <TableHead className='min-w-[120px]'>
-                                    Invoice Number
-                                  </TableHead>
-                                  <TableHead className='min-w-[100px]'>
-                                    Warehouse
-                                  </TableHead>
-                                  <TableHead className='min-w-[100px]'>
-                                    Date
-                                  </TableHead>
-                                  <TableHead className='min-w-[60px]'>
-                                    Items
-                                  </TableHead>
-                                  <TableHead className='min-w-[100px]'>
-                                    Issued By
-                                  </TableHead>
-                                  <TableHead className='min-w-[80px]'>
-                                    Status
-                                  </TableHead>
-                                  <TableHead className='min-w-[120px] text-center'>
-                                    <span className='sr-only'>Actions</span>
-                                  </TableHead>
+                                  <TableCell
+                                    colSpan={7}
+                                    className='bg-muted/30 p-0'
+                                  >
+                                    <div className='p-6'>
+                                      <h4 className='font-semibold mb-2'>
+                                        Invoice Items
+                                      </h4>
+                                      {invoiceItems[invoice.id] &&
+                                      invoiceItems[invoice.id].length > 0 ? (
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>Description</TableHead>
+                                              <TableHead>
+                                                Qty Requested
+                                              </TableHead>
+                                              <TableHead>Qty Issued</TableHead>
+                                              <TableHead>Unit</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {invoiceItems[invoice.id].map(
+                                              (item) => (
+                                                <TableRow key={item.id}>
+                                                  <TableCell>
+                                                    {item.description}
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    {item.quantity_requested}
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    {item.quantity_issued}
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    {item.unit}
+                                                  </TableCell>
+                                                </TableRow>
+                                              )
+                                            )}
+                                          </TableBody>
+                                        </Table>
+                                      ) : (
+                                        <div className='text-muted-foreground'>
+                                          No items found for this invoice.
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
                                 </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {invoices.map((invoice) => (
-                                  <React.Fragment key={invoice.id}>
-                                    <TableRow>
-                                      <TableCell className='font-mono text-sm'>
-                                        {invoice.invoice_number}
-                                      </TableCell>
-                                      <TableCell>{invoice.warehouse}</TableCell>
-                                      <TableCell>
-                                        {new Date(
-                                          invoice.date
-                                        ).toLocaleDateString()}
-                                      </TableCell>
-                                      <TableCell>
-                                        {invoice.total_items}
-                                      </TableCell>
-                                      <TableCell>{invoice.issued_by}</TableCell>
-                                      <TableCell>
-                                        {getStatusBadge(invoice.status)}
-                                      </TableCell>
-                                      <TableCell className='text-center align-middle'>
-                                        <div className='flex gap-1 justify-center items-center min-h-[32px]'>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className='text-center py-8 text-muted-foreground'>
+                  <Package className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                  <p>No invoices found</p>
+                  <p className='text-sm'>
+                    Create your first invoice to get started
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value='stock'>
+          <Card>
+            <CardHeader>
+              <CardTitle>Current Stock Levels</CardTitle>
+              <CardDescription>
+                Real-time inventory status with reorder alerts
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingData ? (
+                <TableSkeleton columns={7} rows={6} />
+              ) : inventoryItems.length > 0 ? (
+                <div className='overflow-x-auto -mx-4 sm:mx-0'>
+                  <div className='inline-block min-w-full align-middle'>
+                    <div className='overflow-hidden'>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className='min-w-[150px]'>
+                              Item Name
+                            </TableHead>
+                            <TableHead className='min-w-[100px]'>
+                              Current Stock
+                            </TableHead>
+                            <TableHead className='min-w-[60px]'>Unit</TableHead>
+                            <TableHead className='min-w-[100px]'>
+                              Reorder Level
+                            </TableHead>
+                            <TableHead className='min-w-[100px]'>
+                              Status
+                            </TableHead>
+                            <TableHead className='min-w-[120px]'>
+                              Last Updated
+                            </TableHead>
+                            <TableHead className='min-w-[80px] text-right'>
+                              Actions
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {inventoryItems.map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell className='font-medium'>
+                                {item.name}
+                              </TableCell>
+                              <TableCell>{item.current_stock}</TableCell>
+                              <TableCell>{item.unit}</TableCell>
+                              <TableCell>{item.reorder_level || 0}</TableCell>
+                              <TableCell>
+                                {getStockStatus(
+                                  item.current_stock,
+                                  item.reorder_level || 0
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {item.last_updated
+                                  ? new Date(
+                                      item.last_updated
+                                    ).toLocaleDateString()
+                                  : "N/A"}
+                              </TableCell>
+                              <TableCell className='text-right'>
+                                {role === "admin" && (
+                                  <Button
+                                    size='icon'
+                                    variant='ghost'
+                                    aria-label='Edit Item'
+                                    className='p-1 h-7 w-7'
+                                    onClick={() => {
+                                      setSelectedItem(item);
+                                      setEditItemModalOpen(true);
+                                    }}
+                                  >
+                                    <Pencil className='h-4 w-4' />
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className='text-center py-8 text-muted-foreground'>
+                  <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                  <p>No inventory items found</p>
+                  <p className='text-sm'>
+                    Add items through invoices to track stock levels
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value='drums'>
+          <Card>
+            <CardHeader>
+              <CardTitle>Drum Tracking</CardTitle>
+              <CardDescription>
+                Cable drum usage and remaining quantities with enhanced tracking
+                logic
+              </CardDescription>
+              <div className='flex items-center gap-2 mt-4'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => setShowInactiveDrums(!showInactiveDrums)}
+                  className='gap-2'
+                >
+                  {showInactiveDrums ? (
+                    <ToggleRight className='h-4 w-4' />
+                  ) : (
+                    <ToggleLeft className='h-4 w-4' />
+                  )}
+                  {showInactiveDrums
+                    ? "Hide Inactive Drums"
+                    : "Show Inactive Drums"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingData ? (
+                <TableSkeleton columns={8} rows={6} />
+              ) : drums.length > 0 ? (
+                <div className='overflow-x-auto -mx-4 sm:mx-0'>
+                  <div className='inline-block min-w-full align-middle'>
+                    <div className='overflow-hidden'>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className='min-w-[120px]'>
+                              Drum Number
+                            </TableHead>
+                            <TableHead className='min-w-[150px]'>
+                              Item
+                            </TableHead>
+                            <TableHead className='min-w-[90px]'>
+                              Initial Qty
+                            </TableHead>
+                            <TableHead className='min-w-[100px]'>
+                              Current Qty
+                            </TableHead>
+                            <TableHead className='min-w-[140px]'>
+                              Usage %
+                            </TableHead>
+                            <TableHead className='min-w-[120px]'>
+                              Received Date
+                            </TableHead>
+                            <TableHead className='min-w-[120px]'>
+                              Status
+                            </TableHead>
+                            <TableHead className='min-w-[150px] text-center'>
+                              Actions
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {drums
+                            .filter(
+                              (drum) =>
+                                showInactiveDrums || drum.status !== "inactive"
+                            )
+                            .map((drum) => {
+                              const displayQuantity =
+                                drum.calculated_current_quantity ?? 0;
+                              const displayStatus =
+                                drum.calculated_status ?? drum.status;
+                              const totalUsed = drum.total_used ?? 0;
+                              const totalWastage = drum.total_wastage ?? 0;
+                              const usagePercentage =
+                                drum.initial_quantity > 0
+                                  ? (
+                                      ((totalUsed + totalWastage) /
+                                        drum.initial_quantity) *
+                                      100
+                                    ).toFixed(1)
+                                  : "0.0";
+
+                              return (
+                                <TableRow key={drum.id}>
+                                  <TableCell className='font-mono'>
+                                    {drum.drum_number}
+                                  </TableCell>
+                                  <TableCell>{drum.item_name || "-"}</TableCell>
+                                  <TableCell>
+                                    {drum.initial_quantity}m
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className='flex flex-col'>
+                                      <span className='text-blue-600 font-medium'>
+                                        {displayQuantity.toFixed(1)}m
+                                      </span>
+                                      <span className='text-xs text-muted-foreground'>
+                                        (Calculated)
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className='flex items-center gap-2'>
+                                      <span>{usagePercentage}%</span>
+                                      <div className='w-16 h-2 bg-gray-200 rounded-full overflow-hidden'>
+                                        <div
+                                          className={`h-full transition-all ${
+                                            Number(usagePercentage) > 80
+                                              ? "bg-red-500"
+                                              : Number(usagePercentage) > 60
+                                              ? "bg-orange-500"
+                                              : "bg-green-500"
+                                          }`}
+                                          style={{
+                                            width: `${Math.min(
+                                              100,
+                                              Number(usagePercentage)
+                                            )}%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                    {drum.usage_count &&
+                                      drum.usage_count > 0 && (
+                                        <div className='text-xs text-muted-foreground mt-1'>
+                                          {drum.usage_count} installation
+                                          {drum.usage_count !== 1 ? "s" : ""}
+                                          {totalWastage > 0 && (
+                                            <>
+                                              <span className='text-orange-600'>
+                                                {" "}
+                                                • {totalWastage.toFixed(1)}m
+                                                waste
+                                              </span>
+                                              {drum.wastage_calculation_method ===
+                                                "manual_override" && (
+                                                <span className='text-blue-600'>
+                                                  {" "}
+                                                  (manual)
+                                                </span>
+                                              )}
+                                              {drum.wastage_calculation_method ===
+                                                "smart_segments" && (
+                                                <span className='text-green-600'>
+                                                  {" "}
+                                                  (smart)
+                                                </span>
+                                              )}
+                                            </>
+                                          )}
+                                          {drum.remaining_cable !== undefined &&
+                                            drum.remaining_cable > 0 && (
+                                              <span className='text-gray-600'>
+                                                {" "}
+                                                •{" "}
+                                                {drum.remaining_cable.toFixed(
+                                                  1
+                                                )}
+                                                m remaining
+                                              </span>
+                                            )}
+                                          {drum.status === "inactive" &&
+                                            drum.remaining_cable &&
+                                            drum.remaining_cable > 0 && (
+                                              <span className='text-red-600'>
+                                                {" "}
+                                                (added to waste)
+                                              </span>
+                                            )}
+                                        </div>
+                                      )}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className='flex flex-col'>
+                                      <span>
+                                        {drum.received_date
+                                          ? new Date(
+                                              drum.received_date
+                                            ).toLocaleDateString()
+                                          : "N/A"}
+                                      </span>
+                                      {drum.last_usage_date && (
+                                        <span className='text-xs text-muted-foreground'>
+                                          Last used:{" "}
+                                          {new Date(
+                                            drum.last_usage_date
+                                          ).toLocaleDateString()}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className='flex flex-col gap-1'>
+                                      {role === "admin" ||
+                                      role === "moderator" ? (
+                                        <Select
+                                          value={displayStatus}
+                                          onValueChange={(value) =>
+                                            updateDrumStatus(
+                                              drum.id,
+                                              value,
+                                              drum.drum_number
+                                            )
+                                          }
+                                        >
+                                          <SelectTrigger className='w-[100px] h-7 text-xs'>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value='active'>
+                                              Active
+                                            </SelectItem>
+                                            <SelectItem value='inactive'>
+                                              Inactive
+                                            </SelectItem>
+                                            <SelectItem value='empty'>
+                                              Empty
+                                            </SelectItem>
+                                            <SelectItem value='maintenance'>
+                                              Maintenance
+                                            </SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        getStatusBadge(displayStatus)
+                                      )}
+                                      {displayStatus !== drum.status && (
+                                        <Badge
+                                          variant='outline'
+                                          className='text-xs'
+                                        >
+                                          DB: {drum.status}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className='text-center align-middle'>
+                                    <div className='flex gap-1 justify-center items-center min-h-[32px]'>
+                                      <Button
+                                        size='icon'
+                                        variant='outline'
+                                        aria-label='View Usage Details'
+                                        className='p-1 h-7 w-7 bg-transparent'
+                                        onClick={() => {
+                                          setSelectedDrumForUsage(drum);
+                                          setDrumUsageModalOpen(true);
+                                        }}
+                                      >
+                                        <Cable className='h-4 w-4' />
+                                      </Button>
+                                      {(role === "admin" ||
+                                        role === "moderator") && (
+                                        <>
                                           <Button
-                                            size='sm'
-                                            variant='outline'
-                                            onClick={async () => {
-                                              if (
-                                                expandedInvoiceId === invoice.id
-                                              ) {
-                                                setExpandedInvoiceId(null);
-                                              } else {
-                                                setExpandedInvoiceId(
-                                                  invoice.id
-                                                );
-                                                await fetchInvoiceItems(
-                                                  invoice.id
-                                                );
-                                              }
+                                            size='icon'
+                                            variant='ghost'
+                                            aria-label='Edit Drum'
+                                            className='p-1 h-7 w-7'
+                                            onClick={() => {
+                                              setSelectedDrum(drum);
+                                              setEditDrumModalOpen(true);
                                             }}
                                           >
-                                            <Eye className='h-4 w-4' />
+                                            <Pencil className='h-4 w-4' />
                                           </Button>
-                                          {(role === "admin" ||
-                                            role === "moderator") && (
+                                          {displayQuantity !==
+                                            drum.current_quantity && (
                                             <Button
-                                              size='sm'
+                                              size='icon'
                                               variant='secondary'
-                                              onClick={async () => {
-                                                if (!invoiceItems[invoice.id]) {
-                                                  await fetchInvoiceItems(
-                                                    invoice.id
-                                                  );
-                                                }
-                                                setSelectedInvoice(invoice);
-                                                setEditInvoiceModalOpen(true);
-                                              }}
+                                              aria-label='Sync Database'
+                                              className='p-1 h-7 w-7'
+                                              onClick={() =>
+                                                syncDrumQuantity(drum)
+                                              }
                                             >
-                                              Edit
+                                              <Package className='h-4 w-4' />
                                             </Button>
                                           )}
-                                          {role === "admin" && (
-                                            <Button
-                                              size='sm'
-                                              variant='destructive'
-                                              onClick={() => {
-                                                setInvoiceToDelete(invoice);
-                                                setDeleteConfirmOpen(true);
-                                              }}
-                                            >
-                                              Delete
-                                            </Button>
-                                          )}
-                                        </div>
-                                      </TableCell>
-                                    </TableRow>
-                                    {expandedInvoiceId === invoice.id && (
-                                      <TableRow>
-                                        <TableCell
-                                          colSpan={7}
-                                          className='bg-muted/30 p-0'
-                                        >
-                                          <div className='p-6'>
-                                            <h4 className='font-semibold mb-2'>
-                                              Invoice Items
-                                            </h4>
-                                            {invoiceItems[invoice.id] &&
-                                            invoiceItems[invoice.id].length >
-                                              0 ? (
-                                              <Table>
-                                                <TableHeader>
-                                                  <TableRow>
-                                                    <TableHead>
-                                                      Description
-                                                    </TableHead>
-                                                    <TableHead>
-                                                      Qty Requested
-                                                    </TableHead>
-                                                    <TableHead>
-                                                      Qty Issued
-                                                    </TableHead>
-                                                    <TableHead>Unit</TableHead>
-                                                  </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                  {invoiceItems[invoice.id].map(
-                                                    (item) => (
-                                                      <TableRow key={item.id}>
-                                                        <TableCell>
-                                                          {item.description}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                          {
-                                                            item.quantity_requested
-                                                          }
-                                                        </TableCell>
-                                                        <TableCell>
-                                                          {item.quantity_issued}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                          {item.unit}
-                                                        </TableCell>
-                                                      </TableRow>
-                                                    )
-                                                  )}
-                                                </TableBody>
-                                              </Table>
-                                            ) : (
-                                              <div className='text-muted-foreground'>
-                                                No items found for this invoice.
-                                              </div>
-                                            )}
-                                          </div>
-                                        </TableCell>
-                                      </TableRow>
-                                    )}
-                                  </React.Fragment>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className='text-center py-8 text-muted-foreground'>
-                        <Package className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                        <p>No invoices found</p>
-                        <p className='text-sm'>
-                          Create your first invoice to get started
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value='stock'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Current Stock Levels</CardTitle>
-                    <CardDescription>
-                      Real-time inventory status with reorder alerts
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {loadingData ? (
-                      <TableSkeleton columns={7} rows={6} />
-                    ) : inventoryItems.length > 0 ? (
-                      <div className='overflow-x-auto -mx-4 sm:mx-0'>
-                        <div className='inline-block min-w-full align-middle'>
-                          <div className='overflow-hidden'>
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className='min-w-[150px]'>
-                                    Item Name
-                                  </TableHead>
-                                  <TableHead className='min-w-[100px]'>
-                                    Current Stock
-                                  </TableHead>
-                                  <TableHead className='min-w-[60px]'>
-                                    Unit
-                                  </TableHead>
-                                  <TableHead className='min-w-[100px]'>
-                                    Reorder Level
-                                  </TableHead>
-                                  <TableHead className='min-w-[100px]'>
-                                    Status
-                                  </TableHead>
-                                  <TableHead className='min-w-[120px]'>
-                                    Last Updated
-                                  </TableHead>
-                                  <TableHead className='min-w-[80px] text-right'>
-                                    Actions
-                                  </TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {inventoryItems.map((item) => (
-                                  <TableRow key={item.id}>
-                                    <TableCell className='font-medium'>
-                                      {item.name}
-                                    </TableCell>
-                                    <TableCell>{item.current_stock}</TableCell>
-                                    <TableCell>{item.unit}</TableCell>
-                                    <TableCell>
-                                      {item.reorder_level || 0}
-                                    </TableCell>
-                                    <TableCell>
-                                      {getStockStatus(
-                                        item.current_stock,
-                                        item.reorder_level || 0
+                                        </>
                                       )}
-                                    </TableCell>
-                                    <TableCell>
-                                      {item.last_updated
-                                        ? new Date(
-                                            item.last_updated
-                                          ).toLocaleDateString()
-                                        : "N/A"}
-                                    </TableCell>
-                                    <TableCell className='text-right'>
                                       {role === "admin" && (
                                         <Button
                                           size='icon'
                                           variant='ghost'
-                                          aria-label='Edit Item'
+                                          aria-label='Delete Drum'
                                           className='p-1 h-7 w-7'
                                           onClick={() => {
-                                            setSelectedItem(item);
-                                            setEditItemModalOpen(true);
-                                          }}
-                                        >
-                                          <Pencil className='h-4 w-4' />
-                                        </Button>
-                                      )}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className='text-center py-8 text-muted-foreground'>
-                        <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                        <p>No inventory items found</p>
-                        <p className='text-sm'>
-                          Add items through invoices to track stock levels
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value='drums'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Drum Tracking</CardTitle>
-                    <CardDescription>
-                      Cable drum usage and remaining quantities with enhanced
-                      tracking logic
-                    </CardDescription>
-                    <div className='flex items-center gap-2 mt-4'>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        onClick={() => setShowInactiveDrums(!showInactiveDrums)}
-                        className='gap-2'
-                      >
-                        {showInactiveDrums ? (
-                          <ToggleRight className='h-4 w-4' />
-                        ) : (
-                          <ToggleLeft className='h-4 w-4' />
-                        )}
-                        {showInactiveDrums
-                          ? "Hide Inactive Drums"
-                          : "Show Inactive Drums"}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {loadingData ? (
-                      <TableSkeleton columns={8} rows={6} />
-                    ) : drums.length > 0 ? (
-                      <div className='overflow-x-auto -mx-4 sm:mx-0'>
-                        <div className='inline-block min-w-full align-middle'>
-                          <div className='overflow-hidden'>
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className='min-w-[120px]'>
-                                    Drum Number
-                                  </TableHead>
-                                  <TableHead className='min-w-[150px]'>
-                                    Item
-                                  </TableHead>
-                                  <TableHead className='min-w-[90px]'>
-                                    Initial Qty
-                                  </TableHead>
-                                  <TableHead className='min-w-[100px]'>
-                                    Current Qty
-                                  </TableHead>
-                                  <TableHead className='min-w-[140px]'>
-                                    Usage %
-                                  </TableHead>
-                                  <TableHead className='min-w-[120px]'>
-                                    Received Date
-                                  </TableHead>
-                                  <TableHead className='min-w-[120px]'>
-                                    Status
-                                  </TableHead>
-                                  <TableHead className='min-w-[150px] text-center'>
-                                    Actions
-                                  </TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {drums
-                                  .filter(
-                                    (drum) =>
-                                      showInactiveDrums ||
-                                      drum.status !== "inactive"
-                                  )
-                                  .map((drum) => {
-                                    const displayQuantity =
-                                      drum.calculated_current_quantity ?? 0;
-                                    const displayStatus =
-                                      drum.calculated_status ?? drum.status;
-                                    const totalUsed = drum.total_used ?? 0;
-                                    const totalWastage =
-                                      drum.total_wastage ?? 0;
-                                    const usagePercentage =
-                                      drum.initial_quantity > 0
-                                        ? (
-                                            ((totalUsed + totalWastage) /
-                                              drum.initial_quantity) *
-                                            100
-                                          ).toFixed(1)
-                                        : "0.0";
-
-                                    return (
-                                      <TableRow key={drum.id}>
-                                        <TableCell className='font-mono'>
-                                          {drum.drum_number}
-                                        </TableCell>
-                                        <TableCell>
-                                          {drum.item_name || "-"}
-                                        </TableCell>
-                                        <TableCell>
-                                          {drum.initial_quantity}m
-                                        </TableCell>
-                                        <TableCell>
-                                          <div className='flex flex-col'>
-                                            <span className='text-blue-600 font-medium'>
-                                              {displayQuantity.toFixed(1)}m
-                                            </span>
-                                            <span className='text-xs text-muted-foreground'>
-                                              (Calculated)
-                                            </span>
-                                          </div>
-                                        </TableCell>
-                                        <TableCell>
-                                          <div className='flex items-center gap-2'>
-                                            <span>{usagePercentage}%</span>
-                                            <div className='w-16 h-2 bg-gray-200 rounded-full overflow-hidden'>
-                                              <div
-                                                className={`h-full transition-all ${
-                                                  Number(usagePercentage) > 80
-                                                    ? "bg-red-500"
-                                                    : Number(usagePercentage) >
-                                                      60
-                                                    ? "bg-orange-500"
-                                                    : "bg-green-500"
-                                                }`}
-                                                style={{
-                                                  width: `${Math.min(
-                                                    100,
-                                                    Number(usagePercentage)
-                                                  )}%`,
-                                                }}
-                                              />
-                                            </div>
-                                          </div>
-                                          {drum.usage_count &&
-                                            drum.usage_count > 0 && (
-                                              <div className='text-xs text-muted-foreground mt-1'>
-                                                {drum.usage_count} installation
-                                                {drum.usage_count !== 1
-                                                  ? "s"
-                                                  : ""}
-                                                {totalWastage > 0 && (
-                                                  <>
-                                                    <span className='text-orange-600'>
-                                                      {" "}
-                                                      •{" "}
-                                                      {totalWastage.toFixed(1)}m
-                                                      waste
-                                                    </span>
-                                                    {drum.wastage_calculation_method ===
-                                                      "manual_override" && (
-                                                      <span className='text-blue-600'>
-                                                        {" "}
-                                                        (manual)
-                                                      </span>
-                                                    )}
-                                                    {drum.wastage_calculation_method ===
-                                                      "smart_segments" && (
-                                                      <span className='text-green-600'>
-                                                        {" "}
-                                                        (smart)
-                                                      </span>
-                                                    )}
-                                                  </>
-                                                )}
-                                                {drum.remaining_cable !==
-                                                  undefined &&
-                                                  drum.remaining_cable > 0 && (
-                                                    <span className='text-gray-600'>
-                                                      {" "}
-                                                      •{" "}
-                                                      {drum.remaining_cable.toFixed(
-                                                        1
-                                                      )}
-                                                      m remaining
-                                                    </span>
-                                                  )}
-                                                {drum.status === "inactive" &&
-                                                  drum.remaining_cable &&
-                                                  drum.remaining_cable > 0 && (
-                                                    <span className='text-red-600'>
-                                                      {" "}
-                                                      (added to waste)
-                                                    </span>
-                                                  )}
-                                              </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                          <div className='flex flex-col'>
-                                            <span>
-                                              {drum.received_date
-                                                ? new Date(
-                                                    drum.received_date
-                                                  ).toLocaleDateString()
-                                                : "N/A"}
-                                            </span>
-                                            {drum.last_usage_date && (
-                                              <span className='text-xs text-muted-foreground'>
-                                                Last used:{" "}
-                                                {new Date(
-                                                  drum.last_usage_date
-                                                ).toLocaleDateString()}
-                                              </span>
-                                            )}
-                                          </div>
-                                        </TableCell>
-                                        <TableCell>
-                                          <div className='flex flex-col gap-1'>
-                                            {role === "admin" ||
-                                            role === "moderator" ? (
-                                              <Select
-                                                value={displayStatus}
-                                                onValueChange={(value) =>
-                                                  updateDrumStatus(
-                                                    drum.id,
-                                                    value,
-                                                    drum.drum_number
-                                                  )
-                                                }
-                                              >
-                                                <SelectTrigger className='w-[100px] h-7 text-xs'>
-                                                  <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                  <SelectItem value='active'>
-                                                    Active
-                                                  </SelectItem>
-                                                  <SelectItem value='inactive'>
-                                                    Inactive
-                                                  </SelectItem>
-                                                  <SelectItem value='empty'>
-                                                    Empty
-                                                  </SelectItem>
-                                                  <SelectItem value='maintenance'>
-                                                    Maintenance
-                                                  </SelectItem>
-                                                </SelectContent>
-                                              </Select>
-                                            ) : (
-                                              getStatusBadge(displayStatus)
-                                            )}
-                                            {displayStatus !== drum.status && (
-                                              <Badge
-                                                variant='outline'
-                                                className='text-xs'
-                                              >
-                                                DB: {drum.status}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                        </TableCell>
-                                        <TableCell className='text-center align-middle'>
-                                          <div className='flex gap-1 justify-center items-center min-h-[32px]'>
-                                            <Button
-                                              size='icon'
-                                              variant='outline'
-                                              aria-label='View Usage Details'
-                                              className='p-1 h-7 w-7 bg-transparent'
-                                              onClick={() => {
-                                                setSelectedDrumForUsage(drum);
-                                                setDrumUsageModalOpen(true);
-                                              }}
-                                            >
-                                              <Cable className='h-4 w-4' />
-                                            </Button>
-                                            {(role === "admin" ||
-                                              role === "moderator") && (
-                                              <>
-                                                <Button
-                                                  size='icon'
-                                                  variant='ghost'
-                                                  aria-label='Edit Drum'
-                                                  className='p-1 h-7 w-7'
-                                                  onClick={() => {
-                                                    setSelectedDrum(drum);
-                                                    setEditDrumModalOpen(true);
-                                                  }}
-                                                >
-                                                  <Pencil className='h-4 w-4' />
-                                                </Button>
-                                                {displayQuantity !==
-                                                  drum.current_quantity && (
-                                                  <Button
-                                                    size='icon'
-                                                    variant='secondary'
-                                                    aria-label='Sync Database'
-                                                    className='p-1 h-7 w-7'
-                                                    onClick={() =>
-                                                      syncDrumQuantity(drum)
-                                                    }
-                                                  >
-                                                    <Package className='h-4 w-4' />
-                                                  </Button>
-                                                )}
-                                              </>
-                                            )}
-                                            {role === "admin" && (
-                                              <Button
-                                                size='icon'
-                                                variant='ghost'
-                                                aria-label='Delete Drum'
-                                                className='p-1 h-7 w-7'
-                                                onClick={() => {
-                                                  setDrumToDelete(drum);
-                                                  setDeleteDrumConfirmOpen(
-                                                    true
-                                                  );
-                                                }}
-                                              >
-                                                <Trash className='h-4 w-4 text-red-500' />
-                                              </Button>
-                                            )}
-                                          </div>
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className='text-center py-8 text-muted-foreground'>
-                        <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                        <p>No drums found</p>
-                        <p className='text-sm'>
-                          Add cable drums through invoices to track usage
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value='waste'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Waste Reports</CardTitle>
-                    <CardDescription>
-                      Track reported waste and reasons
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {loadingData ? (
-                      <TableSkeleton columns={role === "admin" ? 6 : 5} rows={6} />
-                    ) : wasteReports.length > 0 ? (
-                      <div className='overflow-x-auto -mx-4 sm:mx-0'>
-                        <div className='inline-block min-w-full align-middle'>
-                          <div className='overflow-hidden'>
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className='min-w-[150px]'>
-                                    Item
-                                  </TableHead>
-                                  <TableHead className='min-w-[80px]'>
-                                    Quantity
-                                  </TableHead>
-                                  <TableHead className='min-w-[200px]'>
-                                    Reason
-                                  </TableHead>
-                                  <TableHead className='min-w-[100px]'>
-                                    Date
-                                  </TableHead>
-                                  <TableHead className='min-w-[120px]'>
-                                    Reported By
-                                  </TableHead>
-                                  {role === "admin" && (
-                                    <TableHead className='min-w-[80px] text-center'>
-                                      Actions
-                                    </TableHead>
-                                  )}
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {wasteReports.map((waste) => (
-                                  <TableRow key={waste.id}>
-                                    <TableCell>
-                                      {waste.item_name || "-"}
-                                    </TableCell>
-                                    <TableCell>{waste.quantity}</TableCell>
-                                    <TableCell>{waste.waste_reason}</TableCell>
-                                    <TableCell>
-                                      {waste.waste_date
-                                        ? new Date(
-                                            waste.waste_date
-                                          ).toLocaleDateString()
-                                        : "N/A"}
-                                    </TableCell>
-                                    <TableCell>{waste.full_name}</TableCell>
-                                    {role === "admin" && (
-                                      <TableCell className='text-center'>
-                                        <Button
-                                          size='icon'
-                                          variant='ghost'
-                                          aria-label='Delete Waste'
-                                          className='p-1 h-7 w-7'
-                                          onClick={() => {
-                                            setWasteToDelete(waste);
-                                            setDeleteWasteConfirmOpen(true);
+                                            setDrumToDelete(drum);
+                                            setDeleteDrumConfirmOpen(true);
                                           }}
                                         >
                                           <Trash className='h-4 w-4 text-red-500' />
                                         </Button>
-                                      </TableCell>
-                                    )}
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className='text-center py-8 text-muted-foreground'>
-                        <TrendingDown className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                        <p>No waste reports found</p>
-                        <p className='text-sm'>
-                          Record waste to track inventory loss
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </main>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className='text-center py-8 text-muted-foreground'>
+                  <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                  <p>No drums found</p>
+                  <p className='text-sm'>
+                    Add cable drums through invoices to track usage
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        {/* Modals */}
-        <AddInventoryInvoiceModal
-          open={addInvoiceModalOpen}
-          onOpenChange={setAddInvoiceModalOpen}
-          onSuccess={handleSuccess}
-        />
-        <EditInventoryInvoiceModal
-          open={editInvoiceModalOpen}
-          invoice={selectedInvoice}
-          invoiceItems={
-            selectedInvoice ? invoiceItems[selectedInvoice.id] || [] : []
-          }
-          onClose={() => setEditInvoiceModalOpen(false)}
-          onSuccess={handleSuccess}
-          supabase={supabase}
-          addNotification={addNotification}
-        />
-        <AddWasteModal
-          open={addWasteModalOpen}
-          onOpenChange={setAddWasteModalOpen}
-          onSuccess={handleSuccess}
-        />
-        <ManageInventoryItemsModal
-          open={manageItemsModalOpen}
-          onOpenChange={setManageItemsModalOpen}
-          userRole={role ?? ""}
-        />
-        <EditDrumModal
-          open={editDrumModalOpen}
-          drum={selectedDrum}
-          onClose={() => {
-            setEditDrumModalOpen(false);
-            setSelectedDrum(null);
-          }}
-          onSuccess={handleSuccess}
-          supabase={supabase}
-          addNotification={addNotification}
-        />
-        <EditInventoryItemModal
-          open={editItemModalOpen}
-          onOpenChange={setEditItemModalOpen}
-          item={selectedItem}
-          onSuccess={handleSuccess}
-        />
-        <DrumUsageDetailsModal
-          open={drumUsageModalOpen}
-          onOpenChange={setDrumUsageModalOpen}
-          drumId={selectedDrumForUsage?.id || null}
-          drumNumber={selectedDrumForUsage?.drum_number || ""}
-          onWastageUpdate={fetchDrums}
-        />
+        <TabsContent value='waste'>
+          <Card>
+            <CardHeader>
+              <CardTitle>Waste Reports</CardTitle>
+              <CardDescription>
+                Track reported waste and reasons
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingData ? (
+                <TableSkeleton columns={role === "admin" ? 6 : 5} rows={6} />
+              ) : wasteReports.length > 0 ? (
+                <div className='overflow-x-auto -mx-4 sm:mx-0'>
+                  <div className='inline-block min-w-full align-middle'>
+                    <div className='overflow-hidden'>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className='min-w-[150px]'>
+                              Item
+                            </TableHead>
+                            <TableHead className='min-w-[80px]'>
+                              Quantity
+                            </TableHead>
+                            <TableHead className='min-w-[200px]'>
+                              Reason
+                            </TableHead>
+                            <TableHead className='min-w-[100px]'>
+                              Date
+                            </TableHead>
+                            <TableHead className='min-w-[120px]'>
+                              Reported By
+                            </TableHead>
+                            {role === "admin" && (
+                              <TableHead className='min-w-[80px] text-center'>
+                                Actions
+                              </TableHead>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {wasteReports.map((waste) => (
+                            <TableRow key={waste.id}>
+                              <TableCell>{waste.item_name || "-"}</TableCell>
+                              <TableCell>{waste.quantity}</TableCell>
+                              <TableCell>{waste.waste_reason}</TableCell>
+                              <TableCell>
+                                {waste.waste_date
+                                  ? new Date(
+                                      waste.waste_date
+                                    ).toLocaleDateString()
+                                  : "N/A"}
+                              </TableCell>
+                              <TableCell>{waste.full_name}</TableCell>
+                              {role === "admin" && (
+                                <TableCell className='text-center'>
+                                  <Button
+                                    size='icon'
+                                    variant='ghost'
+                                    aria-label='Delete Waste'
+                                    className='p-1 h-7 w-7'
+                                    onClick={() => {
+                                      setWasteToDelete(waste);
+                                      setDeleteWasteConfirmOpen(true);
+                                    }}
+                                  >
+                                    <Trash className='h-4 w-4 text-red-500' />
+                                  </Button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className='text-center py-8 text-muted-foreground'>
+                  <TrendingDown className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                  <p>No waste reports found</p>
+                  <p className='text-sm'>
+                    Record waste to track inventory loss
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-        {/* Delete Confirmation Dialogs */}
-        <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete Invoice</DialogTitle>
-            </DialogHeader>
-            <p>Are you sure you want to delete this invoice?</p>
-            <DialogFooter>
-              <Button
-                variant='secondary'
-                onClick={() => setDeleteConfirmOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant='destructive'
-                onClick={async () => {
-                  if (invoiceToDelete) {
-                    try {
-                      const { error } = await supabase
-                        .from("inventory_invoices")
-                        .delete()
-                        .eq("id", invoiceToDelete.id);
-                      if (error) throw error;
-                      addNotification({
-                        title: "Invoice Deleted",
-                        message: `Invoice #${invoiceToDelete.invoice_number} deleted successfully`,
-                        type: "success",
-                        category: "system",
-                      });
-                      setDeleteConfirmOpen(false);
-                      setInvoiceToDelete(null);
-                      handleSuccess();
-                    } catch (error) {
-                      addNotification({
-                        title: "Error",
-                        message: "Failed to delete invoice",
-                        type: "error",
-                        category: "system",
-                      });
-                    }
+      {/* Modals */}
+      <AddInventoryInvoiceModal
+        open={addInvoiceModalOpen}
+        onOpenChange={setAddInvoiceModalOpen}
+        onSuccess={handleSuccess}
+      />
+      <EditInventoryInvoiceModal
+        open={editInvoiceModalOpen}
+        invoice={selectedInvoice}
+        invoiceItems={
+          selectedInvoice ? invoiceItems[selectedInvoice.id] || [] : []
+        }
+        onClose={() => setEditInvoiceModalOpen(false)}
+        onSuccess={handleSuccess}
+        supabase={supabase}
+        addNotification={addNotification}
+      />
+      <AddWasteModal
+        open={addWasteModalOpen}
+        onOpenChange={setAddWasteModalOpen}
+        onSuccess={handleSuccess}
+      />
+      <ManageInventoryItemsModal
+        open={manageItemsModalOpen}
+        onOpenChange={setManageItemsModalOpen}
+        userRole={role ?? ""}
+      />
+      <EditDrumModal
+        open={editDrumModalOpen}
+        drum={selectedDrum}
+        onClose={() => {
+          setEditDrumModalOpen(false);
+          setSelectedDrum(null);
+        }}
+        onSuccess={handleSuccess}
+        supabase={supabase}
+        addNotification={addNotification}
+      />
+      <EditInventoryItemModal
+        open={editItemModalOpen}
+        onOpenChange={setEditItemModalOpen}
+        item={selectedItem}
+        onSuccess={handleSuccess}
+      />
+      <DrumUsageDetailsModal
+        open={drumUsageModalOpen}
+        onOpenChange={setDrumUsageModalOpen}
+        drumId={selectedDrumForUsage?.id || null}
+        drumNumber={selectedDrumForUsage?.drum_number || ""}
+        onWastageUpdate={fetchDrums}
+      />
+
+      {/* Delete Confirmation Dialogs */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Invoice</DialogTitle>
+          </DialogHeader>
+          <p>Are you sure you want to delete this invoice?</p>
+          <DialogFooter>
+            <Button
+              variant='secondary'
+              onClick={() => setDeleteConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant='destructive'
+              onClick={async () => {
+                if (invoiceToDelete) {
+                  try {
+                    const { error } = await supabase
+                      .from("inventory_invoices")
+                      .delete()
+                      .eq("id", invoiceToDelete.id);
+                    if (error) throw error;
+                    addNotification({
+                      title: "Invoice Deleted",
+                      message: `Invoice #${invoiceToDelete.invoice_number} deleted successfully`,
+                      type: "success",
+                      category: "system",
+                    });
+                    setDeleteConfirmOpen(false);
+                    setInvoiceToDelete(null);
+                    handleSuccess();
+                  } catch (error) {
+                    addNotification({
+                      title: "Error",
+                      message: "Failed to delete invoice",
+                      type: "error",
+                      category: "system",
+                    });
                   }
-                }}
-              >
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                }
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <Dialog
-          open={deleteDrumConfirmOpen}
-          onOpenChange={setDeleteDrumConfirmOpen}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete Drum</DialogTitle>
-            </DialogHeader>
-            <p>Are you sure you want to delete this drum?</p>
-            <DialogFooter>
-              <Button
-                variant='secondary'
-                onClick={() => setDeleteDrumConfirmOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant='destructive'
-                onClick={async () => {
-                  if (drumToDelete) {
-                    try {
-                      const { error } = await supabase
-                        .from("drum_tracking")
-                        .delete()
-                        .eq("id", drumToDelete.id);
-                      if (error) throw error;
-                      addNotification({
-                        title: "Drum Deleted",
-                        message: `Drum #${drumToDelete.drum_number} deleted successfully`,
-                        type: "success",
-                        category: "system",
-                      });
-                      setDeleteDrumConfirmOpen(false);
-                      setDrumToDelete(null);
-                      handleSuccess();
-                    } catch (error) {
-                      addNotification({
-                        title: "Error",
-                        message: "Failed to delete drum",
-                        type: "error",
-                        category: "system",
-                      });
-                    }
+      <Dialog
+        open={deleteDrumConfirmOpen}
+        onOpenChange={setDeleteDrumConfirmOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Drum</DialogTitle>
+          </DialogHeader>
+          <p>Are you sure you want to delete this drum?</p>
+          <DialogFooter>
+            <Button
+              variant='secondary'
+              onClick={() => setDeleteDrumConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant='destructive'
+              onClick={async () => {
+                if (drumToDelete) {
+                  try {
+                    const { error } = await supabase
+                      .from("drum_tracking")
+                      .delete()
+                      .eq("id", drumToDelete.id);
+                    if (error) throw error;
+                    addNotification({
+                      title: "Drum Deleted",
+                      message: `Drum #${drumToDelete.drum_number} deleted successfully`,
+                      type: "success",
+                      category: "system",
+                    });
+                    setDeleteDrumConfirmOpen(false);
+                    setDrumToDelete(null);
+                    handleSuccess();
+                  } catch (error) {
+                    addNotification({
+                      title: "Error",
+                      message: "Failed to delete drum",
+                      type: "error",
+                      category: "system",
+                    });
                   }
-                }}
-              >
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                }
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <Dialog
-          open={deleteWasteConfirmOpen}
-          onOpenChange={setDeleteWasteConfirmOpen}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete Waste Record</DialogTitle>
-            </DialogHeader>
-            <p>Are you sure you want to delete this waste record?</p>
-            <DialogFooter>
-              <Button
-                variant='secondary'
-                onClick={() => setDeleteWasteConfirmOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant='destructive'
-                onClick={async () => {
-                  if (wasteToDelete) {
-                    try {
-                      const { error: deleteError } = await supabase
-                        .from("waste_tracking")
-                        .delete()
-                        .eq("id", wasteToDelete.id);
-                      if (deleteError) throw deleteError;
-                      const { data: itemData, error: fetchError } =
-                        await supabase
-                          .from("inventory_items")
-                          .select("current_stock")
-                          .eq("id", wasteToDelete.item_id)
-                          .single();
-                      if (fetchError) throw fetchError;
-                      const currentStock =
-                        typeof itemData?.current_stock === "number"
-                          ? itemData.current_stock
-                          : 0;
-                      const newStock = currentStock + wasteToDelete.quantity;
-                      const { error: updateError } = await supabase
-                        .from("inventory_items")
-                        .update({ current_stock: newStock })
-                        .eq("id", wasteToDelete.item_id);
-                      if (updateError) throw updateError;
-                      addNotification({
-                        title: "Waste Record Deleted",
-                        message: `Waste record deleted and stock restored for ${
-                          wasteToDelete.item_name || "item"
-                        }`,
-                        type: "success",
-                        category: "system",
-                      });
-                      setDeleteWasteConfirmOpen(false);
-                      setWasteToDelete(null);
-                      handleSuccess();
-                    } catch (error) {
-                      addNotification({
-                        title: "Error",
-                        message:
-                          "Failed to delete waste record or restore stock",
-                        type: "error",
-                        category: "system",
-                      });
-                    }
+      <Dialog
+        open={deleteWasteConfirmOpen}
+        onOpenChange={setDeleteWasteConfirmOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Waste Record</DialogTitle>
+          </DialogHeader>
+          <p>Are you sure you want to delete this waste record?</p>
+          <DialogFooter>
+            <Button
+              variant='secondary'
+              onClick={() => setDeleteWasteConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant='destructive'
+              onClick={async () => {
+                if (wasteToDelete) {
+                  try {
+                    const { error: deleteError } = await supabase
+                      .from("waste_tracking")
+                      .delete()
+                      .eq("id", wasteToDelete.id);
+                    if (deleteError) throw deleteError;
+                    const { data: itemData, error: fetchError } = await supabase
+                      .from("inventory_items")
+                      .select("current_stock")
+                      .eq("id", wasteToDelete.item_id)
+                      .single();
+                    if (fetchError) throw fetchError;
+                    const currentStock =
+                      typeof itemData?.current_stock === "number"
+                        ? itemData.current_stock
+                        : 0;
+                    const newStock = currentStock + wasteToDelete.quantity;
+                    const { error: updateError } = await supabase
+                      .from("inventory_items")
+                      .update({ current_stock: newStock })
+                      .eq("id", wasteToDelete.item_id);
+                    if (updateError) throw updateError;
+                    addNotification({
+                      title: "Waste Record Deleted",
+                      message: `Waste record deleted and stock restored for ${
+                        wasteToDelete.item_name || "item"
+                      }`,
+                      type: "success",
+                      category: "system",
+                    });
+                    setDeleteWasteConfirmOpen(false);
+                    setWasteToDelete(null);
+                    handleSuccess();
+                  } catch (error) {
+                    addNotification({
+                      title: "Error",
+                      message: "Failed to delete waste record or restore stock",
+                      type: "error",
+                      category: "system",
+                    });
                   }
-                }}
-              >
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-      <MobileBottomNav />
-    </SidebarProvider>
+                }
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

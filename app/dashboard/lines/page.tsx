@@ -22,9 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Header } from "@/components/layout/header";
 import { LineDetailsTable } from "@/components/tables/enhanced-line-details-table";
 import { AssigneeManagementModal } from "@/components/modals/assignee-management-modal";
 import { useAuth } from "@/contexts/auth-context";
@@ -106,7 +103,7 @@ export default function LineDetailsPage() {
         title: "Error",
         message: `Failed to fetch line statistics: ${error.message}`,
         type: "error",
-        category:"line_added"
+        category: "line_added",
       });
     } finally {
       setIsRefreshing(false);
@@ -152,176 +149,155 @@ export default function LineDetailsPage() {
   );
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <Header />
+    <div className='space-y-6'>
+      {/* Page Header */}
+      <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
+        <div>
+          <h1 className='text-2xl sm:text-3xl font-bold'>Line Details</h1>
+          <p className='text-muted-foreground'>
+            Manage telecom line installations and track progress
+          </p>
+        </div>
+        <div className='flex flex-col sm:flex-row gap-2 w-full sm:w-auto'>
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={fetchLineStats}
+            disabled={isRefreshing}
+            className='w-full sm:w-auto'
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+          <Select
+            value={selectedMonth.toString()}
+            onValueChange={(value) => setSelectedMonth(Number.parseInt(value))}
+          >
+            <SelectTrigger className='w-full sm:w-[140px]'>
+              <SelectValue placeholder='Month' />
+            </SelectTrigger>
+            <SelectContent>
+              {months.map((month) => (
+                <SelectItem key={month.value} value={month.value.toString()}>
+                  {month.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={selectedYear.toString()}
+            onValueChange={(value) => setSelectedYear(Number.parseInt(value))}
+          >
+            <SelectTrigger className='w-full sm:w-[100px]'>
+              <SelectValue placeholder='Year' />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map((year) => (
+                <SelectItem key={year} value={year.toString()}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-        <main className='flex-1 space-y-6 p-6'>
-          {/* Page Header */}
-          <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
-            <div>
-              <h1 className='text-3xl font-bold'>Line Details</h1>
-              <p className='text-muted-foreground'>
-                Manage telecom line installations and track progress
-              </p>
+      {/* Stats Cards */}
+      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+        <Card>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Total Lines</CardTitle>
+            <Calendar className='h-4 w-4 text-muted-foreground' />
+          </CardHeader>
+          <CardContent>
+            <div className='text-2xl font-bold'>{lineStats.total}</div>
+            <p className='text-xs text-muted-foreground'>
+              {months.find((m) => m.value === selectedMonth)?.label}{" "}
+              {selectedYear}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Completed</CardTitle>
+            <CheckCircle className='h-4 w-4 text-green-600' />
+          </CardHeader>
+          <CardContent>
+            <div className='text-2xl font-bold text-green-600'>
+              {lineStats.completed}
             </div>
-            <div className='flex gap-2'>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={fetchLineStats}
-                disabled={isRefreshing}
-              >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${
-                    isRefreshing ? "animate-spin" : ""
-                  }`}
-                />
-                Refresh
-              </Button>
-              <Select
-                value={selectedMonth.toString()}
-                onValueChange={(value) =>
-                  setSelectedMonth(Number.parseInt(value))
-                }
-              >
-                <SelectTrigger className='w-[140px]'>
-                  <SelectValue placeholder='Month' />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map((month) => (
-                    <SelectItem
-                      key={month.value}
-                      value={month.value.toString()}
-                    >
-                      {month.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={selectedYear.toString()}
-                onValueChange={(value) =>
-                  setSelectedYear(Number.parseInt(value))
-                }
-              >
-                <SelectTrigger className='w-[100px]'>
-                  <SelectValue placeholder='Year' />
-                </SelectTrigger>
-                <SelectContent>
-                  {years.map((year) => (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <p className='text-xs text-muted-foreground'>
+              {lineStats.total > 0
+                ? Math.round((lineStats.completed / lineStats.total) * 100)
+                : 0}
+              % completion rate
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>In Progress</CardTitle>
+            <Clock className='h-4 w-4 text-blue-600' />
+          </CardHeader>
+          <CardContent>
+            <div className='text-2xl font-bold text-blue-600'>
+              {lineStats.inProgress}
             </div>
-          </div>
+            <p className='text-xs text-muted-foreground'>
+              Currently being worked on
+            </p>
+          </CardContent>
+        </Card>
 
-          {/* Stats Cards */}
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Total Lines
-                </CardTitle>
-                <Calendar className='h-4 w-4 text-muted-foreground' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold'>{lineStats.total}</div>
-                <p className='text-xs text-muted-foreground'>
-                  {months.find((m) => m.value === selectedMonth)?.label}{" "}
-                  {selectedYear}
-                </p>
-              </CardContent>
-            </Card>
+        <Card>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Pending</CardTitle>
+            <AlertCircle className='h-4 w-4 text-orange-600' />
+          </CardHeader>
+          <CardContent>
+            <div className='text-2xl font-bold text-orange-600'>
+              {lineStats.pending}
+            </div>
+            <p className='text-xs text-muted-foreground'>Awaiting assignment</p>
+          </CardContent>
+        </Card>
+      </div>
 
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>Completed</CardTitle>
-                <CheckCircle className='h-4 w-4 text-green-600' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold text-green-600'>
-                  {lineStats.completed}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  {lineStats.total > 0
-                    ? Math.round((lineStats.completed / lineStats.total) * 100)
-                    : 0}
-                  % completion rate
-                </p>
-              </CardContent>
-            </Card>
+      {/* Line Details Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Line Details</CardTitle>
+          <CardDescription>
+            Detailed view of all telecom lines for{" "}
+            {months.find((m) => m.value === selectedMonth)?.label}{" "}
+            {selectedYear}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LineDetailsTable
+            selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
+            refreshTrigger={refreshTrigger}
+            onAssigneeManage={(lineId) => {
+              setSelectedLineId(lineId);
+              setAssigneeModalOpen(true);
+            }}
+            onRefresh={() => setRefreshTrigger((prev) => prev + 1)}
+          />
+        </CardContent>
+      </Card>
 
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  In Progress
-                </CardTitle>
-                <Clock className='h-4 w-4 text-blue-600' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold text-blue-600'>
-                  {lineStats.inProgress}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  Currently being worked on
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>Pending</CardTitle>
-                <AlertCircle className='h-4 w-4 text-orange-600' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold text-orange-600'>
-                  {lineStats.pending}
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  Awaiting assignment
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Line Details Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Line Details</CardTitle>
-              <CardDescription>
-                Detailed view of all telecom lines for{" "}
-                {months.find((m) => m.value === selectedMonth)?.label}{" "}
-                {selectedYear}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <LineDetailsTable
-                selectedMonth={selectedMonth}
-                selectedYear={selectedYear}
-                refreshTrigger={refreshTrigger}
-                onAssigneeManage={(lineId) => {
-                  setSelectedLineId(lineId);
-                  setAssigneeModalOpen(true);
-                }}
-                onRefresh={() => setRefreshTrigger((prev) => prev + 1)}
-              />
-            </CardContent>
-          </Card>
-        </main>
-
-        {/* Assignee Management Modal */}
-        <AssigneeManagementModal
-          open={assigneeModalOpen}
-          onOpenChange={setAssigneeModalOpen}
-          lineId={selectedLineId}
-          onSuccess={handleAssigneeSuccess}
-        />
-      </SidebarInset>
-    </SidebarProvider>
+      {/* Assignee Management Modal */}
+      <AssigneeManagementModal
+        open={assigneeModalOpen}
+        onOpenChange={setAssigneeModalOpen}
+        lineId={selectedLineId}
+        onSuccess={handleAssigneeSuccess}
+      />
+    </div>
   );
 }

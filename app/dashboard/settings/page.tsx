@@ -1,10 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Header } from "@/components/layout/header";
-import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { useAuth } from "@/contexts/auth-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -360,84 +356,70 @@ export default function SettingsPage() {
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <div className='flex-1 flex flex-col min-h-screen w-full'>
-        <Header />
-
-        <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-6 overflow-x-hidden'>
-          {loading ? (
-            <PageSkeleton />
-          ) : (
-          <div className='w-full max-w-7xl mx-auto space-y-6'>
-            <div className='flex flex-col sm:flex-row items-start sm:items-center gap-4'>
-              <SettingsIcon className='h-8 w-8' />
-              <div>
-                <h1 className='text-3xl font-bold'>Settings</h1>
-                <p className='text-muted-foreground'>
-                  Manage your account and application preferences
-                </p>
-              </div>
+    <div className='space-y-6'>
+      {loading ? (
+        <PageSkeleton />
+      ) : (
+        <div className='space-y-6'>
+          <div className='flex flex-col sm:flex-row items-start sm:items-center gap-4'>
+            <SettingsIcon className='h-8 w-8' />
+            <div>
+              <h1 className='text-3xl font-bold'>Settings</h1>
+              <p className='text-muted-foreground'>
+                Manage your account and application preferences
+              </p>
             </div>
+          </div>
 
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className='space-y-6'
-            >
-              <TabsList className='grid w-full grid-cols-6'>
-                <TabsTrigger
-                  value='profile'
-                  className='flex items-center gap-2'
-                >
-                  <User className='h-4 w-4' />
-                  Profile
-                </TabsTrigger>
-                <TabsTrigger
-                  value='company'
-                  className='flex items-center gap-2'
-                >
-                  <Building className='h-4 w-4' />
-                  Company
-                </TabsTrigger>
-                <TabsTrigger
-                  value='notifications'
-                  className='flex items-center gap-2'
-                >
-                  <Bell className='h-4 w-4' />
-                  Notifications
-                </TabsTrigger>
-                <TabsTrigger
-                  value='security'
-                  className='flex items-center gap-2'
-                >
-                  <Shield className='h-4 w-4' />
-                  Security
-                </TabsTrigger>
-                <TabsTrigger
-                  value='appearance'
-                  className='flex items-center gap-2'
-                >
-                  <Palette className='h-4 w-4' />
-                  Appearance
-                </TabsTrigger>
-                <TabsTrigger value='data' className='flex items-center gap-2'>
-                  <Database className='h-4 w-4' />
-                  Data
-                </TabsTrigger>
-              </TabsList>
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className='space-y-6'
+          >
+            <TabsList className='grid w-full grid-cols-6'>
+              <TabsTrigger value='profile' className='flex items-center gap-2'>
+                <User className='h-4 w-4' />
+                Profile
+              </TabsTrigger>
+              <TabsTrigger value='company' className='flex items-center gap-2'>
+                <Building className='h-4 w-4' />
+                Company
+              </TabsTrigger>
+              <TabsTrigger
+                value='notifications'
+                className='flex items-center gap-2'
+              >
+                <Bell className='h-4 w-4' />
+                Notifications
+              </TabsTrigger>
+              <TabsTrigger value='security' className='flex items-center gap-2'>
+                <Shield className='h-4 w-4' />
+                Security
+              </TabsTrigger>
+              <TabsTrigger
+                value='appearance'
+                className='flex items-center gap-2'
+              >
+                <Palette className='h-4 w-4' />
+                Appearance
+              </TabsTrigger>
+              <TabsTrigger value='data' className='flex items-center gap-2'>
+                <Database className='h-4 w-4' />
+                Data
+              </TabsTrigger>
+            </TabsList>
 
-              {/* Profile Settings */}
-              <TabsContent value='profile' className='space-y-6'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Profile Information</CardTitle>
-                    <CardDescription>
-                      Update your personal information and contact details
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-6'>
-                    {/* <div className='flex items-center gap-6'>
+            {/* Profile Settings */}
+            <TabsContent value='profile' className='space-y-6'>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Profile Information</CardTitle>
+                  <CardDescription>
+                    Update your personal information and contact details
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-6'>
+                  {/* <div className='flex items-center gap-6'>
                     <Avatar className='h-24 w-24'>
                       <AvatarImage
                         src={profileData.avatar_url || "/placeholder.svg"}
@@ -459,619 +441,415 @@ export default function SettingsPage() {
                     </div>
                   </div> */}
 
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                      <div className='space-y-2'>
-                        <Label htmlFor='full_name'>Full Name</Label>
-                        <Input
-                          id='full_name'
-                          value={profileData.full_name}
-                          onChange={(e) =>
-                            setProfileData({
-                              ...profileData,
-                              full_name: e.target.value,
-                            })
-                          }
-                          placeholder='Enter your full name'
-                        />
-                      </div>
-
-                      <div className='space-y-2'>
-                        <Label htmlFor='email'>Email Address</Label>
-                        <Input
-                          id='email'
-                          value={user?.email || ""}
-                          disabled
-                          className='bg-muted'
-                        />
-                      </div>
-
-                      <div className='space-y-2'>
-                        <Label htmlFor='phone'>Phone Number</Label>
-                        <Input
-                          id='phone'
-                          value={profileData.phone}
-                          onChange={(e) =>
-                            setProfileData({
-                              ...profileData,
-                              phone: e.target.value,
-                            })
-                          }
-                          placeholder='Enter your phone number'
-                        />
-                      </div>
-
-                      <div className='space-y-2'>
-                        <Label htmlFor='address'>Address</Label>
-                        <Input
-                          id='address'
-                          value={profileData.address}
-                          onChange={(e) =>
-                            setProfileData({
-                              ...profileData,
-                              address: e.target.value,
-                            })
-                          }
-                          placeholder='Enter your address'
-                        />
-                      </div>
-                    </div>
-
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                     <div className='space-y-2'>
-                      <Label htmlFor='bio'>Bio</Label>
-                      <Textarea
-                        id='bio'
-                        value={profileData.bio}
+                      <Label htmlFor='full_name'>Full Name</Label>
+                      <Input
+                        id='full_name'
+                        value={profileData.full_name}
                         onChange={(e) =>
                           setProfileData({
                             ...profileData,
-                            bio: e.target.value,
+                            full_name: e.target.value,
                           })
                         }
-                        placeholder='Tell us about yourself'
-                        rows={4}
+                        placeholder='Enter your full name'
                       />
                     </div>
 
-                    <div className='flex justify-end'>
-                      <Button
-                        onClick={handleProfileUpdate}
-                        disabled={isLoading}
-                      >
-                        <Save className='h-4 w-4 mr-2' />
-                        {isLoading ? "Saving..." : "Save Changes"}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Account Information</CardTitle>
-                    <CardDescription>
-                      View your account details and status
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-4'>
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                      <div className='flex items-center gap-2'>
-                        <Mail className='h-4 w-4 text-muted-foreground' />
-                        <span className='text-sm'>{user?.email}</span>
-                        <Badge variant='secondary'>Verified</Badge>
-                      </div>
-                      <div className='flex items-center gap-2'>
-                        <Calendar className='h-4 w-4 text-muted-foreground' />
-                        <span className='text-sm'>
-                          Joined{" "}
-                          {new Date(
-                            user?.created_at || ""
-                          ).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Company Settings */}
-              <TabsContent value='company' className='space-y-6'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className='flex items-center gap-2'>
-                      <Building className='h-5 w-5' />
-                      Company Information
-                    </CardTitle>
-                    <CardDescription>
-                      Configure company details for invoices and documents
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-4'>
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                      <div>
-                        <Label htmlFor='company_name'>Company Name</Label>
-                        <Input
-                          id='company_name'
-                          value={companyData.company_name}
-                          onChange={(e) =>
-                            setCompanyData({
-                              ...companyData,
-                              company_name: e.target.value,
-                            })
-                          }
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor='registered_number'>
-                          Registered Number
-                        </Label>
-                        <Input
-                          id='registered_number'
-                          value={companyData.registered_number}
-                          onChange={(e) =>
-                            setCompanyData({
-                              ...companyData,
-                              registered_number: e.target.value,
-                            })
-                          }
-                          placeholder='Company registration number'
-                        />
-                      </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='email'>Email Address</Label>
+                      <Input
+                        id='email'
+                        value={user?.email || ""}
+                        disabled
+                        className='bg-muted'
+                      />
                     </div>
 
-                    <div>
-                      <Label htmlFor='company_address'>Address</Label>
-                      <Textarea
-                        id='company_address'
-                        value={companyData.address}
+                    <div className='space-y-2'>
+                      <Label htmlFor='phone'>Phone Number</Label>
+                      <Input
+                        id='phone'
+                        value={profileData.phone}
                         onChange={(e) =>
-                          setCompanyData({
-                            ...companyData,
+                          setProfileData({
+                            ...profileData,
+                            phone: e.target.value,
+                          })
+                        }
+                        placeholder='Enter your phone number'
+                      />
+                    </div>
+
+                    <div className='space-y-2'>
+                      <Label htmlFor='address'>Address</Label>
+                      <Input
+                        id='address'
+                        value={profileData.address}
+                        onChange={(e) =>
+                          setProfileData({
+                            ...profileData,
                             address: e.target.value,
                           })
                         }
-                        placeholder='Complete company address'
-                        rows={3}
+                        placeholder='Enter your address'
                       />
                     </div>
+                  </div>
 
+                  <div className='space-y-2'>
+                    <Label htmlFor='bio'>Bio</Label>
+                    <Textarea
+                      id='bio'
+                      value={profileData.bio}
+                      onChange={(e) =>
+                        setProfileData({
+                          ...profileData,
+                          bio: e.target.value,
+                        })
+                      }
+                      placeholder='Tell us about yourself'
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className='flex justify-end'>
+                    <Button onClick={handleProfileUpdate} disabled={isLoading}>
+                      <Save className='h-4 w-4 mr-2' />
+                      {isLoading ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Account Information</CardTitle>
+                  <CardDescription>
+                    View your account details and status
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                    <div className='flex items-center gap-2'>
+                      <Mail className='h-4 w-4 text-muted-foreground' />
+                      <span className='text-sm'>{user?.email}</span>
+                      <Badge variant='secondary'>Verified</Badge>
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      <Calendar className='h-4 w-4 text-muted-foreground' />
+                      <span className='text-sm'>
+                        Joined{" "}
+                        {new Date(user?.created_at || "").toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Company Settings */}
+            <TabsContent value='company' className='space-y-6'>
+              <Card>
+                <CardHeader>
+                  <CardTitle className='flex items-center gap-2'>
+                    <Building className='h-5 w-5' />
+                    Company Information
+                  </CardTitle>
+                  <CardDescription>
+                    Configure company details for invoices and documents
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                     <div>
-                      <Label htmlFor='website'>Website</Label>
+                      <Label htmlFor='company_name'>Company Name</Label>
                       <Input
-                        id='website'
-                        value={companyData.website}
+                        id='company_name'
+                        value={companyData.company_name}
                         onChange={(e) =>
                           setCompanyData({
                             ...companyData,
-                            website: e.target.value,
+                            company_name: e.target.value,
                           })
                         }
-                        placeholder='https://www.company.com'
+                        required
                       />
                     </div>
-
                     <div>
-                      <div className='flex items-center justify-between'>
-                        <Label>Contact Numbers</Label>
-                        <Button
-                          type='button'
-                          onClick={addContactNumber}
-                          size='sm'
-                          variant='outline'
-                          className='gap-2'
-                        >
-                          <Plus className='h-4 w-4' />
-                          Add Number
-                        </Button>
-                      </div>
-                      <div className='space-y-2 mt-2'>
-                        {companyData.contact_numbers.map((number, index) => (
-                          <div key={index} className='flex gap-2'>
-                            <Input
-                              value={number}
-                              onChange={(e) =>
-                                updateContactNumber(index, e.target.value)
-                              }
-                              placeholder='Contact number'
-                            />
-                            <Button
-                              type='button'
-                              onClick={() => removeContactNumber(index)}
-                              size='sm'
-                              variant='outline'
-                              disabled={
-                                companyData.contact_numbers.length === 1
-                              }
-                            >
-                              <Trash2 className='h-4 w-4' />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
+                      <Label htmlFor='registered_number'>
+                        Registered Number
+                      </Label>
+                      <Input
+                        id='registered_number'
+                        value={companyData.registered_number}
+                        onChange={(e) =>
+                          setCompanyData({
+                            ...companyData,
+                            registered_number: e.target.value,
+                          })
+                        }
+                        placeholder='Company registration number'
+                      />
                     </div>
+                  </div>
 
-                    <div className='flex justify-end'>
+                  <div>
+                    <Label htmlFor='company_address'>Address</Label>
+                    <Textarea
+                      id='company_address'
+                      value={companyData.address}
+                      onChange={(e) =>
+                        setCompanyData({
+                          ...companyData,
+                          address: e.target.value,
+                        })
+                      }
+                      placeholder='Complete company address'
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor='website'>Website</Label>
+                    <Input
+                      id='website'
+                      value={companyData.website}
+                      onChange={(e) =>
+                        setCompanyData({
+                          ...companyData,
+                          website: e.target.value,
+                        })
+                      }
+                      placeholder='https://www.company.com'
+                    />
+                  </div>
+
+                  <div>
+                    <div className='flex items-center justify-between'>
+                      <Label>Contact Numbers</Label>
                       <Button
-                        onClick={handleCompanyUpdate}
-                        disabled={isLoading}
+                        type='button'
+                        onClick={addContactNumber}
+                        size='sm'
+                        variant='outline'
+                        className='gap-2'
                       >
-                        <Save className='h-4 w-4 mr-2' />
-                        {isLoading ? "Saving..." : "Save Company Info"}
+                        <Plus className='h-4 w-4' />
+                        Add Number
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Pricing Tiers</CardTitle>
-                    <CardDescription>
-                      Configure pricing based on cable length
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className='space-y-4'>
-                      {companyData.pricing_tiers.map((tier, index) => (
-                        <div
-                          key={index}
-                          className='grid grid-cols-4 gap-4 items-end'
-                        >
-                          <div>
-                            <Label>Min Length (m)</Label>
-                            <Input
-                              type='number'
-                              value={tier.min_length}
-                              onChange={(e) =>
-                                handlePricingTierChange(
-                                  index,
-                                  "min_length",
-                                  Number.parseInt(e.target.value) || 0
-                                )
-                              }
-                            />
-                          </div>
-                          <div>
-                            <Label>Max Length (m)</Label>
-                            <Input
-                              type='number'
-                              value={
-                                tier.max_length === 999999
-                                  ? ""
-                                  : tier.max_length
-                              }
-                              onChange={(e) =>
-                                handlePricingTierChange(
-                                  index,
-                                  "max_length",
-                                  e.target.value
-                                    ? Number.parseInt(e.target.value)
-                                    : 999999
-                                )
-                              }
-                              placeholder='500+ (leave empty)'
-                            />
-                          </div>
-                          <div>
-                            <Label>Rate (LKR)</Label>
-                            <Input
-                              type='number'
-                              value={tier.rate}
-                              onChange={(e) =>
-                                handlePricingTierChange(
-                                  index,
-                                  "rate",
-                                  Number.parseInt(e.target.value) || 0
-                                )
-                              }
-                            />
-                          </div>
-                          <div className='text-sm text-muted-foreground'>
-                            {tier.min_length}–
-                            {tier.max_length === 999999
-                              ? "500+"
-                              : tier.max_length}
-                            m: LKR {tier.rate}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className='flex items-center gap-2'>
-                      <CreditCard className='h-5 w-5' />
-                      Bank Details
-                    </CardTitle>
-                    <CardDescription>
-                      Configure bank information for invoices
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-4'>
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                      <div>
-                        <Label htmlFor='bank_name'>Bank Name</Label>
-                        <Input
-                          id='bank_name'
-                          value={companyData.bank_details.bank_name}
-                          onChange={(e) =>
-                            handleBankDetailsChange("bank_name", e.target.value)
-                          }
-                          placeholder='e.g., Sampath Bank PLC'
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor='account_title'>Account Title</Label>
-                        <Input
-                          id='account_title'
-                          value={companyData.bank_details.account_title}
-                          onChange={(e) =>
-                            handleBankDetailsChange(
-                              "account_title",
-                              e.target.value
-                            )
-                          }
-                          placeholder='Account holder name'
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor='account_number'>Account Number</Label>
-                        <Input
-                          id='account_number'
-                          value={companyData.bank_details.account_number}
-                          onChange={(e) =>
-                            handleBankDetailsChange(
-                              "account_number",
-                              e.target.value
-                            )
-                          }
-                          placeholder='Bank account number'
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor='branch_code'>Branch Code</Label>
-                        <Input
-                          id='branch_code'
-                          value={companyData.bank_details.branch_code}
-                          onChange={(e) =>
-                            handleBankDetailsChange(
-                              "branch_code",
-                              e.target.value
-                            )
-                          }
-                          placeholder='Branch code'
-                        />
-                      </div>
-                      <div className='md:col-span-2'>
-                        <Label htmlFor='iban'>IBAN</Label>
-                        <Input
-                          id='iban'
-                          value={companyData.bank_details.iban}
-                          onChange={(e) =>
-                            handleBankDetailsChange("iban", e.target.value)
-                          }
-                          placeholder='PK36SCBL0000001123456702'
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Notification Settings */}
-              <TabsContent value='notifications' className='space-y-6'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Notification Preferences</CardTitle>
-                    <CardDescription>
-                      Choose how you want to be notified about updates and
-                      activities
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-6'>
-                    <div className='space-y-4'>
-                      <div className='flex items-center justify-between'>
-                        <div className='space-y-0.5'>
-                          <Label>Email Notifications</Label>
-                          <p className='text-sm text-muted-foreground'>
-                            Receive notifications via email
-                          </p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.email_notifications}
-                          onCheckedChange={(checked) =>
-                            setNotificationSettings({
-                              ...notificationSettings,
-                              email_notifications: checked,
-                            })
-                          }
-                        />
-                      </div>
-
-                      <div className='flex items-center justify-between'>
-                        <div className='space-y-0.5'>
-                          <Label>Push Notifications</Label>
-                          <p className='text-sm text-muted-foreground'>
-                            Receive push notifications in browser
-                          </p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.push_notifications}
-                          onCheckedChange={(checked) =>
-                            setNotificationSettings({
-                              ...notificationSettings,
-                              push_notifications: checked,
-                            })
-                          }
-                        />
-                      </div>
-
-                      <div className='flex items-center justify-between'>
-                        <div className='space-y-0.5'>
-                          <Label>Task Reminders</Label>
-                          <p className='text-sm text-muted-foreground'>
-                            Get reminded about pending tasks
-                          </p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.task_reminders}
-                          onCheckedChange={(checked) =>
-                            setNotificationSettings({
-                              ...notificationSettings,
-                              task_reminders: checked,
-                            })
-                          }
-                        />
-                      </div>
-
-                      <div className='flex items-center justify-between'>
-                        <div className='space-y-0.5'>
-                          <Label>Invoice Alerts</Label>
-                          <p className='text-sm text-muted-foreground'>
-                            Notifications about invoice generation and payments
-                          </p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.invoice_alerts}
-                          onCheckedChange={(checked) =>
-                            setNotificationSettings({
-                              ...notificationSettings,
-                              invoice_alerts: checked,
-                            })
-                          }
-                        />
-                      </div>
-
-                      <div className='flex items-center justify-between'>
-                        <div className='space-y-0.5'>
-                          <Label>System Updates</Label>
-                          <p className='text-sm text-muted-foreground'>
-                            Notifications about system maintenance and updates
-                          </p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.system_updates}
-                          onCheckedChange={(checked) =>
-                            setNotificationSettings({
-                              ...notificationSettings,
-                              system_updates: checked,
-                            })
-                          }
-                        />
-                      </div>
-
-                      <div className='flex items-center justify-between'>
-                        <div className='space-y-0.5'>
-                          <Label>Marketing Emails</Label>
-                          <p className='text-sm text-muted-foreground'>
-                            Receive promotional emails and newsletters
-                          </p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.marketing_emails}
-                          onCheckedChange={(checked) =>
-                            setNotificationSettings({
-                              ...notificationSettings,
-                              marketing_emails: checked,
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className='flex justify-end'>
-                      <Button onClick={handleNotificationUpdate}>
-                        <Save className='h-4 w-4 mr-2' />
-                        Save Preferences
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Security Settings */}
-              <TabsContent value='security' className='space-y-6'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Password & Authentication</CardTitle>
-                    <CardDescription>
-                      Manage your password and authentication settings
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-4'>
-                    <div className='space-y-4'>
-                      <div>
-                        <Label htmlFor='current_password'>
-                          Current Password
-                        </Label>
-                        <div className='relative'>
+                    <div className='space-y-2 mt-2'>
+                      {companyData.contact_numbers.map((number, index) => (
+                        <div key={index} className='flex gap-2'>
                           <Input
-                            id='current_password'
-                            type={showPassword ? "text" : "password"}
-                            placeholder='Enter current password'
+                            value={number}
+                            onChange={(e) =>
+                              updateContactNumber(index, e.target.value)
+                            }
+                            placeholder='Contact number'
                           />
                           <Button
                             type='button'
-                            variant='ghost'
+                            onClick={() => removeContactNumber(index)}
                             size='sm'
-                            className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
-                            onClick={() => setShowPassword(!showPassword)}
+                            variant='outline'
+                            disabled={companyData.contact_numbers.length === 1}
                           >
-                            {showPassword ? (
-                              <EyeOff className='h-4 w-4' />
-                            ) : (
-                              <Eye className='h-4 w-4' />
-                            )}
+                            <Trash2 className='h-4 w-4' />
                           </Button>
                         </div>
-                      </div>
-
-                      <div>
-                        <Label htmlFor='new_password'>New Password</Label>
-                        <Input
-                          id='new_password'
-                          type='password'
-                          placeholder='Enter new password'
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor='confirm_password'>
-                          Confirm New Password
-                        </Label>
-                        <Input
-                          id='confirm_password'
-                          type='password'
-                          placeholder='Confirm new password'
-                        />
-                      </div>
-
-                      <Button>Update Password</Button>
+                      ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Security Preferences</CardTitle>
-                    <CardDescription>
-                      Configure additional security settings
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-6'>
+                  <div className='flex justify-end'>
+                    <Button onClick={handleCompanyUpdate} disabled={isLoading}>
+                      <Save className='h-4 w-4 mr-2' />
+                      {isLoading ? "Saving..." : "Save Company Info"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pricing Tiers</CardTitle>
+                  <CardDescription>
+                    Configure pricing based on cable length
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className='space-y-4'>
+                    {companyData.pricing_tiers.map((tier, index) => (
+                      <div
+                        key={index}
+                        className='grid grid-cols-4 gap-4 items-end'
+                      >
+                        <div>
+                          <Label>Min Length (m)</Label>
+                          <Input
+                            type='number'
+                            value={tier.min_length}
+                            onChange={(e) =>
+                              handlePricingTierChange(
+                                index,
+                                "min_length",
+                                Number.parseInt(e.target.value) || 0
+                              )
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label>Max Length (m)</Label>
+                          <Input
+                            type='number'
+                            value={
+                              tier.max_length === 999999 ? "" : tier.max_length
+                            }
+                            onChange={(e) =>
+                              handlePricingTierChange(
+                                index,
+                                "max_length",
+                                e.target.value
+                                  ? Number.parseInt(e.target.value)
+                                  : 999999
+                              )
+                            }
+                            placeholder='500+ (leave empty)'
+                          />
+                        </div>
+                        <div>
+                          <Label>Rate (LKR)</Label>
+                          <Input
+                            type='number'
+                            value={tier.rate}
+                            onChange={(e) =>
+                              handlePricingTierChange(
+                                index,
+                                "rate",
+                                Number.parseInt(e.target.value) || 0
+                              )
+                            }
+                          />
+                        </div>
+                        <div className='text-sm text-muted-foreground'>
+                          {tier.min_length}–
+                          {tier.max_length === 999999
+                            ? "500+"
+                            : tier.max_length}
+                          m: LKR {tier.rate}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className='flex items-center gap-2'>
+                    <CreditCard className='h-5 w-5' />
+                    Bank Details
+                  </CardTitle>
+                  <CardDescription>
+                    Configure bank information for invoices
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                    <div>
+                      <Label htmlFor='bank_name'>Bank Name</Label>
+                      <Input
+                        id='bank_name'
+                        value={companyData.bank_details.bank_name}
+                        onChange={(e) =>
+                          handleBankDetailsChange("bank_name", e.target.value)
+                        }
+                        placeholder='e.g., Sampath Bank PLC'
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor='account_title'>Account Title</Label>
+                      <Input
+                        id='account_title'
+                        value={companyData.bank_details.account_title}
+                        onChange={(e) =>
+                          handleBankDetailsChange(
+                            "account_title",
+                            e.target.value
+                          )
+                        }
+                        placeholder='Account holder name'
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor='account_number'>Account Number</Label>
+                      <Input
+                        id='account_number'
+                        value={companyData.bank_details.account_number}
+                        onChange={(e) =>
+                          handleBankDetailsChange(
+                            "account_number",
+                            e.target.value
+                          )
+                        }
+                        placeholder='Bank account number'
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor='branch_code'>Branch Code</Label>
+                      <Input
+                        id='branch_code'
+                        value={companyData.bank_details.branch_code}
+                        onChange={(e) =>
+                          handleBankDetailsChange("branch_code", e.target.value)
+                        }
+                        placeholder='Branch code'
+                      />
+                    </div>
+                    <div className='md:col-span-2'>
+                      <Label htmlFor='iban'>IBAN</Label>
+                      <Input
+                        id='iban'
+                        value={companyData.bank_details.iban}
+                        onChange={(e) =>
+                          handleBankDetailsChange("iban", e.target.value)
+                        }
+                        placeholder='PK36SCBL0000001123456702'
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Notification Settings */}
+            <TabsContent value='notifications' className='space-y-6'>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Notification Preferences</CardTitle>
+                  <CardDescription>
+                    Choose how you want to be notified about updates and
+                    activities
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-6'>
+                  <div className='space-y-4'>
                     <div className='flex items-center justify-between'>
                       <div className='space-y-0.5'>
-                        <Label>Two-Factor Authentication</Label>
+                        <Label>Email Notifications</Label>
                         <p className='text-sm text-muted-foreground'>
-                          Add an extra layer of security to your account
+                          Receive notifications via email
                         </p>
                       </div>
                       <Switch
-                        checked={securitySettings.two_factor_enabled}
+                        checked={notificationSettings.email_notifications}
                         onCheckedChange={(checked) =>
-                          setSecuritySettings({
-                            ...securitySettings,
-                            two_factor_enabled: checked,
+                          setNotificationSettings({
+                            ...notificationSettings,
+                            email_notifications: checked,
                           })
                         }
                       />
@@ -1079,239 +857,423 @@ export default function SettingsPage() {
 
                     <div className='flex items-center justify-between'>
                       <div className='space-y-0.5'>
-                        <Label>Login Alerts</Label>
+                        <Label>Push Notifications</Label>
                         <p className='text-sm text-muted-foreground'>
-                          Get notified when someone logs into your account
+                          Receive push notifications in browser
                         </p>
                       </div>
                       <Switch
-                        checked={securitySettings.login_alerts}
+                        checked={notificationSettings.push_notifications}
                         onCheckedChange={(checked) =>
-                          setSecuritySettings({
-                            ...securitySettings,
-                            login_alerts: checked,
+                          setNotificationSettings({
+                            ...notificationSettings,
+                            push_notifications: checked,
                           })
                         }
                       />
                     </div>
 
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                      <div>
-                        <Label htmlFor='session_timeout'>
-                          Session Timeout (minutes)
-                        </Label>
-                        <Select
-                          value={securitySettings.session_timeout}
-                          onValueChange={(value) =>
-                            setSecuritySettings({
-                              ...securitySettings,
-                              session_timeout: value,
-                            })
-                          }
+                    <div className='flex items-center justify-between'>
+                      <div className='space-y-0.5'>
+                        <Label>Task Reminders</Label>
+                        <p className='text-sm text-muted-foreground'>
+                          Get reminded about pending tasks
+                        </p>
+                      </div>
+                      <Switch
+                        checked={notificationSettings.task_reminders}
+                        onCheckedChange={(checked) =>
+                          setNotificationSettings({
+                            ...notificationSettings,
+                            task_reminders: checked,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className='flex items-center justify-between'>
+                      <div className='space-y-0.5'>
+                        <Label>Invoice Alerts</Label>
+                        <p className='text-sm text-muted-foreground'>
+                          Notifications about invoice generation and payments
+                        </p>
+                      </div>
+                      <Switch
+                        checked={notificationSettings.invoice_alerts}
+                        onCheckedChange={(checked) =>
+                          setNotificationSettings({
+                            ...notificationSettings,
+                            invoice_alerts: checked,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className='flex items-center justify-between'>
+                      <div className='space-y-0.5'>
+                        <Label>System Updates</Label>
+                        <p className='text-sm text-muted-foreground'>
+                          Notifications about system maintenance and updates
+                        </p>
+                      </div>
+                      <Switch
+                        checked={notificationSettings.system_updates}
+                        onCheckedChange={(checked) =>
+                          setNotificationSettings({
+                            ...notificationSettings,
+                            system_updates: checked,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className='flex items-center justify-between'>
+                      <div className='space-y-0.5'>
+                        <Label>Marketing Emails</Label>
+                        <p className='text-sm text-muted-foreground'>
+                          Receive promotional emails and newsletters
+                        </p>
+                      </div>
+                      <Switch
+                        checked={notificationSettings.marketing_emails}
+                        onCheckedChange={(checked) =>
+                          setNotificationSettings({
+                            ...notificationSettings,
+                            marketing_emails: checked,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className='flex justify-end'>
+                    <Button onClick={handleNotificationUpdate}>
+                      <Save className='h-4 w-4 mr-2' />
+                      Save Preferences
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Security Settings */}
+            <TabsContent value='security' className='space-y-6'>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Password & Authentication</CardTitle>
+                  <CardDescription>
+                    Manage your password and authentication settings
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  <div className='space-y-4'>
+                    <div>
+                      <Label htmlFor='current_password'>Current Password</Label>
+                      <div className='relative'>
+                        <Input
+                          id='current_password'
+                          type={showPassword ? "text" : "password"}
+                          placeholder='Enter current password'
+                        />
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
+                          onClick={() => setShowPassword(!showPassword)}
                         >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value='15'>15 minutes</SelectItem>
-                            <SelectItem value='30'>30 minutes</SelectItem>
-                            <SelectItem value='60'>1 hour</SelectItem>
-                            <SelectItem value='120'>2 hours</SelectItem>
-                            <SelectItem value='480'>8 hours</SelectItem>
-                          </SelectContent>
-                        </Select>
+                          {showPassword ? (
+                            <EyeOff className='h-4 w-4' />
+                          ) : (
+                            <Eye className='h-4 w-4' />
+                          )}
+                        </Button>
                       </div>
+                    </div>
 
+                    <div>
+                      <Label htmlFor='new_password'>New Password</Label>
+                      <Input
+                        id='new_password'
+                        type='password'
+                        placeholder='Enter new password'
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor='confirm_password'>
+                        Confirm New Password
+                      </Label>
+                      <Input
+                        id='confirm_password'
+                        type='password'
+                        placeholder='Confirm new password'
+                      />
+                    </div>
+
+                    <Button>Update Password</Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Security Preferences</CardTitle>
+                  <CardDescription>
+                    Configure additional security settings
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-6'>
+                  <div className='flex items-center justify-between'>
+                    <div className='space-y-0.5'>
+                      <Label>Two-Factor Authentication</Label>
+                      <p className='text-sm text-muted-foreground'>
+                        Add an extra layer of security to your account
+                      </p>
+                    </div>
+                    <Switch
+                      checked={securitySettings.two_factor_enabled}
+                      onCheckedChange={(checked) =>
+                        setSecuritySettings({
+                          ...securitySettings,
+                          two_factor_enabled: checked,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className='flex items-center justify-between'>
+                    <div className='space-y-0.5'>
+                      <Label>Login Alerts</Label>
+                      <p className='text-sm text-muted-foreground'>
+                        Get notified when someone logs into your account
+                      </p>
+                    </div>
+                    <Switch
+                      checked={securitySettings.login_alerts}
+                      onCheckedChange={(checked) =>
+                        setSecuritySettings({
+                          ...securitySettings,
+                          login_alerts: checked,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                    <div>
+                      <Label htmlFor='session_timeout'>
+                        Session Timeout (minutes)
+                      </Label>
+                      <Select
+                        value={securitySettings.session_timeout}
+                        onValueChange={(value) =>
+                          setSecuritySettings({
+                            ...securitySettings,
+                            session_timeout: value,
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value='15'>15 minutes</SelectItem>
+                          <SelectItem value='30'>30 minutes</SelectItem>
+                          <SelectItem value='60'>1 hour</SelectItem>
+                          <SelectItem value='120'>2 hours</SelectItem>
+                          <SelectItem value='480'>8 hours</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor='password_expiry'>
+                        Password Expiry (days)
+                      </Label>
+                      <Select
+                        value={securitySettings.password_expiry}
+                        onValueChange={(value) =>
+                          setSecuritySettings({
+                            ...securitySettings,
+                            password_expiry: value,
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value='30'>30 days</SelectItem>
+                          <SelectItem value='60'>60 days</SelectItem>
+                          <SelectItem value='90'>90 days</SelectItem>
+                          <SelectItem value='180'>180 days</SelectItem>
+                          <SelectItem value='365'>1 year</SelectItem>
+                          <SelectItem value='0'>Never</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className='flex justify-end'>
+                    <Button onClick={handleSecurityUpdate}>
+                      <Save className='h-4 w-4 mr-2' />
+                      Save Security Settings
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Appearance Settings */}
+            <TabsContent value='appearance' className='space-y-6'>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Theme Preferences</CardTitle>
+                  <CardDescription>
+                    Customize the appearance of your dashboard
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  <div>
+                    <Label htmlFor='theme'>Theme</Label>
+                    <Select value={theme} onValueChange={setTheme}>
+                      <SelectTrigger className='w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='light'>Light</SelectItem>
+                        <SelectItem value='dark'>Dark</SelectItem>
+                        <SelectItem value='system'>System</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Language</Label>
+                    <Select defaultValue='en'>
+                      <SelectTrigger className='w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='en'>English</SelectItem>
+                        <SelectItem value='si'>Sinhala</SelectItem>
+                        <SelectItem value='ta'>Tamil</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Date Format</Label>
+                    <Select defaultValue='dd/mm/yyyy'>
+                      <SelectTrigger className='w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='dd/mm/yyyy'>DD/MM/YYYY</SelectItem>
+                        <SelectItem value='mm/dd/yyyy'>MM/DD/YYYY</SelectItem>
+                        <SelectItem value='yyyy-mm-dd'>YYYY-MM-DD</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Currency</Label>
+                    <Select defaultValue='lkr'>
+                      <SelectTrigger className='w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='lkr'>
+                          Sri Lankan Rupee (LKR)
+                        </SelectItem>
+                        <SelectItem value='usd'>US Dollar (USD)</SelectItem>
+                        <SelectItem value='eur'>Euro (EUR)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Data Management */}
+            <TabsContent value='data' className='space-y-6'>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Data Export & Import</CardTitle>
+                  <CardDescription>
+                    Manage your data exports and imports
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                    <Button variant='outline' className='h-20 flex-col gap-2'>
+                      <Download className='h-6 w-6' />
+                      Export All Data
+                    </Button>
+                    <Button variant='outline' className='h-20 flex-col gap-2'>
+                      <Upload className='h-6 w-6' />
+                      Import Data
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Data Cleanup</CardTitle>
+                  <CardDescription>
+                    Manage and cleanup your data
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  <div className='space-y-4'>
+                    <div className='flex items-center justify-between p-4 border rounded-lg'>
                       <div>
-                        <Label htmlFor='password_expiry'>
-                          Password Expiry (days)
-                        </Label>
-                        <Select
-                          value={securitySettings.password_expiry}
-                          onValueChange={(value) =>
-                            setSecuritySettings({
-                              ...securitySettings,
-                              password_expiry: value,
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value='30'>30 days</SelectItem>
-                            <SelectItem value='60'>60 days</SelectItem>
-                            <SelectItem value='90'>90 days</SelectItem>
-                            <SelectItem value='180'>180 days</SelectItem>
-                            <SelectItem value='365'>1 year</SelectItem>
-                            <SelectItem value='0'>Never</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <h4 className='font-medium'>Clear Cache</h4>
+                        <p className='text-sm text-muted-foreground'>
+                          Clear application cache and temporary files
+                        </p>
                       </div>
-                    </div>
-
-                    <div className='flex justify-end'>
-                      <Button onClick={handleSecurityUpdate}>
-                        <Save className='h-4 w-4 mr-2' />
-                        Save Security Settings
+                      <Button variant='outline' size='sm'>
+                        Clear Cache
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
 
-              {/* Appearance Settings */}
-              <TabsContent value='appearance' className='space-y-6'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Theme Preferences</CardTitle>
-                    <CardDescription>
-                      Customize the appearance of your dashboard
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-4'>
-                    <div>
-                      <Label htmlFor='theme'>Theme</Label>
-                      <Select value={theme} onValueChange={setTheme}>
-                        <SelectTrigger className='w-full'>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value='light'>Light</SelectItem>
-                          <SelectItem value='dark'>Dark</SelectItem>
-                          <SelectItem value='system'>System</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label>Language</Label>
-                      <Select defaultValue='en'>
-                        <SelectTrigger className='w-full'>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value='en'>English</SelectItem>
-                          <SelectItem value='si'>Sinhala</SelectItem>
-                          <SelectItem value='ta'>Tamil</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label>Date Format</Label>
-                      <Select defaultValue='dd/mm/yyyy'>
-                        <SelectTrigger className='w-full'>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value='dd/mm/yyyy'>DD/MM/YYYY</SelectItem>
-                          <SelectItem value='mm/dd/yyyy'>MM/DD/YYYY</SelectItem>
-                          <SelectItem value='yyyy-mm-dd'>YYYY-MM-DD</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label>Currency</Label>
-                      <Select defaultValue='lkr'>
-                        <SelectTrigger className='w-full'>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value='lkr'>
-                            Sri Lankan Rupee (LKR)
-                          </SelectItem>
-                          <SelectItem value='usd'>US Dollar (USD)</SelectItem>
-                          <SelectItem value='eur'>Euro (EUR)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Data Management */}
-              <TabsContent value='data' className='space-y-6'>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Data Export & Import</CardTitle>
-                    <CardDescription>
-                      Manage your data exports and imports
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-4'>
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                      <Button variant='outline' className='h-20 flex-col gap-2'>
-                        <Download className='h-6 w-6' />
-                        Export All Data
-                      </Button>
-                      <Button variant='outline' className='h-20 flex-col gap-2'>
-                        <Upload className='h-6 w-6' />
-                        Import Data
+                    <div className='flex items-center justify-between p-4 border rounded-lg'>
+                      <div>
+                        <h4 className='font-medium'>Archive Old Data</h4>
+                        <p className='text-sm text-muted-foreground'>
+                          Archive data older than 2 years
+                        </p>
+                      </div>
+                      <Button variant='outline' size='sm'>
+                        Archive Data
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Data Cleanup</CardTitle>
-                    <CardDescription>
-                      Manage and cleanup your data
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-4'>
-                    <div className='space-y-4'>
-                      <div className='flex items-center justify-between p-4 border rounded-lg'>
-                        <div>
-                          <h4 className='font-medium'>Clear Cache</h4>
-                          <p className='text-sm text-muted-foreground'>
-                            Clear application cache and temporary files
-                          </p>
-                        </div>
-                        <Button variant='outline' size='sm'>
-                          Clear Cache
-                        </Button>
+                    <div className='flex items-center justify-between p-4 border rounded-lg border-destructive'>
+                      <div>
+                        <h4 className='font-medium text-destructive'>
+                          Delete All Data
+                        </h4>
+                        <p className='text-sm text-muted-foreground'>
+                          Permanently delete all your data. This action cannot
+                          be undone.
+                        </p>
                       </div>
-
-                      <div className='flex items-center justify-between p-4 border rounded-lg'>
-                        <div>
-                          <h4 className='font-medium'>Archive Old Data</h4>
-                          <p className='text-sm text-muted-foreground'>
-                            Archive data older than 2 years
-                          </p>
-                        </div>
-                        <Button variant='outline' size='sm'>
-                          Archive Data
-                        </Button>
-                      </div>
-
-                      <div className='flex items-center justify-between p-4 border rounded-lg border-destructive'>
-                        <div>
-                          <h4 className='font-medium text-destructive'>
-                            Delete All Data
-                          </h4>
-                          <p className='text-sm text-muted-foreground'>
-                            Permanently delete all your data. This action cannot
-                            be undone.
-                          </p>
-                        </div>
-                        <Button variant='destructive' size='sm'>
-                          <Trash2 className='h-4 w-4 mr-2' />
-                          Delete All
-                        </Button>
-                      </div>
+                      <Button variant='destructive' size='sm'>
+                        <Trash2 className='h-4 w-4 mr-2' />
+                        Delete All
+                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-          )}
-        </main>
-      </div>
-      <MobileBottomNav />
-    </SidebarProvider>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
+    </div>
   );
 }

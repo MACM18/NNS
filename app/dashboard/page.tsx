@@ -320,7 +320,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <>
+    <div className='space-y-6'>
       {loading ? (
         <DashboardSkeleton />
       ) : (
@@ -508,6 +508,6 @@ export default function Dashboard() {
           fetchDashboardData();
         }}
       />
-    </>
+    </div>
   );
 }

@@ -49,10 +49,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { AddJobVacancyModal } from "@/components/modals/add-job-vacancy-modal";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Header } from "@/components/layout/header";
-import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { supabase } from "@/lib/supabase";
 import type { JobVacancy } from "@/types/content";
 
@@ -171,224 +167,198 @@ export default function CareersPage() {
   });
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <div className='flex-1 flex flex-col min-h-screen w-full'>
-        <Header />
-        <main className='flex-1 w-full max-w-full p-4 md:p-6 lg:p-8 pb-20 lg:pb-6 space-y-4 overflow-x-hidden'>
-          <div className='w-full max-w-7xl mx-auto space-y-4'>
-            <div className='flex flex-col gap-4'>
-              <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
-                <div>
-                  <h1 className='text-2xl sm:text-3xl font-bold tracking-tight'>
-                    Career Management
-                  </h1>
-                  <p className='text-muted-foreground'>
-                    Manage job vacancies and career opportunities
-                  </p>
-                </div>
-                <Button
-                  onClick={() => setShowAddModal(true)}
-                  className='w-full sm:w-auto'
-                >
-                  <Plus className='mr-2 h-4 w-4' />
-                  Add Job Vacancy
-                </Button>
-              </div>
-
-              <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-4'>
-                <div className='relative flex-1 max-w-sm'>
-                  <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4' />
-                  <Input
-                    placeholder='Search job vacancies...'
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className='pl-10'
-                  />
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant='outline' className='w-full sm:w-auto'>
-                      <Filter className='mr-2 h-4 w-4' />
-                      Status: {statusFilter}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => setStatusFilter("all")}>
-                      All
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setStatusFilter("active")}>
-                      Active
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setStatusFilter("disabled")}
-                    >
-                      Disabled
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Job Vacancies ({jobVacancies.length})</CardTitle>
-                <CardDescription>
-                  Manage your company&apos;s job openings and career
-                  opportunities
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className='text-center py-4'>Loading...</div>
-                ) : filteredJobs.length === 0 ? (
-                  <div className='text-center py-8 text-muted-foreground'>
-                    No job vacancies found
-                  </div>
-                ) : (
-                  <div className='overflow-x-auto'>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Job Title</TableHead>
-                          <TableHead className='hidden sm:table-cell'>
-                            Department
-                          </TableHead>
-                          <TableHead className='hidden md:table-cell'>
-                            Location
-                          </TableHead>
-                          <TableHead className='hidden lg:table-cell'>
-                            Type
-                          </TableHead>
-                          <TableHead className='hidden xl:table-cell'>
-                            End Date
-                          </TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredJobs.map((job) => (
-                          <TableRow key={job.id}>
-                            <TableCell className='font-medium'>
-                              <div className='flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2'>
-                                <div className='flex items-center space-x-2'>
-                                  <Briefcase className='h-4 w-4 text-muted-foreground flex-shrink-0' />
-                                  <span className='font-medium'>
-                                    {job.title}
-                                  </span>
-                                </div>
-                                <div className='sm:hidden text-xs text-muted-foreground'>
-                                  {job.department && `${job.department} • `}
-                                  {job.location && `${job.location} • `}
-                                  {job.employment_type}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className='hidden sm:table-cell'>
-                              {job.department || "Not specified"}
-                            </TableCell>
-                            <TableCell className='hidden md:table-cell'>
-                              <div className='flex items-center space-x-1'>
-                                <MapPin className='h-3 w-3 text-muted-foreground' />
-                                <span>{job.location || "Remote"}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className='hidden lg:table-cell'>
-                              <Badge variant='outline'>
-                                {job.employment_type}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className='hidden xl:table-cell'>
-                              <div className='flex flex-col items-start gap-1'>
-                                <div className='flex items-center space-x-1'>
-                                  <Calendar className='h-3 w-3 text-muted-foreground' />
-                                  <span
-                                    className={
-                                      isJobExpired(job.end_date)
-                                        ? "text-red-600"
-                                        : ""
-                                    }
-                                  >
-                                    {new Date(
-                                      job.end_date
-                                    ).toLocaleDateString()}
-                                  </span>
-                                </div>
-                                {isJobExpired(job.end_date) && (
-                                  <Badge
-                                    variant='destructive'
-                                    className='text-xs'
-                                  >
-                                    Expired
-                                  </Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  job.status === "active"
-                                    ? "default"
-                                    : "secondary"
-                                }
-                              >
-                                {job.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant='ghost' size='sm'>
-                                    •••
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                  <DropdownMenuItem
-                                    onClick={() => setEditingJob(job)}
-                                  >
-                                    <Edit className='mr-2 h-4 w-4' />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      handleStatusToggle(job.id, job.status)
-                                    }
-                                  >
-                                    {job.status === "active" ? (
-                                      <>
-                                        <EyeOff className='mr-2 h-4 w-4' />
-                                        Disable
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Eye className='mr-2 h-4 w-4' />
-                                        Enable
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => setDeleteJobId(job.id)}
-                                    className='text-red-600'
-                                  >
-                                    <Trash2 className='mr-2 h-4 w-4' />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+    <div className='space-y-6'>
+      <div className='flex flex-col gap-4'>
+        <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
+          <div>
+            <h1 className='text-2xl sm:text-3xl font-bold tracking-tight'>
+              Career Management
+            </h1>
+            <p className='text-muted-foreground'>
+              Manage job vacancies and career opportunities
+            </p>
           </div>
-        </main>
+          <Button
+            onClick={() => setShowAddModal(true)}
+            className='w-full sm:w-auto'
+          >
+            <Plus className='mr-2 h-4 w-4' />
+            Add Job Vacancy
+          </Button>
+        </div>
+
+        <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-4'>
+          <div className='relative flex-1 max-w-sm'>
+            <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4' />
+            <Input
+              placeholder='Search job vacancies...'
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className='pl-10'
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant='outline' className='w-full sm:w-auto'>
+                <Filter className='mr-2 h-4 w-4' />
+                Status: {statusFilter}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setStatusFilter("all")}>
+                All
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("active")}>
+                Active
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("disabled")}>
+                Disabled
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
-      <MobileBottomNav />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Job Vacancies ({jobVacancies.length})</CardTitle>
+          <CardDescription>
+            Manage your company&apos;s job openings and career opportunities
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className='text-center py-4'>Loading...</div>
+          ) : filteredJobs.length === 0 ? (
+            <div className='text-center py-8 text-muted-foreground'>
+              No job vacancies found
+            </div>
+          ) : (
+            <div className='overflow-x-auto'>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Job Title</TableHead>
+                    <TableHead className='hidden sm:table-cell'>
+                      Department
+                    </TableHead>
+                    <TableHead className='hidden md:table-cell'>
+                      Location
+                    </TableHead>
+                    <TableHead className='hidden lg:table-cell'>Type</TableHead>
+                    <TableHead className='hidden xl:table-cell'>
+                      End Date
+                    </TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredJobs.map((job) => (
+                    <TableRow key={job.id}>
+                      <TableCell className='font-medium'>
+                        <div className='flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2'>
+                          <div className='flex items-center space-x-2'>
+                            <Briefcase className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                            <span className='font-medium'>{job.title}</span>
+                          </div>
+                          <div className='sm:hidden text-xs text-muted-foreground'>
+                            {job.department && `${job.department} • `}
+                            {job.location && `${job.location} • `}
+                            {job.employment_type}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className='hidden sm:table-cell'>
+                        {job.department || "Not specified"}
+                      </TableCell>
+                      <TableCell className='hidden md:table-cell'>
+                        <div className='flex items-center space-x-1'>
+                          <MapPin className='h-3 w-3 text-muted-foreground' />
+                          <span>{job.location || "Remote"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className='hidden lg:table-cell'>
+                        <Badge variant='outline'>{job.employment_type}</Badge>
+                      </TableCell>
+                      <TableCell className='hidden xl:table-cell'>
+                        <div className='flex flex-col items-start gap-1'>
+                          <div className='flex items-center space-x-1'>
+                            <Calendar className='h-3 w-3 text-muted-foreground' />
+                            <span
+                              className={
+                                isJobExpired(job.end_date) ? "text-red-600" : ""
+                              }
+                            >
+                              {new Date(job.end_date).toLocaleDateString()}
+                            </span>
+                          </div>
+                          {isJobExpired(job.end_date) && (
+                            <Badge variant='destructive' className='text-xs'>
+                              Expired
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            job.status === "active" ? "default" : "secondary"
+                          }
+                        >
+                          {job.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant='ghost' size='sm'>
+                              •••
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem
+                              onClick={() => setEditingJob(job)}
+                            >
+                              <Edit className='mr-2 h-4 w-4' />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleStatusToggle(job.id, job.status)
+                              }
+                            >
+                              {job.status === "active" ? (
+                                <>
+                                  <EyeOff className='mr-2 h-4 w-4' />
+                                  Disable
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className='mr-2 h-4 w-4' />
+                                  Enable
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setDeleteJobId(job.id)}
+                              className='text-red-600'
+                            >
+                              <Trash2 className='mr-2 h-4 w-4' />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <AddJobVacancyModal
         open={showAddModal || !!editingJob}
         onOpenChange={(open) => {
@@ -429,6 +399,6 @@ export default function CareersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </SidebarProvider>
+    </div>
   );
 }

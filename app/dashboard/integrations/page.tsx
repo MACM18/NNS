@@ -48,15 +48,17 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className='container mx-auto p-6'>
-      <div className='mb-8'>
-        <h1 className='text-3xl font-bold tracking-tight'>Integrations</h1>
+    <div className='space-y-6'>
+      <div>
+        <h1 className='text-2xl sm:text-3xl font-bold tracking-tight'>
+          Integrations
+        </h1>
         <p className='text-muted-foreground mt-2'>
           Connect and manage external services to sync data with your NNS system
         </p>
       </div>
 
-      <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
+      <div className='grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3'>
         {/* Google Sheets Integration Card */}
         <Card className='hover:shadow-lg transition-shadow cursor-pointer group'>
           <CardHeader>
