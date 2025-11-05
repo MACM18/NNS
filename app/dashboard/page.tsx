@@ -138,18 +138,18 @@ export default function Dashboard() {
         .toString()
         .padStart(2, "0")}-${previousMonthLastDay.toString().padStart(2, "0")}`;
 
-      // Lines
+      // Lines: count by installation 'date' (monthly lines)
       const { data: currentLines } = await supabase
         .from("line_details")
         .select("*")
-        .gte("created_at", currentMonthStartDate)
-        .lte("created_at", currentMonthEndDate);
+        .gte("date", currentMonthStartDate)
+        .lte("date", currentMonthEndDate);
 
       const { data: previousLines } = await supabase
         .from("line_details")
         .select("*")
-        .gte("created_at", previousMonthStartDate)
-        .lte("created_at", previousMonthEndDate);
+        .gte("date", previousMonthStartDate)
+        .lte("date", previousMonthEndDate);
 
       // Active tasks
       const { data: currentTasks } = await supabase
