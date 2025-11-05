@@ -327,14 +327,40 @@ export function TaskManagementTable({
         .single();
       if (fetchError && fetchError.code !== "PGRST116") throw fetchError;
 
-      // If task is linked to a line_details record, remove any drum_usage rows
-      // that reference that line before deleting the task to avoid FK issues
-      if (taskRow?.line_details_id) {
+      // Collect any line_details IDs that are related to this task in either
+      // the task's line_details_id column OR where line_details.task_id == taskId.
+      const toCleanLineIds: string[] = [];
+      const taskRowAny = taskRow as any;
+      if (taskRowAny?.line_details_id)
+        toCleanLineIds.push(taskRowAny.line_details_id as string);
+
+      const { data: ldRows, error: ldError } = await supabase
+        .from("line_details")
+        .select("id")
+        .eq("task_id", taskId);
+      if (ldError) throw ldError;
+      if (ldRows && Array.isArray(ldRows)) {
+        toCleanLineIds.push(...(ldRows as any[]).map((r) => r.id));
+      }
+
+      // Remove duplicates and falsy values
+      const uniqueIds = Array.from(new Set(toCleanLineIds.filter(Boolean)));
+
+      // If there are any related line_details, first remove dependent drum_usage
+      // records, then null out the task reference on those line_details to
+      // prevent FK issues when deleting the task.
+      if (uniqueIds.length) {
         const { error: drumError } = await supabase
           .from("drum_usage")
           .delete()
-          .eq("line_details_id", taskRow.line_details_id);
+          .in("line_details_id", uniqueIds);
         if (drumError) throw drumError;
+
+        const { error: clearError } = await supabase
+          .from("line_details")
+          .update({ task_id: null })
+          .in("id", uniqueIds);
+        if (clearError) throw clearError;
       }
 
       const { error } = await supabase.from("tasks").delete().eq("id", taskId);
