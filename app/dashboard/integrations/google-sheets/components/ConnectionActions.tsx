@@ -162,8 +162,9 @@ export default function ConnectionActions({
                 // Submit the form which points to the action returned by useActionState
                 syncFormRef.current?.requestSubmit();
               }}
+              disabled={syncPending}
             >
-              Confirm
+              {syncPending ? "Syncing..." : "Confirm"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -188,8 +189,9 @@ export default function ConnectionActions({
                 setOpenDelete(false);
                 deleteFormRef.current?.requestSubmit();
               }}
+              disabled={deletePending}
             >
-              Delete
+              {deletePending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

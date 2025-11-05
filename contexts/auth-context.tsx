@@ -186,6 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (!document.hidden) {
         // Page became visible, refresh the session
+        setLoading(true);
         try {
           const {
             data: { session },
@@ -216,6 +217,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           }
         } catch (err) {
           console.error("Error handling visibility change:", err);
+        } finally {
+          if (isMounted()) setLoading(false);
         }
       }
     };
