@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
+import { FcGoogle } from "react-icons/fc";
 import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -111,7 +112,13 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
                 </>
               ) : (
                 <>
-                  <Icons.google className='h-4 w-4' />
+                  {(() => {
+                    const GoogleIcon =
+                      Icons.google as unknown as React.ComponentType<{
+                        className?: string;
+                      }>;
+                    return <GoogleIcon className='h-4 w-4' />;
+                  })()}
                   <span>Continue with Google</span>
                 </>
               )}

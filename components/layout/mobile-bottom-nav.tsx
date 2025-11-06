@@ -12,22 +12,22 @@ const navItems = [
     icon: Home,
   },
   {
-    href: "/inventory",
+    href: "/dashboard/inventory",
     label: "Inventory",
     icon: Package,
   },
   {
-    href: "/lines",
+    href: "/dashboard/lines",
     label: "Lines",
     icon: FileText,
   },
   {
-    href: "/tasks",
+    href: "/dashboard/tasks",
     label: "Tasks",
     icon: ClipboardList,
   },
   {
-    href: "/profile",
+    href: "/dashboard/profile",
     label: "Profile",
     icon: User,
   },

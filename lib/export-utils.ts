@@ -1,46 +1,67 @@
-import { getSupabaseClient } from "./supabase"
+import { getSupabaseClient } from "./supabase";
 
 export interface ExportOptions {
-  format: "pdf" | "csv" | "excel"
-  reportType: string
+  format: "pdf" | "csv" | "excel";
+  reportType: string;
   dateRange: {
-    start: string
-    end: string
-  }
-  filters?: Record<string, any>
+    start: string;
+    end: string;
+  };
+  filters?: Record<string, any>;
 }
 
 export interface CompanyInfo {
-  company_name: string
-  address: string
-  contact_numbers: string[]
-  website: string
-  registered_number: string
+  company_name: string;
+  address: string;
+  contact_numbers: string[];
+  website: string;
+  registered_number: string;
 }
 
 export class ExportService {
-  private supabase = getSupabaseClient()
+  private supabase = getSupabaseClient();
 
   async getCompanyInfo(): Promise<CompanyInfo> {
     try {
-      const { data } = await this.supabase.from("company_settings").select("*").single()
+      const { data } = await this.supabase
+        .from("company_settings")
+        .select(
+          "company_name,address,contact_numbers,website,registered_number"
+        )
+        .single();
+
+      const settings = (data ?? {}) as Partial<CompanyInfo> & {
+        contact_numbers?: unknown;
+      };
 
       return {
-        company_name: data?.company_name || "NNS Enterprise",
-        address: data?.address || "",
-        contact_numbers: data?.contact_numbers || [],
-        website: data?.website || "nns.lk",
-        registered_number: data?.registered_number || "",
-      }
+        company_name:
+          typeof settings.company_name === "string" &&
+          settings.company_name.trim() !== ""
+            ? settings.company_name
+            : "NNS Enterprise",
+        address: typeof settings.address === "string" ? settings.address : "",
+        contact_numbers: Array.isArray(settings.contact_numbers)
+          ? ((settings.contact_numbers as unknown[])
+              .filter((n) => typeof n === "string")
+              .map((n) => String(n)) as string[])
+          : [],
+        website:
+          typeof settings.website === "string" ? settings.website : "nns.lk",
+        registered_number:
+          typeof settings.registered_number === "string"
+            ? settings.registered_number
+            : "",
+      };
     } catch (error) {
-      console.error("Error fetching company info:", error)
+      console.error("Error fetching company info:", error);
       return {
         company_name: "NNS Enterprise",
         address: "",
         contact_numbers: [],
         website: "nns.lk",
         registered_number: "",
-      }
+      };
     }
   }
 
@@ -49,15 +70,17 @@ export class ExportService {
       // Get line details excluding rejected tasks
       const { data: lines } = await this.supabase
         .from("line_details")
-        .select(`
+        .select(
+          `
           *,
           tasks!inner(status)
-        `)
+        `
+        )
         .gte("date", options.dateRange.start)
         .lte("date", options.dateRange.end)
-        .neq("tasks.status", "rejected")
+        .neq("tasks.status", "rejected");
 
-      if (!lines) return null
+      if (!lines) return null;
 
       const reportData = lines.map((line) => ({
         phone_number: line.phone_number,
@@ -72,12 +95,12 @@ export class ExportService {
         fac: line.fac_new,
         internal_wire: line.internal_wire_new,
         wastage: line.wastage_input,
-      }))
+      }));
 
-      return this.formatExport(reportData, options, "Material Usage Report")
+      return this.formatExport(reportData, options, "Material Usage Report");
     } catch (error) {
-      console.error("Error generating material usage report:", error)
-      return null
+      console.error("Error generating material usage report:", error);
+      return null;
     }
   }
 
@@ -87,16 +110,18 @@ export class ExportService {
       // For now, we'll create a simplified version
       const { data: drumUsage } = await this.supabase
         .from("drum_usage")
-        .select(`
+        .select(
+          `
           *,
           drum_tracking(drum_number, initial_quantity, current_quantity),
           line_details(phone_number, name)
-        `)
+        `
+        )
         .gte("usage_date", options.dateRange.start)
         .lte("usage_date", options.dateRange.end)
-        .order("usage_date")
+        .order("usage_date");
 
-      if (!drumUsage) return null
+      if (!drumUsage) return null;
 
       const reportData = drumUsage.map((usage: any) => ({
         date: usage.usage_date,
@@ -107,12 +132,16 @@ export class ExportService {
         balance_return: usage.drum_tracking?.current_quantity,
         customer: usage.line_details?.name,
         phone: usage.line_details?.phone_number,
-      }))
+      }));
 
-      return this.formatExport(reportData, options, "Daily Material Balance Report")
+      return this.formatExport(
+        reportData,
+        options,
+        "Daily Material Balance Report"
+      );
     } catch (error) {
-      console.error("Error generating daily material balance report:", error)
-      return null
+      console.error("Error generating daily material balance report:", error);
+      return null;
     }
   }
 
@@ -120,13 +149,15 @@ export class ExportService {
     try {
       const { data: lines } = await this.supabase
         .from("line_details")
-        .select("phone_number, cable_start_new, cable_middle_new, cable_end_new, drum_number_new, name, dp")
+        .select(
+          "phone_number, cable_start_new, cable_middle_new, cable_end_new, drum_number_new, name, dp"
+        )
         .gte("date", options.dateRange.start)
         .lte("date", options.dateRange.end)
         .not("drum_number_new", "is", null)
-        .order("drum_number_new")
+        .order("drum_number_new");
 
-      if (!lines) return null
+      if (!lines) return null;
 
       const reportData = lines.map((line) => ({
         phone_number: line.phone_number,
@@ -136,30 +167,37 @@ export class ExportService {
         cable_middle: line.cable_middle_new,
         cable_end: line.cable_end_new,
         drum_number: line.drum_number_new,
-      }))
+      }));
 
-      return this.formatExport(reportData, options, "Drum Number Sheet")
+      return this.formatExport(reportData, options, "Drum Number Sheet");
     } catch (error) {
-      console.error("Error generating drum number report:", error)
-      return null
+      console.error("Error generating drum number report:", error);
+      return null;
     }
   }
 
   async generateMaterialBalanceReport(options: ExportOptions) {
     try {
-      const { data: items } = await this.supabase.from("inventory_items").select(`
+      const { data: items } = await this.supabase.from("inventory_items")
+        .select(`
           *,
           inventory_invoice_items(quantity, unit_price),
           waste_tracking(quantity)
-        `)
+        `);
 
-      if (!items) return null
+      if (!items) return null;
 
       const reportData = items.map((item: any) => {
         const totalIssued =
-          item.inventory_invoice_items?.reduce((sum: number, invoice: any) => sum + (invoice.quantity || 0), 0) || 0
+          item.inventory_invoice_items?.reduce(
+            (sum: number, invoice: any) => sum + (invoice.quantity || 0),
+            0
+          ) || 0;
         const totalWastage =
-          item.waste_tracking?.reduce((sum: number, waste: any) => sum + (waste.quantity || 0), 0) || 0
+          item.waste_tracking?.reduce(
+            (sum: number, waste: any) => sum + (waste.quantity || 0),
+            0
+          ) || 0;
 
         return {
           item_name: item.name,
@@ -168,36 +206,47 @@ export class ExportService {
           wastage: totalWastage,
           in_hand: item.current_stock,
           material_used_invoice: totalIssued - totalWastage, // Simplified calculation
-          wip_material: Math.max(0, totalIssued - totalWastage - item.current_stock),
-        }
-      })
+          wip_material: Math.max(
+            0,
+            totalIssued - totalWastage - item.current_stock
+          ),
+        };
+      });
 
-      return this.formatExport(reportData, options, "Material Balance Sheet")
+      return this.formatExport(reportData, options, "Material Balance Sheet");
     } catch (error) {
-      console.error("Error generating material balance report:", error)
-      return null
+      console.error("Error generating material balance report:", error);
+      return null;
     }
   }
 
-  private async formatExport(data: any[], options: ExportOptions, reportTitle: string) {
-    const companyInfo = await this.getCompanyInfo()
+  private async formatExport(
+    data: any[],
+    options: ExportOptions,
+    reportTitle: string
+  ) {
+    const companyInfo = await this.getCompanyInfo();
 
     switch (options.format) {
       case "csv":
-        return this.generateCSV(data, reportTitle, companyInfo)
+        return this.generateCSV(data, reportTitle, companyInfo);
       case "excel":
-        return this.generateExcel(data, reportTitle, companyInfo)
+        return this.generateExcel(data, reportTitle, companyInfo);
       case "pdf":
-        return this.generatePDF(data, reportTitle, companyInfo)
+        return this.generatePDF(data, reportTitle, companyInfo);
       default:
-        throw new Error("Unsupported export format")
+        throw new Error("Unsupported export format");
     }
   }
 
-  private generateCSV(data: any[], reportTitle: string, companyInfo: CompanyInfo) {
-    if (data.length === 0) return ""
+  private generateCSV(
+    data: any[],
+    reportTitle: string,
+    companyInfo: CompanyInfo
+  ) {
+    if (data.length === 0) return "";
 
-    const headers = Object.keys(data[0])
+    const headers = Object.keys(data[0]);
     const csvContent = [
       `# ${reportTitle}`,
       `# ${companyInfo.company_name}`,
@@ -206,19 +255,29 @@ export class ExportService {
       `# Website: ${companyInfo.website}`,
       "",
       headers.join(","),
-      ...data.map((row) => headers.map((header) => `"${row[header] || ""}"`).join(",")),
-    ].join("\n")
+      ...data.map((row) =>
+        headers.map((header) => `"${row[header] || ""}"`).join(",")
+      ),
+    ].join("\n");
 
-    return csvContent
+    return csvContent;
   }
 
-  private generateExcel(data: any[], reportTitle: string, companyInfo: CompanyInfo) {
+  private generateExcel(
+    data: any[],
+    reportTitle: string,
+    companyInfo: CompanyInfo
+  ) {
     // For Excel generation, you would typically use a library like xlsx
     // For now, we'll return CSV format as a placeholder
-    return this.generateCSV(data, reportTitle, companyInfo)
+    return this.generateCSV(data, reportTitle, companyInfo);
   }
 
-  private generatePDF(data: any[], reportTitle: string, companyInfo: CompanyInfo) {
+  private generatePDF(
+    data: any[],
+    reportTitle: string,
+    companyInfo: CompanyInfo
+  ) {
     // For PDF generation, you would typically use a library like jsPDF or Puppeteer
     // For now, we'll return a structured object that can be used by a PDF generator
     return {
@@ -226,8 +285,8 @@ export class ExportService {
       company: companyInfo,
       data: data,
       generatedAt: new Date().toISOString(),
-    }
+    };
   }
 }
 
-export const exportService = new ExportService()
+export const exportService = new ExportService();

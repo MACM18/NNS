@@ -96,7 +96,7 @@ export function CompanySettingsModal({
           return { min_length: min, max_length: max, rate: Number(rate) };
         });
       } else if (Array.isArray(data?.pricing_tiers)) {
-        tiers = data.pricing_tiers;
+        tiers = data?.pricing_tiers as any[] as PricingTier[];
       }
 
       setFormData({
@@ -105,14 +105,16 @@ export function CompanySettingsModal({
           data.company_name.trim() !== ""
             ? data.company_name
             : "NNS Enterprise",
-        address: typeof data?.address === "string" ? data.address : "",
+        address:
+          typeof data?.address === "string" ? (data?.address as string) : "",
         contact_numbers: Array.isArray(data?.contact_numbers)
-          ? data.contact_numbers
+          ? (data?.contact_numbers as string[])
           : [""],
-        website: typeof data?.website === "string" ? data.website : "",
+        website:
+          typeof data?.website === "string" ? (data?.website as string) : "",
         registered_number:
           typeof data?.registered_number === "string"
-            ? data.registered_number
+            ? (data?.registered_number as string)
             : "",
         pricing_tiers: tiers,
         bank_details:
@@ -204,6 +206,7 @@ export function CompanySettingsModal({
           title: "Validation Error",
           message: "Please add at least one pricing tier",
           type: "error",
+          category: "system",
         });
         setLoading(false);
         return;
@@ -250,6 +253,7 @@ export function CompanySettingsModal({
         title: "Success",
         message: "Company settings updated successfully",
         type: "success",
+        category: "system",
       });
 
       onSuccess();
@@ -259,6 +263,7 @@ export function CompanySettingsModal({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     } finally {
       setLoading(false);

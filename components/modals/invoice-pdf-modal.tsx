@@ -106,20 +106,24 @@ export function InvoicePDFModal({
         throw settingsError;
       }
 
-      setLineDetails(lines || []);
+      // Cast Supabase response to our LineDetail[] shape
+      setLineDetails((lines as unknown as LineDetail[]) || []);
 
       if (settings) {
-        const parsedSettings = settings;
-        if (typeof settings.pricing_tiers === "string") {
+        // Work with a mutable copy and normalize pricing_tiers
+        const parsedSettings: any = { ...(settings as any) };
+        if (typeof parsedSettings.pricing_tiers === "string") {
           try {
-            parsedSettings.pricing_tiers = JSON.parse(settings.pricing_tiers);
+            parsedSettings.pricing_tiers = JSON.parse(
+              parsedSettings.pricing_tiers
+            );
           } catch {
             parsedSettings.pricing_tiers = getDefaultPricingTiers();
           }
         }
-        setCompanySettings(parsedSettings);
+        setCompanySettings(parsedSettings as CompanySettings);
         setPricingTiers(
-          parsedSettings.pricing_tiers || getDefaultPricingTiers()
+          (parsedSettings.pricing_tiers as any[]) || getDefaultPricingTiers()
         );
       } else {
         setCompanySettings(getDefaultCompanySettings());
@@ -131,6 +135,7 @@ export function InvoicePDFModal({
         title: "Error",
         message: "Failed to load invoice data",
         type: "error",
+        category: "system",
       });
     } finally {
       setLoading(false);
@@ -214,6 +219,7 @@ export function InvoicePDFModal({
       title: "Download Started",
       message: `Invoice ${invoice.invoice_number} downloaded`,
       type: "success",
+      category: "invoice_generated",
     });
   };
 

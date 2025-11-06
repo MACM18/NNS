@@ -9,7 +9,7 @@ import {
 } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/contexts/auth-context";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import type {
   Notification,
   NotificationContextType,
@@ -40,7 +40,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         .limit(50);
 
       if (error) throw error;
-      setNotifications(data || []);
+      setNotifications((data as unknown as Notification[]) || []);
     } catch (error) {
       console.error("Error fetching notifications:", error);
     } finally {
@@ -69,15 +69,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
-      setNotifications((prev) => [data, ...prev]);
+      setNotifications((prev) => [data as unknown as Notification, ...prev]);
 
       // Show toast for immediate feedback
-      console.log("toast adde");
-      toast({
-        title: notification.title,
+      toast(notification.title, {
         description: notification.message,
-        variant: "default",
-        duration: 5000,
+        action: notification.action_url
+          ? {
+              label: "View",
+              onClick: () => (window.location.href = notification.action_url!),
+            }
+          : undefined,
       });
     } catch (error) {
       console.error("Error adding notification:", error);

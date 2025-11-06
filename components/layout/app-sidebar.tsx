@@ -45,61 +45,61 @@ const navItems = [
   },
   {
     title: "Lines",
-    url: "/lines",
+    url: "/dashboard/lines",
     icon: Cable,
   },
   {
     title: "Invoices",
-    url: "/invoices",
+    url: "/dashboard/invoices",
     icon: FileText,
   },
   {
     title: "Tasks",
-    url: "/tasks",
+    url: "/dashboard/tasks",
     icon: ClipboardList,
   },
   {
     title: "Work Tracking",
-    url: "/work-tracking",
+    url: "/dashboard/work-tracking",
     icon: CalendarDays,
     roles: ["admin", "moderator"],
   },
   {
     title: "Inventory",
-    url: "/inventory",
+    url: "/dashboard/inventory",
     icon: Package,
   },
   {
     title: "Users",
-    url: "/users",
+    url: "/dashboard/users",
     icon: Users,
     // admin only
     roles: ["admin"],
   },
   {
     title: "Content",
-    url: "/content",
+    url: "/dashboard/content",
     icon: BookOpen,
     // admin and moderator
     roles: ["admin", "moderator"],
   },
   {
     title: "Integrations",
-    url: "/integrations",
+    url: "/dashboard/integrations",
     icon: Zap,
     // admin and moderator
     roles: ["admin", "moderator"],
   },
   {
     title: "Careers",
-    url: "/careers",
+    url: "/dashboard/careers",
     icon: Briefcase,
     // admin and moderator
     roles: ["admin", "moderator"],
   },
   {
     title: "Search",
-    url: "/search",
+    url: "/dashboard/search",
     icon: Search,
   },
 ];
@@ -151,16 +151,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/profile"}>
-                  <Link href='/profile'>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/dashboard/profile"}
+                >
+                  <Link href='/dashboard/profile'>
                     <Users />
                     <span>Profile</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/settings"}>
-                  <Link href='/settings'>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/dashboard/settings"}
+                >
+                  <Link href='/dashboard/settings'>
                     <Settings />
                     <span>Settings</span>
                   </Link>

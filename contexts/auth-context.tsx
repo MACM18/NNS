@@ -11,12 +11,29 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
+
+interface Profile {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: string; // e.g., 'user' | 'admin' | 'moderator'
+  created_at?: string;
+  updated_at?: string;
+  // Optional extended profile fields stored in DB (used by profile/settings pages)
+  phone?: string | null;
+  address?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+}
 
 interface AuthContextType {
   user: User | null;
-  profile: any | null;
+  profile: Profile | null;
   loading: boolean;
   role: string | null;
+  isGoogleUser: boolean;
+  refreshSession: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -26,65 +43,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<any | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const fetchUserProfile = useCallback(
+  // Helpers: fetch and create a profile without relying on PostgREST error codes
+  const fetchProfile = useCallback(async (userId: string) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      // maybeSingle() returns null when not found without throwing
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data as unknown as Profile) ?? null;
+  }, []);
+
+  const createProfile = useCallback(
+    async (userId: string, userEmail: string, userName: string | null) => {
+      const payload = {
+        id: userId,
+        email: userEmail || null,
+        full_name: userName || userEmail || null,
+        role: "user" as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await supabase
+        .from("profiles")
+        .insert(payload)
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data as unknown as Profile;
+    },
+    []
+  );
+
+  const getOrCreateProfile = useCallback(
     async (userId: string, userEmail: string, userName: string | null) => {
       try {
-        const { data: profile, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", userId)
-          .single();
-
-        if (error) {
-          // If profile doesn't exist, create it
-          if (error.code === "PGRST116") {
-            console.log(
-              "Profile not found, creating new profile for user:",
-              userId
-            );
-            const { data: newProfile, error: insertError } = await supabase
-              .from("profiles")
-              .insert({
-                id: userId,
-                email: userEmail,
-                full_name: userName || userEmail,
-                role: "user",
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              })
-              .select("*")
-              .single();
-
-            if (insertError) {
-              console.error("Error creating user profile:", insertError);
-              return { role: "user", profile: null };
-            }
-
-            return {
-              role: (newProfile?.role as string) || "user",
-              profile: newProfile,
-            };
-          }
-          console.error("Error fetching user profile:", error);
-          return { role: "user", profile: null };
+        const existing = await fetchProfile(userId);
+        if (existing) {
+          return {
+            role: (existing.role || "user").toLowerCase(),
+            profile: existing,
+          };
         }
-
+        const created = await createProfile(userId, userEmail, userName);
         return {
-          role: (profile?.role as string) || "user",
-          profile: profile,
+          role: (created.role || "user").toLowerCase(),
+          profile: created,
         };
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
+      } catch (err) {
+        console.error("Error ensuring user profile:", err);
         return { role: "user", profile: null };
       }
     },
-    []
+    [createProfile, fetchProfile]
   );
 
   const applySession = useCallback(
@@ -105,21 +124,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           session.user.user_metadata?.name ||
           null;
 
-        const roleValue = await fetchUserProfile(
-          session.user.id,
-          session.user.email || "",
-          userName
-        );
-        if (!isMounted()) return;
-        setRole(roleValue.role?.toLowerCase?.() || "user");
-        setProfile(roleValue.profile);
+        // If profile already loaded for this user, keep current state (avoid network hits)
+        if (profile?.id === session.user.id && role) {
+          return; // keep existing role/profile; session user updated already
+        }
+
+        // Otherwise, fetch/create profile once
+        try {
+          const roleValue = await getOrCreateProfile(
+            session.user.id,
+            session.user.email || "",
+            userName
+          );
+          if (!isMounted()) return;
+          setRole(roleValue.role?.toLowerCase?.() || "user");
+          setProfile(roleValue.profile as Profile | null);
+        } catch (e) {
+          // Keep previous role/profile on error to avoid UX downgrades
+          console.warn(
+            "applySession: profile fetch/create skipped due to error",
+            e
+          );
+        }
       } else {
         setUser(null);
         setRole(null);
         setIsGoogleUser(false);
+        setProfile(null);
       }
     },
-    [fetchUserProfile]
+    [getOrCreateProfile, profile, role]
   );
 
   useEffect(() => {
@@ -162,72 +196,114 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted()) return;
-      setLoading(true);
+      // Only block UI for explicit sign-in/out transitions
+      const blockUI = event === "SIGNED_IN" || event === "SIGNED_OUT";
+      if (blockUI) setLoading(true);
       try {
         await applySession(session, isMounted);
       } catch (err) {
         console.error("Error handling auth state change:", err);
-        if (isMounted()) {
+        if (isMounted() && blockUI) {
           setUser(null);
           setRole(null);
         }
       } finally {
-        if (isMounted()) {
+        if (isMounted() && blockUI) {
           setLoading(false);
         }
       }
     });
 
-    // Handle page visibility changes to refresh session when tab becomes visible
-    const handleVisibilityChange = async () => {
-      if (!isMounted()) return;
-
-      if (!document.hidden) {
-        // Page became visible, refresh the session
-        try {
-          const {
-            data: { session },
-            error,
-          } = await supabase.auth.getSession();
-
-          if (error) {
-            console.error(
-              "Error refreshing session on visibility change:",
-              error
-            );
-            return;
-          }
-
-          // If no session, try to refresh
-          if (!session) {
-            const { data: refreshData, error: refreshError } =
-              await supabase.auth.refreshSession();
-            if (refreshError) {
-              console.warn(
-                "Unable to refresh session on visibility change:",
-                refreshError.message
-              );
-            }
-            await applySession(refreshData?.session ?? null, isMounted);
-          } else {
-            await applySession(session, isMounted);
-          }
-        } catch (err) {
-          console.error("Error handling visibility change:", err);
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [applySession]);
+
+  const { toast } = useToast();
+
+  // Internal refresh implementation with options to suppress loading/toast
+  const refreshSessionInternal = useCallback(
+    async (options: { notify?: boolean; setLoading?: boolean } = {}) => {
+      const { notify = true, setLoading: withLoading = true } = options;
+      if (withLoading) setLoading(true);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session) {
+          await applySession(session, () => true);
+          if (notify) {
+            toast({
+              title: "Refreshed",
+              description: "Session refreshed",
+              duration: 2000,
+            });
+          }
+          return;
+        }
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        await applySession(refreshData?.session ?? null, () => true);
+        if (notify) {
+          toast({
+            title: "Refreshed",
+            description: "Session refreshed",
+            duration: 2000,
+          });
+        }
+      } catch (err) {
+        console.error("Error refreshing session:", err);
+      } finally {
+        if (withLoading) setLoading(false);
+      }
+    },
+    [applySession, toast]
+  );
+
+  // Idle-staleness hint: after a long inactivity, show a subtle hint and revalidate in background
+  const [lastActive, setLastActive] = useState<number>(() => Date.now());
+  const [staleLocked, setStaleLocked] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Update lastActive on basic user interactions
+    const markActive = () => {
+      setLastActive(Date.now());
+      setStaleLocked(false);
+    };
+    const events: Array<keyof DocumentEventMap> = [
+      "mousemove",
+      "keydown",
+      "click",
+      "touchstart",
+    ];
+    events.forEach((ev) => document.addEventListener(ev, markActive));
+
+    const STALE_MS = 15 * 60 * 1000; // 15 minutes
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      if (now - lastActive >= STALE_MS && !staleLocked) {
+        // Show a small hint and kick off a silent refresh
+        toast({
+          title: "Session might be stale",
+          description: "Revalidating in background…",
+          duration: 2000,
+        });
+        setStaleLocked(true);
+        void refreshSessionInternal({ notify: false, setLoading: false });
+      }
+    }, 60 * 1000); // check every minute
+
+    return () => {
+      events.forEach((ev) => document.removeEventListener(ev, markActive));
+      window.clearInterval(interval);
+    };
+  }, [lastActive, staleLocked, refreshSessionInternal, toast]);
+
+  const refreshSession = useCallback(async () => {
+    await refreshSessionInternal({ notify: true, setLoading: true });
+  }, [refreshSessionInternal]);
 
   const signOut = useCallback(async () => {
     setLoading(true);
@@ -247,7 +323,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, role, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        loading,
+        role,
+        isGoogleUser,
+        refreshSession,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

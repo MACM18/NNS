@@ -102,6 +102,7 @@ export function TaskManagementTable({
   const [deletePopoverOpen, setDeletePopoverOpen] = useState<string | null>(
     null
   );
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
 
   const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
@@ -160,12 +161,13 @@ export function TaskManagementTable({
 
       if (error) throw error;
 
-      setData(tasks || []);
+      setData((tasks as unknown as Task[]) || []);
     } catch (error: any) {
       addNotification({
         title: "Error",
         message: "Failed to fetch tasks",
         type: "error",
+        category: "system",
       });
     } finally {
       setLoading(false);
@@ -206,6 +208,7 @@ export function TaskManagementTable({
         title: "Success",
         message: "Task accepted successfully",
         type: "success",
+        category: "task_completed",
       });
 
       fetchData();
@@ -214,6 +217,7 @@ export function TaskManagementTable({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     }
   };
@@ -224,6 +228,7 @@ export function TaskManagementTable({
         title: "Error",
         message: "Please provide a rejection reason",
         type: "error",
+        category: "system",
       });
       return;
     }
@@ -245,6 +250,7 @@ export function TaskManagementTable({
         title: "Success",
         message: "Task rejected successfully",
         type: "success",
+        category: "task_completed",
       });
 
       setRejectModalOpen(false);
@@ -256,6 +262,7 @@ export function TaskManagementTable({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     }
   };
@@ -263,10 +270,11 @@ export function TaskManagementTable({
   const handleCompleteTask = async (taskId: string) => {
     try {
       // Check if line details exist for this task
+      const tel = data.find((t) => t.id === taskId)?.telephone_no ?? "";
       const { data: lineDetails, error: lineError } = await supabase
         .from("line_details")
         .select("id")
-        .eq("telephone_no", data.find((t) => t.id === taskId)?.telephone_no)
+        .eq("telephone_no", tel)
         .single();
 
       if (lineError || !lineDetails) {
@@ -275,6 +283,7 @@ export function TaskManagementTable({
           message:
             "Line details must be filled before marking task as completed",
           type: "error",
+          category: "system",
         });
         return;
       }
@@ -295,6 +304,7 @@ export function TaskManagementTable({
         title: "Success",
         message: "Task marked as completed",
         type: "success",
+        category: "task_completed",
       });
 
       fetchData();
@@ -303,14 +313,59 @@ export function TaskManagementTable({
         title: "Error",
         message: error.message,
         type: "error",
+        category: "system",
       });
     }
   };
 
   const handleDeleteTask = async (taskId: string) => {
+    setDeleteLoading(taskId);
     try {
-      const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+      // Fetch the task to see if it's linked to a line_details row
+      const { data: taskRow, error: fetchError } = await supabase
+        .from("tasks")
+        .select("line_details_id")
+        .eq("id", taskId)
+        .single();
+      if (fetchError && fetchError.code !== "PGRST116") throw fetchError;
 
+      // Collect any line_details IDs that are related to this task in either
+      // the task's line_details_id column OR where line_details.task_id == taskId.
+      const toCleanLineIds: string[] = [];
+      const taskRowAny = taskRow as any;
+      if (taskRowAny?.line_details_id)
+        toCleanLineIds.push(taskRowAny.line_details_id as string);
+
+      const { data: ldRows, error: ldError } = await supabase
+        .from("line_details")
+        .select("id")
+        .eq("task_id", taskId);
+      if (ldError) throw ldError;
+      if (ldRows && Array.isArray(ldRows)) {
+        toCleanLineIds.push(...(ldRows as any[]).map((r) => r.id));
+      }
+
+      // Remove duplicates and falsy values
+      const uniqueIds = Array.from(new Set(toCleanLineIds.filter(Boolean)));
+
+      // If there are any related line_details, first remove dependent drum_usage
+      // records, then null out the task reference on those line_details to
+      // prevent FK issues when deleting the task.
+      if (uniqueIds.length) {
+        const { error: drumError } = await supabase
+          .from("drum_usage")
+          .delete()
+          .in("line_details_id", uniqueIds);
+        if (drumError) throw drumError;
+
+        const { error: clearError } = await supabase
+          .from("line_details")
+          .update({ task_id: null })
+          .in("id", uniqueIds);
+        if (clearError) throw clearError;
+      }
+
+      const { error } = await supabase.from("tasks").delete().eq("id", taskId);
       if (error) throw error;
 
       toast({
@@ -330,6 +385,8 @@ export function TaskManagementTable({
         variant: "destructive",
         duration: 4000,
       });
+    } finally {
+      setDeleteLoading(null);
     }
   };
 
@@ -690,8 +747,18 @@ export function TaskManagementTable({
                                 variant='destructive'
                                 className='gap-1'
                                 onClick={() => setDeletePopoverOpen(item.id)}
+                                disabled={deleteLoading === item.id}
                               >
-                                <Trash2 className='h-4 w-4' /> Delete
+                                {deleteLoading === item.id ? (
+                                  <>
+                                    <div className='h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent' />
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Trash2 className='h-4 w-4' /> Delete
+                                  </>
+                                )}
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className='w-56'>
@@ -704,6 +771,7 @@ export function TaskManagementTable({
                                     size='sm'
                                     variant='outline'
                                     onClick={() => setDeletePopoverOpen(null)}
+                                    disabled={deleteLoading === item.id}
                                   >
                                     Cancel
                                   </Button>
@@ -714,8 +782,17 @@ export function TaskManagementTable({
                                       await handleDeleteTask(item.id);
                                       setDeletePopoverOpen(null);
                                     }}
+                                    disabled={deleteLoading === item.id}
+                                    className='gap-2'
                                   >
-                                    Delete
+                                    {deleteLoading === item.id ? (
+                                      <>
+                                        <div className='h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent' />
+                                        Deleting...
+                                      </>
+                                    ) : (
+                                      "Delete"
+                                    )}
                                   </Button>
                                 </div>
                               </div>

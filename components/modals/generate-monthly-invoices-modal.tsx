@@ -157,8 +157,8 @@ export function GenerateMonthlyInvoicesModal({
 
       if (error) throw error;
 
-      setLineDetails(data || []);
-      generateInvoicePreviews(data || []);
+      setLineDetails((data as unknown as LineDetail[]) || []);
+      generateInvoicePreviews((data as unknown as LineDetail[]) || []);
     } catch (error: any) {
       addNotification({
         title: "Error",
@@ -337,8 +337,8 @@ export function GenerateMonthlyInvoicesModal({
         <DialogHeader>
           <DialogTitle>Generate Monthly Invoices</DialogTitle>
           <DialogDescription>
-            Generate 2 monthly invoices (A=90%, B=10%) based on completed
-            line installations.
+            Generate 2 monthly invoices (A=90%, B=10%) based on completed line
+            installations.
           </DialogDescription>
         </DialogHeader>
 
