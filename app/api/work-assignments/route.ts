@@ -37,10 +37,18 @@ type AssignmentRow = {
   worker_id: string;
 };
 
+/**
+ * Worker data structure representing a field technician or installer.
+ * Workers are tracked separately from user accounts for flexibility.
+ */
 type Worker = {
+  /** Unique identifier for the worker */
   id: string;
+  /** Worker's full name */
   full_name: string | null;
+  /** Worker's role/position (e.g., technician, installer) */
   role: string | null;
+  /** Worker's current status (active or inactive) */
   status: string | null;
 };
 

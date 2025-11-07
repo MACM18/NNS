@@ -72,7 +72,7 @@ export default function WorkTrackingSummaryPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<SummaryState | null>(null);
-  const { toast} = useToast();
+  const { toast } = useToast();
 
   const filteredTotals = useMemo(() => {
     if (!summary || selectedEmployee === "all") {
