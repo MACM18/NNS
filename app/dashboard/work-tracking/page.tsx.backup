@@ -120,28 +120,7 @@ export default function WorkTrackingCalendarPage() {
   const [workersDialogOpen, setWorkersDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const dayMap = useMemo(() => {
-    const map = new Map<string, DayInfo>();
-    data?.days.forEach((day) => {
-      map.set(day.date, day);
-    });
-    return map;
-  }, [data]);
-
-  const workers = data?.workers ?? [];
-
-  const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(new Date(selectedYear, selectedMonth - 1));
-    const monthEnd = endOfMonth(monthStart);
-    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-    return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-  }, [selectedMonth, selectedYear]);
-
-  const activeDay = activeDate ? dayMap.get(activeDate) : null;
-  const linesForActiveDay = useMemo(() => activeDay?.lines ?? [], [activeDay]);
-
-  // Check authorization and redirect if needed
+  // Check authorization
   useEffect(() => {
     if (!authLoading) {
       const normalizedRole = (role || "").toLowerCase();
@@ -151,23 +130,6 @@ export default function WorkTrackingCalendarPage() {
     }
   }, [role, authLoading, router]);
 
-  useEffect(() => {
-    fetchData(selectedMonth, selectedYear);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMonth, selectedYear]);
-
-  useEffect(() => {
-    if (activeLineId) {
-      const exists = linesForActiveDay.some((line) => line.id === activeLineId);
-      if (!exists) {
-        setActiveLineId(null);
-      }
-    } else if (dialogOpen && linesForActiveDay.length > 0) {
-      setActiveLineId(linesForActiveDay[0].id);
-    }
-  }, [linesForActiveDay, activeLineId, dialogOpen]);
-
-  // Early return if still loading or unauthorized
   if (authLoading) {
     return null;
   }
@@ -178,6 +140,16 @@ export default function WorkTrackingCalendarPage() {
   }
 
   const isAdmin = normalizedRole === "admin";
+
+  const dayMap = useMemo(() => {
+    const map = new Map<string, DayInfo>();
+    data?.days.forEach((day) => {
+      map.set(day.date, day);
+    });
+    return map;
+  }, [data]);
+
+  const workers = data?.workers ?? [];
 
   const getAuthToken = async () => {
     const {
@@ -274,6 +246,19 @@ export default function WorkTrackingCalendarPage() {
     }
   };
 
+  useEffect(() => {
+    fetchData(selectedMonth, selectedYear);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth, selectedYear]);
+
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(new Date(selectedYear, selectedMonth - 1));
+    const monthEnd = endOfMonth(monthStart);
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+    return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  }, [selectedMonth, selectedYear]);
+
   const handleOpenDay = (date: Date, lineId?: string) => {
     const key = format(date, "yyyy-MM-dd");
     setActiveDate(key);
@@ -349,6 +334,20 @@ export default function WorkTrackingCalendarPage() {
       });
     }
   };
+
+  const activeDay = activeDate ? dayMap.get(activeDate) : null;
+  const linesForActiveDay = activeDay?.lines ?? [];
+
+  useEffect(() => {
+    if (activeLineId) {
+      const exists = linesForActiveDay.some((line) => line.id === activeLineId);
+      if (!exists) {
+        setActiveLineId(null);
+      }
+    } else if (dialogOpen && linesForActiveDay.length > 0) {
+      setActiveLineId(linesForActiveDay[0].id);
+    }
+  }, [linesForActiveDay, activeLineId, dialogOpen]);
 
   const handleDialogChange = (open: boolean) => {
     setDialogOpen(open);

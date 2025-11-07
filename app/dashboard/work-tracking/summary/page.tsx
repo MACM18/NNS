@@ -72,9 +72,16 @@ export default function WorkTrackingSummaryPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<SummaryState | null>(null);
-  const { toast } = useToast();
+  const { toast} = useToast();
 
-  // Check authorization
+  const filteredTotals = useMemo(() => {
+    if (!summary || selectedEmployee === "all") {
+      return summary?.totals ?? [];
+    }
+    return summary.totals.filter((w) => w.worker_id === selectedEmployee);
+  }, [summary, selectedEmployee]);
+
+  // Check authorization and redirect if needed
   useEffect(() => {
     if (!authLoading) {
       const normalizedRole = (role || "").toLowerCase();
@@ -84,6 +91,7 @@ export default function WorkTrackingSummaryPage() {
     }
   }, [role, authLoading, router]);
 
+  // Early return if still loading or unauthorized
   if (authLoading) {
     return null;
   }
@@ -238,13 +246,6 @@ export default function WorkTrackingSummaryPage() {
     fetchSummary(selectedMonth, selectedYear);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, selectedYear]);
-
-  const filteredTotals = useMemo(() => {
-    if (!summary || selectedEmployee === "all") return summary?.totals ?? [];
-    return summary.totals.filter(
-      (worker) => worker.worker_id === selectedEmployee
-    );
-  }, [summary, selectedEmployee]);
 
   const getStatusColor = (status?: string) => {
     switch (status) {

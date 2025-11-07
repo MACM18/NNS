@@ -87,7 +87,18 @@ export default function WorkTrackingAnalyticsPage() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const { toast } = useToast();
 
-  // Check authorization
+  const filteredWorkers = useMemo(() => {
+    if (!analytics || selectedEmployee === "all") {
+      return analytics?.workers ?? [];
+    }
+    return analytics.workers.filter((w) => w.worker_id === selectedEmployee);
+  }, [analytics, selectedEmployee]);
+
+  const maxDailyJobs = useMemo(() => {
+    return Math.max(...(analytics?.dailyTrend?.map((d) => d.count) ?? [1]), 1);
+  }, [analytics]);
+
+  // Check authorization and redirect if needed
   useEffect(() => {
     if (!authLoading) {
       const normalizedRole = (role || "").toLowerCase();
@@ -97,6 +108,7 @@ export default function WorkTrackingAnalyticsPage() {
     }
   }, [role, authLoading, router]);
 
+  // Early return if still loading or unauthorized
   if (authLoading) {
     return null;
   }
@@ -274,16 +286,6 @@ export default function WorkTrackingAnalyticsPage() {
     fetchAnalytics(selectedMonth, selectedYear);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, selectedYear]);
-
-  const filteredWorkers = useMemo(() => {
-    if (!analytics || selectedEmployee === "all")
-      return analytics?.allWorkers ?? [];
-    return analytics.allWorkers.filter((w) => w.worker_id === selectedEmployee);
-  }, [analytics, selectedEmployee]);
-
-  const maxDailyJobs = useMemo(() => {
-    return Math.max(...(analytics?.dailyTrend.map((d) => d.count) ?? [1]), 1);
-  }, [analytics]);
 
   return (
     <div className='space-y-6'>
