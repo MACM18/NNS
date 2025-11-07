@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useActionState } from "react";
+import React, { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -23,9 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-type Props = {
-  action: (formData: FormData) => Promise<any>;
-};
+type Props = {};
 
 const months = [
   { value: "1", label: "January" },
@@ -46,18 +44,16 @@ const years = Array.from({ length: 6 }, (_, i) =>
   String(new Date().getFullYear() - i)
 );
 
-export default function AddConnectionForm({ action }: Props) {
+export default function AddConnectionForm(_: Props) {
   const router = useRouter();
   const { addNotification } = useNotification();
   const [month, setMonth] = useState<string>("");
   const [year, setYear] = useState<string>(String(new Date().getFullYear()));
   const [sheetUrl, setSheetUrl] = useState<string>("");
-  const [sheetName, setSheetName] = useState<string>("");
   const [accessToken, setAccessToken] = useState<string>("");
   const [validationOpen, setValidationOpen] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
-
-  const [result, formAction, pending] = useActionState(action as any, null);
+  const [pending, setPending] = useState(false);
 
   // Fetch a short-lived access token so server actions can authenticate without cookies
   useEffect(() => {
@@ -78,10 +74,10 @@ export default function AddConnectionForm({ action }: Props) {
     };
   }, []);
 
-  // Client-side pre-submit validation to avoid accidental submission of the page URL
-  const handleSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+  // Client-side pre-submit validation and API submit (token-only flow)
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
+    e.preventDefault();
     if (!sheetUrl || sheetUrl.trim() === "") {
-      e.preventDefault();
       setValidationMessage(
         "Please enter the Google Sheet URL before submitting."
       );
@@ -96,7 +92,6 @@ export default function AddConnectionForm({ action }: Props) {
         parsed.hostname === window.location.hostname &&
         path.startsWith("/dashboard/integrations")
       ) {
-        e.preventDefault();
         setValidationMessage(
           "It looks like you pasted the integration page URL. Please paste the Google Sheet URL (docs.google.com/spreadsheets/...)."
         );
@@ -106,12 +101,30 @@ export default function AddConnectionForm({ action }: Props) {
     } catch {
       // If URL parsing fails, let server-side validation handle it
     }
-  };
 
-  // Respond to server action results to show toast and navigate
-  useEffect(() => {
-    if (!result) return;
-    if ((result as any).ok) {
+    setPending(true);
+    try {
+      const payload = {
+        month: Number(month),
+        year: Number(year),
+        sheet_url: sheetUrl.trim(),
+      };
+
+      const res = await fetch("/api/integrations/google-sheets/connection", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: accessToken ? `Bearer ${accessToken}` : "",
+        },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        throw new Error(
+          json?.error || json?.message || "Failed to connect sheet"
+        );
+      }
+
       addNotification({
         title: "Sheet connected",
         message: "Google Sheet connection created successfully.",
@@ -119,19 +132,21 @@ export default function AddConnectionForm({ action }: Props) {
         category: "system",
       });
       router.replace("/dashboard/integrations/google-sheets");
-    } else if ((result as any).error) {
+    } catch (err: any) {
       addNotification({
         title: "Failed to connect sheet",
-        message: String((result as any).error),
+        message: String(err?.message || err),
         type: "error",
         category: "system",
       });
+    } finally {
+      setPending(false);
     }
-  }, [result, addNotification, router]);
+  };
 
   return (
     <div className='max-w-2xl mx-auto p-4'>
-      <form action={formAction} onSubmit={handleSubmit} className='grid gap-4'>
+      <form onSubmit={handleSubmit} className='grid gap-4'>
         <div className='grid grid-cols-2 gap-4'>
           <div>
             <Label>Month</Label>
@@ -177,22 +192,12 @@ export default function AddConnectionForm({ action }: Props) {
           />
         </div>
 
-        <div>
-          <Label>Sheet Name (Tab)</Label>
-          <Input
-            name='sheet_name'
-            type='text'
-            placeholder='Sheet tab name (optional)'
-            value={sheetName}
-            onChange={(e) => setSheetName(e.target.value)}
-          />
-        </div>
+        {/* Sheet name (tab) removed — we auto-detect or persist default on sync */}
 
         {/* Hidden inputs to submit controlled Select values */}
         <input type='hidden' name='month' value={month} />
         <input type='hidden' name='year' value={year} />
-        {/* Provide Supabase access token for secure, cookie-less auth on the server action */}
-        <input type='hidden' name='sb_access_token' value={accessToken} />
+        {/* accessToken is sent in Authorization header by the client submit; keep hidden fields for progressive enhancement */}
 
         <div className='flex justify-end gap-2'>
           <Button variant='outline' asChild>

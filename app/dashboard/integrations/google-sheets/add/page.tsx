@@ -1,5 +1,4 @@
 import AddConnectionForm from "./AddConnectionForm";
-import { createConnectionFromForm } from "@/app/dashboard/integrations/google-sheets/actions";
 
 export default function AddConnectionPage() {
   return (
@@ -10,7 +9,7 @@ export default function AddConnectionPage() {
           Link a Google Sheet to a specific month for syncing.
         </p>
       </div>
-      <AddConnectionForm action={createConnectionFromForm} />
+      <AddConnectionForm />
     </div>
   );
 }
