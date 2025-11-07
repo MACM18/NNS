@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -44,7 +44,9 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { Loader2, Plus, Users as UsersIcon, Trash2 } from "lucide-react";
+import { Loader2, Plus, Users as UsersIcon, Trash2, UserPlus } from "lucide-react";
+import { ManageWorkersModal } from "@/components/modals/manage-workers-modal";
+import { WorkTrackingHeader } from "@/components/work-tracking/work-tracking-header";
 
 interface WorkerOption {
   id: string;
@@ -104,8 +106,7 @@ const yearOptions = Array.from({ length: 6 }, (_, idx) => {
 
 export default function WorkTrackingCalendarPage() {
   const router = useRouter();
-  const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, role, loading: authLoading } = useAuth();
   const today = useMemo(() => new Date(), []);
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
@@ -116,7 +117,29 @@ export default function WorkTrackingCalendarPage() {
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const [selectedWorker, setSelectedWorker] = useState<string | null>(null);
   const [assignLoading, setAssignLoading] = useState(false);
+  const [workersDialogOpen, setWorkersDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  // Check authorization
+  useEffect(() => {
+    if (!authLoading) {
+      const normalizedRole = (role || "").toLowerCase();
+      if (!normalizedRole || !["admin", "moderator"].includes(normalizedRole)) {
+        router.replace("/");
+      }
+    }
+  }, [role, authLoading, router]);
+
+  if (authLoading) {
+    return null;
+  }
+
+  const normalizedRole = (role || "").toLowerCase();
+  if (!normalizedRole || !["admin", "moderator"].includes(normalizedRole)) {
+    return null;
+  }
+
+  const isAdmin = normalizedRole === "admin";
 
   const dayMap = useMemo(() => {
     const map = new Map<string, DayInfo>();
@@ -337,6 +360,8 @@ export default function WorkTrackingCalendarPage() {
 
   return (
     <div className='space-y-6'>
+      <WorkTrackingHeader />
+
       <Card className='p-4 shadow-sm'>
         <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
@@ -346,6 +371,15 @@ export default function WorkTrackingCalendarPage() {
             </p>
           </div>
           <div className='flex gap-2'>
+            {isAdmin && (
+              <Button
+                variant='outline'
+                onClick={() => setWorkersDialogOpen(true)}
+              >
+                <UserPlus className='h-4 w-4 mr-2' />
+                Manage Workers
+              </Button>
+            )}
             <Select
               value={selectedMonth.toString()}
               onValueChange={(value) => setSelectedMonth(Number(value))}
@@ -652,6 +686,13 @@ export default function WorkTrackingCalendarPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Manage Workers Modal */}
+      <ManageWorkersModal
+        open={workersDialogOpen}
+        onOpenChange={setWorkersDialogOpen}
+        onWorkersUpdated={() => fetchData(selectedMonth, selectedYear)}
+      />
     </div>
   );
 }

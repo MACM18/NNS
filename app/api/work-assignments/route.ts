@@ -37,10 +37,11 @@ type AssignmentRow = {
   worker_id: string;
 };
 
-type WorkerProfile = {
+type Worker = {
   id: string;
   full_name: string | null;
   role: string | null;
+  status: string | null;
 };
 
 async function authorize(
@@ -148,26 +149,26 @@ export async function GET(req: NextRequest) {
       new Set((assignments || []).map((row: AssignmentRow) => row.worker_id))
     );
 
-    let workerDetails: WorkerProfile[] = [];
+    let workerDetails: Worker[] = [];
     if (workerIds.length) {
-      const { data: workerProfiles, error: workerErr } = await supabaseServer
-        .from("profiles")
-        .select("id, full_name, role")
+      const { data: workers, error: workerErr } = await supabaseServer
+        .from("workers")
+        .select("id, full_name, role, status")
         .in("id", workerIds);
 
       if (workerErr) throw workerErr;
-      workerDetails = workerProfiles || [];
+      workerDetails = workers || [];
     }
 
     const { data: workerOptions, error: optionsErr } = await supabaseServer
-      .from("profiles")
-      .select("id, full_name, role")
-      .eq("role", "employee")
+      .from("workers")
+      .select("id, full_name, role, status")
+      .eq("status", "active")
       .order("full_name", { ascending: true });
 
     if (optionsErr) throw optionsErr;
 
-    const workerLookup = new Map<string, WorkerProfile>();
+    const workerLookup = new Map<string, Worker>();
     workerDetails.forEach((worker) => workerLookup.set(worker.id, worker));
 
     const lineMap = new Map<string, any>();
@@ -215,7 +216,7 @@ export async function GET(req: NextRequest) {
         month,
         year,
         days,
-        workers: (workerOptions || []).map((worker: WorkerProfile) => ({
+        workers: (workerOptions || []).map((worker: Worker) => ({
           id: worker.id,
           full_name: worker.full_name,
           role: worker.role,

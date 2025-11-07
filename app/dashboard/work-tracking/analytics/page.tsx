@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { WorkTrackingHeader } from "@/components/work-tracking/work-tracking-header";
 
 interface DayData {
   date: string;
@@ -77,8 +78,7 @@ const yearOptions = Array.from({ length: 6 }, (_, idx) => {
 
 export default function WorkTrackingAnalyticsPage() {
   const router = useRouter();
-  const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, role, loading: authLoading } = useAuth();
   const today = useMemo(() => new Date(), []);
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
@@ -86,6 +86,25 @@ export default function WorkTrackingAnalyticsPage() {
   const [loading, setLoading] = useState(false);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const { toast } = useToast();
+
+  // Check authorization
+  useEffect(() => {
+    if (!authLoading) {
+      const normalizedRole = (role || "").toLowerCase();
+      if (!normalizedRole || !["admin", "moderator"].includes(normalizedRole)) {
+        router.replace("/");
+      }
+    }
+  }, [role, authLoading, router]);
+
+  if (authLoading) {
+    return null;
+  }
+
+  const normalizedRole = (role || "").toLowerCase();
+  if (!normalizedRole || !["admin", "moderator"].includes(normalizedRole)) {
+    return null;
+  }
 
   const getAuthToken = async () => {
     const {
@@ -268,6 +287,8 @@ export default function WorkTrackingAnalyticsPage() {
 
   return (
     <div className='space-y-6'>
+      <WorkTrackingHeader />
+      
       <Card className='p-4 shadow-sm'>
         <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
