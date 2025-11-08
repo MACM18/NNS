@@ -1803,6 +1803,7 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
   }
 
   const toCreate = unique.filter((n) => !byNumber.has(n));
+  const createdNumbers: string[] = [];
   for (const num of toCreate) {
     try {
       const initial = Number(defaultItem?.drum_size || 0) || 0;
@@ -1818,17 +1819,39 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
         .insert(insertPayload)
         .select("id, item_id, status")
         .single();
-      if (!insErr && created?.id) {
+      if (insErr) {
+        console.error(
+          "[ensureDrumTrackingForNumbers] Insert failed for",
+          num,
+          insErr
+        );
+        continue;
+      }
+      if (created?.id) {
         byNumber.set(num, {
           id: created.id,
           item_id: created.item_id,
           status: created.status || "active",
         });
+        createdNumbers.push(num);
+        console.log(
+          "[ensureDrumTrackingForNumbers] Created drum_tracking for",
+          num,
+          "id=",
+          created.id
+        );
       }
-    } catch {}
+    } catch (err) {
+      console.error(
+        "[ensureDrumTrackingForNumbers] Exception creating drum_tracking for",
+        num,
+        err
+      );
+      continue;
+    }
   }
 
-  return { byNumber };
+  return { byNumber, createdNumbers };
 }
 
 // Recalculate drum current quantities using calculateSmartWastage; set status when empty.
