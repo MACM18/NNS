@@ -853,17 +853,17 @@ export async function syncConnection(
           const ensured = await ensureDrumTrackingForNumbers(
             drumNumbersFromSheet as string[]
           );
-          // ensured.createdNumbers contains full created drum objects (with id)
-          if (ensured.createdNumbers && ensured.createdNumbers.length) {
-            const createdKeys = ensured.createdNumbers.map((c: any) =>
-              (c.drum_number || "").toString()
-            );
-            drumProcessed += createdKeys.length;
-            // record created drum numbers for debug/confirmation (store strings)
-            drumCreatedNumbers.push(...createdKeys);
+          const ensuredKeys = Array.from(ensured.byNumber.keys());
+          const newlyCreatedKeys = ensuredKeys.filter((k) =>
+            drumNumbersFromSheet.includes(k)
+          );
+          drumProcessed += newlyCreatedKeys.length;
+          // record created drum numbers for debug/confirmation
+          if (newlyCreatedKeys.length) {
+            drumCreatedNumbers.push(...newlyCreatedKeys);
             console.log(
               "[syncConnection] Created drum_tracking rows for:",
-              ensured.createdNumbers
+              newlyCreatedKeys
             );
           }
         }
@@ -1014,31 +1014,21 @@ export async function syncConnection(
             usage_date: l.date,
             cable_start_point: Number(l.cable_start || 0),
             cable_end_point: Number(l.cable_end || 0),
+            wastage_calculated: 0, // Initialize wastage to 0, will be calculated later if needed
           };
-
           const existing = usageByLine.get(l.id);
           if (existing?.id) {
-            const { data: updatedRow, error: updErr } = await supabaseServer
+            const { error: updErr } = await supabaseServer
               .from("drum_usage")
               .update(payload)
-              .eq("id", existing.id)
-              .select(
-                "id, drum_id, line_details_id, quantity_used, usage_date, cable_start_point, cable_end_point, created_at"
-              )
-              .single();
+              .eq("id", existing.id);
             if (updErr) throw updErr;
-            // updatedRow.id contains the UUID of the updated drum_usage
             drumUsageUpdated++;
           } else {
-            const { data: insData, error: insErr } = await supabaseServer
+            const { error: insErr } = await supabaseServer
               .from("drum_usage")
-              .insert(payload)
-              .select(
-                "id, drum_id, line_details_id, quantity_used, usage_date, cable_start_point, cable_end_point, created_at"
-              )
-              .single();
+              .insert(payload);
             if (insErr) throw insErr;
-            // insData.id contains the UUID of the inserted drum_usage
             drumUsageInserted++;
           }
           affectedDrumIds.add(drum.id);
@@ -1861,54 +1851,66 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
       status: d.status,
     });
 
-  // Find a sensible default cable inventory item (specifically 'Drop Wire Cable')
+  // Find the 'Drop Wire Cable' inventory item specifically
   let defaultItem: { id: string; drum_size?: number } | null = null;
   try {
-    const { data: prefer, error: prefErr } = await supabaseServer
+    const { data: dropWireCable, error: cableErr } = await supabaseServer
       .from("inventory_items")
       .select("id, drum_size, name")
-      .not("drum_size", "is", null)
       .eq("name", "Drop Wire Cable")
       .limit(1)
       .maybeSingle();
-    if (!prefErr && prefer) defaultItem = prefer as any;
-  } catch {}
-  if (!defaultItem) {
-    try {
-      const { data: anyItem } = await supabaseServer
-        .from("inventory_items")
-        .select("id, drum_size")
-        .not("drum_size", "is", null)
-        .limit(1)
-        .maybeSingle();
-      if (anyItem) defaultItem = anyItem as any;
-    } catch {}
+    if (cableErr) {
+      console.error(
+        "[ensureDrumTrackingForNumbers] Error finding Drop Wire Cable:",
+        cableErr
+      );
+    } else if (dropWireCable) {
+      defaultItem = dropWireCable as any;
+      console.log(
+        "[ensureDrumTrackingForNumbers] Found Drop Wire Cable item:",
+        dropWireCable.id
+      );
+    } else {
+      console.warn(
+        "[ensureDrumTrackingForNumbers] Drop Wire Cable item not found in inventory"
+      );
+    }
+  } catch (err) {
+    console.error(
+      "[ensureDrumTrackingForNumbers] Exception finding Drop Wire Cable:",
+      err
+    );
   }
 
   const toCreate = unique.filter((n) => !byNumber.has(n));
-  const createdNumbers: Array<any> = [];
+  const createdNumbers: string[] = [];
   for (const num of toCreate) {
     try {
-      const initial = Number(defaultItem?.drum_size || 0) || 0;
+      // Only create drums if we have the Drop Wire Cable item
+      if (!defaultItem) {
+        console.error(
+          "[ensureDrumTrackingForNumbers] Cannot create drum tracking for",
+          num,
+          "- Drop Wire Cable item not found in inventory"
+        );
+        continue;
+      }
+
+      const initial = Number(defaultItem.drum_size || 0) || 0;
       const insertPayload: any = {
         drum_number: num,
-        item_id: defaultItem?.id || null,
+        item_id: defaultItem.id, // Always use the Drop Wire Cable item_id
         initial_quantity: initial,
         current_quantity: initial,
-        // Always mark newly discovered drums as active per request
-        status: "active",
-        received_date: new Date().toISOString().slice(0, 10),
+        status: "active", // Always create drums with active status
+        received_date: new Date().toISOString().slice(0, 10), // Set received date to today
       };
-
-      // Return all relevant fields including the generated UUID
       const { data: created, error: insErr } = await supabaseServer
         .from("drum_tracking")
         .insert(insertPayload)
-        .select(
-          "id, drum_number, item_id, initial_quantity, current_quantity, status, received_date, created_at, updated_at"
-        )
+        .select("id, item_id, status")
         .single();
-
       if (insErr) {
         console.error(
           "[ensureDrumTrackingForNumbers] Insert failed for",
@@ -1923,7 +1925,7 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
           item_id: created.item_id,
           status: created.status || "active",
         });
-        createdNumbers.push(created);
+        createdNumbers.push(num);
         console.log(
           "[ensureDrumTrackingForNumbers] Created drum_tracking for",
           num,
