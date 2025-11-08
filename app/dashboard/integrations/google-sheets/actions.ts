@@ -402,7 +402,10 @@ export async function syncConnection(
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: primaryRange,
-      valueRenderOption: "UNFORMATTED_VALUE",
+      // Use FORMATTED_VALUE so computed/formula results in the primary sheet's
+      // telephone number column are returned as the displayed values and not
+      // as raw/unformatted values which can be empty for formulas.
+      valueRenderOption: "FORMATTED_VALUE",
       dateTimeRenderOption: "FORMATTED_STRING",
     });
     const values = res.data.values || [];
@@ -841,7 +844,10 @@ export async function syncConnection(
       const drumRes = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: drumRange,
-        valueRenderOption: "UNFORMATTED_VALUE",
+        // Use FORMATTED_VALUE so we receive the computed/displayed result of any
+        // formulas in the TP column (rather than raw/unformatted values that
+        // can appear empty when a formula is present).
+        valueRenderOption: "FORMATTED_VALUE",
         dateTimeRenderOption: "FORMATTED_STRING",
       });
       const drumValues = drumRes.data.values || [];
