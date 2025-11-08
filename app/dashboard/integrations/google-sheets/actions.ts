@@ -395,184 +395,76 @@ export async function syncConnection(
     if (!sheetTab) {
       throw new Error("Failed to resolve a sheet tab to read from.");
     }
-
-    // Fetch sheet data with comprehensive error handling
-    let values: any[] = [];
-    try {
-      progress("Reading sheet data");
-      const range = `${sheetTab}!B1:AZ`;
-      const readRes = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range,
-        valueRenderOption: "UNFORMATTED_VALUE",
-        dateTimeRenderOption: "FORMATTED_STRING",
-      });
-      values = readRes.data.values || [];
-    } catch (error: any) {
-      console.error("[syncConnection] Failed to read sheet data:", error);
-      if (error.code === 400) {
-        throw new Error(
-          `Invalid sheet or range. Please check that tab '${sheetTab}' exists and is accessible.`
-        );
-      } else if (error.code === 403) {
-        throw new Error(
-          "Access denied. Please ensure the service account has access to this Google Sheet."
-        );
-      } else if (error.code === 404) {
-        throw new Error(
-          "Sheet not found. Please check the sheet URL and try again."
-        );
-      }
-      throw new Error(
-        `Failed to read sheet data: ${error.message || "Unknown error"}`
-      );
-    }
-
+    // Establish month window & read primary sheet data
+    const { start, end } = monthStartEnd(month, year);
+    progress("Reading sheet data");
+    const primaryRange = `${sheetTab}!B1:AZ`;
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: primaryRange,
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    });
+    const values = res.data.values || [];
     if (!values.length) {
-      throw new Error(
-        `No data found in tab '${sheetTab}'. Please ensure the sheet contains data.`
-      );
+      throw new Error("Selected sheet tab contains no data rows");
     }
-
-    // Validate headers with better error reporting
-    const headers = (values[0] || []).map((h: any) =>
-      (h ?? "").toString().trim()
-    );
-    try {
-      progress("Validating header format");
-      validateHeaders(headers);
-    } catch (error) {
-      console.error("[syncConnection] Header validation failed:", error);
-      throw new Error(
-        `Sheet format validation failed: ${
-          error instanceof Error ? error.message : "Invalid headers"
-        }`
-      );
-    }
-
-    // Build index map for quick access
+    const headers = (values[0] || []).map((h: any) => (h ?? "").toString().trim());
+    validateHeaders(headers);
     const idx = headerIndex(headers);
 
-    // Collect rows (skip header) with error handling
-    const rows = values.slice(1).filter((r) => {
-      try {
-        return (r[idx.number] ?? "").toString().trim() !== "";
-      } catch (error) {
-        console.warn("[syncConnection] Error filtering row:", error);
-        return false;
-      }
-    });
+    // Map sheet rows -> normalized row objects
+    const sheetRows = values
+      .slice(1)
+      .map((r: any[]) => mapSheetRow(r, idx, month, year))
+      .filter((r: any) => r.telephone_no); // keep only rows with a number
 
-    // Map to normalized objects with error handling
-    let sheetRows: any[] = [];
-    try {
-      progress("Mapping rows");
-      sheetRows = rows.map((r, index) => {
-        try {
-          // pass connection month/year as context so partial dates (e.g. "8/1")
-          // are resolved to the correct year/month for this connection
-          return mapSheetRow(r, idx, month, year);
-        } catch (error) {
-          console.warn(
-            `[syncConnection] Error mapping row ${index + 2}:`,
-            error
-          );
-          throw new Error(
-            `Invalid data in row ${index + 2}: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`
-          );
-        }
-      });
-    } catch (error) {
-      throw error;
-    }
-
-    // Filter month in sheetRows if needed; prefer trusting the sheet month
-    // We'll still restrict DB queries to month range for safety
-    const { start, end } = monthStartEnd(month, year);
-
-    // Fetch existing project lines for these numbers within the month window
-    const numbers = Array.from(
-      new Set(sheetRows.map((x) => x.telephone_no).filter(Boolean))
+    // Collect telephone numbers for existing line lookup
+    const numbers = sheetRows.map((r: any) => r.telephone_no).filter(Boolean);
+    const existingLines = await fetchExistingLines(numbers, start, end);
+    const existingByPhone = new Map<string, any>(
+      existingLines.map((l: any) => [l.telephone_no, l])
     );
 
-    if (numbers.length === 0) {
-      throw new Error(
-        `No telephone numbers found after parsing tab '${sheetTab}'. Please verify the sheet data.`
-      );
-    }
+    // Utilities for merge/dedupe logic
+    const isBlank = (v: any) => v == null || (typeof v === "string" && v.toString().trim() === "");
+    const isNumberLike = (v: any) => {
+      if (v == null || v === "") return false;
+      if (typeof v === "number") return Number.isFinite(v);
+      if (typeof v === "string") return /^[-+]?\d+(\.\d+)?$/.test(v.trim());
+      return false;
+    };
 
-    let existingLines: any[] = [];
-    try {
-      progress("Fetching existing project rows");
-      existingLines = await fetchExistingLines(numbers, start, end);
-    } catch (error) {
-      console.error("[syncConnection] Failed to fetch existing lines:", error);
-      throw new Error(
-        `Failed to fetch existing data: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    }
-
-    const existingByPhone = new Map<string, any>();
-    for (const line of existingLines) {
-      if (line.telephone_no) existingByPhone.set(line.telephone_no, line);
-    }
-
-    // De-duplicate / merge sheetRows by telephone_no (sheet uses month/day only)
-    // This consolidates duplicates that refer to the same phone even if the
-    // sheet's date column varies in month/day formatting.
-    const seen = new Map<string, any>();
-    const mergedKeys: string[] = [];
-
-    const isBlank = (v: any) =>
-      v === null ||
-      v === undefined ||
-      (typeof v === "string" && v.toString().trim() === "");
-    const isNumberLike = (v: any) => Number.isFinite(Number(v));
+    // Merge two row objects preferring non-empty / more specific incoming values
     const mergeRows = (a: any, b: any) => {
       const out: any = { ...a };
       for (const k of Object.keys(b)) {
-        const bv = b[k];
         const av = out[k];
-        // Keep telephone_no from existing a (they should be identical)
-        if (k === "telephone_no") continue;
-
-        // For date, prefer existing value unless blank, then accept incoming
+        const bv = b[k];
+        if (k === "telephone_no") continue; // identical keys
         if (k === "date") {
           if (isBlank(av) && !isBlank(bv)) out[k] = bv;
           continue;
         }
-
-        if (isBlank(bv)) {
-          continue; // nothing incoming -> keep existing
-        }
-
-        // Prefer incoming numeric non-zero values
+        if (isBlank(bv)) continue;
         if (isNumberLike(bv)) {
           const num = Number(bv);
-          if (Number.isFinite(num) && num !== 0) {
-            out[k] = num;
-          } else if (isBlank(av)) {
-            out[k] = num;
-          }
+          if ((Number.isFinite(num) && num !== 0) || isBlank(av)) out[k] = num;
           continue;
         }
-
-        // For strings prefer incoming non-empty
         if (typeof bv === "string") {
           const s = bv.toString().trim();
-          if (s !== "") out[k] = s;
+            if (s !== "") out[k] = s;
           continue;
         }
-
-        // Fallback: overwrite if incoming not null/undefined
         out[k] = bv;
       }
       return out;
     };
+
+    // Deduplicate sheet rows by (telephone_no,date)
+    const seen = new Map<string, any>();
+    const mergedKeys: string[] = [];
 
     for (const row of sheetRows) {
       const phone = (row.telephone_no || "").toString().trim();
@@ -630,8 +522,8 @@ export async function syncConnection(
         console.log(
           "[syncConnection] Bulk upsert failed, falling back to row-by-row"
         );
-        for (let index = 0; index < sheetRows.length; index++) {
-          const row = sheetRows[index];
+        for (let index = 0; index < dedupedRows.length; index++) {
+          const row = dedupedRows[index];
           try {
             const existing = row.telephone_no
               ? existingByPhone.get(row.telephone_no)
@@ -695,12 +587,12 @@ export async function syncConnection(
             for (const line of upsertedLines || []) {
               if (line.telephone_no) lineIdMap.set(line.telephone_no, line.id);
             }
-            const newTasks = sheetRows
-              .filter((row) => {
+            const newTasks = dedupedRows
+              .filter((row: any) => {
                 const lineId = lineIdMap.get(row.telephone_no);
                 return lineId && !existingLineIds.has(lineId);
               })
-              .map((row) => {
+              .map((row: any) => {
                 const lineId = lineIdMap.get(row.telephone_no)!;
                 return {
                   telephone_no: row.telephone_no,
@@ -906,146 +798,7 @@ export async function syncConnection(
       console.warn("Continuing sync despite sheet write-back failure");
     }
 
-    // Drum Usage: create usage rows for lines that have drum numbers
-    let drumUsageInserted = 0;
-    let drumsRecalculated = 0;
-    try {
-      progress("Processing drum usage");
-      const { data: monthLines, error: monthErr } = await supabaseServer
-        .from("line_details")
-        .select("*")
-        .gte("date", start)
-        .lte("date", end);
-      if (monthErr) throw monthErr;
-
-      const linesWithDrum = (monthLines || []).filter(
-        (l: any) => l.drum_number || l.drum_number_new
-      );
-      if (linesWithDrum.length) {
-        const drumNumbers = Array.from(
-          new Set(
-            linesWithDrum
-              .map((l: any) => l.drum_number || l.drum_number_new)
-              .filter(Boolean)
-          )
-        );
-        if (drumNumbers.length) {
-          const { data: drums, error: drumsErr } = await supabaseServer
-            .from("drum_tracking")
-            .select("id, drum_number, item_id, current_quantity, status")
-            .in("drum_number", drumNumbers);
-          if (drumsErr) throw drumsErr;
-
-          const drumByNumber = new Map<string, any>();
-          for (const d of drums || []) drumByNumber.set(d.drum_number, d);
-
-          // Candidate usages
-          const candidates = linesWithDrum
-            .map((l: any) => {
-              const num = l.drum_number || l.drum_number_new;
-              const drum = num ? drumByNumber.get(num) : null;
-              if (!drum) return null;
-              return {
-                drum_id: drum.id,
-                line_details_id: l.id,
-                quantity_used:
-                  Number(l.total_cable) ||
-                  Math.abs(
-                    Number(l.cable_end || 0) - Number(l.cable_start || 0)
-                  ) ||
-                  0,
-                usage_date: l.date,
-                cable_start_point: Number(l.cable_start || 0),
-                cable_end_point: Number(l.cable_end || 0),
-              };
-            })
-            .filter(Boolean) as Array<{
-            drum_id: string;
-            line_details_id: string;
-            quantity_used: number;
-            usage_date: string;
-            cable_start_point: number;
-            cable_end_point: number;
-          }>;
-
-          if (candidates.length) {
-            // Avoid duplicates by existing line_details_id
-            const ids = candidates.map((c) => c.line_details_id);
-            const { data: existingUsages, error: existErr } =
-              await supabaseServer
-                .from("drum_usage")
-                .select("line_details_id")
-                .in("line_details_id", ids);
-            if (existErr) throw existErr;
-            const existingSet = new Set(
-              (existingUsages || []).map((u: any) => u.line_details_id)
-            );
-            const toInsert = candidates.filter(
-              (c) => !existingSet.has(c.line_details_id)
-            );
-
-            if (toInsert.length) {
-              const { error: insDUerr } = await supabaseServer
-                .from("drum_usage")
-                .insert(toInsert);
-              if (insDUerr) throw insDUerr;
-              drumUsageInserted = toInsert.length;
-
-              // Recalculate current quantities per drum using smart wastage
-              const affectedDrumIds = Array.from(
-                new Set(toInsert.map((c) => c.drum_id))
-              );
-              for (const drumId of affectedDrumIds) {
-                const drum = (drums || []).find((d: any) => d.id === drumId);
-                if (!drum) continue;
-                // Get drum capacity from inventory_items via item_id
-                let capacity = 0;
-                if (drum.item_id) {
-                  const { data: item, error: itemErr } = await supabaseServer
-                    .from("inventory_items")
-                    .select("drum_size")
-                    .eq("id", drum.item_id)
-                    .single();
-                  if (!itemErr && item?.drum_size)
-                    capacity = Number(item.drum_size) || 0;
-                }
-
-                // Fetch all usages for this drum
-                const { data: usages, error: uErr } = await supabaseServer
-                  .from("drum_usage")
-                  .select("id, cable_start_point, cable_end_point, usage_date")
-                  .eq("drum_id", drumId);
-                if (uErr) continue;
-
-                if (capacity > 0) {
-                  const result = calculateSmartWastage(
-                    (usages || []).map((u: any) => ({
-                      id: u.id,
-                      cable_start_point: Number(u.cable_start_point || 0),
-                      cable_end_point: Number(u.cable_end_point || 0),
-                      usage_date: u.usage_date,
-                    })),
-                    capacity,
-                    undefined,
-                    drum.status
-                  );
-                  // Update current_quantity to reflect calculated current
-                  await supabaseServer
-                    .from("drum_tracking")
-                    .update({
-                      current_quantity: result.calculatedCurrentQuantity,
-                    })
-                    .eq("id", drumId);
-                  drumsRecalculated++;
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("Drum usage sync skipped:", (e as Error).message);
-    }
+    // (Old drum usage block removed; replaced with improved pipeline after Drum Number tab sync)
 
     // Also process the 'Drum Number' tab bidirectionally if present
     let drumProcessed = 0;
@@ -1140,6 +893,116 @@ export async function syncConnection(
       console.warn("Drum Number tab sync skipped:", (e as Error).message);
     }
 
+    // Drum pipeline: ensure drum tracking, upsert usage per line, recalc quantities & inventory
+    let drumUsageInserted = 0;
+    let drumUsageUpdated = 0;
+    let drumsRecalculated = 0;
+    try {
+      progress("Processing drum usage & inventory");
+
+      const { data: monthLines, error: monthErr } = await supabaseServer
+        .from("line_details")
+        .select("*")
+        .gte("date", start)
+        .lte("date", end);
+      if (monthErr) throw monthErr;
+
+      const linesWithDrum = (monthLines || []).filter(
+        (l: any) => l.drum_number || l.drum_number_new
+      );
+      if (!linesWithDrum.length) {
+        progress("No drum numbers found in this period");
+      } else {
+        const drumNumbers = Array.from(
+          new Set(
+            linesWithDrum
+              .map((l: any) => (l.drum_number || l.drum_number_new) as string)
+              .filter(Boolean)
+          )
+        );
+
+        // 1) Ensure drum_tracking exists for all referenced drum numbers
+        const ensured = await ensureDrumTrackingForNumbers(drumNumbers);
+        const drumMap = ensured.byNumber; // Map<drum_number, {id,item_id,status}>
+
+        // 2) Upsert (insert or update) drum_usage per line
+        const idsToCheck = linesWithDrum.map((l: any) => l.id);
+        const { data: existingUsages, error: existErr } = await supabaseServer
+          .from("drum_usage")
+          .select("id, line_details_id")
+          .in("line_details_id", idsToCheck);
+        if (existErr) throw existErr;
+        const usageByLine = new Map<string, any>();
+        for (const u of existingUsages || []) usageByLine.set(u.line_details_id, u);
+
+        const affectedDrumIds = new Set<string>();
+
+        for (const l of linesWithDrum) {
+          const num = (l.drum_number || l.drum_number_new) as string;
+          const drum = drumMap.get(num);
+          if (!drum) continue; // should not happen after ensure
+          const quantity = computeQuantityUsed(l);
+          const payload = {
+            drum_id: drum.id,
+            line_details_id: l.id,
+            quantity_used: quantity,
+            usage_date: l.date,
+            cable_start_point: Number(l.cable_start || 0),
+            cable_end_point: Number(l.cable_end || 0),
+          };
+
+          const existing = usageByLine.get(l.id);
+          if (existing?.id) {
+            const { error: updErr } = await supabaseServer
+              .from("drum_usage")
+              .update(payload)
+              .eq("id", existing.id);
+            if (updErr) throw updErr;
+            drumUsageUpdated++;
+          } else {
+            const { error: insErr } = await supabaseServer
+              .from("drum_usage")
+              .insert(payload);
+            if (insErr) throw insErr;
+            drumUsageInserted++;
+          }
+          affectedDrumIds.add(drum.id);
+        }
+
+        // 3) Recalculate per-drum current quantities and set status
+        drumsRecalculated += await recalcDrumAggregates(Array.from(affectedDrumIds));
+
+        // 4) Update inventory item stock totals based on active drums
+        const impactedItemIds = Array.from(
+          new Set(
+            Array.from(drumMap.values())
+              .map((d) => d.item_id)
+              .filter(Boolean)
+          )
+        ) as string[];
+        for (const itemId of impactedItemIds) {
+          try {
+            const { data: sums, error: sumErr } = await supabaseServer
+              .from("drum_tracking")
+              .select("current_quantity")
+              .eq("item_id", itemId)
+              .eq("status", "active");
+            if (sumErr) continue;
+            const total = (sums || []).reduce(
+              (acc: number, r: any) => acc + Number(r.current_quantity || 0),
+              0
+            );
+            await supabaseServer
+              .from("inventory_items")
+              .update({ current_stock: total })
+              .eq("id", itemId);
+          } catch {}
+        }
+      }
+    } catch (e) {
+      console.warn("Drum pipeline warnings:", (e as Error).message);
+    }
+
     // Update connection status
     const now = new Date().toISOString();
     const totalProcessed =
@@ -1179,6 +1042,7 @@ export async function syncConnection(
         drumProcessed,
         drumAppended,
         drumUsageInserted,
+        drumUsageUpdated,
         drumsRecalculated,
       };
     } catch (error) {
@@ -1791,6 +1655,136 @@ function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
   row[idx.dw_cus] = l.name;
   row[idx.drum_number] = l.drum_number ?? l.drum_number_new ?? "";
   return row;
+}
+
+// Compute quantity used for a line (prefers explicit total_cable, else abs(end-start))
+function computeQuantityUsed(l: any): number {
+  const total = Number(l.total_cable || 0);
+  if (Number.isFinite(total) && total > 0) return total;
+  const start = Number(l.cable_start || 0);
+  const end = Number(l.cable_end || 0);
+  const diff = Math.abs(end - start);
+  return Number.isFinite(diff) && diff >= 0 ? diff : 0;
+}
+
+// Ensure drum_tracking rows exist for the given drum numbers. Tries to map to a cable inventory item.
+async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
+  const unique = Array.from(new Set((drumNumbers || []).filter(Boolean)));
+  if (!unique.length) return { byNumber: new Map<string, { id: string; item_id?: string; status: string }>() };
+
+  const { data: existing, error: existErr } = await supabaseServer
+    .from("drum_tracking")
+    .select("id, drum_number, item_id, status")
+    .in("drum_number", unique);
+  if (existErr) throw existErr;
+
+  const byNumber = new Map<string, { id: string; item_id?: string; status: string }>();
+  for (const d of existing || []) byNumber.set(d.drum_number, { id: d.id, item_id: d.item_id, status: d.status });
+
+  // Find a sensible default cable inventory item (prefer names like 'drop wire')
+  let defaultItem: { id: string; drum_size?: number } | null = null;
+  try {
+    const { data: prefer, error: prefErr } = await supabaseServer
+      .from("inventory_items")
+      .select("id, drum_size, name")
+      .not("drum_size", "is", null)
+      .ilike("name", "%drop wire%")
+      .limit(1)
+      .maybeSingle();
+    if (!prefErr && prefer) defaultItem = prefer as any;
+  } catch {}
+  if (!defaultItem) {
+    try {
+      const { data: anyItem } = await supabaseServer
+        .from("inventory_items")
+        .select("id, drum_size")
+        .not("drum_size", "is", null)
+        .limit(1)
+        .maybeSingle();
+      if (anyItem) defaultItem = anyItem as any;
+    } catch {}
+  }
+
+  const toCreate = unique.filter((n) => !byNumber.has(n));
+  for (const num of toCreate) {
+    try {
+      const initial = Number(defaultItem?.drum_size || 0) || 0;
+      const insertPayload: any = {
+        drum_number: num,
+        item_id: defaultItem?.id || null,
+        initial_quantity: initial,
+        current_quantity: initial,
+        status: initial > 0 ? "active" : "unknown",
+      };
+      const { data: created, error: insErr } = await supabaseServer
+        .from("drum_tracking")
+        .insert(insertPayload)
+        .select("id, item_id, status")
+        .single();
+      if (!insErr && created?.id) {
+        byNumber.set(num, {
+          id: created.id,
+          item_id: created.item_id,
+          status: created.status || "active",
+        });
+      }
+    } catch {}
+  }
+
+  return { byNumber };
+}
+
+// Recalculate drum current quantities using calculateSmartWastage; set status when empty.
+async function recalcDrumAggregates(drumIds: string[]): Promise<number> {
+  if (!drumIds.length) return 0;
+  let recalced = 0;
+  // Fetch drums with related item capacity
+  const { data: drums, error: drumsErr } = await supabaseServer
+    .from("drum_tracking")
+    .select("id, item_id, status, current_quantity")
+    .in("id", drumIds);
+  if (drumsErr) throw drumsErr;
+
+  for (const d of drums || []) {
+    let capacity = 0;
+    if (d.item_id) {
+      const { data: item } = await supabaseServer
+        .from("inventory_items")
+        .select("drum_size")
+        .eq("id", d.item_id)
+        .maybeSingle();
+      if (item?.drum_size) capacity = Number(item.drum_size) || 0;
+    }
+
+    // Gather all usages for this drum
+    const { data: usages } = await supabaseServer
+      .from("drum_usage")
+      .select("id, cable_start_point, cable_end_point, usage_date")
+      .eq("drum_id", d.id);
+
+    if (capacity > 0) {
+      const result = calculateSmartWastage(
+        (usages || []).map((u: any) => ({
+          id: u.id,
+          cable_start_point: Number(u.cable_start_point || 0),
+          cable_end_point: Number(u.cable_end_point || 0),
+          usage_date: u.usage_date,
+        })),
+        capacity,
+        undefined,
+        d.status
+      );
+
+      const newQty = result.calculatedCurrentQuantity;
+      const newStatus = newQty <= 0 ? "inactive" : (d.status || "active");
+      await supabaseServer
+        .from("drum_tracking")
+        .update({ current_quantity: newQty, status: newStatus })
+        .eq("id", d.id);
+      recalced++;
+    }
+  }
+  return recalced;
 }
 
 // Month window helper restored
