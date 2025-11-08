@@ -353,7 +353,7 @@ CREATE TABLE public.work_assignments (
   line_id uuid NOT NULL,
   worker_id uuid NOT NULL,
   assigned_date date NOT NULL,
-  created_by uuid,
+  created_by uuid NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT work_assignments_pkey PRIMARY KEY (id),
   CONSTRAINT work_assignments_line_id_fkey FOREIGN KEY (line_id) REFERENCES public.line_details(id) ON DELETE CASCADE,
