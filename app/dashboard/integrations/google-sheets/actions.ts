@@ -1042,7 +1042,9 @@ export async function syncConnection(
 
         // 3) Recalculate per-drum current quantities and set status
         drumsRecalculated += await recalcDrumAggregates(
-          Array.from(affectedDrumIds)
+          Array.from(affectedDrumIds),
+          month,
+          year
         );
 
         // 4) Update inventory item stock totals based on active drums
@@ -1848,7 +1850,7 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
         item_id: defaultItem?.id || null,
         initial_quantity: initial,
         current_quantity: initial,
-        status: initial > 0 ? "active" : "unknown",
+        status: initial > 0 ? "active" : "inactive",
       };
       const { data: created, error: insErr } = await supabaseServer
         .from("drum_tracking")
@@ -1890,8 +1892,12 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
   return { byNumber, createdNumbers };
 }
 
-// Recalculate drum current quantities using calculateSmartWastage; set status when empty.
-async function recalcDrumAggregates(drumIds: string[]): Promise<number> {
+// Recalculate drum current quantities using calculateSmartWastage; set status based on last used line date in current month.
+async function recalcDrumAggregates(
+  drumIds: string[],
+  month: number,
+  year: number
+): Promise<number> {
   if (!drumIds.length) return 0;
   let recalced = 0;
   // Fetch drums with related item capacity
@@ -1932,7 +1938,15 @@ async function recalcDrumAggregates(drumIds: string[]): Promise<number> {
       );
 
       const newQty = result.calculatedCurrentQuantity;
-      const newStatus = newQty <= 0 ? "inactive" : d.status || "active";
+
+      // Check if drum was used in current month (present device/global time)
+      const currentMonth = new Date().getMonth() + 1; // getMonth() returns 0-11
+      const currentYear = new Date().getFullYear();
+      const isCurrentMonth = month === currentMonth && year === currentYear;
+
+      // If used in current month, set active; otherwise inactive
+      const newStatus = isCurrentMonth ? "active" : "inactive";
+
       await supabaseServer
         .from("drum_tracking")
         .update({ current_quantity: newQty, status: newStatus })
