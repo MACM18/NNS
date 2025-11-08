@@ -295,10 +295,16 @@ export async function POST(req: NextRequest) {
       .select("id")
       .eq("id", lineId)
       .maybeSingle();
-    if (lineErr) throw lineErr;
+    if (lineErr) {
+      console.error("Line validation error:", lineErr);
+      throw lineErr;
+    }
     if (!lineExists) {
+      console.error("Line not found:", lineId);
       return new Response(
-        JSON.stringify({ error: "Line not found for provided lineId" }),
+        JSON.stringify({
+          error: `Line not found for provided lineId: ${lineId}`,
+        }),
         { status: 400 }
       );
     }
@@ -306,19 +312,28 @@ export async function POST(req: NextRequest) {
     // Validate referenced worker exists and is active
     const { data: workerExists, error: workerErr } = await supabaseServer
       .from("workers")
-      .select("id, status")
+      .select("id, status, full_name")
       .eq("id", workerId)
       .maybeSingle();
-    if (workerErr) throw workerErr;
+    if (workerErr) {
+      console.error("Worker validation error:", workerErr);
+      throw workerErr;
+    }
     if (!workerExists) {
+      console.error("Worker not found:", workerId);
       return new Response(
-        JSON.stringify({ error: "Worker not found for provided workerId" }),
+        JSON.stringify({
+          error: `Worker not found for provided workerId: ${workerId}`,
+        }),
         { status: 400 }
       );
     }
     if (workerExists.status !== "active") {
+      console.error("Worker not active:", workerId, workerExists.status);
       return new Response(
-        JSON.stringify({ error: "Worker must be active to be assigned" }),
+        JSON.stringify({
+          error: `Worker must be active to be assigned. Current status: ${workerExists.status}`,
+        }),
         { status: 400 }
       );
     }
@@ -336,6 +351,24 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Double-check worker exists right before insert (to catch race conditions)
+    const { data: workerCheck, error: workerCheckErr } = await supabaseServer
+      .from("workers")
+      .select("id, status")
+      .eq("id", workerId)
+      .maybeSingle();
+    if (workerCheckErr) {
+      console.error("Worker pre-insert check error:", workerCheckErr);
+      throw workerCheckErr;
+    }
+    if (!workerCheck || workerCheck.status !== "active") {
+      console.error("Worker pre-insert check failed:", workerId, workerCheck);
+      return new Response(
+        JSON.stringify({ error: "Worker validation failed before insert" }),
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabaseServer
       .from("work_assignments")
       .insert({
@@ -348,12 +381,27 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
+      console.error("Insert error:", error);
+      console.error("Insert data:", {
+        line_id: lineId,
+        worker_id: workerId,
+        assigned_date: date,
+        created_by: auth.userId,
+      });
       if (error.code === "23505") {
         return new Response(
           JSON.stringify({
             error: "Worker already assigned for this line and date",
           }),
           { status: 409 }
+        );
+      }
+      if (error.code === "23503") {
+        return new Response(
+          JSON.stringify({
+            error: "Invalid worker or line reference",
+          }),
+          { status: 400 }
         );
       }
       throw error;
