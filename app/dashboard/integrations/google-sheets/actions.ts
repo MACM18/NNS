@@ -731,10 +731,7 @@ export async function syncConnection(
       for (const l of monthLines || []) {
         if (!l?.telephone_no) continue;
         const c = core(l.telephone_no);
-        // For existing or gap updates, exclude Number column (sheet formatting handles display)
-        const outB = buildSheetRowFromLine(l, headers, {
-          includeNumberForSheet: false,
-        });
+        const outB = buildSheetRowFromLine(l, headers);
         const matchedRow = c ? sheetCoreToRow.get(c) : undefined;
         if (matchedRow) {
           // Update existing row's B:AZ
@@ -760,9 +757,7 @@ export async function syncConnection(
           continue;
         }
         // No match and no gap -> append later (we will include A numbering)
-        toAppend.push(
-          buildSheetRowFromLine(l, headers, { includeNumberForSheet: true })
-        );
+        toAppend.push(outB);
       }
 
       // Apply updates (B) and A numbering if needed
@@ -811,7 +806,7 @@ export async function syncConnection(
     // Also process the 'Drum Number' tab bidirectionally if present
     let drumProcessed = 0;
     let drumAppended = 0;
-    let drumsEnsuredFromTab = 0;
+    let drumCreatedNumbers: string[] = [];
     try {
       progress("Syncing Drum Number tab");
       const drumTab = "Drum Number";
@@ -833,28 +828,6 @@ export async function syncConnection(
           .slice(1)
           .filter((r: any) => (r[dIdx.tp] ?? "").toString().trim() !== "");
         const drumRows = drumRowsRaw.map((r: any) => mapDrumRow(r, dIdx));
-
-        // Ensure drums exist in drum_tracking for any drum numbers present in the tab
-        const drumNumbersFromTab: string[] = Array.from(
-          new Set(
-            drumRows
-              .map((r: any) => (r.drum_number || "").toString().trim())
-              .filter((d: string) => d)
-          )
-        );
-        if (drumNumbersFromTab.length > 0) {
-          try {
-            const ensured = await ensureDrumTrackingForNumbers(
-              drumNumbersFromTab
-            );
-            drumsEnsuredFromTab += ensured.createdNumbers.length;
-          } catch (e) {
-            console.warn(
-              "Failed to ensure drum tracking for Drum Number tab:",
-              (e as Error).message || e
-            );
-          }
-        }
 
         // Build a telephone_no -> latest line mapping for this month window
         const { data: monthLines, error: monthErr } = await supabaseServer
@@ -917,6 +890,48 @@ export async function syncConnection(
             requestBody: { values: drumAppendRows },
           });
           drumAppended = drumAppendRows.length;
+        }
+        // Ensure drum_tracking entries exist for any drum numbers present in the Drum Number tab
+        try {
+          const drumNumbersFromSheet = Array.from(
+            new Set(
+              drumRows
+                .map((r: any) => (r.drum_number || "").toString().trim())
+                .filter(Boolean)
+            )
+          );
+          if (drumNumbersFromSheet.length) {
+            // Check existing drum_tracking for these numbers to compute how many are newly created
+            const { data: existingDrums } = await supabaseServer
+              .from("drum_tracking")
+              .select("drum_number")
+              .in("drum_number", drumNumbersFromSheet);
+            const existingSet = new Set(
+              (existingDrums || []).map((d: any) => d.drum_number)
+            );
+
+            const ensured = await ensureDrumTrackingForNumbers(
+              drumNumbersFromSheet as string[]
+            );
+            const ensuredKeys = Array.from(ensured.byNumber.keys());
+            const newlyCreatedKeys = ensuredKeys.filter(
+              (k) => !existingSet.has(k)
+            );
+            drumProcessed += newlyCreatedKeys.length;
+            // record created drum numbers for debug/confirmation
+            if (newlyCreatedKeys.length) {
+              drumCreatedNumbers.push(...newlyCreatedKeys);
+              console.log(
+                "[syncConnection] Created drum_tracking rows for:",
+                newlyCreatedKeys
+              );
+            }
+          }
+        } catch (e) {
+          console.warn(
+            "Failed to ensure drum_tracking for Drum Number tab:",
+            (e as Error).message || e
+          );
         }
       }
     } catch (e) {
@@ -1075,10 +1090,10 @@ export async function syncConnection(
         updatedInSheet,
         drumProcessed,
         drumAppended,
-        drumsEnsuredFromTab,
         drumUsageInserted,
         drumUsageUpdated,
         drumsRecalculated,
+        drumCreated: drumCreatedNumbers,
       };
     } catch (error) {
       console.error("[syncConnection] Final status update failed:", error);
@@ -1588,30 +1603,13 @@ async function ensureTaskForLine(lineId: string, r: any) {
   return created;
 }
 
-// When writing back to the sheet, we avoid changing the 'Number' column during updates.
-// For appended rows, we write the 7-digit core if the number starts with 034.
-function sheetDisplayNumber(telephoneNo: any): string {
-  const s = (telephoneNo ?? "").toString();
-  if (/[a-zA-Z]/.test(s)) return s; // preserve non-numeric tokens
-  const digits = s.replace(/\D+/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("034") && digits.length === 10) return digits.slice(3);
-  return digits;
-}
-
-function buildSheetRowFromLine(
-  l: any,
-  headers: string[],
-  options: { includeNumberForSheet?: boolean } = {}
-): any[] {
+function buildSheetRowFromLine(l: any, headers: string[]): any[] {
   const idx = headerIndex(headers);
   const row = new Array(headers.length);
 
   // Map line fields back to sheet columns
   row[idx.date] = l.date;
-  if (options.includeNumberForSheet) {
-    row[idx.number] = sheetDisplayNumber(l.telephone_no);
-  }
+  row[idx.number] = l.telephone_no;
   row[idx.dp] = l.dp;
   row[idx.power_dp] = l.power_dp;
   row[idx.power_inbox] = l.power_inbox;
@@ -1701,7 +1699,7 @@ function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
   const idx = headerIndexDrum(headers);
   const row = new Array(headers.length);
   // We don't set NO (sequence) here; Google Sheets will leave it blank or a formula can fill it
-  row[idx.tp] = sheetDisplayNumber(l.telephone_no);
+  row[idx.tp] = l.telephone_no;
   row[idx.dw_dp] = l.dp;
   row[idx.dw_c_hook] = l.c_hook;
   row[idx.dw_cus] = l.name;
@@ -1728,7 +1726,6 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
         string,
         { id: string; item_id?: string; status: string }
       >(),
-      createdNumbers: [] as string[],
     };
 
   const { data: existing, error: existErr } = await supabaseServer
@@ -1747,8 +1744,6 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
       item_id: d.item_id,
       status: d.status,
     });
-
-  const createdNumbers: string[] = [];
 
   // Find a sensible default cable inventory item (prefer names like 'drop wire')
   let defaultItem: { id: string; drum_size?: number } | null = null;
@@ -1796,12 +1791,11 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
           item_id: created.item_id,
           status: created.status || "active",
         });
-        createdNumbers.push(num);
       }
     } catch {}
   }
 
-  return { byNumber, createdNumbers };
+  return { byNumber };
 }
 
 // Recalculate drum current quantities using calculateSmartWastage; set status when empty.
