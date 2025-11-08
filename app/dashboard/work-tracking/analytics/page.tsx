@@ -91,7 +91,9 @@ export default function WorkTrackingAnalyticsPage() {
     if (!analytics || selectedEmployee === "all") {
       return analytics?.allWorkers ?? [];
     }
-    return analytics.allWorkers.filter((w: WorkerAnalytics) => w.worker_id === selectedEmployee);
+    return analytics.allWorkers.filter(
+      (w: WorkerAnalytics) => w.worker_id === selectedEmployee
+    );
   }, [analytics, selectedEmployee]);
 
   const maxDailyJobs = useMemo(() => {
@@ -292,7 +294,7 @@ export default function WorkTrackingAnalyticsPage() {
   return (
     <div className='space-y-6'>
       <WorkTrackingHeader />
-      
+
       <Card className='p-4 shadow-sm'>
         <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
