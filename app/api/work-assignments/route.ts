@@ -257,118 +257,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate date format
-    const parsedDate = new Date(date);
-    if (isNaN(parsedDate.getTime())) {
-      return new Response(JSON.stringify({ error: "Invalid date format" }), {
-        status: 400,
-      });
-    }
-
-    // Ensure date is not in the future (allow same day)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const assignmentDate = new Date(parsedDate);
-    assignmentDate.setHours(0, 0, 0, 0);
-    if (assignmentDate > today) {
-      return new Response(
-        JSON.stringify({ error: "Assignment date cannot be in the future" }),
-        { status: 400 }
-      );
-    }
-
-    // Ensure date is not too far in the past (more than 1 year ago)
-    const oneYearAgo = new Date(today);
-    oneYearAgo.setFullYear(today.getFullYear() - 1);
-    if (assignmentDate < oneYearAgo) {
-      return new Response(
-        JSON.stringify({
-          error: "Assignment date cannot be more than 1 year in the past",
-        }),
-        { status: 400 }
-      );
-    }
-
-    // Validate referenced line exists
-    const { data: lineExists, error: lineErr } = await supabaseServer
-      .from("line_details")
-      .select("id")
-      .eq("id", lineId)
-      .maybeSingle();
-    if (lineErr) {
-      console.error("Line validation error:", lineErr);
-      throw lineErr;
-    }
-    if (!lineExists) {
-      console.error("Line not found:", lineId);
-      return new Response(
-        JSON.stringify({
-          error: `Line not found for provided lineId: ${lineId}`,
-        }),
-        { status: 400 }
-      );
-    }
-
-    // Validate referenced worker exists and is active
-    const { data: workerExists, error: workerErr } = await supabaseServer
-      .from("workers")
-      .select("id, status, full_name")
-      .eq("id", workerId)
-      .maybeSingle();
-    if (workerErr) {
-      console.error("Worker validation error:", workerErr);
-      throw workerErr;
-    }
-    if (!workerExists) {
-      console.error("Worker not found:", workerId);
-      return new Response(
-        JSON.stringify({
-          error: `Worker not found for provided workerId: ${workerId}`,
-        }),
-        { status: 400 }
-      );
-    }
-    if (workerExists.status !== "active") {
-      console.error("Worker not active:", workerId, workerExists.status);
-      return new Response(
-        JSON.stringify({
-          error: `Worker must be active to be assigned. Current status: ${workerExists.status}`,
-        }),
-        { status: 400 }
-      );
-    }
-
-    // Validate that the authenticated user has a profile
-    const { data: profileExists, error: profileErr } = await supabaseServer
-      .from("profiles")
-      .select("id")
-      .eq("id", auth.userId)
-      .maybeSingle();
-    if (profileErr) throw profileErr;
-    if (!profileExists) {
-      return new Response(JSON.stringify({ error: "User profile not found" }), {
-        status: 400,
-      });
-    }
-
-    // Double-check worker exists right before insert (to catch race conditions)
-    const { data: workerCheck, error: workerCheckErr } = await supabaseServer
-      .from("workers")
-      .select("id, status")
-      .eq("id", workerId)
-      .maybeSingle();
-    if (workerCheckErr) {
-      console.error("Worker pre-insert check error:", workerCheckErr);
-      throw workerCheckErr;
-    }
-    if (!workerCheck || workerCheck.status !== "active") {
-      console.error("Worker pre-insert check failed:", workerId, workerCheck);
-      return new Response(
-        JSON.stringify({ error: "Worker validation failed before insert" }),
-        { status: 400 }
-      );
-    }
-
     const { data, error } = await supabaseServer
       .from("work_assignments")
       .insert({
@@ -381,27 +269,12 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Insert error:", error);
-      console.error("Insert data:", {
-        line_id: lineId,
-        worker_id: workerId,
-        assigned_date: date,
-        created_by: auth.userId,
-      });
       if (error.code === "23505") {
         return new Response(
           JSON.stringify({
             error: "Worker already assigned for this line and date",
           }),
           { status: 409 }
-        );
-      }
-      if (error.code === "23503") {
-        return new Response(
-          JSON.stringify({
-            error: "Invalid worker or line reference",
-          }),
-          { status: 400 }
         );
       }
       throw error;
