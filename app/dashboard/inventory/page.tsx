@@ -1248,8 +1248,7 @@ export default function InventoryPage() {
                             .map((drum) => {
                               const displayQuantity =
                                 drum.calculated_current_quantity ?? 0;
-                              const displayStatus =
-                                drum.calculated_status ?? drum.status;
+                              const displayStatus = drum.status;
                               const totalUsed = drum.total_used ?? 0;
                               const totalWastage = drum.total_wastage ?? 0;
                               const usagePercentage =
@@ -1311,34 +1310,7 @@ export default function InventoryPage() {
                                                 )}-${seg.end.toFixed(1)})`}
                                               />
                                             ))}
-                                          {/* Orange waste overlays */}
-                                          {drum.wastedSegments &&
-                                            drum.initial_quantity > 0 &&
-                                            drum.wastedSegments.map(
-                                              (seg, i) => (
-                                                <div
-                                                  key={`w-${i}`}
-                                                  className='absolute top-0 h-full bg-orange-500/70'
-                                                  style={{
-                                                    left: `${
-                                                      (seg.start /
-                                                        drum.initial_quantity) *
-                                                      100
-                                                    }%`,
-                                                    width: `${
-                                                      (seg.length /
-                                                        drum.initial_quantity) *
-                                                      100
-                                                    }%`,
-                                                  }}
-                                                  title={`Waste ${seg.length.toFixed(
-                                                    1
-                                                  )}m (${seg.start.toFixed(
-                                                    1
-                                                  )}-${seg.end.toFixed(1)})`}
-                                                />
-                                              )
-                                            )}
+
                                           {/* Remaining (implicit background) */}
                                         </div>
                                         <div className='w-24 h-1 bg-gray-100 rounded-full overflow-hidden'>
@@ -1463,14 +1435,6 @@ export default function InventoryPage() {
                                         </Select>
                                       ) : (
                                         getStatusBadge(displayStatus)
-                                      )}
-                                      {displayStatus !== drum.status && (
-                                        <Badge
-                                          variant='outline'
-                                          className='text-xs'
-                                        >
-                                          DB: {drum.status}
-                                        </Badge>
                                       )}
                                     </div>
                                   </TableCell>
