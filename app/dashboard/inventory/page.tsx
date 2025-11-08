@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePageVisibility } from "@/hooks/use-page-visibility";
 import {
   Plus,
   Package,
@@ -299,14 +298,6 @@ export default function InventoryPage() {
       fetchAllData();
     }
   }, [user, refreshTrigger]);
-
-  // Refresh data when page becomes visible again
-  usePageVisibility(() => {
-    if (user) {
-      console.log("Page became visible, refreshing inventory data");
-      fetchAllData();
-    }
-  }, [user]);
 
   const fetchAllData = async () => {
     setLoadingData(true);
@@ -1312,23 +1303,6 @@ export default function InventoryPage() {
                                             ))}
 
                                           {/* Remaining (implicit background) */}
-                                        </div>
-                                        <div className='w-24 h-1 bg-gray-100 rounded-full overflow-hidden'>
-                                          <div
-                                            className={`h-full transition-all ${
-                                              Number(usagePercentage) > 80
-                                                ? "bg-red-500"
-                                                : Number(usagePercentage) > 60
-                                                ? "bg-orange-500"
-                                                : "bg-green-500"
-                                            }`}
-                                            style={{
-                                              width: `${Math.min(
-                                                100,
-                                                Number(usagePercentage)
-                                              )}%`,
-                                            }}
-                                          />
                                         </div>
                                       </div>
                                     </div>
