@@ -674,7 +674,7 @@ export async function syncConnection(
       );
     }
 
-    // Project -> Sheet: update rows by phone (ignore leading 034) or fill gap rows, then append with A numbering
+    // Project -> Sheet: update rows by phone (match on digit-only numbers) or fill gap rows, then append with A numbering
     let updatedInSheet = 0;
     let appendedInSheet = 0;
     try {
@@ -698,30 +698,17 @@ export async function syncConnection(
       const core = (v: any) => {
         const s = (v ?? "").toString();
         const digits = s.replace(/\D+/g, "");
-        if (!digits) return "";
-        return digits.startsWith("034") ? digits.slice(3) : digits;
+        return digits || "";
       };
       // Map existing sheet core numbers -> sheet row index (1-based).
-      // Populate keys for both forms (with and without leading '034') so matching
-      // against DB values (which may have '034' added during normalization) will succeed.
+      // Keys are the digit-only phone strings as displayed in the sheet.
       const sheetCoreToRow = new Map<string, number>();
       for (let i = 0; i < sheetDataRows.length; i++) {
         const r = sheetDataRows[i];
         const num = r[idx.number];
         const base = core(num);
         if (!base) continue;
-        // key without 034
         sheetCoreToRow.set(base, i + 2);
-        // also key with 034 prefix (for lookup against normalized DB numbers)
-        if (!base.startsWith("034") && base.length < 10) {
-          sheetCoreToRow.set("034" + base, i + 2);
-        }
-        // also support case where sheet already includes 034 (store that as well)
-        const rawDigits = (num ?? "").toString().replace(/\D+/g, "");
-        if (rawDigits && rawDigits.startsWith("034")) {
-          sheetCoreToRow.set(rawDigits, i + 2);
-          sheetCoreToRow.set(rawDigits.slice(3), i + 2);
-        }
       }
 
       // Find gap rows: A filled but B empty
@@ -749,20 +736,10 @@ export async function syncConnection(
         if (!l?.telephone_no) continue;
         const outB = buildSheetRowFromLine(l, headers);
         const normalized = core(l.telephone_no);
-        // Try matching against multiple representations to avoid duplicates
-        let matchedRow = normalized
+        // Match using the digit-only normalized value
+        const matchedRow = normalized
           ? sheetCoreToRow.get(normalized)
           : undefined;
-        if (!matchedRow) {
-          // try with leading 034
-          const with034 =
-            normalized &&
-            !normalized.startsWith("034") &&
-            normalized.length < 10
-              ? `034${normalized}`
-              : undefined;
-          if (with034) matchedRow = sheetCoreToRow.get(with034);
-        }
         if (matchedRow) {
           // Update existing row's B:AZ
           updatesForB.push({
@@ -1347,16 +1324,15 @@ function toNumber(v: any): number {
 
 // Normalize telephone numbers from sheet -> project
 // - If contains any letters, return as-is (no changes)
-// - Otherwise, strip non-digits, and if length < 10 and doesn't start with '034', prefix '034'
-//   (common case: 7-digit local numbers need area code '034' to reach 10 digits)
+// - Otherwise, strip non-digits and return the digit sequence as-is.
+// NOTE: we no longer auto-prefix area codes (e.g. '034') because the
+// sheet reads now use formatted values and we want to preserve the
+// raw displayed number; matching logic handles minor variations.
 function normalizeTelephone(raw: any): string {
   const s = (raw ?? "").toString().trim();
   if (/[a-zA-Z]/.test(s)) return s; // leave values with letters unchanged
   const digits = s.replace(/\D+/g, "");
   if (!digits) return s; // nothing to normalize
-  if (digits.length < 10 && !digits.startsWith("034")) {
-    return `034${digits}`;
-  }
   return digits;
 }
 
