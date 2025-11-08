@@ -683,7 +683,7 @@ export async function syncConnection(
         .lte("date", end);
       if (monthErr) throw monthErr;
 
-      // Read column A to determine numbering context
+      // Read column A to detect gaps and get last sequence number
       const aRes = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${sheetTab}!A1:A`,
@@ -696,16 +696,25 @@ export async function syncConnection(
         const s = (v ?? "").toString();
         const digits = s.replace(/\D+/g, "");
         if (!digits) return "";
-        return digits.startsWith("034") && digits.length === 10
-          ? digits.slice(3)
-          : digits;
+        return digits.startsWith("034") ? digits.slice(3) : digits;
       };
-
-      const sheetCoreSet = new Set<string>();
-      for (const r of sheetDataRows) {
+      // Map existing sheet core numbers -> sheet row index (1-based)
+      const sheetCoreToRow = new Map<string, number>();
+      for (let i = 0; i < sheetDataRows.length; i++) {
+        const r = sheetDataRows[i];
         const num = r[idx.number];
         const c = core(num);
-        if (c) sheetCoreSet.add(c);
+        if (c) sheetCoreToRow.set(c, i + 2);
+      }
+
+      // Find gap rows: A filled but B empty
+      const gapRows: number[] = [];
+      for (let j = 2; j <= sheetDataRows.length + 1; j++) {
+        const aVal = colA[j - 1];
+        const bEmpty = !(sheetDataRows[j - 2]?.[idx.number] ?? "")
+          .toString()
+          .trim();
+        if (aVal != null && aVal !== "" && bEmpty) gapRows.push(j);
       }
 
       // Last sequence in column A (max numeric value)
@@ -715,20 +724,70 @@ export async function syncConnection(
         if (Number.isFinite(n)) lastSeq = Math.max(lastSeq, n);
       }
 
+      const updatesForB: Array<{ range: string; values: any[][] }> = [];
+      const updatesForA: Array<{ range: string; values: any[][] }> = [];
       const toAppend: any[][] = [];
 
       for (const l of monthLines || []) {
         if (!l?.telephone_no) continue;
         const c = core(l.telephone_no);
-        if (c && sheetCoreSet.has(c)) continue; // already present, do not overwrite
-        const outB = buildSheetRowFromLine(l, headers);
-        toAppend.push(outB);
+        // For existing or gap updates, exclude Number column (sheet formatting handles display)
+        const outB = buildSheetRowFromLine(l, headers, {
+          includeNumberForSheet: false,
+        });
+        const matchedRow = c ? sheetCoreToRow.get(c) : undefined;
+        if (matchedRow) {
+          // Update existing row's B:AZ
+          updatesForB.push({
+            range: `${sheetTab}!B${matchedRow}`,
+            values: [outB],
+          });
+          continue;
+        }
+        if (gapRows.length) {
+          // Fill the first available gap row
+          const rowNum = gapRows.shift()!;
+          updatesForB.push({ range: `${sheetTab}!B${rowNum}`, values: [outB] });
+          // If column A is empty, assign next sequence
+          const aExisting = colA[rowNum - 1];
+          if (aExisting == null || aExisting === "") {
+            lastSeq += 1;
+            updatesForA.push({
+              range: `${sheetTab}!A${rowNum}`,
+              values: [[lastSeq]],
+            });
+          }
+          continue;
+        }
+        // No match and no gap -> append later (we will include A numbering)
+        toAppend.push(
+          buildSheetRowFromLine(l, headers, { includeNumberForSheet: true })
+        );
       }
 
+      // Apply updates (B) and A numbering if needed
+      if (updatesForB.length || updatesForA.length) {
+        progress(
+          `Updating ${updatesForB.length} existing/gap rows in sheet` +
+            (updatesForA.length ? ` (+${updatesForA.length} A-cells)` : "")
+        );
+        const data = [...updatesForB, ...updatesForA];
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            valueInputOption: "USER_ENTERED",
+            data,
+          },
+        });
+        updatedInSheet = updatesForB.length;
+      }
+
+      // Append new rows including A numbering
       if (toAppend.length) {
         progress(
           `Appending ${toAppend.length} new rows to sheet with numbering`
         );
+        // Build rows with [A, ...B..]
         const rowsWithA = toAppend.map((bRow) => {
           lastSeq += 1;
           return [lastSeq, ...bRow];
@@ -752,6 +811,7 @@ export async function syncConnection(
     // Also process the 'Drum Number' tab bidirectionally if present
     let drumProcessed = 0;
     let drumAppended = 0;
+    let drumsEnsuredFromTab = 0;
     try {
       progress("Syncing Drum Number tab");
       const drumTab = "Drum Number";
@@ -774,15 +834,26 @@ export async function syncConnection(
           .filter((r: any) => (r[dIdx.tp] ?? "").toString().trim() !== "");
         const drumRows = drumRowsRaw.map((r: any) => mapDrumRow(r, dIdx));
 
-        const drumNumbersFromSheet: string[] = Array.from(
-          new Set<string>(
+        // Ensure drums exist in drum_tracking for any drum numbers present in the tab
+        const drumNumbersFromTab: string[] = Array.from(
+          new Set(
             drumRows
-              .map((r: any) => String(r.drum_number || "").trim())
-              .filter((num: string) => num !== "")
+              .map((r: any) => (r.drum_number || "").toString().trim())
+              .filter((d: string) => d)
           )
         );
-        if (drumNumbersFromSheet.length) {
-          await ensureDrumTrackingForNumbers(drumNumbersFromSheet);
+        if (drumNumbersFromTab.length > 0) {
+          try {
+            const ensured = await ensureDrumTrackingForNumbers(
+              drumNumbersFromTab
+            );
+            drumsEnsuredFromTab += ensured.createdNumbers.length;
+          } catch (e) {
+            console.warn(
+              "Failed to ensure drum tracking for Drum Number tab:",
+              (e as Error).message || e
+            );
+          }
         }
 
         // Build a telephone_no -> latest line mapping for this month window
@@ -1004,6 +1075,7 @@ export async function syncConnection(
         updatedInSheet,
         drumProcessed,
         drumAppended,
+        drumsEnsuredFromTab,
         drumUsageInserted,
         drumUsageUpdated,
         drumsRecalculated,
@@ -1238,17 +1310,6 @@ function normalizeTelephone(raw: any): string {
     return `034${digits}`;
   }
   return digits;
-}
-
-// Sheets display local 7-digit numbers via formatting, so strip the 034 area code again when writing back.
-function formatTelephoneForSheet(raw: any): string {
-  const s = (raw ?? "").toString().trim();
-  if (!s) return "";
-  const digits = s.replace(/\D+/g, "");
-  if (digits.length === 10 && digits.startsWith("034")) {
-    return digits.slice(3);
-  }
-  return s;
 }
 
 function toDateISO(
@@ -1527,13 +1588,30 @@ async function ensureTaskForLine(lineId: string, r: any) {
   return created;
 }
 
-function buildSheetRowFromLine(l: any, headers: string[]): any[] {
+// When writing back to the sheet, we avoid changing the 'Number' column during updates.
+// For appended rows, we write the 7-digit core if the number starts with 034.
+function sheetDisplayNumber(telephoneNo: any): string {
+  const s = (telephoneNo ?? "").toString();
+  if (/[a-zA-Z]/.test(s)) return s; // preserve non-numeric tokens
+  const digits = s.replace(/\D+/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("034") && digits.length === 10) return digits.slice(3);
+  return digits;
+}
+
+function buildSheetRowFromLine(
+  l: any,
+  headers: string[],
+  options: { includeNumberForSheet?: boolean } = {}
+): any[] {
   const idx = headerIndex(headers);
   const row = new Array(headers.length);
 
   // Map line fields back to sheet columns
   row[idx.date] = l.date;
-  row[idx.number] = formatTelephoneForSheet(l.telephone_no);
+  if (options.includeNumberForSheet) {
+    row[idx.number] = sheetDisplayNumber(l.telephone_no);
+  }
   row[idx.dp] = l.dp;
   row[idx.power_dp] = l.power_dp;
   row[idx.power_inbox] = l.power_inbox;
@@ -1623,7 +1701,7 @@ function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
   const idx = headerIndexDrum(headers);
   const row = new Array(headers.length);
   // We don't set NO (sequence) here; Google Sheets will leave it blank or a formula can fill it
-  row[idx.tp] = formatTelephoneForSheet(l.telephone_no);
+  row[idx.tp] = sheetDisplayNumber(l.telephone_no);
   row[idx.dw_dp] = l.dp;
   row[idx.dw_c_hook] = l.c_hook;
   row[idx.dw_cus] = l.name;
@@ -1650,6 +1728,7 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
         string,
         { id: string; item_id?: string; status: string }
       >(),
+      createdNumbers: [] as string[],
     };
 
   const { data: existing, error: existErr } = await supabaseServer
@@ -1668,6 +1747,8 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
       item_id: d.item_id,
       status: d.status,
     });
+
+  const createdNumbers: string[] = [];
 
   // Find a sensible default cable inventory item (prefer names like 'drop wire')
   let defaultItem: { id: string; drum_size?: number } | null = null;
@@ -1715,11 +1796,12 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
           item_id: created.item_id,
           status: created.status || "active",
         });
+        createdNumbers.push(num);
       }
     } catch {}
   }
 
-  return { byNumber };
+  return { byNumber, createdNumbers };
 }
 
 // Recalculate drum current quantities using calculateSmartWastage; set status when empty.
