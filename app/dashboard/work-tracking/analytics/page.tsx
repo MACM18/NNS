@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -89,9 +89,9 @@ export default function WorkTrackingAnalyticsPage() {
 
   const filteredWorkers = useMemo(() => {
     if (!analytics || selectedEmployee === "all") {
-      return analytics?.workers ?? [];
+      return analytics?.allWorkers ?? [];
     }
-    return analytics.workers.filter((w) => w.worker_id === selectedEmployee);
+    return analytics.allWorkers.filter((w: WorkerAnalytics) => w.worker_id === selectedEmployee);
   }, [analytics, selectedEmployee]);
 
   const maxDailyJobs = useMemo(() => {
@@ -186,6 +186,8 @@ export default function WorkTrackingAnalyticsPage() {
       router.replace(`/login?redirect=${redirect}`);
     }
   };
+
+  const pathname = usePathname();
 
   const fetchAnalytics = async (month: number, year: number) => {
     setLoading(true);

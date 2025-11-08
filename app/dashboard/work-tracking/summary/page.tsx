@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -169,6 +169,8 @@ export default function WorkTrackingSummaryPage() {
       router.replace(`/login?redirect=${redirect}`);
     }
   };
+
+  const pathname = usePathname();
 
   const fetchSummary = async (month: number, year: number) => {
     setLoading(true);
