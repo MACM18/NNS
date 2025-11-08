@@ -409,7 +409,9 @@ export async function syncConnection(
     if (!values.length) {
       throw new Error("Selected sheet tab contains no data rows");
     }
-    const headers = (values[0] || []).map((h: any) => (h ?? "").toString().trim());
+    const headers = (values[0] || []).map((h: any) =>
+      (h ?? "").toString().trim()
+    );
     validateHeaders(headers);
     const idx = headerIndex(headers);
 
@@ -427,7 +429,8 @@ export async function syncConnection(
     );
 
     // Utilities for merge/dedupe logic
-    const isBlank = (v: any) => v == null || (typeof v === "string" && v.toString().trim() === "");
+    const isBlank = (v: any) =>
+      v == null || (typeof v === "string" && v.toString().trim() === "");
     const isNumberLike = (v: any) => {
       if (v == null || v === "") return false;
       if (typeof v === "number") return Number.isFinite(v);
@@ -454,7 +457,7 @@ export async function syncConnection(
         }
         if (typeof bv === "string") {
           const s = bv.toString().trim();
-            if (s !== "") out[k] = s;
+          if (s !== "") out[k] = s;
           continue;
         }
         out[k] = bv;
@@ -933,7 +936,8 @@ export async function syncConnection(
           .in("line_details_id", idsToCheck);
         if (existErr) throw existErr;
         const usageByLine = new Map<string, any>();
-        for (const u of existingUsages || []) usageByLine.set(u.line_details_id, u);
+        for (const u of existingUsages || [])
+          usageByLine.set(u.line_details_id, u);
 
         const affectedDrumIds = new Set<string>();
 
@@ -970,7 +974,9 @@ export async function syncConnection(
         }
 
         // 3) Recalculate per-drum current quantities and set status
-        drumsRecalculated += await recalcDrumAggregates(Array.from(affectedDrumIds));
+        drumsRecalculated += await recalcDrumAggregates(
+          Array.from(affectedDrumIds)
+        );
 
         // 4) Update inventory item stock totals based on active drums
         const impactedItemIds = Array.from(
@@ -1670,7 +1676,13 @@ function computeQuantityUsed(l: any): number {
 // Ensure drum_tracking rows exist for the given drum numbers. Tries to map to a cable inventory item.
 async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
   const unique = Array.from(new Set((drumNumbers || []).filter(Boolean)));
-  if (!unique.length) return { byNumber: new Map<string, { id: string; item_id?: string; status: string }>() };
+  if (!unique.length)
+    return {
+      byNumber: new Map<
+        string,
+        { id: string; item_id?: string; status: string }
+      >(),
+    };
 
   const { data: existing, error: existErr } = await supabaseServer
     .from("drum_tracking")
@@ -1678,8 +1690,16 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
     .in("drum_number", unique);
   if (existErr) throw existErr;
 
-  const byNumber = new Map<string, { id: string; item_id?: string; status: string }>();
-  for (const d of existing || []) byNumber.set(d.drum_number, { id: d.id, item_id: d.item_id, status: d.status });
+  const byNumber = new Map<
+    string,
+    { id: string; item_id?: string; status: string }
+  >();
+  for (const d of existing || [])
+    byNumber.set(d.drum_number, {
+      id: d.id,
+      item_id: d.item_id,
+      status: d.status,
+    });
 
   // Find a sensible default cable inventory item (prefer names like 'drop wire')
   let defaultItem: { id: string; drum_size?: number } | null = null;
@@ -1776,7 +1796,7 @@ async function recalcDrumAggregates(drumIds: string[]): Promise<number> {
       );
 
       const newQty = result.calculatedCurrentQuantity;
-      const newStatus = newQty <= 0 ? "inactive" : (d.status || "active");
+      const newStatus = newQty <= 0 ? "inactive" : d.status || "active";
       await supabaseServer
         .from("drum_tracking")
         .update({ current_quantity: newQty, status: newStatus })
