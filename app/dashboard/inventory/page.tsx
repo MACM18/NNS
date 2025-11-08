@@ -10,6 +10,7 @@ import {
   BarChart3,
   Eye,
   Pencil,
+  RefreshCw,
   Trash,
   Cable,
   ToggleLeft,
@@ -40,6 +41,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { AddInventoryInvoiceModal } from "@/components/modals/add-inventory-invoice-modal";
 import { AddWasteModal } from "@/components/modals/add-waste-modal";
 import { ManageInventoryItemsModal } from "@/components/modals/manage-inventory-items-modal";
@@ -51,13 +59,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { recalculateAllDrumQuantities } from "@/app/dashboard/integrations/google-sheets/actions";
 import {
   calculateSmartWastage,
   calculateLegacyWastage,
@@ -116,6 +118,8 @@ export interface DrumTracking {
     | "legacy_gaps"
     | "manual_override";
   manual_wastage_override?: number;
+  usageSegments?: { start: number; end: number; length: number }[];
+  wastedSegments?: { start: number; end: number; length: number }[];
 }
 
 interface WasteReport {
@@ -166,13 +170,40 @@ const calculateDrumMetrics = (drum: any, usageData: any[]) => {
   }
 
   // Convert to the format expected by our calculation functions
-  const drumUsageData: DrumUsage[] = drumUsages.map((usage) => ({
+  let drumUsageData: DrumUsage[] = drumUsages.map((usage) => ({
     id: usage.id,
     cable_start_point: usage.cable_start_point || 0,
     cable_end_point: usage.cable_end_point || 0,
     usage_date: usage.usage_date,
     quantity_used: usage.quantity_used,
   }));
+
+  // Fallback: if start/end points are missing (zero-length) but quantities exist,
+  // synthesize sequential segments based on quantity_used ordered by date
+  const hasValidSegments = drumUsageData.some(
+    (u) => (u.cable_end_point || 0) !== (u.cable_start_point || 0)
+  );
+  const hasQuantities = drumUsageData.some(
+    (u) => typeof u.quantity_used === "number" && (u.quantity_used || 0) > 0
+  );
+  if (!hasValidSegments && hasQuantities) {
+    const sorted = [...drumUsageData].sort(
+      (a, b) =>
+        new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime()
+    );
+    let pos = 0;
+    drumUsageData = sorted.map((u) => {
+      const len = Number(u.quantity_used || 0);
+      const start = pos;
+      const end = pos + Math.max(0, len);
+      pos = end;
+      return {
+        ...u,
+        cable_start_point: start,
+        cable_end_point: end,
+      };
+    });
+  }
 
   // Use smart calculation by default, with manual override if set
   const calculation = calculateSmartWastage(
@@ -481,6 +512,8 @@ export default function InventoryPage() {
           usage_count: metrics.usageCount,
           last_usage_date: metrics.lastUsageDate,
           usages: metrics.usages,
+          usageSegments: metrics.usageSegments,
+          wastedSegments: metrics.wastedSegments,
         };
       });
 
@@ -1124,6 +1157,50 @@ export default function InventoryPage() {
                     ? "Hide Inactive Drums"
                     : "Show Inactive Drums"}
                 </Button>
+                {(role === "admin" || role === "moderator") && (
+                  <Button
+                    variant='secondary'
+                    size='sm'
+                    onClick={async () => {
+                      try {
+                        // Retrieve the Supabase access token to authorize the server action
+                        const { data: sessionData } =
+                          await supabase.auth.getSession();
+                        const accessToken = sessionData?.session?.access_token;
+
+                        if (!accessToken) {
+                          throw new Error(
+                            "Missing access token. Please sign in again and try."
+                          );
+                        }
+
+                        await recalculateAllDrumQuantities(accessToken);
+                        addNotification({
+                          title: "Success",
+                          message:
+                            "All drum quantities recalculated successfully",
+                          type: "success",
+                          category: "system",
+                        });
+                        handleSuccess();
+                      } catch (error: any) {
+                        const msg =
+                          error?.message ||
+                          "Failed to recalculate drum quantities";
+                        addNotification({
+                          title: "Error",
+                          message: msg,
+                          type: "error",
+                          category: "system",
+                        });
+                      }
+                    }}
+                    className='gap-2'
+                  >
+                    <RefreshCw className='h-4 w-4' />
+                    Recalculate All
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -1171,8 +1248,7 @@ export default function InventoryPage() {
                             .map((drum) => {
                               const displayQuantity =
                                 drum.calculated_current_quantity ?? 0;
-                              const displayStatus =
-                                drum.calculated_status ?? drum.status;
+                              const displayStatus = drum.status;
                               const totalUsed = drum.total_used ?? 0;
                               const totalWastage = drum.total_wastage ?? 0;
                               const usagePercentage =
@@ -1206,22 +1282,54 @@ export default function InventoryPage() {
                                   <TableCell>
                                     <div className='flex items-center gap-2'>
                                       <span>{usagePercentage}%</span>
-                                      <div className='w-16 h-2 bg-gray-200 rounded-full overflow-hidden'>
-                                        <div
-                                          className={`h-full transition-all ${
-                                            Number(usagePercentage) > 80
-                                              ? "bg-red-500"
-                                              : Number(usagePercentage) > 60
-                                              ? "bg-orange-500"
-                                              : "bg-green-500"
-                                          }`}
-                                          style={{
-                                            width: `${Math.min(
-                                              100,
-                                              Number(usagePercentage)
-                                            )}%`,
-                                          }}
-                                        />
+                                      <div className='flex flex-col gap-1'>
+                                        <div className='w-24 h-2 bg-gray-200 rounded-full overflow-hidden relative'>
+                                          {/* Composite bar: green usage segments */}
+                                          {drum.usageSegments &&
+                                            drum.initial_quantity > 0 &&
+                                            drum.usageSegments.map((seg, i) => (
+                                              <div
+                                                key={`u-${i}`}
+                                                className='absolute top-0 h-full bg-green-500/80'
+                                                style={{
+                                                  left: `${
+                                                    (seg.start /
+                                                      drum.initial_quantity) *
+                                                    100
+                                                  }%`,
+                                                  width: `${
+                                                    (seg.length /
+                                                      drum.initial_quantity) *
+                                                    100
+                                                  }%`,
+                                                }}
+                                                title={`Used ${seg.length.toFixed(
+                                                  1
+                                                )}m (${seg.start.toFixed(
+                                                  1
+                                                )}-${seg.end.toFixed(1)})`}
+                                              />
+                                            ))}
+
+                                          {/* Remaining (implicit background) */}
+                                        </div>
+                                        <div className='w-24 h-1 bg-gray-100 rounded-full overflow-hidden'>
+                                          <div
+                                            className={`h-full transition-all ${
+                                              Number(usagePercentage) > 80
+                                                ? "bg-red-500"
+                                                : Number(usagePercentage) > 60
+                                                ? "bg-orange-500"
+                                                : "bg-green-500"
+                                            }`}
+                                            style={{
+                                              width: `${Math.min(
+                                                100,
+                                                Number(usagePercentage)
+                                              )}%`,
+                                            }}
+                                          />
+                                        </div>
                                       </div>
                                     </div>
                                     {drum.usage_count &&
@@ -1327,14 +1435,6 @@ export default function InventoryPage() {
                                         </Select>
                                       ) : (
                                         getStatusBadge(displayStatus)
-                                      )}
-                                      {displayStatus !== drum.status && (
-                                        <Badge
-                                          variant='outline'
-                                          className='text-xs'
-                                        >
-                                          DB: {drum.status}
-                                        </Badge>
                                       )}
                                     </div>
                                   </TableCell>
