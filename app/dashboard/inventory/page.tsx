@@ -118,6 +118,8 @@ export interface DrumTracking {
     | "legacy_gaps"
     | "manual_override";
   manual_wastage_override?: number;
+  usageSegments?: { start: number; end: number; length: number }[];
+  wastedSegments?: { start: number; end: number; length: number }[];
 }
 
 interface WasteReport {
@@ -168,13 +170,40 @@ const calculateDrumMetrics = (drum: any, usageData: any[]) => {
   }
 
   // Convert to the format expected by our calculation functions
-  const drumUsageData: DrumUsage[] = drumUsages.map((usage) => ({
+  let drumUsageData: DrumUsage[] = drumUsages.map((usage) => ({
     id: usage.id,
     cable_start_point: usage.cable_start_point || 0,
     cable_end_point: usage.cable_end_point || 0,
     usage_date: usage.usage_date,
     quantity_used: usage.quantity_used,
   }));
+
+  // Fallback: if start/end points are missing (zero-length) but quantities exist,
+  // synthesize sequential segments based on quantity_used ordered by date
+  const hasValidSegments = drumUsageData.some(
+    (u) => (u.cable_end_point || 0) !== (u.cable_start_point || 0)
+  );
+  const hasQuantities = drumUsageData.some(
+    (u) => typeof u.quantity_used === "number" && (u.quantity_used || 0) > 0
+  );
+  if (!hasValidSegments && hasQuantities) {
+    const sorted = [...drumUsageData].sort(
+      (a, b) =>
+        new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime()
+    );
+    let pos = 0;
+    drumUsageData = sorted.map((u) => {
+      const len = Number(u.quantity_used || 0);
+      const start = pos;
+      const end = pos + Math.max(0, len);
+      pos = end;
+      return {
+        ...u,
+        cable_start_point: start,
+        cable_end_point: end,
+      };
+    });
+  }
 
   // Use smart calculation by default, with manual override if set
   const calculation = calculateSmartWastage(
@@ -483,6 +512,8 @@ export default function InventoryPage() {
           usage_count: metrics.usageCount,
           last_usage_date: metrics.lastUsageDate,
           usages: metrics.usages,
+          usageSegments: metrics.usageSegments,
+          wastedSegments: metrics.wastedSegments,
         };
       });
 
@@ -1132,7 +1163,18 @@ export default function InventoryPage() {
                     size='sm'
                     onClick={async () => {
                       try {
-                        await recalculateAllDrumQuantities();
+                        // Retrieve the Supabase access token to authorize the server action
+                        const { data: sessionData } =
+                          await supabase.auth.getSession();
+                        const accessToken = sessionData?.session?.access_token;
+
+                        if (!accessToken) {
+                          throw new Error(
+                            "Missing access token. Please sign in again and try."
+                          );
+                        }
+
+                        await recalculateAllDrumQuantities(accessToken);
                         addNotification({
                           title: "Success",
                           message:
@@ -1141,10 +1183,13 @@ export default function InventoryPage() {
                           category: "system",
                         });
                         handleSuccess();
-                      } catch (error) {
+                      } catch (error: any) {
+                        const msg =
+                          error?.message ||
+                          "Failed to recalculate drum quantities";
                         addNotification({
                           title: "Error",
-                          message: "Failed to recalculate drum quantities",
+                          message: msg,
                           type: "error",
                           category: "system",
                         });
@@ -1238,22 +1283,81 @@ export default function InventoryPage() {
                                   <TableCell>
                                     <div className='flex items-center gap-2'>
                                       <span>{usagePercentage}%</span>
-                                      <div className='w-16 h-2 bg-gray-200 rounded-full overflow-hidden'>
-                                        <div
-                                          className={`h-full transition-all ${
-                                            Number(usagePercentage) > 80
-                                              ? "bg-red-500"
-                                              : Number(usagePercentage) > 60
-                                              ? "bg-orange-500"
-                                              : "bg-green-500"
-                                          }`}
-                                          style={{
-                                            width: `${Math.min(
-                                              100,
-                                              Number(usagePercentage)
-                                            )}%`,
-                                          }}
-                                        />
+                                      <div className='flex flex-col gap-1'>
+                                        <div className='w-24 h-2 bg-gray-200 rounded-full overflow-hidden relative'>
+                                          {/* Composite bar: green usage segments */}
+                                          {drum.usageSegments &&
+                                            drum.initial_quantity > 0 &&
+                                            drum.usageSegments.map((seg, i) => (
+                                              <div
+                                                key={`u-${i}`}
+                                                className='absolute top-0 h-full bg-green-500/80'
+                                                style={{
+                                                  left: `${
+                                                    (seg.start /
+                                                      drum.initial_quantity) *
+                                                    100
+                                                  }%`,
+                                                  width: `${
+                                                    (seg.length /
+                                                      drum.initial_quantity) *
+                                                    100
+                                                  }%`,
+                                                }}
+                                                title={`Used ${seg.length.toFixed(
+                                                  1
+                                                )}m (${seg.start.toFixed(
+                                                  1
+                                                )}-${seg.end.toFixed(1)})`}
+                                              />
+                                            ))}
+                                          {/* Orange waste overlays */}
+                                          {drum.wastedSegments &&
+                                            drum.initial_quantity > 0 &&
+                                            drum.wastedSegments.map(
+                                              (seg, i) => (
+                                                <div
+                                                  key={`w-${i}`}
+                                                  className='absolute top-0 h-full bg-orange-500/70'
+                                                  style={{
+                                                    left: `${
+                                                      (seg.start /
+                                                        drum.initial_quantity) *
+                                                      100
+                                                    }%`,
+                                                    width: `${
+                                                      (seg.length /
+                                                        drum.initial_quantity) *
+                                                      100
+                                                    }%`,
+                                                  }}
+                                                  title={`Waste ${seg.length.toFixed(
+                                                    1
+                                                  )}m (${seg.start.toFixed(
+                                                    1
+                                                  )}-${seg.end.toFixed(1)})`}
+                                                />
+                                              )
+                                            )}
+                                          {/* Remaining (implicit background) */}
+                                        </div>
+                                        <div className='w-24 h-1 bg-gray-100 rounded-full overflow-hidden'>
+                                          <div
+                                            className={`h-full transition-all ${
+                                              Number(usagePercentage) > 80
+                                                ? "bg-red-500"
+                                                : Number(usagePercentage) > 60
+                                                ? "bg-orange-500"
+                                                : "bg-green-500"
+                                            }`}
+                                            style={{
+                                              width: `${Math.min(
+                                                100,
+                                                Number(usagePercentage)
+                                              )}%`,
+                                            }}
+                                          />
+                                        </div>
                                       </div>
                                     </div>
                                     {drum.usage_count &&
