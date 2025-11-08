@@ -683,7 +683,7 @@ export async function syncConnection(
         .lte("date", end);
       if (monthErr) throw monthErr;
 
-      // Read column A to detect gaps and get last sequence number
+      // Read column A to determine numbering context
       const aRes = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${sheetTab}!A1:A`,
@@ -696,25 +696,16 @@ export async function syncConnection(
         const s = (v ?? "").toString();
         const digits = s.replace(/\D+/g, "");
         if (!digits) return "";
-        return digits.startsWith("034") ? digits.slice(3) : digits;
+        return digits.startsWith("034") && digits.length === 10
+          ? digits.slice(3)
+          : digits;
       };
-      // Map existing sheet core numbers -> sheet row index (1-based)
-      const sheetCoreToRow = new Map<string, number>();
-      for (let i = 0; i < sheetDataRows.length; i++) {
-        const r = sheetDataRows[i];
+
+      const sheetCoreSet = new Set<string>();
+      for (const r of sheetDataRows) {
         const num = r[idx.number];
         const c = core(num);
-        if (c) sheetCoreToRow.set(c, i + 2);
-      }
-
-      // Find gap rows: A filled but B empty
-      const gapRows: number[] = [];
-      for (let j = 2; j <= sheetDataRows.length + 1; j++) {
-        const aVal = colA[j - 1];
-        const bEmpty = !(sheetDataRows[j - 2]?.[idx.number] ?? "")
-          .toString()
-          .trim();
-        if (aVal != null && aVal !== "" && bEmpty) gapRows.push(j);
+        if (c) sheetCoreSet.add(c);
       }
 
       // Last sequence in column A (max numeric value)
@@ -724,65 +715,20 @@ export async function syncConnection(
         if (Number.isFinite(n)) lastSeq = Math.max(lastSeq, n);
       }
 
-      const updatesForB: Array<{ range: string; values: any[][] }> = [];
-      const updatesForA: Array<{ range: string; values: any[][] }> = [];
       const toAppend: any[][] = [];
 
       for (const l of monthLines || []) {
         if (!l?.telephone_no) continue;
         const c = core(l.telephone_no);
+        if (c && sheetCoreSet.has(c)) continue; // already present, do not overwrite
         const outB = buildSheetRowFromLine(l, headers);
-        const matchedRow = c ? sheetCoreToRow.get(c) : undefined;
-        if (matchedRow) {
-          // Update existing row's B:AZ
-          updatesForB.push({
-            range: `${sheetTab}!B${matchedRow}`,
-            values: [outB],
-          });
-          continue;
-        }
-        if (gapRows.length) {
-          // Fill the first available gap row
-          const rowNum = gapRows.shift()!;
-          updatesForB.push({ range: `${sheetTab}!B${rowNum}`, values: [outB] });
-          // If column A is empty, assign next sequence
-          const aExisting = colA[rowNum - 1];
-          if (aExisting == null || aExisting === "") {
-            lastSeq += 1;
-            updatesForA.push({
-              range: `${sheetTab}!A${rowNum}`,
-              values: [[lastSeq]],
-            });
-          }
-          continue;
-        }
-        // No match and no gap -> append later (we will include A numbering)
         toAppend.push(outB);
       }
 
-      // Apply updates (B) and A numbering if needed
-      if (updatesForB.length || updatesForA.length) {
-        progress(
-          `Updating ${updatesForB.length} existing/gap rows in sheet` +
-            (updatesForA.length ? ` (+${updatesForA.length} A-cells)` : "")
-        );
-        const data = [...updatesForB, ...updatesForA];
-        await sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId,
-          requestBody: {
-            valueInputOption: "USER_ENTERED",
-            data,
-          },
-        });
-        updatedInSheet = updatesForB.length;
-      }
-
-      // Append new rows including A numbering
       if (toAppend.length) {
         progress(
           `Appending ${toAppend.length} new rows to sheet with numbering`
         );
-        // Build rows with [A, ...B..]
         const rowsWithA = toAppend.map((bRow) => {
           lastSeq += 1;
           return [lastSeq, ...bRow];
@@ -827,6 +773,17 @@ export async function syncConnection(
           .slice(1)
           .filter((r: any) => (r[dIdx.tp] ?? "").toString().trim() !== "");
         const drumRows = drumRowsRaw.map((r: any) => mapDrumRow(r, dIdx));
+
+        const drumNumbersFromSheet: string[] = Array.from(
+          new Set<string>(
+            drumRows
+              .map((r: any) => String(r.drum_number || "").trim())
+              .filter((num: string) => num !== "")
+          )
+        );
+        if (drumNumbersFromSheet.length) {
+          await ensureDrumTrackingForNumbers(drumNumbersFromSheet);
+        }
 
         // Build a telephone_no -> latest line mapping for this month window
         const { data: monthLines, error: monthErr } = await supabaseServer
@@ -1283,6 +1240,17 @@ function normalizeTelephone(raw: any): string {
   return digits;
 }
 
+// Sheets display local 7-digit numbers via formatting, so strip the 034 area code again when writing back.
+function formatTelephoneForSheet(raw: any): string {
+  const s = (raw ?? "").toString().trim();
+  if (!s) return "";
+  const digits = s.replace(/\D+/g, "");
+  if (digits.length === 10 && digits.startsWith("034")) {
+    return digits.slice(3);
+  }
+  return s;
+}
+
 function toDateISO(
   v: any,
   monthContext?: number,
@@ -1565,7 +1533,7 @@ function buildSheetRowFromLine(l: any, headers: string[]): any[] {
 
   // Map line fields back to sheet columns
   row[idx.date] = l.date;
-  row[idx.number] = l.telephone_no;
+  row[idx.number] = formatTelephoneForSheet(l.telephone_no);
   row[idx.dp] = l.dp;
   row[idx.power_dp] = l.power_dp;
   row[idx.power_inbox] = l.power_inbox;
@@ -1655,7 +1623,7 @@ function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
   const idx = headerIndexDrum(headers);
   const row = new Array(headers.length);
   // We don't set NO (sequence) here; Google Sheets will leave it blank or a formula can fill it
-  row[idx.tp] = l.telephone_no;
+  row[idx.tp] = formatTelephoneForSheet(l.telephone_no);
   row[idx.dw_dp] = l.dp;
   row[idx.dw_c_hook] = l.c_hook;
   row[idx.dw_cus] = l.name;
