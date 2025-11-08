@@ -496,10 +496,10 @@ export async function syncConnection(
     const dedupedRows = Array.from(seen.values());
 
     // Upsert lines from sheet -> project (prefer bulk; fallback to row-by-row if unique constraint missing)
-    const linePayloads = dedupedRows.map((row) => ({
-      ...sheetToLinePayload(row),
-      status: "completed",
-    }));
+    const linePayloads = dedupedRows
+      .map((row) => sheetToLinePayload(row))
+      .filter((p) => p !== null)
+      .map((p) => ({ ...p, status: "completed" }));
 
     let upsertedLines: Array<{ id: string; telephone_no: string }> | null =
       null;
@@ -531,20 +531,29 @@ export async function syncConnection(
         for (let index = 0; index < dedupedRows.length; index++) {
           const row = dedupedRows[index];
           try {
+            const payload = sheetToLinePayload(row);
+            if (!payload) {
+              console.log(
+                `[syncConnection] Skipping row ${
+                  index + 1
+                } due to invalid telephone number`
+              );
+              continue; // Skip rows with invalid telephone numbers
+            }
             const existing = row.telephone_no
               ? existingByPhone.get(row.telephone_no)
               : undefined;
             if (existing) {
               const { error: updErr } = await supabaseServer
                 .from("line_details")
-                .update(sheetToLinePayload(row))
+                .update(payload)
                 .eq("id", existing.id);
               if (updErr) throw updErr;
               upsertedCount++;
               await ensureTaskForLine(existing.id, row);
             } else {
               const insertPayload = {
-                ...sheetToLinePayload(row),
+                ...payload,
                 status: "completed",
               };
               const { data: ins, error: insErr } = await supabaseServer
@@ -697,8 +706,7 @@ export async function syncConnection(
       const sheetDataRows = values.slice(1); // B.. data rows (skip header)
       const core = (v: any) => {
         const s = (v ?? "").toString();
-        const digits = s.replace(/\D+/g, "");
-        return digits || "";
+        return normalizeTelephoneCanonical(s) || "";
       };
       // Map existing sheet core numbers -> sheet row index (1-based).
       // Keys are the digit-only phone strings as displayed in the sheet.
@@ -1322,18 +1330,22 @@ function toNumber(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Normalize telephone numbers from sheet -> project
-// - If contains any letters, return as-is (no changes)
-// - Otherwise, strip non-digits and return the digit sequence as-is.
-// NOTE: we no longer auto-prefix area codes (e.g. '034') because the
-// sheet reads now use formatted values and we want to preserve the
-// raw displayed number; matching logic handles minor variations.
-function normalizeTelephone(raw: any): string {
+// Normalize telephone numbers from sheet -> project using the same rules as checkTelephoneForInsert
+// - If contains any letters, return as-is
+// - If numeric: apply prefix rules and return normalized 10-digit string
+// - If invalid digit length, return "" (to be filtered out)
+function normalizeTelephoneCanonical(raw: any): string {
   const s = (raw ?? "").toString().trim();
-  if (/[a-zA-Z]/.test(s)) return s; // leave values with letters unchanged
+  if (!s) return s;
+  // If contains letters, accept as-is
+  if (/[a-zA-Z]/.test(s)) return s;
   const digits = s.replace(/\D+/g, "");
-  if (!digits) return s; // nothing to normalize
-  return digits;
+  if (!digits) return s;
+  if (digits.length === 10) return digits;
+  if (digits.length === 9) return `0${digits}`;
+  if (digits.length === 7) return `034${digits}`;
+  // Invalid length: return empty to filter out
+  return "";
 }
 
 function toDateISO(
@@ -1449,7 +1461,7 @@ function mapSheetRow(
   yearContext?: number
 ) {
   const rawNumber = (row[idx.number] ?? "").toString().trim();
-  const normalizedNumber = normalizeTelephone(rawNumber);
+  const normalizedNumber = normalizeTelephoneCanonical(rawNumber);
   const rawDate = toDateISO(row[idx.date], monthContext, yearContext);
   const normalizedDate = enforceConnectionDate(
     rawDate,
@@ -1518,12 +1530,19 @@ function mapSheetRow(
   };
 }
 
-function sheetToLinePayload(r: any) {
+function sheetToLinePayload(r: any): any | null {
+  // Validate telephone number first
+  const validatedTelephone = checkTelephoneForInsert(r.telephone_no);
+  if (validatedTelephone === "wrong number") {
+    return null; // Skip rows with invalid telephone numbers
+  }
+
   // Payload matches line_details columns
   const payload: any = {
     date: r.date || new Date().toISOString().slice(0, 10),
-    telephone_no: r.telephone_no,
-    phone_number: r.telephone_no,
+    // Use the validated telephone number
+    telephone_no: validatedTelephone,
+    phone_number: validatedTelephone,
     dp: r.dp,
     power_dp: r.power_dp,
     power_inbox: r.power_inbox,
@@ -1565,6 +1584,27 @@ function sheetToLinePayload(r: any) {
     rj12: r.rj12,
   };
   return payload;
+}
+
+// Validate/normalize telephone for DB insertion according to rules:
+// - If value contains any letters, accept as-is (return original string)
+// - If numeric:
+//   - 10 digits: return as-is
+//   - 9 digits: prefix with '0' -> becomes 10
+//   - 7 digits: prefix with '034' -> becomes 10
+// Returns either the original letter-based value or a 10-digit numeric string when possible.
+function checkTelephoneForInsert(raw: any): string {
+  const s = (raw ?? "").toString().trim();
+  if (!s) return s;
+  // If contains letters, accept as-is
+  if (/[a-zA-Z]/.test(s)) return s;
+  const digits = s.replace(/\D+/g, "");
+  if (!digits) return s;
+  if (digits.length === 10) return digits;
+  if (digits.length === 9) return `0${digits}`;
+  if (digits.length === 7) return `034${digits}`;
+  // Fallback: return digits unchanged (caller may validate further)
+  return "wrong number";
 }
 
 async function fetchExistingLines(
@@ -1618,7 +1658,7 @@ function buildSheetRowFromLine(l: any, headers: string[]): any[] {
 
   // Map line fields back to sheet columns
   row[idx.date] = l.date;
-  row[idx.number] = l.telephone_no;
+  row[idx.number] = formatTelephoneForSheet(l.telephone_no);
   row[idx.dp] = l.dp;
   row[idx.power_dp] = l.power_dp;
   row[idx.power_inbox] = l.power_inbox;
@@ -1696,7 +1736,7 @@ function headerIndexDrum(headers: string[]) {
 function mapDrumRow(row: any[], idx: ReturnType<typeof headerIndexDrum>) {
   return {
     no: (row[idx.no] ?? "").toString().trim(),
-    tp: normalizeTelephone((row[idx.tp] ?? "").toString().trim()),
+    tp: normalizeTelephoneCanonical((row[idx.tp] ?? "").toString().trim()),
     dw_dp: (row[idx.dw_dp] ?? "").toString().trim(),
     dw_c_hook: toNumber(row[idx.dw_c_hook]),
     dw_cus: (row[idx.dw_cus] ?? "").toString().trim(),
@@ -1708,12 +1748,26 @@ function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
   const idx = headerIndexDrum(headers);
   const row = new Array(headers.length);
   // We don't set NO (sequence) here; Google Sheets will leave it blank or a formula can fill it
-  row[idx.tp] = l.telephone_no;
+  row[idx.tp] = formatTelephoneForSheet(l.telephone_no);
   row[idx.dw_dp] = l.dp;
   row[idx.dw_c_hook] = l.c_hook;
   row[idx.dw_cus] = l.name;
   row[idx.drum_number] = l.drum_number ?? l.drum_number_new ?? "";
   return row;
+}
+
+// Format telephone number for writing to sheets: prefer the shorter/display form
+// (strip a leading local area code like '034' if present) to avoid overwriting
+// sheet values with an unwanted prefixed form.
+function formatTelephoneForSheet(raw: any): string {
+  if (!raw && raw !== 0) return "";
+  const s = String(raw).trim();
+  const digits = s.replace(/\D+/g, "");
+  if (!digits) return s;
+  // If the number starts with '034' and has more digits after it, strip it
+  // when writing back to the sheet to preserve the sheet's displayed format.
+  if (digits.startsWith("034") && digits.length > 3) return digits.slice(3);
+  return digits;
 }
 
 // Compute quantity used for a line (prefers explicit total_cable, else abs(end-start))
