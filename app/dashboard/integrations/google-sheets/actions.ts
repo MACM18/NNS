@@ -1047,31 +1047,59 @@ export async function syncConnection(
           year
         );
 
-        // 4) Update inventory item stock totals based on active drums
-        const impactedItemIds = Array.from(
-          new Set(
-            Array.from(drumMap.values())
-              .map((d) => d.item_id)
-              .filter(Boolean)
-          )
-        ) as string[];
-        for (const itemId of impactedItemIds) {
-          try {
-            const { data: sums, error: sumErr } = await supabaseServer
+        // 4) Update inventory item stock totals based on active drums remaining amounts for 'Drop Wire Cable'
+        try {
+          // Find the 'Drop Wire Cable' inventory item
+          const { data: dropWireItem, error: itemErr } = await supabaseServer
+            .from("inventory_items")
+            .select("id")
+            .eq("name", "Drop Wire Cable")
+            .maybeSingle();
+
+          if (itemErr || !dropWireItem) {
+            console.warn(
+              "[syncConnection] 'Drop Wire Cable' inventory item not found, skipping inventory update"
+            );
+          } else {
+            // Get all active drums for this item and sum their remaining quantities
+            const { data: activeDrums, error: activeErr } = await supabaseServer
               .from("drum_tracking")
               .select("current_quantity")
-              .eq("item_id", itemId)
+              .eq("item_id", dropWireItem.id)
               .eq("status", "active");
-            if (sumErr) continue;
-            const total = (sums || []).reduce(
-              (acc: number, r: any) => acc + Number(r.current_quantity || 0),
-              0
-            );
-            await supabaseServer
-              .from("inventory_items")
-              .update({ current_stock: total })
-              .eq("id", itemId);
-          } catch {}
+            if (activeErr) {
+              console.warn(
+                "[syncConnection] Failed to fetch active drums for inventory update:",
+                activeErr
+              );
+            } else {
+              // Calculate total remaining cable from active drums
+              const totalRemainingCable = (activeDrums || []).reduce(
+                (acc: number, drum: any) =>
+                  acc + Number(drum.current_quantity || 0),
+                0
+              );
+
+              // Update inventory item with the dynamic remaining cable amount
+              const { error: updateErr } = await supabaseServer
+                .from("inventory_items")
+                .update({ current_stock: totalRemainingCable })
+                .eq("id", dropWireItem.id);
+
+              if (updateErr) {
+                console.warn(
+                  "[syncConnection] Failed to update 'Drop Wire Cable' inventory:",
+                  updateErr
+                );
+              } else {
+                console.log(
+                  `[syncConnection] Updated 'Drop Wire Cable' inventory with total remaining cable: ${totalRemainingCable}`
+                );
+              }
+            }
+          }
+        } catch (invErr) {
+          console.warn("[syncConnection] Inventory update error:", invErr);
         }
       }
     } catch (e) {
@@ -1816,14 +1844,14 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
       status: d.status,
     });
 
-  // Find a sensible default cable inventory item (prefer names like 'drop wire')
+  // Find a sensible default cable inventory item (specifically 'Drop Wire Cable')
   let defaultItem: { id: string; drum_size?: number } | null = null;
   try {
     const { data: prefer, error: prefErr } = await supabaseServer
       .from("inventory_items")
       .select("id, drum_size, name")
       .not("drum_size", "is", null)
-      .ilike("name", "%drop wire%")
+      .eq("name", "Drop Wire Cable")
       .limit(1)
       .maybeSingle();
     if (!prefErr && prefer) defaultItem = prefer as any;
@@ -1939,14 +1967,8 @@ async function recalcDrumAggregates(
 
       const newQty = result.calculatedCurrentQuantity;
 
-      // Check if drum was used in current month (present device/global time)
-      const currentMonth = new Date().getMonth() + 1; // getMonth() returns 0-11
-      const currentYear = new Date().getFullYear();
-      const isCurrentMonth = month === currentMonth && year === currentYear;
-
-      // If used in current month, set active; otherwise inactive
-      const newStatus = isCurrentMonth ? "active" : "inactive";
-
+      // Always set status to active
+      const newStatus = "active";
       await supabaseServer
         .from("drum_tracking")
         .update({ current_quantity: newQty, status: newStatus })
