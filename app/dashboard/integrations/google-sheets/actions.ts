@@ -1137,6 +1137,19 @@ export async function syncConnection(
         throw new Error(updateErr.message || "Failed to update sync status");
       }
 
+      // Recalculate all drum quantities at the end of sync
+      try {
+        progress("Recalculating all drum quantities");
+        const recalcResult = await recalculateAllDrumQuantities(accessToken);
+        console.log(
+          "[syncConnection] Drum recalculation completed:",
+          recalcResult
+        );
+      } catch (recalcErr) {
+        console.warn("[syncConnection] Drum recalculation failed:", recalcErr);
+        // Don't fail the entire sync for recalculation issues
+      }
+
       return {
         connection: data,
         upserted: upsertedCount,
@@ -1977,6 +1990,134 @@ async function recalcDrumAggregates(
     }
   }
   return recalced;
+}
+
+// Recalculate all drum current quantities based on their usage records
+export async function recalculateAllDrumQuantities(accessToken?: string) {
+  "use server";
+
+  try {
+    // Ensure caller is authorized
+    await authorize(accessToken);
+
+    console.log(
+      "[recalculateAllDrumQuantities] Starting recalculation of all drum quantities"
+    );
+
+    // Fetch all drums with their item information
+    const { data: drums, error: drumsErr } = await supabaseServer
+      .from("drum_tracking")
+      .select("id, item_id, status, initial_quantity, drum_number")
+      .not("item_id", "is", null);
+
+    if (drumsErr) {
+      console.error(
+        "[recalculateAllDrumQuantities] Error fetching drums:",
+        drumsErr
+      );
+      throw new Error("Failed to fetch drum data");
+    }
+
+    if (!drums || drums.length === 0) {
+      console.log(
+        "[recalculateAllDrumQuantities] No drums found to recalculate"
+      );
+      return { updated: 0, message: "No drums found to recalculate" };
+    }
+
+    let updatedCount = 0;
+    const errors: string[] = [];
+
+    for (const drum of drums) {
+      try {
+        // Get drum capacity from inventory item
+        let capacity = 0;
+        if (drum.item_id) {
+          const { data: item } = await supabaseServer
+            .from("inventory_items")
+            .select("drum_size")
+            .eq("id", drum.item_id)
+            .maybeSingle();
+          if (item?.drum_size) capacity = Number(item.drum_size) || 0;
+        }
+
+        if (capacity <= 0) {
+          console.warn(
+            `[recalculateAllDrumQuantities] Skipping drum ${drum.drum_number}: no valid capacity`
+          );
+          continue;
+        }
+
+        // Gather all usages for this drum
+        const { data: usages } = await supabaseServer
+          .from("drum_usage")
+          .select("id, cable_start_point, cable_end_point, usage_date")
+          .eq("drum_id", drum.id);
+
+        // Calculate new quantity using smart wastage calculation
+        const result = calculateSmartWastage(
+          (usages || []).map((u: any) => ({
+            id: u.id,
+            cable_start_point: Number(u.cable_start_point || 0),
+            cable_end_point: Number(u.cable_end_point || 0),
+            usage_date: u.usage_date,
+          })),
+          capacity,
+          undefined, // no manual override
+          drum.status
+        );
+
+        const newQuantity = result.calculatedCurrentQuantity;
+
+        // Update the drum with the recalculated quantity
+        const { error: updateErr } = await supabaseServer
+          .from("drum_tracking")
+          .update({
+            current_quantity: newQuantity,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", drum.id);
+
+        if (updateErr) {
+          console.error(
+            `[recalculateAllDrumQuantities] Failed to update drum ${drum.drum_number}:`,
+            updateErr
+          );
+          errors.push(`Failed to update drum ${drum.drum_number}`);
+        } else {
+          updatedCount++;
+          console.log(
+            `[recalculateAllDrumQuantities] Updated drum ${
+              drum.drum_number
+            }: ${newQuantity.toFixed(1)}m remaining`
+          );
+        }
+      } catch (drumErr) {
+        console.error(
+          `[recalculateAllDrumQuantities] Error processing drum ${drum.drum_number}:`,
+          drumErr
+        );
+        errors.push(`Error processing drum ${drum.drum_number}`);
+      }
+    }
+
+    console.log(
+      `[recalculateAllDrumQuantities] Completed: ${updatedCount} drums updated`
+    );
+
+    return {
+      updated: updatedCount,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `Successfully recalculated quantities for ${updatedCount} drums${
+        errors.length > 0 ? ` (${errors.length} errors)` : ""
+      }`,
+    };
+  } catch (error) {
+    console.error("[recalculateAllDrumQuantities] Error:", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Failed to recalculate drum quantities");
+  }
 }
 
 // Month window helper restored

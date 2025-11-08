@@ -10,6 +10,7 @@ import {
   BarChart3,
   Eye,
   Pencil,
+  RefreshCw,
   Trash,
   Cable,
   ToggleLeft,
@@ -40,6 +41,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { AddInventoryInvoiceModal } from "@/components/modals/add-inventory-invoice-modal";
 import { AddWasteModal } from "@/components/modals/add-waste-modal";
 import { ManageInventoryItemsModal } from "@/components/modals/manage-inventory-items-modal";
@@ -51,13 +59,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { recalculateAllDrumQuantities } from "@/app/dashboard/integrations/google-sheets/actions";
 import {
   calculateSmartWastage,
   calculateLegacyWastage,
@@ -1124,6 +1126,36 @@ export default function InventoryPage() {
                     ? "Hide Inactive Drums"
                     : "Show Inactive Drums"}
                 </Button>
+                {(role === "admin" || role === "moderator") && (
+                  <Button
+                    variant='secondary'
+                    size='sm'
+                    onClick={async () => {
+                      try {
+                        await recalculateAllDrumQuantities();
+                        addNotification({
+                          title: "Success",
+                          message:
+                            "All drum quantities recalculated successfully",
+                          type: "success",
+                          category: "system",
+                        });
+                        handleSuccess();
+                      } catch (error) {
+                        addNotification({
+                          title: "Error",
+                          message: "Failed to recalculate drum quantities",
+                          type: "error",
+                          category: "system",
+                        });
+                      }
+                    }}
+                    className='gap-2'
+                  >
+                    <RefreshCw className='h-4 w-4' />
+                    Recalculate All
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
