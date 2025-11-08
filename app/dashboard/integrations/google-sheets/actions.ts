@@ -853,17 +853,17 @@ export async function syncConnection(
           const ensured = await ensureDrumTrackingForNumbers(
             drumNumbersFromSheet as string[]
           );
-          const ensuredKeys = Array.from(ensured.byNumber.keys());
-          const newlyCreatedKeys = ensuredKeys.filter((k) =>
-            drumNumbersFromSheet.includes(k)
-          );
-          drumProcessed += newlyCreatedKeys.length;
-          // record created drum numbers for debug/confirmation
-          if (newlyCreatedKeys.length) {
-            drumCreatedNumbers.push(...newlyCreatedKeys);
+          // ensured.createdNumbers contains full created drum objects (with id)
+          if (ensured.createdNumbers && ensured.createdNumbers.length) {
+            const createdKeys = ensured.createdNumbers.map((c: any) =>
+              (c.drum_number || "").toString()
+            );
+            drumProcessed += createdKeys.length;
+            // record created drum numbers for debug/confirmation (store strings)
+            drumCreatedNumbers.push(...createdKeys);
             console.log(
               "[syncConnection] Created drum_tracking rows for:",
-              newlyCreatedKeys
+              ensured.createdNumbers
             );
           }
         }
@@ -1018,17 +1018,27 @@ export async function syncConnection(
 
           const existing = usageByLine.get(l.id);
           if (existing?.id) {
-            const { error: updErr } = await supabaseServer
+            const { data: updatedRow, error: updErr } = await supabaseServer
               .from("drum_usage")
               .update(payload)
-              .eq("id", existing.id);
+              .eq("id", existing.id)
+              .select(
+                "id, drum_id, line_details_id, quantity_used, usage_date, cable_start_point, cable_end_point, created_at"
+              )
+              .single();
             if (updErr) throw updErr;
+            // updatedRow.id contains the UUID of the updated drum_usage
             drumUsageUpdated++;
           } else {
-            const { error: insErr } = await supabaseServer
+            const { data: insData, error: insErr } = await supabaseServer
               .from("drum_usage")
-              .insert(payload);
+              .insert(payload)
+              .select(
+                "id, drum_id, line_details_id, quantity_used, usage_date, cable_start_point, cable_end_point, created_at"
+              )
+              .single();
             if (insErr) throw insErr;
+            // insData.id contains the UUID of the inserted drum_usage
             drumUsageInserted++;
           }
           affectedDrumIds.add(drum.id);
@@ -1876,7 +1886,7 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
   }
 
   const toCreate = unique.filter((n) => !byNumber.has(n));
-  const createdNumbers: string[] = [];
+  const createdNumbers: Array<any> = [];
   for (const num of toCreate) {
     try {
       const initial = Number(defaultItem?.drum_size || 0) || 0;
@@ -1885,13 +1895,20 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
         item_id: defaultItem?.id || null,
         initial_quantity: initial,
         current_quantity: initial,
-        status: initial > 0 ? "active" : "inactive",
+        // Always mark newly discovered drums as active per request
+        status: "active",
+        received_date: new Date().toISOString().slice(0, 10),
       };
+
+      // Return all relevant fields including the generated UUID
       const { data: created, error: insErr } = await supabaseServer
         .from("drum_tracking")
         .insert(insertPayload)
-        .select("id, item_id, status")
+        .select(
+          "id, drum_number, item_id, initial_quantity, current_quantity, status, received_date, created_at, updated_at"
+        )
         .single();
+
       if (insErr) {
         console.error(
           "[ensureDrumTrackingForNumbers] Insert failed for",
@@ -1906,7 +1923,7 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
           item_id: created.item_id,
           status: created.status || "active",
         });
-        createdNumbers.push(num);
+        createdNumbers.push(created);
         console.log(
           "[ensureDrumTrackingForNumbers] Created drum_tracking for",
           num,
