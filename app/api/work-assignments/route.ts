@@ -257,6 +257,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate referenced line exists
+    const { data: lineExists, error: lineErr } = await supabaseServer
+      .from("line_details")
+      .select("id")
+      .eq("id", lineId)
+      .maybeSingle();
+    if (lineErr) throw lineErr;
+    if (!lineExists) {
+      return new Response(
+        JSON.stringify({ error: "Line not found for provided lineId" }),
+        { status: 400 }
+      );
+    }
+
+    // Validate referenced worker exists
+    const { data: workerExists, error: workerErr } = await supabaseServer
+      .from("workers")
+      .select("id")
+      .eq("id", workerId)
+      .maybeSingle();
+    if (workerErr) throw workerErr;
+    if (!workerExists) {
+      return new Response(
+        JSON.stringify({ error: "Worker not found for provided workerId" }),
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabaseServer
       .from("work_assignments")
       .insert({
