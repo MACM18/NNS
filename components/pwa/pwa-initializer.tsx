@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const SERVICE_WORKER_PATH = "/sw.js";
 
 export function PWAInitializer() {
+  const [canInstall, setCanInstall] = useState(false);
+
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
       return;
@@ -49,9 +51,10 @@ export function PWAInitializer() {
       console.info(
         "[PWA] beforeinstallprompt fired; you can prompt the user later."
       );
-      // Optionally store the event on window for later use
+      // Store the event on window for later use and show install affordance
       // @ts-ignore
       window.__NNS_DEFERRED_PROMPT = e;
+      setCanInstall(true);
     };
 
     // Reload page when new service worker takes control
@@ -67,6 +70,15 @@ export function PWAInitializer() {
       }
     };
 
+    // App installed: hide install button and cleanup
+    const onAppInstalled = () => {
+      // eslint-disable-next-line no-console
+      console.info("[PWA] App installed");
+      setCanInstall(false);
+      // @ts-ignore
+      if (window.__NNS_DEFERRED_PROMPT) delete window.__NNS_DEFERRED_PROMPT;
+    };
+
     window.addEventListener(
       "beforeinstallprompt",
       onBeforeInstallPrompt as EventListener
@@ -75,6 +87,7 @@ export function PWAInitializer() {
       "controllerchange",
       onControllerChange
     );
+    window.addEventListener("appinstalled", onAppInstalled);
 
     return () => {
       window.removeEventListener(
@@ -85,8 +98,46 @@ export function PWAInitializer() {
         "controllerchange",
         onControllerChange
       );
+      window.removeEventListener("appinstalled", onAppInstalled);
     };
   }, []);
 
-  return null;
+  // Small in-app install button to trigger the saved prompt when available.
+  const handleInstallClick = async () => {
+    // @ts-ignore
+    const deferred = window.__NNS_DEFERRED_PROMPT;
+    if (!deferred) return;
+
+    try {
+      // @ts-ignore
+      deferred.prompt();
+      // @ts-ignore
+      const choice = await deferred.userChoice;
+      // eslint-disable-next-line no-console
+      console.info("[PWA] User choice for install:", choice);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[PWA] Error prompting for install", err);
+    } finally {
+      setCanInstall(false);
+      // @ts-ignore
+      if (window.__NNS_DEFERRED_PROMPT) delete window.__NNS_DEFERRED_PROMPT;
+    }
+  };
+
+  return (
+    <>
+      {canInstall && (
+        <div className='fixed right-4 bottom-20 z-50'>
+          <button
+            onClick={handleInstallClick}
+            className='rounded-full bg-primary text-white px-4 py-2 shadow-md hover:brightness-95'
+            aria-label='Install app'
+          >
+            Install App
+          </button>
+        </div>
+      )}
+    </>
+  );
 }
