@@ -698,13 +698,27 @@ export async function syncConnection(
         if (!digits) return "";
         return digits.startsWith("034") ? digits.slice(3) : digits;
       };
-      // Map existing sheet core numbers -> sheet row index (1-based)
+      // Map existing sheet core numbers -> sheet row index (1-based).
+      // Populate keys for both forms (with and without leading '034') so matching
+      // against DB values (which may have '034' added during normalization) will succeed.
       const sheetCoreToRow = new Map<string, number>();
       for (let i = 0; i < sheetDataRows.length; i++) {
         const r = sheetDataRows[i];
         const num = r[idx.number];
-        const c = core(num);
-        if (c) sheetCoreToRow.set(c, i + 2);
+        const base = core(num);
+        if (!base) continue;
+        // key without 034
+        sheetCoreToRow.set(base, i + 2);
+        // also key with 034 prefix (for lookup against normalized DB numbers)
+        if (!base.startsWith("034") && base.length < 10) {
+          sheetCoreToRow.set("034" + base, i + 2);
+        }
+        // also support case where sheet already includes 034 (store that as well)
+        const rawDigits = (num ?? "").toString().replace(/\D+/g, "");
+        if (rawDigits && rawDigits.startsWith("034")) {
+          sheetCoreToRow.set(rawDigits, i + 2);
+          sheetCoreToRow.set(rawDigits.slice(3), i + 2);
+        }
       }
 
       // Find gap rows: A filled but B empty
@@ -730,9 +744,22 @@ export async function syncConnection(
 
       for (const l of monthLines || []) {
         if (!l?.telephone_no) continue;
-        const c = core(l.telephone_no);
         const outB = buildSheetRowFromLine(l, headers);
-        const matchedRow = c ? sheetCoreToRow.get(c) : undefined;
+        const normalized = core(l.telephone_no);
+        // Try matching against multiple representations to avoid duplicates
+        let matchedRow = normalized
+          ? sheetCoreToRow.get(normalized)
+          : undefined;
+        if (!matchedRow) {
+          // try with leading 034
+          const with034 =
+            normalized &&
+            !normalized.startsWith("034") &&
+            normalized.length < 10
+              ? `034${normalized}`
+              : undefined;
+          if (with034) matchedRow = sheetCoreToRow.get(with034);
+        }
         if (matchedRow) {
           // Update existing row's B:AZ
           updatesForB.push({
