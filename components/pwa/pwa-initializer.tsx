@@ -37,7 +37,55 @@ export function PWAInitializer() {
       }
     };
 
+    // Register the service worker
     registerServiceWorker();
+
+    // Handle beforeinstallprompt to allow custom install flow
+    const onBeforeInstallPrompt = (e: Event) => {
+      // Prevent the mini-infobar from appearing on mobile
+      // @ts-ignore - event is a BeforeInstallPromptEvent
+      e.preventDefault?.();
+      // eslint-disable-next-line no-console
+      console.info(
+        "[PWA] beforeinstallprompt fired; you can prompt the user later."
+      );
+      // Optionally store the event on window for later use
+      // @ts-ignore
+      window.__NNS_DEFERRED_PROMPT = e;
+    };
+
+    // Reload page when new service worker takes control
+    const onControllerChange = () => {
+      // eslint-disable-next-line no-console
+      console.info(
+        "[PWA] Service worker controller changed; reloading to activate new SW."
+      );
+      try {
+        window.location.reload();
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    window.addEventListener(
+      "beforeinstallprompt",
+      onBeforeInstallPrompt as EventListener
+    );
+    navigator.serviceWorker.addEventListener?.(
+      "controllerchange",
+      onControllerChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "beforeinstallprompt",
+        onBeforeInstallPrompt as EventListener
+      );
+      navigator.serviceWorker.removeEventListener?.(
+        "controllerchange",
+        onControllerChange
+      );
+    };
   }, []);
 
   return null;
