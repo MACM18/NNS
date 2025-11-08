@@ -1,3 +1,5 @@
+"use server";
+
 import { supabaseServer } from "@/lib/supabase-server";
 import { google } from "googleapis";
 import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
@@ -57,8 +59,6 @@ export async function createConnection(
   },
   accessToken?: string
 ) {
-  "use server";
-
   try {
     const auth = await authorize(accessToken);
 
@@ -129,8 +129,6 @@ export async function createConnection(
 
 // Helper server action to accept FormData from a <form action=> submission in the App Router.
 export async function createConnectionFromForm(formData: FormData) {
-  "use server";
-
   try {
     // Debug: log incoming form data keys only (never values/tokens)
     try {
@@ -193,8 +191,6 @@ export async function deleteConnection(
   connectionId: string,
   accessToken?: string
 ) {
-  "use server";
-
   try {
     const auth = await authorize(accessToken);
 
@@ -249,8 +245,6 @@ export async function syncConnection(
   accessToken?: string,
   onProgress?: (message: string) => void
 ) {
-  "use server";
-
   try {
     const progress = (m: string) => {
       try {
@@ -1994,8 +1988,6 @@ async function recalcDrumAggregates(
 
 // Recalculate all drum current quantities based on their usage records
 export async function recalculateAllDrumQuantities(accessToken?: string) {
-  "use server";
-
   try {
     // Ensure caller is authorized
     await authorize(accessToken);
@@ -2132,8 +2124,6 @@ function monthStartEnd(month: number, year: number) {
 
 // Form wrappers for use as <form action={...}> server actions
 export async function deleteConnectionFromForm(formData: FormData) {
-  "use server";
-
   try {
     const connectionId = String(formData.get("connectionId") || "");
     const accessToken = formData.get("sb_access_token")
@@ -2160,8 +2150,6 @@ export async function deleteConnectionFromForm(formData: FormData) {
 }
 
 export async function syncConnectionFromForm(formData: FormData) {
-  "use server";
-
   try {
     const connectionId = String(formData.get("connectionId") || "");
     const accessToken = formData.get("sb_access_token")
@@ -2195,8 +2183,6 @@ export async function syncConnectionFromForm(formData: FormData) {
 // Dev-only helper: check presence/format of integration-related env vars.
 // Protected with authorize() so only admin/moderator can call.
 export async function checkIntegrationEnv(accessToken?: string) {
-  "use server";
-
   try {
     // ensure caller is authorized
     await authorize(accessToken);
