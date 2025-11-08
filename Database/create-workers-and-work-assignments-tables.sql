@@ -51,6 +51,11 @@ ALTER TABLE public.workers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.work_assignments ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for workers table
+-- Service role can do everything
+CREATE POLICY "Service role can manage workers" ON public.workers
+	FOR ALL
+	USING (auth.role() = 'service_role');
+
 -- Admins and moderators can do everything
 CREATE POLICY "Admins can manage workers" ON public.workers
 	FOR ALL
@@ -71,6 +76,11 @@ CREATE POLICY "Authenticated users can view active workers" ON public.workers
 	);
 
 -- RLS Policies for work_assignments table
+-- Service role can manage assignments
+CREATE POLICY "Service role can manage work assignments" ON public.work_assignments
+	FOR ALL
+	USING (auth.role() = 'service_role');
+
 -- Admins and moderators can manage assignments
 CREATE POLICY "Admins can manage work assignments" ON public.work_assignments
 	FOR ALL
