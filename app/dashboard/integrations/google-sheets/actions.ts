@@ -1897,7 +1897,7 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
         continue;
       }
 
-      const initial = Number(defaultItem.drum_size || 0) || 0;
+      const initial = 2000; // Default initial quantity for new drums
       const insertPayload: any = {
         drum_number: num,
         item_id: defaultItem.id, // Always use the Drop Wire Cable item_id
