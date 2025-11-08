@@ -847,7 +847,34 @@ export async function syncConnection(
           .filter((r: any) => (r[dIdx.tp] ?? "").toString().trim() !== "");
         const drumRows = drumRowsRaw.map((r: any) => mapDrumRow(r, dIdx));
 
-        // Build a telephone_no -> latest line mapping for this month window
+        // 2) Insert drum numbers to tracking table BEFORE updating line_details
+        const drumNumbersFromSheet = Array.from(
+          new Set(
+            drumRows
+              .map((r: any) => (r.drum_number || "").toString().trim())
+              .filter(Boolean)
+          )
+        );
+        if (drumNumbersFromSheet.length) {
+          const ensured = await ensureDrumTrackingForNumbers(
+            drumNumbersFromSheet as string[]
+          );
+          const ensuredKeys = Array.from(ensured.byNumber.keys());
+          const newlyCreatedKeys = ensuredKeys.filter((k) =>
+            drumNumbersFromSheet.includes(k)
+          );
+          drumProcessed += newlyCreatedKeys.length;
+          // record created drum numbers for debug/confirmation
+          if (newlyCreatedKeys.length) {
+            drumCreatedNumbers.push(...newlyCreatedKeys);
+            console.log(
+              "[syncConnection] Created drum_tracking rows for:",
+              newlyCreatedKeys
+            );
+          }
+        }
+
+        // 3) Add numbers to line details (update existing line_details with drum numbers)
         const { data: monthLines, error: monthErr } = await supabaseServer
           .from("line_details")
           .select("*")
@@ -884,10 +911,13 @@ export async function syncConnection(
         }
 
         if (updates.length > 0) {
-          const { error: updErr } = await supabaseServer
-            .from("line_details")
-            .upsert(updates, { onConflict: "id" });
-          if (updErr) throw updErr;
+          for (const update of updates) {
+            const { error: updErr } = await supabaseServer
+              .from("line_details")
+              .update(update)
+              .eq("id", update.id);
+            if (updErr) throw updErr;
+          }
           drumProcessed += updates.length;
         }
 
@@ -910,47 +940,7 @@ export async function syncConnection(
           drumAppended = drumAppendRows.length;
         }
         // Ensure drum_tracking entries exist for any drum numbers present in the Drum Number tab
-        try {
-          const drumNumbersFromSheet = Array.from(
-            new Set(
-              drumRows
-                .map((r: any) => (r.drum_number || "").toString().trim())
-                .filter(Boolean)
-            )
-          );
-          if (drumNumbersFromSheet.length) {
-            // Check existing drum_tracking for these numbers to compute how many are newly created
-            const { data: existingDrums } = await supabaseServer
-              .from("drum_tracking")
-              .select("drum_number")
-              .in("drum_number", drumNumbersFromSheet);
-            const existingSet = new Set(
-              (existingDrums || []).map((d: any) => d.drum_number)
-            );
-
-            const ensured = await ensureDrumTrackingForNumbers(
-              drumNumbersFromSheet as string[]
-            );
-            const ensuredKeys = Array.from(ensured.byNumber.keys());
-            const newlyCreatedKeys = ensuredKeys.filter(
-              (k) => !existingSet.has(k)
-            );
-            drumProcessed += newlyCreatedKeys.length;
-            // record created drum numbers for debug/confirmation
-            if (newlyCreatedKeys.length) {
-              drumCreatedNumbers.push(...newlyCreatedKeys);
-              console.log(
-                "[syncConnection] Created drum_tracking rows for:",
-                newlyCreatedKeys
-              );
-            }
-          }
-        } catch (e) {
-          console.warn(
-            "Failed to ensure drum_tracking for Drum Number tab:",
-            (e as Error).message || e
-          );
-        }
+        // Note: This is now handled in the drum pipeline below to ensure proper ordering
       }
     } catch (e) {
       // If tab is missing or validation fails, don't fail the entire sync
@@ -985,11 +975,27 @@ export async function syncConnection(
           )
         );
 
-        // 1) Ensure drum_tracking exists for all referenced drum numbers
-        const ensured = await ensureDrumTrackingForNumbers(drumNumbers);
-        const drumMap = ensured.byNumber; // Map<drum_number, {id,item_id,status}>
+        // Drum tracking should already be ensured in the Drum Number tab sync
+        // Create a map for existing drum_tracking (assume all exist)
+        const drumMap = new Map<
+          string,
+          { id: string; item_id?: string; status: string }
+        >();
+        if (drumNumbers.length) {
+          const { data: existingDrums, error: existErr } = await supabaseServer
+            .from("drum_tracking")
+            .select("id, drum_number, item_id, status")
+            .in("drum_number", drumNumbers);
+          if (existErr) throw existErr;
+          for (const d of existingDrums || [])
+            drumMap.set(d.drum_number, {
+              id: d.id,
+              item_id: d.item_id,
+              status: d.status,
+            });
+        }
 
-        // 2) Upsert (insert or update) drum_usage per line
+        // 4) Finally add drum usage
         const idsToCheck = linesWithDrum.map((l: any) => l.id);
         const { data: existingUsages, error: existErr } = await supabaseServer
           .from("drum_usage")
