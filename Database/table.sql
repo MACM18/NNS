@@ -332,3 +332,31 @@ CREATE TABLE public.waste_tracking (
   CONSTRAINT waste_tracking_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.inventory_items(id),
   CONSTRAINT waste_tracking_reported_by_fkey FOREIGN KEY (reported_by) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.workers (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  full_name text NOT NULL,
+  phone_number text,
+  email text,
+  role text DEFAULT 'technician',
+  status text DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+  profile_id uuid,
+  notes text,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT workers_pkey PRIMARY KEY (id),
+  CONSTRAINT workers_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
+  CONSTRAINT workers_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.work_assignments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  line_id uuid NOT NULL,
+  worker_id uuid NOT NULL,
+  assigned_date date NOT NULL,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT work_assignments_pkey PRIMARY KEY (id),
+  CONSTRAINT work_assignments_line_id_fkey FOREIGN KEY (line_id) REFERENCES public.line_details(id) ON DELETE CASCADE,
+  CONSTRAINT work_assignments_worker_id_fkey FOREIGN KEY (worker_id) REFERENCES public.workers(id) ON DELETE CASCADE,
+  CONSTRAINT work_assignments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
