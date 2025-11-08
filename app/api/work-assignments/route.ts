@@ -368,25 +368,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (workerExists.status !== "active") {
-      return new Response(
-        JSON.stringify({ error: "Worker must be active to be assigned" }),
-        { status: 400 }
-      );
-    }
-
-    // Validate that the authenticated user has a profile
-    const { data: profileExists, error: profileErr } = await supabaseServer
-      .from("profiles")
-      .select("id")
-      .eq("id", auth.userId)
-      .maybeSingle();
-    if (profileErr) throw profileErr;
-    if (!profileExists) {
-      return new Response(JSON.stringify({ error: "User profile not found" }), {
-        status: 400,
-      });
-    }
 
     const { data, error } = await supabaseServer
       .from("work_assignments")
