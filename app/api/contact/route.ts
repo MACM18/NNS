@@ -1,28 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
+import { z } from "zod";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Zod schema for contact form validation
+const contactFormSchema = z.object({
+  name: z
+    .string()
+    .min(2, "Name must be at least 2 characters long")
+    .max(100, "Name must be less than 100 characters")
+    .trim(),
+  email: z
+    .string()
+    .email("Please enter a valid email address")
+    .max(254, "Email address is too long"),
+  subject: z
+    .string()
+    .min(5, "Subject must be at least 5 characters long")
+    .max(200, "Subject must be less than 200 characters")
+    .trim(),
+  message: z
+    .string()
+    .min(10, "Message must be at least 10 characters long")
+    .max(5000, "Message must be less than 5000 characters")
+    .trim(),
+});
+
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, subject, message } = await request.json();
+    const body = await request.json();
 
-    // Validate required fields
-    if (!name || !email || !subject || !message) {
+    // Validate the request body using Zod
+    const validationResult = contactFormSchema.safeParse(body);
+
+    if (!validationResult.success) {
+      // Return detailed validation errors
+      const errors = validationResult.error.errors.map((err) => ({
+        field: err.path.join("."),
+        message: err.message,
+      }));
+
       return NextResponse.json(
-        { error: "All fields are required" },
+        {
+          error: "Validation failed",
+          details: errors,
+        },
         { status: 400 }
       );
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: "Invalid email format" },
-        { status: 400 }
-      );
-    }
+    const { name, email, subject, message } = validationResult.data;
 
     // Send email using Resend
     const { data, error } = await resend.emails.send({
