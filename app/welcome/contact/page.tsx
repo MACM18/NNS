@@ -53,12 +53,24 @@ export default function ContactPage() {
           variant: "default",
         });
       } else {
-        toast({
-          title: "Error",
-          description:
-            result.error || "Failed to send message. Please try again.",
-          variant: "destructive",
-        });
+        // Handle detailed validation errors from Zod
+        if (result.details && Array.isArray(result.details)) {
+          const errorMessages = result.details
+            .map((err: any) => `${err.field}: ${err.message}`)
+            .join("\n");
+          toast({
+            title: "Validation Error",
+            description: errorMessages,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description:
+              result.error || "Failed to send message. Please try again.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error("Form submission error:", error);
