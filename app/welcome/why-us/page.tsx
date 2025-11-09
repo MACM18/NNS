@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function WhyUsPage() {
   return (
     <section className='py-12 md:py-24 lg:py-32 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950'>
-      <div className='container px-4 md:px-6'>
+      <div className='container mx-auto px-4 md:px-6'>
         <div className='max-w-6xl mx-auto'>
           <div className='max-w-3xl mx-auto text-center mb-12'>
             <h1 className='text-4xl font-bold tracking-tight text-foreground sm:text-5xl'>
