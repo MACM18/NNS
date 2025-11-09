@@ -7,6 +7,7 @@ import { NotificationProvider } from "@/contexts/notification-context";
 import { DataCacheProvider } from "@/contexts/data-cache-context";
 import { Toaster } from "@/components/ui/toaster";
 import { PWAInitializer } from "@/components/pwa/pwa-initializer";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: {
@@ -52,6 +53,7 @@ export default function RootLayout({
   return (
     <html lang='en' suppressHydrationWarning>
       <body className='min-h-screen bg-background font-sans antialiased'>
+        <SpeedInsights />
         <ThemeProvider
           attribute='class'
           defaultTheme='system'
