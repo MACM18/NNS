@@ -29,8 +29,8 @@ export default function WhyUsPage() {
             </h2>
             <p className='text-muted-foreground leading-relaxed'>
               Choosing NNS Enterprise means opting for a partner dedicated to
-              delivering exceptional results through a combination of
-              expertise, efficiency, and unwavering commitment to quality.
+              delivering exceptional results through a combination of expertise,
+              efficiency, and unwavering commitment to quality.
             </p>
             <div className='grid gap-6 sm:grid-cols-2'>
               <Card>
@@ -50,14 +50,12 @@ export default function WhyUsPage() {
               <Card>
                 <CardHeader className='flex flex-row items-center gap-4 pb-2'>
                   <TrendingUp className='h-6 w-6 text-primary' />
-                  <CardTitle className='text-lg'>
-                    Efficiency & Speed
-                  </CardTitle>
+                  <CardTitle className='text-lg'>Efficiency & Speed</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className='text-sm text-muted-foreground'>
-                    Our streamlined processes and experienced teams ensure
-                    rapid deployment without compromising quality.
+                    Our streamlined processes and experienced teams ensure rapid
+                    deployment without compromising quality.
                   </p>
                 </CardContent>
               </Card>

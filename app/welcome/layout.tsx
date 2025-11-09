@@ -19,7 +19,8 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: "NNS Enterprise - Telecom Solutions",
-    description: "Leading telecom solutions provider specializing in fiber optic infrastructure and FTTH establishment.",
+    description:
+      "Leading telecom solutions provider specializing in fiber optic infrastructure and FTTH establishment.",
     type: "website",
   },
 };

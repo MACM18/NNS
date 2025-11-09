@@ -16,8 +16,8 @@ export default function PrivacyPolicyPage() {
           1. Information Collection and Use
         </h2>
         <p>
-          We collect several different types of information for various
-          purposes to provide and improve our Service to you.
+          We collect several different types of information for various purposes
+          to provide and improve our Service to you.
         </p>
 
         <h3 className='text-xl font-semibold'>Personal Data</h3>
@@ -41,28 +41,27 @@ export default function PrivacyPolicyPage() {
           sign up or log in, your authentication data (such as email, hashed
           password, or OAuth provider details) and profile information are
           stored on Supabase's servers. Supabase is a third-party service and
-          their use of your information is governed by their own privacy
-          policy.
+          their use of your information is governed by their own privacy policy.
         </p>
 
         <h3 className='text-xl font-semibold'>Google Authentication</h3>
         <p>
           If you choose to sign in with Google, we use Supabase's Google Auth
           provider. We will receive access to basic profile information from
-          your Google account, such as your name and email address, which we
-          use to create and manage your account.
+          your Google account, such as your name and email address, which we use
+          to create and manage your account.
         </p>
 
         <h3 className='text-xl font-semibold'>Google Sheets Integration</h3>
         <p>
-          Our Service offers an integration with Google Sheets. If you choose
-          to use this feature, we will request your explicit consent to access
-          your Google Sheets. The permission we request is for full access
-          (read, write, create, and delete) to the spreadsheets you connect.
-          This level of access is required for the Service to fully manage and
-          maintain the data within the sheets you attach to our platform. We
-          will not access, modify, or delete any Google Sheets that you have
-          not explicitly connected to our Service.
+          Our Service offers an integration with Google Sheets. If you choose to
+          use this feature, we will request your explicit consent to access your
+          Google Sheets. The permission we request is for full access (read,
+          write, create, and delete) to the spreadsheets you connect. This level
+          of access is required for the Service to fully manage and maintain the
+          data within the sheets you attach to our platform. We will not access,
+          modify, or delete any Google Sheets that you have not explicitly
+          connected to our Service.
         </p>
 
         <h2 className='text-2xl font-semibold'>3. Use of Data</h2>
@@ -87,9 +86,9 @@ export default function PrivacyPolicyPage() {
         <p>
           The security of your data is important to us but remember that no
           method of transmission over the Internet or method of electronic
-          storage is 100% secure. While we strive to use commercially
-          acceptable means to protect your Personal Data, we cannot guarantee
-          its absolute security.
+          storage is 100% secure. While we strive to use commercially acceptable
+          means to protect your Personal Data, we cannot guarantee its absolute
+          security.
         </p>
 
         <h2 className='text-2xl font-semibold'>5. Service Providers</h2>
@@ -97,9 +96,9 @@ export default function PrivacyPolicyPage() {
           We employ third-party companies and individuals to facilitate our
           Service ("Service Providers"), to provide the Service on our behalf,
           to perform Service-related services or to assist us in analyzing how
-          our Service is used. These third parties have access to your
-          Personal Data only to perform these tasks on our behalf and are -
-          obligated not to disclose or use it for any other purpose.
+          our Service is used. These third parties have access to your Personal
+          Data only to perform these tasks on our behalf and are - obligated not
+          to disclose or use it for any other purpose.
         </p>
         <ul>
           <li>
@@ -112,10 +111,9 @@ export default function PrivacyPolicyPage() {
           6. Changes to This Privacy Policy
         </h2>
         <p>
-          We may update our Privacy Policy from time to time. We will notify
-          you of any changes by posting the new Privacy Policy on this page.
-          You are advised to review this Privacy Policy periodically for any
-          changes.
+          We may update our Privacy Policy from time to time. We will notify you
+          of any changes by posting the new Privacy Policy on this page. You are
+          advised to review this Privacy Policy periodically for any changes.
         </p>
 
         <h2 className='text-2xl font-semibold'>Contact Us</h2>
