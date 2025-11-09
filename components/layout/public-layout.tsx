@@ -30,7 +30,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
     { name: "About Us", href: "/welcome/about" },
     { name: "Careers", href: "/welcome/job-listings" },
     { name: "Articles", href: "/welcome/articles" },
-    { name: "Insights", href: "/welcome/insights" },
     { name: "Contact", href: "/welcome/contact" },
   ];
 
@@ -42,7 +41,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
   const footerResourcesLinks = [
     { name: "Articles", href: "/welcome/articles" },
-    { name: "Insights", href: "/welcome/insights" },
     { name: "Services", href: "/welcome/services" },
   ];
 
@@ -56,7 +54,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className='flex flex-col min-h-screen bg-gradient-to-br from-background to-muted/50 text-foreground'>
+    <div className='flex flex-col min-h-screen bg-background text-foreground'>
       {/* Header */}
       <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
         <nav
@@ -147,7 +145,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         </Sheet>
       </header>
 
-      <main className='flex-1 pt-16'>{children}</main>
+      <main className='flex-1'>{children}</main>
 
       {/* Footer */}
       <footer className='bg-muted py-12'>
