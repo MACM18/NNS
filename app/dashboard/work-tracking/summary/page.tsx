@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -170,6 +170,8 @@ export default function WorkTrackingSummaryPage() {
     }
   };
 
+  const pathname = usePathname();
+
   const fetchSummary = async (month: number, year: number) => {
     setLoading(true);
     try {
@@ -271,7 +273,7 @@ export default function WorkTrackingSummaryPage() {
   return (
     <div className='space-y-6'>
       <WorkTrackingHeader />
-      
+
       <Card className='p-4 shadow-sm'>
         <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>

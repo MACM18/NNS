@@ -40,8 +40,13 @@ export function MobileBottomNav() {
     <nav className='fixed bottom-0 left-0 right-0 z-50 border-t bg-background lg:hidden'>
       <div className='flex h-16 items-center justify-around px-2 safe-area-inset-bottom'>
         {navItems.map((item) => {
-          const isActive =
-            pathname === item.href || pathname?.startsWith(`${item.href}/`);
+          // normalize paths by removing trailing slash (but keep root "/")
+          const normalize = (p?: string) => {
+            if (!p) return p;
+            return p === "/" ? "/" : p.replace(/\/+$/, "");
+          };
+
+          const isActive = normalize(pathname) === normalize(item.href);
           const Icon = item.icon;
 
           return (

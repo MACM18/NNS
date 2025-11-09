@@ -1,5 +1,5 @@
 const CACHE_NAME = "nns-telecom-cache-v1";
-const PRECACHE_URLS = ["/", "/manifest.webmanifest"];
+const PRECACHE_URLS = ["/", "/manifest.webmanifest", "/offline.html"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -43,7 +43,9 @@ self.addEventListener("fetch", (event) => {
       fetch(request).catch(() => {
         // Only use cache as fallback for HTML
         return caches.match(request).then((cachedResponse) => {
-          return cachedResponse || caches.match("/");
+          return (
+            cachedResponse || caches.match("/offline.html") || caches.match("/")
+          );
         });
       })
     );

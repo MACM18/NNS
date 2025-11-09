@@ -38,10 +38,10 @@ export default function LandingPage() {
   const router = useRouter();
 
   // Redirect authenticated users to dashboard
-  if (!loading && user) {
-    router.push("/dashboard");
-    return null;
-  }
+  // if (!loading && user) {
+  //   router.push("/dashboard");
+  //   return null;
+  // }
 
   const handleAuthAction = () => {
     if (user) {
