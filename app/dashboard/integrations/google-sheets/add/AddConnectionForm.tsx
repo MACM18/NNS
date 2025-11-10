@@ -51,6 +51,11 @@ export default function AddConnectionForm(_: Props) {
   const [year, setYear] = useState<string>(String(new Date().getFullYear()));
   const [sheetUrl, setSheetUrl] = useState<string>("");
   const [accessToken, setAccessToken] = useState<string>("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [driveLoading, setDriveLoading] = useState(false);
+  const [files, setFiles] = useState<
+    Array<{ id: string; name: string; webViewLink?: string }>
+  >([]);
   const [validationOpen, setValidationOpen] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
   const [pending, setPending] = useState(false);
@@ -180,16 +185,48 @@ export default function AddConnectionForm(_: Props) {
           </div>
         </div>
 
-        <div>
-          <Label>Google Sheet URL</Label>
-          <Input
-            name='sheet_url'
-            type='url'
-            placeholder='https://docs.google.com/spreadsheets/d/...'
-            value={sheetUrl}
-            onChange={(e) => setSheetUrl(e.target.value)}
-            required
-          />
+        <div className='space-y-2'>
+          <Label>Google Sheet</Label>
+          <div className='flex gap-2'>
+            <Input
+              className='flex-1'
+              name='sheet_url'
+              type='url'
+              placeholder='https://docs.google.com/spreadsheets/d/...'
+              value={sheetUrl}
+              onChange={(e) => setSheetUrl(e.target.value)}
+              required
+            />
+            <Button
+              type='button'
+              variant='secondary'
+              onClick={async () => {
+                setPickerOpen(true);
+                setDriveLoading(true);
+                try {
+                  const res = await fetch("/api/google/drive/list");
+                  const json = await res.json();
+                  if (json?.ok && Array.isArray(json.files)) {
+                    setFiles(
+                      json.files.map((f: any) => ({
+                        id: f.id,
+                        name: f.name,
+                        webViewLink: f.webViewLink,
+                      }))
+                    );
+                  } else {
+                    setFiles([]);
+                  }
+                } catch {
+                  setFiles([]);
+                } finally {
+                  setDriveLoading(false);
+                }
+              }}
+            >
+              Choose from Drive
+            </Button>
+          </div>
         </div>
 
         {/* Sheet name (tab) removed — we auto-detect or persist default on sync */}
@@ -208,6 +245,66 @@ export default function AddConnectionForm(_: Props) {
           </Button>
         </div>
       </form>
+
+      {/* Drive Picker */}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className='max-w-2xl'>
+          <DialogHeader>
+            <DialogTitle>Select a spreadsheet</DialogTitle>
+            <DialogDescription>
+              Choose a Google Sheet from your Drive.
+            </DialogDescription>
+          </DialogHeader>
+          {driveLoading ? (
+            <div className='py-8 text-center text-muted-foreground'>
+              Loading...
+            </div>
+          ) : files.length === 0 ? (
+            <div className='py-8 text-center text-muted-foreground'>
+              No spreadsheets found or not connected.
+            </div>
+          ) : (
+            <div className='max-h-80 overflow-auto divide-y'>
+              {files.map((f) => (
+                <div
+                  key={f.id}
+                  className='flex items-center justify-between gap-3 py-3'
+                >
+                  <div className='min-w-0'>
+                    <div className='truncate font-medium'>{f.name}</div>
+                    {f.webViewLink && (
+                      <a
+                        className='text-xs text-blue-600 hover:underline'
+                        href={f.webViewLink}
+                        target='_blank'
+                        rel='noreferrer'
+                      >
+                        Open
+                      </a>
+                    )}
+                  </div>
+                  <Button
+                    size='sm'
+                    onClick={() => {
+                      setSheetUrl(
+                        `https://docs.google.com/spreadsheets/d/${f.id}`
+                      );
+                      setPickerOpen(false);
+                    }}
+                  >
+                    Select
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setPickerOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Validation dialog */}
       <Dialog open={validationOpen} onOpenChange={setValidationOpen}>

@@ -103,11 +103,24 @@ function getStatusBadge(status: string | null) {
   }
 }
 
+async function fetchOAuthStatus() {
+  const { data: sessionData } = await supabaseServer.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return { connected: false };
+  const { data } = await supabaseServer
+    .from("google_oauth_tokens")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return { connected: Boolean(data?.user_id) };
+}
+
 export default async function GoogleSheetsPage({ searchParams }: any) {
   const currentPage = parseInt((searchParams?.page as string) || "1", 10) || 1;
   const pageSize = 10;
 
   const { rows, total } = await fetchConnections(currentPage, pageSize);
+  const oauthStatus = await fetchOAuthStatus();
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const startIndex = (currentPage - 1) * pageSize + 1;
@@ -137,6 +150,46 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
               Connect Google Sheets to sync line installation data for each
               month
             </p>
+            {/* OAuth status banner */}
+            {!oauthStatus.connected ? (
+              <div className='mt-4 p-4 rounded-md border bg-yellow-50 dark:bg-yellow-900/20 flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
+                <div className='text-sm'>
+                  <span className='font-medium'>Google not connected.</span>{" "}
+                  Authorize your Google account to list and select spreadsheets
+                  and perform syncs.
+                </div>
+                <div className='flex gap-2'>
+                  <a
+                    href='/api/google/oauth/start'
+                    className='inline-flex items-center rounded-md bg-green-600 text-white text-sm px-3 py-2 hover:bg-green-700 transition'
+                  >
+                    Connect Google
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <form
+                action='/api/google/oauth/disconnect'
+                method='POST'
+                className='mt-4'
+              >
+                <div className='p-4 rounded-md border bg-green-50 dark:bg-green-900/20 flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
+                  <div className='text-sm'>
+                    <span className='font-medium'>
+                      Google account connected.
+                    </span>{" "}
+                    You can now pick spreadsheets from Drive. Disconnect to
+                    revoke access.
+                  </div>
+                  <button
+                    type='submit'
+                    className='inline-flex items-center rounded-md bg-red-600 text-white text-sm px-3 py-2 hover:bg-red-700 transition'
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
 
           <div className='w-full md:w-auto'>

@@ -1,7 +1,7 @@
 "use server";
 
 import { supabaseServer } from "@/lib/supabase-server";
-import { google } from "googleapis";
+import { getSheetsClientForUser } from "@/lib/google-oauth";
 import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
@@ -100,6 +100,7 @@ export async function createConnection(
         sheet_tab: sheet_tab,
         sheet_id: spreadsheetId,
         created_by: auth.userId,
+        oauth_user_id: auth.userId,
       })
       .select("id")
       .single();
@@ -272,7 +273,9 @@ export async function syncConnection(
     try {
       const { data: connData, error: fetchErr } = await supabaseServer
         .from("google_sheet_connections")
-        .select("id, month, year, sheet_url, sheet_name, sheet_tab, sheet_id")
+        .select(
+          "id, month, year, sheet_url, sheet_name, sheet_tab, sheet_id, oauth_user_id, created_by"
+        )
         .eq("id", connectionId)
         .single();
 
@@ -316,21 +319,13 @@ export async function syncConnection(
     }
 
     progress("Initializing Google Sheets client");
-    // Initialize Google Sheets API with error handling
-    let sheets: any;
-    try {
-      sheets = await getSheetsClient();
-    } catch (error) {
-      console.error(
-        "[syncConnection] Failed to initialize Google Sheets client:",
-        error
-      );
+    const ownerUserId = conn.oauth_user_id || conn.created_by;
+    if (!ownerUserId) {
       throw new Error(
-        `Google Sheets API initialization failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
+        "No Google account linked to this connection. Please connect Google and assign an owner."
       );
     }
+    const sheets = await getSheetsClientForUser(ownerUserId);
 
     let availableTabs: string[] = [];
     try {
@@ -371,7 +366,7 @@ export async function syncConnection(
       console.error("[syncConnection] Failed to verify sheet metadata:", error);
       if (error?.code === 403) {
         throw new Error(
-          "Access denied while verifying sheet metadata. Please ensure the service account has at least viewer access."
+          "Access denied while verifying sheet metadata. Ensure the linked Google account has access to this spreadsheet."
         );
       }
       if (error?.code === 404) {
@@ -1196,57 +1191,7 @@ function extractSpreadsheetId(url: string): string | null {
   return m ? m[1] : null;
 }
 
-async function getSheetsClient() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-
-  if (!email || !keyRaw) {
-    throw new Error(
-      "Google service account credentials are not configured. Please check GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_KEY environment variables."
-    );
-  }
-
-  // Parse the full key.json content and extract the private_key
-  let key: string;
-  try {
-    const creds = JSON.parse(keyRaw);
-    if (!creds.private_key) {
-      throw new Error("Invalid JSON credentials: missing private_key field");
-    }
-    key = creds.private_key;
-  } catch (e) {
-    // Fallback: if it's not JSON, assume it's the raw key with escaped newlines
-    key = keyRaw.replace(/\\n/g, "\n");
-
-    // Validate that it looks like a private key
-    if (
-      !key.includes("-----BEGIN PRIVATE KEY-----") &&
-      !key.includes("-----BEGIN RSA PRIVATE KEY-----")
-    ) {
-      throw new Error(
-        "Invalid private key format. Expected PEM format starting with -----BEGIN PRIVATE KEY-----"
-      );
-    }
-  }
-
-  try {
-    const auth = new google.auth.JWT({
-      email,
-      key,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
-
-    await auth.authorize();
-    return google.sheets({ version: "v4", auth });
-  } catch (error) {
-    console.error("[getSheetsClient] Authentication failed:", error);
-    throw new Error(
-      `Google Sheets API authentication failed: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`
-    );
-  }
-}
+// Removed legacy service-account client. OAuth-only integration in use.
 
 function requiredHeaders(): string[] {
   return [
@@ -2208,28 +2153,16 @@ export async function checkIntegrationEnv(accessToken?: string) {
 
     const result: Record<string, any> = {};
 
-    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-    result.GOOGLE_SERVICE_ACCOUNT_EMAIL_present = Boolean(email);
-    result.GOOGLE_SERVICE_ACCOUNT_KEY_present = Boolean(keyRaw);
-
-    // determine likely format without exposing the key
-    if (!keyRaw) {
-      result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "missing";
-    } else {
-      try {
-        const parsed = JSON.parse(keyRaw);
-        result.GOOGLE_SERVICE_ACCOUNT_KEY_format = parsed?.private_key
-          ? "json-with-private_key"
-          : "json-unknown";
-      } catch (e) {
-        if (keyRaw.includes("\\n") || keyRaw.includes("-----BEGIN")) {
-          result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "pem-escaped-or-raw";
-        } else {
-          result.GOOGLE_SERVICE_ACCOUNT_KEY_format = "raw";
-        }
-      }
-    }
+    // OAuth envs
+    result.GOOGLE_OAUTH_CLIENT_ID_present = Boolean(
+      process.env.GOOGLE_OAUTH_CLIENT_ID
+    );
+    result.GOOGLE_OAUTH_CLIENT_SECRET_present = Boolean(
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET
+    );
+    result.GOOGLE_OAUTH_REDIRECT_URI_present = Boolean(
+      process.env.GOOGLE_OAUTH_REDIRECT_URI
+    );
 
     result.SUPABASE_SERVICE_ROLE_KEY_present = Boolean(
       process.env.SUPABASE_SERVICE_ROLE_KEY

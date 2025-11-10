@@ -50,20 +50,23 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
 
 ## Google Sheets Import (Admin/Moderator)
 
-- API: `POST /api/import-lines` with `{ sheetUrl, sheetName, month, year }`
-  - Supports dry-run with `{ ..., dryRun: true }` to preview deletions and insertions
+- User OAuth-based integration (no service account). Each connection uses the owner’s Google account permissions.
+- API surface (app): dashboard Google Sheets pages provide connect/disconnect, Drive picker, and sync.
 - Validations:
-  - Sheet name must contain `nns` (case-insensitive)
-  - First row must match required headers (case-insensitive comparison)
-  - Overwrite behavior: for the given month, existing `line_details` rows with phone numbers present in the import are deleted, then new rows inserted
-- Mappings: Columns map to `line_details` fields; `Pole-5.6` -> `pole`, `Pole-6.7` -> `pole_67`, `Total` -> `total_cable`, etc.
-- Status defaults to `completed` on import
-- Auth: UI is gated by role, and the API enforces server-side role check via Supabase session (admin/moderator only)
-- Dry-run response includes: totals, existingByPhone, sampleInserts
-- Env vars:
-  - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
-  - `GOOGLE_SERVICE_ACCOUNT_KEY` (PEM; escape newlines as `\n`)
-- Access model: The Google Sheet must grant at least Viewer access to the service account email; public sheets may still require explicit sharing.
+  - Sheet header must match required columns (case-insensitive); DP regex/wastage rules enforced server-side.
+  - For the given month, matching phone numbers are merged/upserted.
+- Mappings: Columns map to `line_details` fields (`Pole-5.6` -> `pole`, `Pole-6.7` -> `pole_67`, `Total` -> `total_cable`, etc.).
+- Status defaults to `completed` on import.
+- Auth: UI gated by role; server actions validate user token and role (admin/moderator).
+- Drive picker lists spreadsheets owned/shared with the user’s Google account.
+- Env vars (OAuth):
+  - `GOOGLE_OAUTH_CLIENT_ID`
+  - `GOOGLE_OAUTH_CLIENT_SECRET`
+  - `GOOGLE_OAUTH_REDIRECT_URI` (e.g., `https://<your-domain>/api/google/oauth/callback`)
+- Database:
+  - `google_oauth_tokens(user_id PK, access_token, refresh_token, scope, token_type, expires_at, created_at, updated_at)`
+  - `google_sheet_connections(..., oauth_user_id references profiles(id))`
+  - Optional RLS on tokens to restrict to owner.
 
 ## Workflows & Conventions
 
