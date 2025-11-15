@@ -897,10 +897,6 @@ export async function syncConnection(
           if (!arr || arr.length === 0) continue;
           const target = pickLatest(arr);
           const update: any = { id: target.id };
-          if (r.dw_dp) {
-            const dpStr = String(r.dw_dp || "").trim();
-            if (dpStr) update.dp = dpStr;
-          }
           if (typeof r.dw_c_hook === "number") update.c_hook = r.dw_c_hook;
           // Only overwrite name if DW CUS looks like a proper name (has letters)
           if (r.dw_cus && looksAlphabetic(r.dw_cus))
