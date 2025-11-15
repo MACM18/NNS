@@ -897,9 +897,14 @@ export async function syncConnection(
           if (!arr || arr.length === 0) continue;
           const target = pickLatest(arr);
           const update: any = { id: target.id };
-          if (r.dw_dp) update.dp = String(r.dw_dp || "");
+          if (r.dw_dp) {
+            const dpStr = String(r.dw_dp || "").trim();
+            if (dpStr) update.dp = dpStr;
+          }
           if (typeof r.dw_c_hook === "number") update.c_hook = r.dw_c_hook;
-          if (r.dw_cus) update.name = String(r.dw_cus || "");
+          // Only overwrite name if DW CUS looks like a proper name (has letters)
+          if (r.dw_cus && looksAlphabetic(r.dw_cus))
+            update.name = String(r.dw_cus).trim();
           if (r.drum_number) update.drum_number = r.drum_number;
           updates.push(update);
         }
@@ -1571,6 +1576,11 @@ function mapSheetRow(
     rj11: toNumber(row[idx.rj11]),
     rj12: toNumber(row[idx.rj12]),
   };
+}
+
+function looksAlphabetic(raw: any): boolean {
+  const s = (raw ?? "").toString();
+  return /[a-zA-Z]/.test(s);
 }
 
 function sheetToLinePayload(r: any): any | null {
