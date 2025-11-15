@@ -1586,10 +1586,10 @@ function sheetToLinePayload(r: any): any | null {
     // Use the validated telephone number
     telephone_no: validatedTelephone,
     phone_number: validatedTelephone,
-    dp: r.dp,
+    dp: String(r.dp || ""),
     power_dp: r.power_dp,
     power_inbox: r.power_inbox,
-    name: r.name,
+    name: String(r.name || ""),
     address: r.address,
     cable_start: r.cable_start,
     cable_middle: r.cable_middle,
@@ -1681,9 +1681,9 @@ async function ensureTaskForLine(lineId: string, r: any) {
     .from("tasks")
     .insert({
       telephone_no: r.telephone_no,
-      dp: r.dp,
+      dp: String(r.dp || ""),
       address: r.address,
-      customer_name: r.name,
+      customer_name: String(r.name || ""),
       status: "completed",
       line_details_id: lineId,
       task_date: r.date || new Date().toISOString().slice(0, 10),
