@@ -897,9 +897,9 @@ export async function syncConnection(
           if (!arr || arr.length === 0) continue;
           const target = pickLatest(arr);
           const update: any = { id: target.id };
-          if (r.dw_dp) update.dp = r.dw_dp;
+          if (r.dw_dp) update.dp = String(r.dw_dp || "");
           if (typeof r.dw_c_hook === "number") update.c_hook = r.dw_c_hook;
-          if (r.dw_cus) update.name = r.dw_cus;
+          if (r.dw_cus) update.name = String(r.dw_cus || "");
           if (r.drum_number) update.drum_number = r.drum_number;
           updates.push(update);
         }
@@ -1674,7 +1674,16 @@ async function ensureTaskForLine(lineId: string, r: any) {
     .eq("line_details_id", lineId)
     .maybeSingle();
   if (taskErr) throw taskErr;
-  if (existingTask?.id) return existingTask;
+
+  if (existingTask?.id) {
+    // Ensure line_details has task_id set when a task already exists
+    await supabaseServer
+      .from("line_details")
+      .update({ task_id: existingTask.id })
+      .eq("id", lineId);
+
+    return existingTask;
+  }
 
   // Create completed task
   const { data: created, error: insErr } = await supabaseServer
@@ -1692,6 +1701,15 @@ async function ensureTaskForLine(lineId: string, r: any) {
     .select("id")
     .single();
   if (insErr) throw insErr;
+
+  // Persist the new task's id on the related line_details row
+  if (created?.id) {
+    await supabaseServer
+      .from("line_details")
+      .update({ task_id: created.id })
+      .eq("id", lineId);
+  }
+
   return created;
 }
 
