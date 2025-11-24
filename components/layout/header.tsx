@@ -286,7 +286,7 @@ export function Header() {
           return;
         }
 
-        router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+        router.push(`/dashboard/search?q=${encodeURIComponent(searchQuery)}`);
         setShowSearchResults(false);
         setSearchQuery("");
 
