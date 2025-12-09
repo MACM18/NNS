@@ -1,0 +1,584 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// USER & AUTHENTICATION
+// ==========================================
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String?   // Hashed password (null for OAuth users)
+  emailVerified DateTime?
+  
+  // Relationships
+  profile       Profile?
+  accounts      Account[]
+  sessions      Session[]
+  notifications Notification[]
+  lineEntries   LineEntry[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ==========================================
+// PROFILES (Application-level user data)
+// ==========================================
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  email     String?
+  fullName  String?  @map("full_name")
+  role      String   @default("user")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user                      User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasksCreated              Task[]                   @relation("TaskCreatedBy")
+  tasksAssigned             Task[]                   @relation("TaskAssignedTo")
+  tasksRejected             Task[]                   @relation("TaskRejectedBy")
+  tasksCompleted            Task[]                   @relation("TaskCompletedBy")
+  inventoryInvoicesCreated  InventoryInvoice[]       @relation("InvoiceCreatedBy")
+  monthlyWastageCreated     MonthlyWastage[]
+  wasteTrackingReported     WasteTracking[]
+  workersCreated            Worker[]                 @relation("WorkerCreatedBy")
+  workAssignmentsCreated    WorkAssignment[]         @relation("AssignmentCreatedBy")
+  lineAssignees             LineAssignee[]
+  googleSheetConnections    GoogleSheetConnection[]
+
+  // Worker relationship (if this profile is linked to a worker)
+  linkedWorker              Worker?                  @relation("WorkerProfile")
+
+  @@map("profiles")
+}
+
+// ==========================================
+// COMPANY SETTINGS
+// ==========================================
+model CompanySettings {
+  id               String   @id @default(uuid())
+  companyName      String   @default("NNS Enterprise") @map("company_name")
+  address          String?
+  contactNumbers   String[] @map("contact_numbers")
+  website          String?  @default("nns.lk")
+  registeredNumber String?  @map("registered_number")
+  bankDetails      Json?    @map("bank_details")
+  pricingTiers     Json?    @map("pricing_tiers")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("company_settings")
+}
+
+// ==========================================
+// INVENTORY MANAGEMENT
+// ==========================================
+model InventoryItem {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  unit         String
+  currentStock Decimal  @default(0) @map("current_stock")
+  drumSize     Decimal? @map("drum_size")
+  reorderLevel Decimal  @default(0) @map("reorder_level")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  inventoryInvoiceItems InventoryInvoiceItem[]
+  drumTracking          DrumTracking[]
+  monthlyWastage        MonthlyWastage[]
+  wasteTracking         WasteTracking[]
+
+  @@map("inventory_items")
+}
+
+model InventoryInvoice {
+  id                String   @id @default(uuid())
+  invoiceNumber     String   @unique @map("invoice_number")
+  warehouse         String?
+  date              DateTime @default(now()) @db.Date
+  issuedBy          String?  @map("issued_by")
+  drawnBy           String?  @map("drawn_by")
+  invoiceImageUrl   String?  @map("invoice_image_url")
+  createdById       String?  @map("created_by")
+  autoInvoiceNumber String?  @unique @map("auto_invoice_number")
+  ocrProcessed      Boolean  @default(false) @map("ocr_processed")
+  ocrImageUrl       String?  @map("ocr_image_url")
+  totalItems        Int      @default(0) @map("total_items")
+  status            String   @default("draft")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  createdBy Profile?               @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  items     InventoryInvoiceItem[]
+
+  @@map("inventory_invoices")
+}
+
+model InventoryInvoiceItem {
+  id                String   @id @default(uuid())
+  invoiceId         String?  @map("invoice_id")
+  itemId            String?  @map("item_id")
+  description       String?
+  unit              String?
+  quantityRequested Decimal? @map("quantity_requested")
+  quantityIssued    Decimal? @map("quantity_issued")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations
+  invoice InventoryInvoice? @relation(fields: [invoiceId], references: [id])
+  item    InventoryItem?    @relation(fields: [itemId], references: [id])
+
+  @@map("inventory_invoice_items")
+}
+
+// ==========================================
+// DRUM TRACKING
+// ==========================================
+model DrumTracking {
+  id              String   @id @default(uuid())
+  drumNumber      String   @map("drum_number")
+  itemId          String?  @map("item_id")
+  initialQuantity Decimal  @map("initial_quantity")
+  currentQuantity Decimal  @map("current_quantity")
+  status          String   @default("active")
+  receivedDate    DateTime @default(now()) @map("received_date") @db.Date
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  item       InventoryItem? @relation(fields: [itemId], references: [id])
+  drumUsages DrumUsage[]
+
+  @@map("drum_tracking")
+}
+
+model DrumUsage {
+  id                String   @id @default(uuid())
+  drumId            String?  @map("drum_id")
+  lineDetailsId     String?  @map("line_details_id")
+  quantityUsed      Decimal  @map("quantity_used")
+  usageDate         DateTime @default(now()) @map("usage_date") @db.Date
+  cableStartPoint   Decimal  @default(0) @map("cable_start_point")
+  cableEndPoint     Decimal  @default(0) @map("cable_end_point")
+  wastageCalculated Decimal  @default(0) @map("wastage_calculated")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations
+  drum        DrumTracking? @relation(fields: [drumId], references: [id])
+  lineDetails LineDetails?  @relation(fields: [lineDetailsId], references: [id])
+
+  @@map("drum_usage")
+}
+
+// ==========================================
+// LINE DETAILS (Main fiber line installation records)
+// ==========================================
+model LineDetails {
+  id           String    @id @default(uuid())
+  taskId       String?   @map("task_id")
+  date         DateTime  @default(now()) @db.Date
+  telephoneNo  String    @map("telephone_no")
+  dp           String
+  powerDp      Decimal?  @map("power_dp")
+  powerInbox   Decimal?  @map("power_inbox")
+  name         String?
+  address      String?
+  cableStart   Decimal   @default(0) @map("cable_start")
+  cableMiddle  Decimal   @default(0) @map("cable_middle")
+  cableEnd     Decimal   @default(0) @map("cable_end")
+  // f1, g1, total_cable are generated columns in PostgreSQL
+  // We'll compute them in application code
+  wastage      Decimal   @default(0)
+  retainers    Int       @default(0)
+  lHook        Int       @default(0) @map("l_hook")
+  topBolt      Int       @default(0) @map("top_bolt")
+  cHook        Int       @default(1) @map("c_hook")
+  fiberRosette Int       @default(1) @map("fiber_rosette")
+  internalWire Decimal   @default(0) @map("internal_wire")
+  sRosette     Int       @default(0) @map("s_rosette")
+  fac          Int       @default(2)
+  casing       Decimal   @default(0)
+  cTie         Int       @default(0) @map("c_tie")
+  cClip        Int       @default(0) @map("c_clip")
+  conduit      Decimal   @default(0)
+  tagTie       Int       @default(1) @map("tag_tie")
+  ont          String?
+  voiceTestNo  String?   @map("voice_test_no")
+  stb          String?
+  flexible     Int       @default(2)
+  rj45         Int       @default(0)
+  cat5         Decimal   @default(0)
+  pole67       Int       @default(0) @map("pole_67")
+  pole         Int       @default(0)
+  concreteNail Int       @default(0) @map("concrete_nail")
+  rollPlug     Int       @default(0) @map("roll_plug")
+  uClip        Int       @default(0) @map("u_clip")
+  socket       Int       @default(0)
+  bend         Int       @default(0)
+  rj11         Int       @default(0)
+  rj12         Int       @default(0)
+  drumNumber   String?   @map("drum_number")
+  phoneNumber  String?   @map("phone_number")
+  wastageInput Decimal?  @map("wastage_input")
+  ontSerial    String?   @map("ont_serial")
+  voiceTestNoNew String? @map("voice_test_no_new")
+  stbSerial    String?   @map("stb_serial")
+  drumNumberNew String?  @map("drum_number_new")
+  completedDate DateTime? @map("completed_date") @db.Date
+  status       String?
+  nutBolt      Int       @default(0) @map("nut_bolt")
+  screwNail    Int       @default(0) @map("screw_nail")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  task            Task?            @relation(fields: [taskId], references: [id])
+  drumUsages      DrumUsage[]
+  workAssignments WorkAssignment[]
+  lineAssignees   LineAssignee[]
+
+  @@unique([telephoneNo, date])
+  @@map("line_details")
+}
+
+// ==========================================
+// TASKS (Work order management)
+// ==========================================
+model Task {
+  id                  String    @id @default(uuid())
+  addedDate           DateTime  @default(now()) @map("added_date") @db.Date
+  telephoneNo         String    @map("telephone_no")
+  dp                  String
+  contactNo           String?   @map("contact_no")
+  customerName        String?   @map("customer_name")
+  address             String?
+  status              String    @default("pending")
+  connectionTypes     String[]  @map("connection_types")
+  connectionTypeMain  String    @default("new") @map("connection_type_main")
+  rejectionReason     String?   @map("rejection_reason")
+  rejectedById        String?   @map("rejected_by")
+  rejectedAt          DateTime? @map("rejected_at")
+  completedAt         DateTime? @map("completed_at")
+  createdById         String?   @map("created_by")
+  taskDate            DateTime  @default(now()) @map("task_date") @db.Date
+  connectionTypeNew   String    @default("New") @map("connection_type_new")
+  connectionServices  String[]  @default([]) @map("connection_services")
+  assignedToId        String?   @map("assigned_to")
+  completedById       String?   @map("completed_by")
+  lineDetailsId       String?   @map("line_details_id")
+  notes               String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  rejectedBy  Profile?      @relation("TaskRejectedBy", fields: [rejectedById], references: [id])
+  completedBy Profile?      @relation("TaskCompletedBy", fields: [completedById], references: [id])
+  assignedTo  Profile?      @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
+  createdBy   Profile?      @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  lineDetails LineDetails[]
+
+  @@map("tasks")
+}
+
+// ==========================================
+// WORKERS & WORK ASSIGNMENTS
+// ==========================================
+model Worker {
+  id          String   @id @default(uuid())
+  fullName    String   @map("full_name")
+  phoneNumber String?  @map("phone_number")
+  email       String?
+  role        String   @default("technician")
+  status      String   @default("active")
+  profileId   String?  @unique @map("profile_id")
+  notes       String?
+  createdById String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  profile         Profile?         @relation("WorkerProfile", fields: [profileId], references: [id])
+  createdBy       Profile?         @relation("WorkerCreatedBy", fields: [createdById], references: [id])
+  workAssignments WorkAssignment[]
+
+  @@map("workers")
+}
+
+model WorkAssignment {
+  id           String   @id @default(uuid())
+  lineId       String   @map("line_id")
+  workerId     String   @map("worker_id")
+  assignedDate DateTime @map("assigned_date") @db.Date
+  createdById  String   @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  line      LineDetails @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  worker    Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdBy Profile     @relation("AssignmentCreatedBy", fields: [createdById], references: [id])
+
+  @@map("work_assignments")
+}
+
+model LineAssignee {
+  id         String   @id @default(uuid())
+  lineId     String   @map("line_id")
+  userId     String   @map("user_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  line LineDetails @relation(fields: [lineId], references: [id])
+  user Profile     @relation(fields: [userId], references: [id])
+
+  @@map("line_assignees")
+}
+
+// ==========================================
+// INVOICING
+// ==========================================
+model GeneratedInvoice {
+  id             String   @id @default(uuid())
+  invoiceNumber  String   @map("invoice_number")
+  month          Int?
+  year           Int?
+  invoiceType    String?  @map("invoice_type")
+  totalAmount    Decimal? @map("total_amount")
+  pdfUrl         String?  @map("pdf_url")
+  invoiceDate    DateTime? @map("invoice_date") @db.Date
+  jobMonth       String?  @map("job_month")
+  lineCount      Decimal? @map("line_count")
+  status         String?
+  lineDetailsIds Json?    @map("line_details_ids")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("generated_invoices")
+}
+
+// ==========================================
+// WASTAGE TRACKING
+// ==========================================
+model MonthlyWastage {
+  id          String   @id @default(uuid())
+  month       Int?
+  year        Int?
+  itemId      String?  @map("item_id")
+  quantity    Decimal?
+  createdById String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  createdBy Profile?       @relation(fields: [createdById], references: [id])
+  item      InventoryItem? @relation(fields: [itemId], references: [id])
+
+  @@map("monthly_wastage")
+}
+
+model WasteTracking {
+  id           String   @id @default(uuid())
+  itemId       String?  @map("item_id")
+  quantity     Decimal
+  wasteReason  String?  @map("waste_reason")
+  wasteDate    DateTime @default(now()) @map("waste_date") @db.Date
+  reportedById String?  @map("reported_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  item       InventoryItem? @relation(fields: [itemId], references: [id])
+  reportedBy Profile?       @relation(fields: [reportedById], references: [id])
+
+  @@map("waste_tracking")
+}
+
+// ==========================================
+// NOTIFICATIONS
+// ==========================================
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  title     String
+  message   String
+  type      String   @default("info") // info, success, warning, error
+  category  String   @default("system") // line_added, task_completed, invoice_generated, report_ready, inventory_low, system
+  isRead    Boolean  @default(false) @map("is_read")
+  actionUrl String?  @map("action_url")
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// ==========================================
+// CONTENT MANAGEMENT (Blog & Posts)
+// ==========================================
+model Blog {
+  id               Int       @id @default(autoincrement())
+  title            String
+  content          String
+  excerpt          String?
+  author           String
+  category         String?
+  tags             String[]
+  featuredImageUrl String?   @map("featured_image_url")
+  slug             String?   @unique
+  metaDescription  String?   @map("meta_description")
+  readingTime      Int?      @map("reading_time")
+  status           String    @default("active") // active, disabled
+  publishedAt      DateTime? @map("published_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@map("blogs")
+}
+
+model Post {
+  id               Int      @id @default(autoincrement())
+  title            String
+  content          String
+  excerpt          String?
+  author           String
+  category         String?
+  tags             String[]
+  featuredImageUrl String?  @map("featured_image_url")
+  status           String   @default("active") // active, disabled
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("posts")
+}
+
+// ==========================================
+// JOB VACANCIES
+// ==========================================
+model JobVacancy {
+  id               Int       @id @default(autoincrement())
+  title            String
+  description      String
+  requirements     String?
+  responsibilities String?
+  department       String?
+  location         String?
+  employmentType   String    @default("full-time") @map("employment_type") // full-time, part-time, contract, internship
+  salaryRange      String?   @map("salary_range")
+  experienceLevel  String?   @map("experience_level")
+  skills           String[]
+  benefits         String[]
+  applicationEmail String?   @map("application_email")
+  applicationUrl   String?   @map("application_url")
+  endDate          DateTime  @map("end_date") @db.Date
+  status           String    @default("active") // active, disabled
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@map("job_vacancies")
+}
+
+// ==========================================
+// GOOGLE SHEETS INTEGRATION
+// ==========================================
+model GoogleSheetConnection {
+  id          String    @id @default(uuid())
+  month       Int
+  year        Int
+  sheetUrl    String    @map("sheet_url")
+  sheetId     String?   @map("sheet_id")
+  sheetName   String?   @map("sheet_name")
+  sheetTab    String?   @map("sheet_tab")
+  createdById String?   @map("created_by")
+  lastSynced  DateTime? @map("last_synced")
+  status      String    @default("active")
+  recordCount Int       @default(0) @map("record_count")
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  createdBy Profile? @relation(fields: [createdById], references: [id])
+
+  @@index([year, month])
+  @@map("google_sheet_connections")
+}
+
+// ==========================================
+// LEGACY TABLE (May not be actively used)
+// ==========================================
+model LineEntry {
+  id          String   @id @default(uuid())
+  date        DateTime @db.Date
+  phoneNumber String   @map("phone_number")
+  dp          String
+  powerDp     Decimal  @map("power_dp")
+  powerInbox  Decimal  @map("power_inbox")
+  name        String
+  address     String
+  cableStart  Decimal  @map("cable_start")
+  cableMiddle Decimal  @map("cable_middle")
+  cableEnd    Decimal  @map("cable_end")
+  f1          Decimal
+  g1          Decimal
+  total       Decimal
+  wastage     Decimal
+  userId      String?  @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("line_entries")
+}
