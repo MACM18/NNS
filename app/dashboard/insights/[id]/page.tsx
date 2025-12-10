@@ -14,7 +14,7 @@ import { CalendarDays, User, Tag } from "lucide-react";
 import { format } from "date-fns";
 
 interface Blog {
-  id: string;
+  id: number;
   title: string;
   content: string;
   excerpt: string;

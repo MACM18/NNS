@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const jobs = await prisma.jobVacancies.findMany({
-      orderBy: { created_at: "desc" },
+    const jobs = await prisma.jobVacancy.findMany({
+      orderBy: { createdAt: "desc" },
     });
 
     // Transform to snake_case for frontend compatibility
@@ -15,15 +15,15 @@ export async function GET() {
       description: job.description,
       department: job.department,
       location: job.location,
-      employment_type: job.employment_type,
-      salary_range: job.salary_range,
+      employment_type: job.employmentType,
+      salary_range: job.salaryRange,
       requirements: job.requirements,
       responsibilities: job.responsibilities,
       benefits: job.benefits,
-      application_deadline: job.application_deadline,
+      application_deadline: job.endDate,
       status: job.status,
-      created_at: job.created_at,
-      updated_at: job.updated_at,
+      created_at: job.createdAt,
+      updated_at: job.updatedAt,
     }));
 
     return NextResponse.json({ data: transformedJobs });
@@ -45,20 +45,22 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const job = await prisma.jobVacancies.create({
+    const job = await prisma.jobVacancy.create({
       data: {
         title: body.title,
         description: body.description,
         department: body.department,
         location: body.location,
-        employment_type: body.employment_type,
-        salary_range: body.salary_range,
+        employmentType: body.employment_type ?? body.employmentType,
+        salaryRange: body.salary_range ?? body.salaryRange,
         requirements: body.requirements,
         responsibilities: body.responsibilities,
         benefits: body.benefits,
-        application_deadline: body.application_deadline
+        endDate: body.application_deadline
           ? new Date(body.application_deadline)
-          : null,
+          : body.endDate
+          ? new Date(body.endDate)
+          : new Date(),
         status: body.status || "active",
       },
     });

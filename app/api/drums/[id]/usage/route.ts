@@ -20,11 +20,9 @@ export async function GET(
       where: { id },
       select: {
         id: true,
-        initial_quantity: true,
-        current_quantity: true,
-        manual_wastage_override: true,
-        wastage_calculation_method: true,
-        drum_number: true,
+        initialQuantity: true,
+        currentQuantity: true,
+        drumNumber: true,
         status: true,
       },
     });
@@ -35,12 +33,12 @@ export async function GET(
 
     // Get usage records
     const usageRecords = await prisma.drumUsage.findMany({
-      where: { drum_id: id },
-      orderBy: { usage_date: "asc" },
+      where: { drumId: id },
+      orderBy: { usageDate: "asc" },
       include: {
-        line_details: {
+        lineDetails: {
           select: {
-            telephone_no: true,
+            telephoneNo: true,
             name: true,
             dp: true,
           },
@@ -75,29 +73,11 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const { wastage_calculation_method, manual_wastage_override } = body;
-
-    const updateData: Record<string, unknown> = {
-      wastage_calculation_method,
-      updated_at: new Date(),
-    };
-
-    if (wastage_calculation_method === "manual_override") {
-      updateData.manual_wastage_override = manual_wastage_override;
-    } else {
-      updateData.manual_wastage_override = null;
-    }
-
-    const drum = await prisma.drumTracking.update({
-      where: { id },
-      data: updateData,
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: drum,
-    });
+    // Wastage override settings are not supported in current schema
+    return NextResponse.json(
+      { error: "Wastage override settings are not supported" },
+      { status: 400 }
+    );
   } catch (error) {
     console.error("Error updating drum wastage settings:", error);
     return NextResponse.json(

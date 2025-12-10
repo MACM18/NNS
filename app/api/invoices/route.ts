@@ -36,16 +36,14 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       where.OR = [
-        { invoice_number: { contains: search, mode: "insensitive" } },
-        { customer_name: { contains: search, mode: "insensitive" } },
-        { telephone_no: { contains: search, mode: "insensitive" } },
+        { invoiceNumber: { contains: search, mode: "insensitive" } },
       ];
     }
 
     const [invoices, total] = await Promise.all([
       prisma.generatedInvoice.findMany({
         where,
-        orderBy: { created_at: "desc" },
+        orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
       }),

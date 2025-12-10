@@ -30,12 +30,12 @@ export async function GET(req: NextRequest) {
         },
       },
       include: {
-        line_assignees: {
+        lineAssignees: {
           include: {
-            profile: {
+            user: {
               select: {
                 id: true,
-                full_name: true,
+                fullName: true,
                 role: true,
               },
             },
@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
 
     // Process lines to include assignees in expected format
     const processedLines = lines.map((line: any) => {
-      const assignees = (line.line_assignees || [])
-        .map((a: any) => a.profile)
+      const assignees = (line.lineAssignees || [])
+        .map((a: any) => a.user)
         .filter(Boolean);
 
       // Determine status
@@ -65,54 +65,57 @@ export async function GET(req: NextRequest) {
         id: line.id,
         name: line.name,
         address: line.address,
-        telephone_no: line.telephone_no,
+        telephone_no: line.telephoneNo,
         dp: line.dp,
         date: line.date,
         status: normalizedStatus,
-        task_id: line.task_id,
-        power_dp: line.power_dp || 0,
-        power_inbox: line.power_inbox || 0,
-        cable_start: line.cable_start || 0,
-        cable_middle: line.cable_middle || 0,
-        cable_end: line.cable_end || 0,
-        total_cable: line.total_cable || 0,
+        task_id: line.taskId,
+        power_dp: Number(line.powerDp || 0),
+        power_inbox: Number(line.powerInbox || 0),
+        cable_start: Number(line.cableStart || 0),
+        cable_middle: Number(line.cableMiddle || 0),
+        cable_end: Number(line.cableEnd || 0),
+        total_cable:
+          Number(line.cableStart || 0) +
+          Number(line.cableMiddle || 0) +
+          Number(line.cableEnd || 0),
         wastage: line.wastage || 0,
-        internal_wire: line.internal_wire || 0,
+        internal_wire: Number(line.internalWire || 0),
         casing: line.casing || 0,
         conduit: line.conduit || 0,
         cat5: line.cat5 || 0,
-        c_tie: line.c_tie || 0,
-        c_clip: line.c_clip || 0,
-        tag_tie: line.tag_tie || 0,
+        c_tie: line.cTie || 0,
+        c_clip: line.cClip || 0,
+        tag_tie: line.tagTie || 0,
         flexible: line.flexible || 0,
         pole: line.pole || 0,
-        pole_67: line.pole_67 || 0,
+        pole_67: line.pole67 || 0,
         top_bolt: line.top_bolt || 0,
         f1: line.f1 || 0,
         g1: line.g1 || 0,
-        c_hook: line.c_hook || 0,
-        l_hook: line.l_hook || 0,
+        c_hook: line.cHook || 0,
+        l_hook: line.lHook || 0,
         retainers: line.retainers || 0,
-        nut_bolt: line.nut_bolt || 0,
+        nut_bolt: line.nutBolt || 0,
         u_clip: line.u_clip || 0,
-        concrete_nail: line.concrete_nail || 0,
-        roll_plug: line.roll_plug || 0,
-        screw_nail: line.screw_nail || 0,
+        concrete_nail: line.concreteNail || 0,
+        roll_plug: line.rollPlug || 0,
+        screw_nail: line.screwNail || 0,
         socket: line.socket || 0,
         bend: line.bend || 0,
         rj11: line.rj11 || 0,
         rj12: line.rj12 || 0,
         rj45: line.rj45 || 0,
-        fiber_rosette: line.fiber_rosette || 0,
-        s_rosette: line.s_rosette || 0,
+        fiber_rosette: line.fiberRosette || 0,
+        s_rosette: line.sRosette || 0,
         fac: line.fac || 0,
         assignees,
-        created_at: line.created_at,
+        created_at: line.createdAt,
         completed: line.completed,
-        drum_number: line.drum_number || "",
-        ont_serial: line.ont_serial || "",
-        voice_test_no: line.voice_test_no || "",
-        stb_serial: line.stb_serial || "",
+        drum_number: line.drumNumber || "",
+        ont_serial: line.ontSerial || "",
+        voice_test_no: line.voiceTestNo || "",
+        stb_serial: line.stbSerial || "",
       };
     });
 

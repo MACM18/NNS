@@ -13,7 +13,7 @@ import { MapPin, DollarSign, CalendarDays, Briefcase } from "lucide-react";
 import { format } from "date-fns";
 
 interface JobVacancy {
-  id: string;
+  id: number;
   title: string;
   description: string;
   location: string;
@@ -25,7 +25,7 @@ interface JobVacancy {
 
 async function fetchJobVacancy(id: string): Promise<JobVacancy | null> {
   const row = await prisma.jobVacancy.findUnique({
-    where: { id },
+    where: { id: Number(id) },
     select: {
       id: true,
       title: true,

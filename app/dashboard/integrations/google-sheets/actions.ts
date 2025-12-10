@@ -1,5 +1,5 @@
 // @ts-nocheck
-// TODO: This file needs full migration from Supabase to Prisma
+// Migrated: Supabase references removed; uses Prisma + NextAuth
 // Temporarily disabled TypeScript checking during migration
 "use server";
 
@@ -35,11 +35,10 @@ export async function createConnection(
     sheet_url: string;
     sheet_name?: string | null;
     sheet_tab?: string | null;
-  },
-  accessToken?: string
+  }
 ) {
   try {
-    const auth = await authorize(accessToken);
+    const auth = await authorize();
 
     const {
       month,
@@ -127,9 +126,6 @@ export async function createConnectionFromForm(formData: FormData) {
     const sheet_tab = formData.get("sheet_tab")
       ? String(formData.get("sheet_tab"))
       : null;
-    const accessToken = formData.get("sb_access_token")
-      ? String(formData.get("sb_access_token"))
-      : undefined;
 
     // Input validation
     if (!monthRaw || !yearRaw || !sheet_url) {
@@ -150,8 +146,7 @@ export async function createConnectionFromForm(formData: FormData) {
         sheet_url: sheet_url.trim(),
         sheet_name: sheet_name?.trim() || null,
         sheet_tab: sheet_tab?.trim() || null,
-      },
-      accessToken
+      }
     );
     return { ok: true, id: result.id };
   } catch (error: any) {
@@ -164,12 +159,9 @@ export async function createConnectionFromForm(formData: FormData) {
   }
 }
 
-export async function deleteConnection(
-  connectionId: string,
-  accessToken?: string
-) {
+export async function deleteConnection(connectionId: string) {
   try {
-    const auth = await authorize(accessToken);
+    const auth = await authorize();
 
     if (!connectionId) {
       throw new Error("connectionId is required");
@@ -213,7 +205,6 @@ export async function deleteConnection(
 
 export async function syncConnection(
   connectionId: string,
-  accessToken?: string,
   onProgress?: (message: string) => void
 ) {
   try {
@@ -224,7 +215,7 @@ export async function syncConnection(
     };
 
     progress("Authorizing");
-    const auth = await authorize(accessToken);
+    const auth = await authorize();
 
     if (!connectionId) {
       throw new Error("connectionId is required");
@@ -992,7 +983,7 @@ export async function syncConnection(
       // Recalculate all drum quantities at the end of sync
       try {
         progress("Recalculating all drum quantities");
-        const recalcResult = await recalculateAllDrumQuantities(accessToken);
+        const recalcResult = await recalculateAllDrumQuantities();
         console.log(
           "[syncConnection] Drum recalculation completed:",
           recalcResult
@@ -2002,15 +1993,12 @@ function monthStartEnd(month: number, year: number) {
 export async function deleteConnectionFromForm(formData: FormData) {
   try {
     const connectionId = String(formData.get("connectionId") || "");
-    const accessToken = formData.get("sb_access_token")
-      ? String(formData.get("sb_access_token"))
-      : undefined;
 
     if (!connectionId) {
       throw new Error("connectionId is required");
     }
 
-    const result = await deleteConnection(connectionId, accessToken);
+    const result = await deleteConnection(connectionId);
 
     // redirect back to list
     const { redirect } = await import("next/navigation");
@@ -2028,15 +2016,12 @@ export async function deleteConnectionFromForm(formData: FormData) {
 export async function syncConnectionFromForm(formData: FormData) {
   try {
     const connectionId = String(formData.get("connectionId") || "");
-    const accessToken = formData.get("sb_access_token")
-      ? String(formData.get("sb_access_token"))
-      : undefined;
 
     if (!connectionId) {
       throw new Error("connectionId is required");
     }
 
-    const result = await syncConnection(connectionId, accessToken);
+    const result = await syncConnection(connectionId);
 
     // redirect back to list (or stay)
     const { redirect } = await import("next/navigation");
@@ -2058,10 +2043,10 @@ export async function syncConnectionFromForm(formData: FormData) {
 
 // Dev-only helper: check presence/format of integration-related env vars.
 // Protected with authorize() so only admin/moderator can call.
-export async function checkIntegrationEnv(accessToken?: string) {
+export async function checkIntegrationEnv() {
   try {
     // ensure caller is authorized
-    await authorize(accessToken);
+    await authorize();
 
     const result: Record<string, any> = {};
 
@@ -2088,15 +2073,10 @@ export async function checkIntegrationEnv(accessToken?: string) {
       }
     }
 
-    result.SUPABASE_SERVICE_ROLE_KEY_present = Boolean(
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-    result.NEXT_PUBLIC_SUPABASE_ANON_KEY_present = Boolean(
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
-    result.NEXT_PUBLIC_SUPABASE_URL_present = Boolean(
-      process.env.NEXT_PUBLIC_SUPABASE_URL
-    );
+    // NextAuth/Prisma specific envs
+    result.NEXTAUTH_URL_present = Boolean(process.env.NEXTAUTH_URL);
+    result.NEXTAUTH_SECRET_present = Boolean(process.env.NEXTAUTH_SECRET);
+    result.DATABASE_URL_present = Boolean(process.env.DATABASE_URL);
 
     // log for server-side diagnostics (no sensitive values)
     console.log("[checkIntegrationEnv] result:", result);

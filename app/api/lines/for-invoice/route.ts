@@ -29,15 +29,15 @@ export async function GET(req: NextRequest) {
           gte: startDate,
           lte: endDate,
         },
-        telephoneNo: { not: null },
-        totalCable: { gt: -1 },
       },
       orderBy: { date: "asc" },
       select: {
         id: true,
         name: true,
         telephoneNo: true,
-        totalCable: true,
+        cableStart: true,
+        cableMiddle: true,
+        cableEnd: true,
         date: true,
         address: true,
       },
@@ -49,7 +49,10 @@ export async function GET(req: NextRequest) {
       id: line.id,
       name: line.name,
       phone_number: line.telephoneNo,
-      total_cable: line.totalCable ? Number(line.totalCable) : 0,
+      total_cable:
+        Number(line.cableStart || 0) +
+        Number(line.cableMiddle || 0) +
+        Number(line.cableEnd || 0),
       date: line.date?.toISOString().split("T")[0],
       address: line.address,
     }));

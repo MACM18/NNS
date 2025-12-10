@@ -224,7 +224,8 @@ export function AddTelephoneLineModal({
       ...prev,
       date: prev.date || preparedDate,
       warehouse: prev.warehouse || "Main Warehouse",
-      issued_by: prev.issued_by || user?.user_metadata?.full_name || "",
+      issued_by:
+        prev.issued_by || (user as any)?.profile?.fullName || (user as any)?.name || "",
     }));
 
     void (async () => {
@@ -324,7 +325,7 @@ export function AddTelephoneLineModal({
       quantity: "2000",
       date: new Date().toISOString().split("T")[0],
       warehouse: "Main Warehouse",
-      issued_by: user?.user_metadata?.full_name || "",
+      issued_by: (user as any)?.profile?.fullName || (user as any)?.name || "",
       drawn_by: "",
     });
   };

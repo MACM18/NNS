@@ -15,7 +15,7 @@ export async function GET(
     const { id } = await params;
 
     const items = await prisma.inventoryInvoiceItem.findMany({
-      where: { invoice_id: id },
+      where: { invoiceId: id },
     });
 
     return NextResponse.json({ data: items });

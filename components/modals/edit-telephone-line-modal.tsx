@@ -378,9 +378,9 @@ export function EditTelephoneLineModal({
             <div className='p-3 bg-muted rounded-lg'>
               <p className='text-sm font-medium'>Current Usage Info:</p>
               <p className='text-sm text-muted-foreground'>
-                Currently using {originalDrumUsage.cable_used}m from drum{" "}
+                Currently using {(originalDrumUsage as any).cableUsed}m from drum{" "}
                 {
-                  drums.find((d) => d.id === originalDrumUsage.drum_id)
+                  drums.find((d) => d.id === (originalDrumUsage as any).drumId)
                     ?.drum_number
                 }
               </p>

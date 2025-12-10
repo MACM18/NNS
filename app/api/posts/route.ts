@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const posts = await prisma.posts.findMany({
-      orderBy: { created_at: "desc" },
+    const posts = await prisma.post.findMany({
+      orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({ data: posts });
@@ -27,16 +27,16 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const post = await prisma.posts.create({
+    const post = await prisma.post.create({
       data: {
         title: body.title,
         content: body.content,
         excerpt: body.excerpt,
         category: body.category,
         tags: body.tags,
-        image_url: body.image_url,
+        featuredImageUrl: body.image_url ?? body.featuredImageUrl ?? null,
         status: body.status || "active",
-        author_id: session.user.id,
+        author: session.user.name ?? "Unknown",
       },
     });
 

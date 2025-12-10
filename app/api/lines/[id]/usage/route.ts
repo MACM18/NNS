@@ -16,13 +16,13 @@ export async function GET(
     const { id } = await params;
 
     const usage = await prisma.drumUsage.findFirst({
-      where: { line_details_id: id },
+      where: { lineDetailsId: id },
       include: {
-        drum_tracking: {
-          select: { id: true, drum_number: true, current_quantity: true },
+        drum: {
+          select: { id: true, drumNumber: true, currentQuantity: true },
         },
       },
-      orderBy: { usage_date: "desc" },
+      orderBy: { usageDate: "desc" },
     });
 
     if (!usage) return NextResponse.json({ data: null });
@@ -30,12 +30,12 @@ export async function GET(
     return NextResponse.json({
       data: {
         id: usage.id,
-        drum_id: usage.drum_id,
-        line_id: usage.line_details_id,
-        quantity_used: usage.quantity_used,
-        usage_date: usage.usage_date,
-        wastage_calculated: usage.wastage_calculated,
-        drum: usage.drum_tracking,
+        drum_id: usage.drumId,
+        line_id: usage.lineDetailsId,
+        quantity_used: usage.quantityUsed,
+        usage_date: usage.usageDate,
+        wastage_calculated: usage.wastageCalculated,
+        drum: usage.drum,
       },
     });
   } catch (error) {

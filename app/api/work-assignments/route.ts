@@ -123,15 +123,15 @@ export async function GET(req: NextRequest) {
     if (workerIds.length) {
       const workers = await prisma.worker.findMany({
         where: { id: { in: workerIds } },
-        select: { id: true, full_name: true, role: true, status: true },
+        select: { id: true, fullName: true, role: true, status: true },
       });
       workerDetails = workers as unknown as Worker[];
     }
 
     const workerOptions = await prisma.worker.findMany({
       where: { status: "active" },
-      select: { id: true, full_name: true, role: true, status: true },
-      orderBy: { full_name: "asc" },
+      select: { id: true, fullName: true, role: true, status: true },
+      orderBy: { fullName: "asc" },
     });
 
     const workerLookup = new Map<string, Worker>();

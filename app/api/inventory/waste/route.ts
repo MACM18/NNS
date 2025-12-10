@@ -13,13 +13,13 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20");
 
     const wasteReports = await prisma.wasteTracking.findMany({
-      orderBy: { waste_date: "desc" },
+      orderBy: { wasteDate: "desc" },
       take: limit,
       include: {
-        profile: {
-          select: { full_name: true },
+        reportedBy: {
+          select: { fullName: true },
         },
-        inventoryItem: {
+        item: {
           select: { name: true },
         },
       },
@@ -27,13 +27,11 @@ export async function GET(req: NextRequest) {
 
     // Transform the data to match the expected format
     type WasteReportWithRelations = (typeof wasteReports)[number];
-    const formattedReports = wasteReports.map(
-      (report: WasteReportWithRelations) => ({
-        ...report,
-        item_name: report.inventoryItem?.name || "",
-        full_name: report.profile?.full_name || "",
-      })
-    );
+    const formattedReports = wasteReports.map((report: WasteReportWithRelations) => ({
+      ...report,
+      item_name: report.item?.name || "",
+      full_name: report.reportedBy?.fullName || "",
+    }));
 
     return NextResponse.json({ data: formattedReports });
   } catch (error) {
@@ -64,28 +62,27 @@ export async function POST(req: NextRequest) {
           // Create waste record
           const wasteRecord = await tx.wasteTracking.create({
             data: {
-              item_id: item.item_id,
+              itemId: item.item_id ?? item.itemId,
               quantity: Number(item.quantity),
-              waste_reason: item.waste_reason || "",
-              waste_date: waste_date ? new Date(waste_date) : new Date(),
-              reported_by: session.user?.id,
+              wasteReason: item.waste_reason ?? item.wasteReason ?? "",
+              wasteDate: waste_date ? new Date(waste_date) : new Date(),
+              reportedById: session.user?.id,
             },
           });
           createdRecords.push(wasteRecord);
 
           // Update inventory stock (reduce by waste amount)
           const inventoryItem = await tx.inventoryItem.findUnique({
-            where: { id: item.item_id },
+            where: { id: item.item_id ?? item.itemId },
           });
 
           if (inventoryItem) {
-            const currentStock = inventoryItem.current_stock || 0;
+            const currentStock = Number(inventoryItem.currentStock || 0);
             const newStock = Math.max(0, currentStock - Number(item.quantity));
             await tx.inventoryItem.update({
-              where: { id: item.item_id },
+              where: { id: item.item_id ?? item.itemId },
               data: {
-                current_stock: newStock,
-                updated_at: new Date(),
+                currentStock: newStock,
               },
             });
           }
@@ -102,7 +99,13 @@ export async function POST(req: NextRequest) {
 
     // Single record creation (legacy support)
     const wasteReport = await prisma.wasteTracking.create({
-      data: body,
+      data: {
+        itemId: body.item_id ?? body.itemId,
+        quantity: Number(body.quantity),
+        wasteReason: body.waste_reason ?? body.wasteReason ?? "",
+        wasteDate: body.waste_date ? new Date(body.waste_date) : new Date(),
+        reportedById: session.user?.id,
+      },
     });
 
     return NextResponse.json({ data: wasteReport });

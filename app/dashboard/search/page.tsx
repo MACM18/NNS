@@ -72,7 +72,7 @@ export default function SearchPage() {
         categories: searchFilters.categories,
         lineStatus: searchFilters.lineStatus,
         taskStatus: searchFilters.taskStatus,
-        taskPriority: searchFilters.taskPriority,
+        // taskPriority removed; not part of filters
         invoiceType: searchFilters.invoiceType,
         inventoryLowStock: searchFilters.inventoryLowStock,
         lengthRange: searchFilters.lengthRange,

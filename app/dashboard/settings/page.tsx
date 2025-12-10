@@ -530,7 +530,7 @@ export default function SettingsPage() {
                       <Calendar className='h-4 w-4 text-muted-foreground' />
                       <span className='text-sm'>
                         Joined{" "}
-                        {new Date(user?.created_at || "").toLocaleDateString()}
+                        {new Date((user as any)?.createdAt || "").toLocaleDateString()}
                       </span>
                     </div>
                   </div>

@@ -9,7 +9,7 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const job = await prisma.jobVacancies.findUnique({
+    const job = await prisma.jobVacancy.findUnique({
       where: { id: parseInt(id) },
     });
 
@@ -43,14 +43,15 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
-    const job = await prisma.jobVacancies.update({
+    const job = await prisma.jobVacancy.update({
       where: { id: parseInt(id) },
       data: {
         ...body,
-        application_deadline: body.application_deadline
+        endDate: body.application_deadline
           ? new Date(body.application_deadline)
+          : body.endDate
+          ? new Date(body.endDate)
           : undefined,
-        updated_at: new Date(),
       },
     });
 
@@ -76,7 +77,7 @@ export async function DELETE(
 
     const { id } = await params;
 
-    await prisma.jobVacancies.delete({
+    await prisma.jobVacancy.delete({
       where: { id: parseInt(id) },
     });
 

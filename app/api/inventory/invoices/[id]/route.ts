@@ -18,9 +18,9 @@ export async function GET(
     const invoice = await prisma.inventoryInvoice.findUnique({
       where: { id },
       include: {
-        inventory_invoice_items: {
+        items: {
           include: {
-            inventory_items: true,
+            item: true,
           },
         },
       },
@@ -57,7 +57,7 @@ export async function DELETE(
     await prisma.$transaction(async (tx: any) => {
       // First delete related invoice items
       await tx.inventoryInvoiceItem.deleteMany({
-        where: { invoice_id: id },
+        where: { invoiceId: id },
       });
 
       // Then delete the invoice
@@ -97,7 +97,6 @@ export async function PATCH(
       where: { id },
       data: {
         ...body,
-        updated_at: new Date(),
       },
     });
 

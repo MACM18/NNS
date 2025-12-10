@@ -14,19 +14,15 @@ export async function GET(req: NextRequest) {
 
     // Get low stock items count (where current_stock <= reorder_level)
     const lowStockItems = await prisma.inventoryItem.findMany({
-      select: { id: true, current_stock: true, reorder_level: true },
+      select: { id: true, currentStock: true, reorderLevel: true },
     });
 
     // Manual comparison since Prisma doesn't support field-to-field comparison easily
-    type LowStockItem = {
-      id: string;
-      current_stock: number | null;
-      reorder_level: number | null;
-    };
-    const lowStockAlerts = lowStockItems.filter(
-      (item: LowStockItem) =>
-        (item.current_stock ?? 0) <= (item.reorder_level ?? 0)
-    ).length;
+    const lowStockAlerts = lowStockItems.filter((item) => {
+      const current = Number(item.currentStock ?? 0);
+      const reorder = Number(item.reorderLevel ?? 0);
+      return current <= reorder;
+    }).length;
 
     // Get active drums count
     const activeDrums = await prisma.drumTracking.count({
@@ -40,7 +36,7 @@ export async function GET(req: NextRequest) {
 
     const wasteData = await prisma.wasteTracking.aggregate({
       where: {
-        waste_date: {
+        wasteDate: {
           gte: startOfMonth,
           lte: endOfMonth,
         },
@@ -49,11 +45,11 @@ export async function GET(req: NextRequest) {
     });
 
     const totalStockData = await prisma.inventoryItem.aggregate({
-      _sum: { current_stock: true },
+      _sum: { currentStock: true },
     });
 
-    const totalWaste = wasteData._sum.quantity ?? 0;
-    const totalStock = totalStockData._sum.current_stock ?? 1;
+    const totalWaste = Number(wasteData._sum.quantity ?? 0);
+    const totalStock = Number(totalStockData._sum.currentStock ?? 1);
     const monthlyWastePercentage =
       totalStock > 0 ? Number(((totalWaste / totalStock) * 100).toFixed(1)) : 0;
 

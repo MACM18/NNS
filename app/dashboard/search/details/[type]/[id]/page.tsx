@@ -128,7 +128,7 @@ export default async function SearchDetailsPage({ params }: any) {
         if (!task) notFound();
         data = task;
         const customerName = task.customerName
-          ? String(task.customer_name)
+          ? String(task.customerName)
           : "Unknown customer";
         const telephone = task.telephoneNo ? String(task.telephoneNo) : "N/A";
         const contactNo = task.contactNo ? String(task.contactNo) : "N/A";
@@ -153,7 +153,7 @@ export default async function SearchDetailsPage({ params }: any) {
 
         title = `Task: ${customerName}`;
         subtitle =
-          [task.telephone_no ? telephone : null, task.address ? address : null]
+          [task.telephoneNo ? telephone : null, task.address ? address : null]
             .filter(Boolean)
             .join(" • ") || "No contact information";
         badgeColor = "bg-green-100 text-green-800";

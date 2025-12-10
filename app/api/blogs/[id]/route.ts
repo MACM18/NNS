@@ -9,7 +9,7 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const blog = await prisma.blogs.findUnique({
+    const blog = await prisma.blog.findUnique({
       where: { id: parseInt(id) },
     });
 
@@ -40,7 +40,7 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
-    const blog = await prisma.blogs.update({
+    const blog = await prisma.blog.update({
       where: { id: parseInt(id) },
       data: {
         ...body,
@@ -70,7 +70,7 @@ export async function DELETE(
 
     const { id } = await params;
 
-    await prisma.blogs.delete({
+    await prisma.blog.delete({
       where: { id: parseInt(id) },
     });
 

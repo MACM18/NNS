@@ -12,11 +12,11 @@ export async function GET(_req: NextRequest) {
 
     // Get all task IDs that are already used by line_details
     const assigned = await prisma.lineDetails.findMany({
-      where: { task_id: { not: null } },
-      select: { task_id: true },
+      where: { taskId: { not: null } },
+      select: { taskId: true },
     });
     const assignedIds = assigned
-      .map((r: { task_id: string | null }) => r.task_id!)
+      .map((r: { taskId: string | null }) => r.taskId!)
       .filter(Boolean) as string[];
 
     // Fetch accepted tasks not in assignedIds

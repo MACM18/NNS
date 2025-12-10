@@ -6,7 +6,6 @@ import bcrypt from "bcryptjs";
 type UserSelect = {
   id: string;
   email: string | null;
-  name: string | null;
   emailVerified: Date | null;
   createdAt: Date;
 };
@@ -32,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     // Get profiles (which contains role info)
     const profiles = await prisma.profile.findMany({
-      orderBy: { created_at: "desc" },
+      orderBy: { createdAt: "desc" },
     });
 
     // Get users for additional info including OAuth accounts
@@ -40,7 +39,6 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         email: true,
-        name: true,
         emailVerified: true,
         createdAt: true,
         accounts: {
@@ -54,12 +52,12 @@ export async function GET(req: NextRequest) {
     // Combine the data
     const combinedUsers = users.map(
       (user: UserSelect & { accounts?: { provider: string }[] }) => {
-        const profile = profiles.find((p: ProfileData) => p.userId === user.id);
+        const profile = profiles.find((p) => p.userId === user.id);
         return {
           ...user,
           profile,
           role: profile?.role || "user",
-          full_name: profile?.full_name || user.name,
+          full_name: profile?.fullName || null,
         };
       }
     );
@@ -120,7 +118,6 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.create({
       data: {
         email,
-        name,
         password: hashedPassword,
       },
     });
@@ -129,7 +126,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: user.id,
         email,
-        full_name: name,
+        fullName: name,
         role: role || "user",
       },
     });
@@ -141,7 +138,7 @@ export async function POST(req: NextRequest) {
         user: {
           id: result.user.id,
           email: result.user.email,
-          name: result.user.name,
+          name: profile.fullName,
         },
         profile: result.profile,
       },

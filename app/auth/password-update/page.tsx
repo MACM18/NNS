@@ -13,9 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 export default function PasswordUpdatePage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [codeParam, setCodeParam] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");

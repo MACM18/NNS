@@ -54,26 +54,38 @@ async function fetchConnections(page = 1, pageSize = 10) {
 
   const [rows, total] = await Promise.all([
     prisma.googleSheetConnection.findMany({
-      orderBy: { created_at: "desc" },
+      orderBy: { createdAt: "desc" },
       skip,
       take: pageSize,
       select: {
         id: true,
         month: true,
         year: true,
-        sheet_url: true,
-        sheet_name: true,
-        sheet_tab: true,
-        last_synced: true,
+        sheetUrl: true,
+        sheetName: true,
+        sheetTab: true,
+        lastSynced: true,
         status: true,
-        record_count: true,
-        created_at: true,
+        recordCount: true,
+        createdAt: true,
       },
     }),
     prisma.googleSheetConnection.count(),
   ]);
 
-  return { rows: rows as unknown as SheetConnectionRow[], total };
+  const mapped = (rows || []).map((r: any) => ({
+    id: r.id,
+    month: r.month,
+    year: r.year,
+    sheet_url: r.sheetUrl,
+    sheet_name: r.sheetName,
+    sheet_tab: r.sheetTab,
+    last_synced: r.lastSynced,
+    status: r.status,
+    record_count: r.recordCount,
+    created_at: (r.createdAt as Date)?.toISOString?.() || r.createdAt,
+  })) as SheetConnectionRow[];
+  return { rows: mapped, total };
 }
 
 function formatDate(dateString: string | null | undefined) {

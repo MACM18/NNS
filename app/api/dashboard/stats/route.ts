@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
       prisma.task.count({
         where: {
           status: "in_progress",
-          created_at: {
+          createdAt: {
             gte: currentMonthStartDate,
             lte: currentMonthEndDate,
           },
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       prisma.task.count({
         where: {
           status: "in_progress",
-          created_at: {
+          createdAt: {
             gte: previousMonthStartDate,
             lte: previousMonthEndDate,
           },
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
       prisma.task.count({
         where: {
           status: "pending",
-          created_at: {
+          createdAt: {
             gte: currentMonthStartDate,
             lte: currentMonthEndDate,
           },
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
       prisma.task.count({
         where: {
           status: "pending",
-          created_at: {
+          createdAt: {
             gte: previousMonthStartDate,
             lte: previousMonthEndDate,
           },
@@ -102,40 +102,40 @@ export async function GET(req: NextRequest) {
     const [currentInvoices, previousInvoices] = await Promise.all([
       prisma.generatedInvoice.aggregate({
         where: {
-          invoice_type: { in: ["A", "B"] },
-          job_month: {
+          invoiceType: { in: ["A", "B"] },
+          invoiceDate: {
             gte: currentMonthStartDate,
             lte: currentMonthEndDate,
           },
         },
         _sum: {
-          total_amount: true,
+          totalAmount: true,
         },
       }),
       prisma.generatedInvoice.aggregate({
         where: {
-          invoice_type: { in: ["A", "B"] },
-          job_month: {
+          invoiceType: { in: ["A", "B"] },
+          invoiceDate: {
             gte: previousMonthStartDate,
             lte: previousMonthEndDate,
           },
         },
         _sum: {
-          total_amount: true,
+          totalAmount: true,
         },
       }),
     ]);
 
     // Recent activities (latest 5 tasks)
     const recentTasks = await prisma.task.findMany({
-      orderBy: { created_at: "desc" },
+      orderBy: { createdAt: "desc" },
       take: 5,
       select: {
         id: true,
-        telephone_no: true,
+        telephoneNo: true,
         address: true,
         status: true,
-        created_at: true,
+        createdAt: true,
       },
     });
 
@@ -143,12 +143,12 @@ export async function GET(req: NextRequest) {
     const totalLines = currentLines;
     const activeTasks = currentTasks;
     const pendingReviews = currentReviews;
-    const monthlyRevenue = currentInvoices._sum.total_amount || 0;
+    const monthlyRevenue = Number(currentInvoices._sum.totalAmount ?? 0);
 
     const prevLines = previousLines;
     const prevTasks = previousTasks;
     const prevReviews = previousReviews;
-    const prevRevenue = previousInvoices._sum.total_amount || 0;
+    const prevRevenue = Number(previousInvoices._sum.totalAmount ?? 0);
 
     const lineChange =
       prevLines > 0 ? ((totalLines - prevLines) / prevLines) * 100 : 0;
@@ -166,10 +166,10 @@ export async function GET(req: NextRequest) {
     // Format activities
     const activities = recentTasks.map((task: any) => ({
       id: task.id,
-      action: `Task: ${task.telephone_no}`,
+      action: `Task: ${task.telephoneNo}`,
       location: task.address || "Unknown Location",
       status: task.status,
-      created_at: task.created_at,
+      created_at: task.createdAt,
     }));
 
     return NextResponse.json({

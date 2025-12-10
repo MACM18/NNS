@@ -18,17 +18,17 @@ export async function GET(
     const wasteRecord = await prisma.wasteTracking.findUnique({
       where: { id },
       include: {
-        inventory_items: {
+        item: {
           select: {
             id: true,
-            item_name: true,
-            current_stock: true,
+            name: true,
+            currentStock: true,
           },
         },
-        profiles: {
+        reportedBy: {
           select: {
             id: true,
-            full_name: true,
+            fullName: true,
           },
         },
       },
@@ -68,10 +68,10 @@ export async function DELETE(
     const wasteRecord = await prisma.wasteTracking.findUnique({
       where: { id },
       include: {
-        inventory_items: {
+        item: {
           select: {
             id: true,
-            current_stock: true,
+            currentStock: true,
           },
         },
       },
@@ -92,14 +92,14 @@ export async function DELETE(
       });
 
       // Restore stock to inventory item
-      if (wasteRecord.item_id && wasteRecord.inventory_items) {
-        const currentStock = wasteRecord.inventory_items.current_stock ?? 0;
-        const quantityToRestore = wasteRecord.quantity ?? 0;
+      if (wasteRecord.itemId && wasteRecord.item) {
+        const currentStock = Number(wasteRecord.item.currentStock ?? 0);
+        const quantityToRestore = Number(wasteRecord.quantity ?? 0);
 
         await tx.inventoryItem.update({
-          where: { id: wasteRecord.item_id },
+          where: { id: wasteRecord.itemId },
           data: {
-            current_stock: currentStock + quantityToRestore,
+            currentStock: currentStock + quantityToRestore,
           },
         });
       }
@@ -132,12 +132,20 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
+    // Map potential snake_case to camelCase
+    const updateData: any = {};
+    if (body.itemId ?? body.item_id) updateData.itemId = body.itemId ?? body.item_id;
+    if (body.quantity != null) updateData.quantity = Number(body.quantity);
+    if (body.wasteReason ?? body.waste_reason)
+      updateData.wasteReason = body.wasteReason ?? body.waste_reason;
+    if (body.wasteDate ?? body.waste_date)
+      updateData.wasteDate = new Date(body.wasteDate ?? body.waste_date);
+    if (body.reportedById ?? body.reported_by)
+      updateData.reportedById = body.reportedById ?? body.reported_by;
+
     const wasteRecord = await prisma.wasteTracking.update({
       where: { id },
-      data: {
-        ...body,
-        updated_at: new Date(),
-      },
+      data: updateData,
     });
 
     return NextResponse.json({

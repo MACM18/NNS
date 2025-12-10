@@ -22,14 +22,14 @@ export async function GET(req: NextRequest) {
     const lines = await prisma.lineDetails.findMany({
       where: {
         OR: [
-          { telephone_no: { contains: query, mode: "insensitive" } },
+          { telephoneNo: { contains: query, mode: "insensitive" } },
           { name: { contains: query, mode: "insensitive" } },
           { address: { contains: query, mode: "insensitive" } },
         ],
       },
       select: {
         id: true,
-        telephone_no: true,
+        telephoneNo: true,
         name: true,
         address: true,
       },
@@ -40,8 +40,8 @@ export async function GET(req: NextRequest) {
     const tasks = await prisma.task.findMany({
       where: {
         OR: [
-          { customer_name: { contains: query, mode: "insensitive" } },
-          { telephone_no: { contains: query, mode: "insensitive" } },
+          { customerName: { contains: query, mode: "insensitive" } },
+          { telephoneNo: { contains: query, mode: "insensitive" } },
           { address: { contains: query, mode: "insensitive" } },
           { dp: { contains: query, mode: "insensitive" } },
           { notes: { contains: query, mode: "insensitive" } },
@@ -49,8 +49,8 @@ export async function GET(req: NextRequest) {
       },
       select: {
         id: true,
-        customer_name: true,
-        telephone_no: true,
+        customerName: true,
+        telephoneNo: true,
         address: true,
         status: true,
         dp: true,
@@ -63,15 +63,14 @@ export async function GET(req: NextRequest) {
     const invoices = await prisma.generatedInvoice.findMany({
       where: {
         AND: [
-          { invoice_type: { in: ["A", "B"] } },
-          { invoice_number: { contains: query, mode: "insensitive" } },
+          { invoiceType: { in: ["A", "B"] } },
+          { invoiceNumber: { contains: query, mode: "insensitive" } },
         ],
       },
       select: {
         id: true,
-        invoice_number: true,
-        customer_name: true,
-        total_amount: true,
+        invoiceNumber: true,
+        totalAmount: true,
       },
       take: 3,
     });
@@ -84,7 +83,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         name: true,
-        current_stock: true,
+        currentStock: true,
         unit: true,
       },
       take: 3,
@@ -100,9 +99,9 @@ export async function GET(req: NextRequest) {
       ...lines.map((line: LineResult) => ({
         id: line.id,
         type: "line" as const,
-        title: line.telephone_no || line.name || "Line",
+        title: (line as any).telephoneNo || line.name || "Line",
         subtitle:
-          [line.telephone_no, line.name, line.address]
+          [(line as any).telephoneNo, line.name, line.address]
             .filter(Boolean)
             .join(" • ") || "No details",
         data: line,
@@ -110,10 +109,10 @@ export async function GET(req: NextRequest) {
       ...tasks.map((task: TaskResult) => ({
         id: task.id,
         type: "task" as const,
-        title: task.customer_name || task.telephone_no || "Task",
+        title: (task as any).customerName || (task as any).telephoneNo || "Task",
         subtitle:
           [
-            task.telephone_no,
+            (task as any).telephoneNo,
             task.address,
             task.status ? `Status: ${task.status}` : null,
           ]
@@ -124,16 +123,11 @@ export async function GET(req: NextRequest) {
       ...invoices.map((invoice: InvoiceResult) => ({
         id: invoice.id,
         type: "invoice" as const,
-        title: invoice.invoice_number || "Invoice",
-        subtitle: invoice.customer_name
-          ? `${invoice.customer_name}${
-              invoice.total_amount != null
-                ? ` • LKR ${Number(invoice.total_amount).toLocaleString()}`
-                : ""
-            }`
-          : invoice.total_amount != null
-          ? `LKR ${Number(invoice.total_amount).toLocaleString()}`
-          : "",
+        title: (invoice as any).invoiceNumber || "Invoice",
+        subtitle:
+          (invoice as any).totalAmount != null
+            ? `LKR ${Number((invoice as any).totalAmount).toLocaleString()}`
+            : "",
         data: invoice,
       })),
       ...inventory.map((item: InventoryResult) => ({
@@ -141,8 +135,8 @@ export async function GET(req: NextRequest) {
         type: "inventory" as const,
         title: item.name || "Inventory Item",
         subtitle:
-          item.current_stock != null
-            ? `Stock: ${item.current_stock}${item.unit ? ` ${item.unit}` : ""}`
+          (item as any).currentStock != null
+            ? `Stock: ${(item as any).currentStock}${item.unit ? ` ${item.unit}` : ""}`
             : "",
         data: item,
       })),
@@ -191,7 +185,7 @@ export async function POST(req: NextRequest) {
 
       if (filters.query?.trim()) {
         lineWhere.OR = [
-          { telephone_no: { contains: filters.query, mode: "insensitive" } },
+          { telephoneNo: { contains: filters.query, mode: "insensitive" } },
           { name: { contains: filters.query, mode: "insensitive" } },
           { address: { contains: filters.query, mode: "insensitive" } },
         ];
@@ -202,15 +196,15 @@ export async function POST(req: NextRequest) {
       }
 
       if (filters.lengthRange?.min) {
-        lineWhere.total_cable = {
-          ...lineWhere.total_cable,
+        lineWhere.totalCable = {
+          ...lineWhere.totalCable,
           gte: filters.lengthRange.min,
         };
       }
 
       if (filters.lengthRange?.max) {
-        lineWhere.total_cable = {
-          ...lineWhere.total_cable,
+        lineWhere.totalCable = {
+          ...lineWhere.totalCable,
           lte: filters.lengthRange.max,
         };
       }
@@ -235,11 +229,11 @@ export async function POST(req: NextRequest) {
       });
 
       lines.forEach((line: any) => {
-        const telephone = String(line.telephone_no ?? "");
-        const customerName = String(line.customer_name ?? line.name ?? "");
+        const telephone = String(line.telephoneNo ?? "");
+        const customerName = String(line.customerName ?? line.name ?? "");
         const addr = String(line.address ?? "");
         const lengthValue =
-          line.total_cable != null ? Number(line.total_cable) : undefined;
+          line.totalCable != null ? Number(line.totalCable) : undefined;
         const relevanceScore = calculateRelevance(filters.query || "", [
           telephone,
           customerName,
@@ -273,8 +267,8 @@ export async function POST(req: NextRequest) {
 
       if (filters.query?.trim()) {
         taskWhere.OR = [
-          { telephone_no: { contains: filters.query, mode: "insensitive" } },
-          { customer_name: { contains: filters.query, mode: "insensitive" } },
+          { telephoneNo: { contains: filters.query, mode: "insensitive" } },
+          { customerName: { contains: filters.query, mode: "insensitive" } },
           { address: { contains: filters.query, mode: "insensitive" } },
           { dp: { contains: filters.query, mode: "insensitive" } },
           { notes: { contains: filters.query, mode: "insensitive" } },
@@ -290,15 +284,15 @@ export async function POST(req: NextRequest) {
       }
 
       if (filters.dateRange?.from) {
-        taskWhere.created_at = {
-          ...taskWhere.created_at,
+        taskWhere.createdAt = {
+          ...taskWhere.createdAt,
           gte: new Date(filters.dateRange.from),
         };
       }
 
       if (filters.dateRange?.to) {
-        taskWhere.created_at = {
-          ...taskWhere.created_at,
+        taskWhere.createdAt = {
+          ...taskWhere.createdAt,
           lte: new Date(filters.dateRange.to),
         };
       }
@@ -309,14 +303,14 @@ export async function POST(req: NextRequest) {
       });
 
       tasks.forEach((task: any) => {
-        const telephone = String(task.telephone_no ?? "");
-        const customerName = String(task.customer_name ?? "");
+        const telephone = String(task.telephoneNo ?? "");
+        const customerName = String(task.customerName ?? "");
         const addr = String(task.address ?? "");
         const status = String(task.status ?? "");
         const dp = String(task.dp ?? "");
         const notes = String(task.notes ?? "");
-        const taskDate = String(task.task_date ?? "");
-        const connectionType = String(task.connection_type_new ?? "");
+        const taskDate = String(task.taskDate ?? "");
+        const connectionType = String(task.connectionTypeNew ?? "");
         const title =
           customerName || telephone || dp || `Task ${String(task.id ?? "")}`;
         const relevanceScore = calculateRelevance(filters.query || "", [
@@ -354,44 +348,44 @@ export async function POST(req: NextRequest) {
     // Search Invoices
     if (filters.categories?.includes("invoice")) {
       const invoiceWhere: any = {
-        invoice_type: { in: ["A", "B"] },
+        invoiceType: { in: ["A", "B"] },
       };
 
       if (filters.query?.trim()) {
         invoiceWhere.OR = [
-          { invoice_number: { contains: filters.query, mode: "insensitive" } },
-          { customer_name: { contains: filters.query, mode: "insensitive" } },
+          { invoiceNumber: { contains: filters.query, mode: "insensitive" } },
+          { customerName: { contains: filters.query, mode: "insensitive" } },
         ];
       }
 
       if (filters.invoiceType && filters.invoiceType !== "all") {
-        invoiceWhere.invoice_type = filters.invoiceType;
+        invoiceWhere.invoiceType = filters.invoiceType;
       }
 
       if (filters.amountRange?.min) {
-        invoiceWhere.total_amount = {
-          ...invoiceWhere.total_amount,
+        invoiceWhere.totalAmount = {
+          ...invoiceWhere.totalAmount,
           gte: filters.amountRange.min,
         };
       }
 
       if (filters.amountRange?.max) {
-        invoiceWhere.total_amount = {
-          ...invoiceWhere.total_amount,
+        invoiceWhere.totalAmount = {
+          ...invoiceWhere.totalAmount,
           lte: filters.amountRange.max,
         };
       }
 
       if (filters.dateRange?.from) {
-        invoiceWhere.created_at = {
-          ...invoiceWhere.created_at,
+        invoiceWhere.createdAt = {
+          ...invoiceWhere.createdAt,
           gte: new Date(filters.dateRange.from),
         };
       }
 
       if (filters.dateRange?.to) {
-        invoiceWhere.created_at = {
-          ...invoiceWhere.created_at,
+        invoiceWhere.createdAt = {
+          ...invoiceWhere.createdAt,
           lte: new Date(filters.dateRange.to),
         };
       }
@@ -402,11 +396,11 @@ export async function POST(req: NextRequest) {
       });
 
       invoices.forEach((invoice: any) => {
-        const invNo = String(invoice.invoice_number ?? "");
-        const cust = String(invoice.customer_name ?? "");
-        const tel = String(invoice.telephone_no ?? "");
-        const total = Number(invoice.total_amount ?? 0);
-        const type = String(invoice.invoice_type ?? "");
+        const invNo = String(invoice.invoiceNumber ?? "");
+        const cust = String(invoice.customerName ?? "");
+        const tel = String(invoice.telephoneNo ?? "");
+        const total = Number(invoice.totalAmount ?? 0);
+        const type = String(invoice.invoiceType ?? "");
         const relevanceScore = calculateRelevance(filters.query || "", [
           invNo,
           cust,
@@ -440,15 +434,15 @@ export async function POST(req: NextRequest) {
       }
 
       if (filters.dateRange?.from) {
-        inventoryWhere.created_at = {
-          ...inventoryWhere.created_at,
+        inventoryWhere.createdAt = {
+          ...inventoryWhere.createdAt,
           gte: new Date(filters.dateRange.from),
         };
       }
 
       if (filters.dateRange?.to) {
-        inventoryWhere.created_at = {
-          ...inventoryWhere.created_at,
+        inventoryWhere.createdAt = {
+          ...inventoryWhere.createdAt,
           lte: new Date(filters.dateRange.to),
         };
       }
@@ -462,7 +456,7 @@ export async function POST(req: NextRequest) {
       if (filters.inventoryLowStock) {
         inventory = inventory.filter((item: any) => {
           return (
-            Number(item.current_stock ?? 0) < Number(item.reorder_level ?? 0)
+            Number(item.currentStock ?? 0) < Number(item.reorderLevel ?? 0)
           );
         });
       }
@@ -471,7 +465,7 @@ export async function POST(req: NextRequest) {
         const name = String(item.name ?? "");
         const desc = String(item.description ?? "");
         const cat = String(item.category ?? "");
-        const stock = Number(item.current_stock ?? 0);
+        const stock = Number(item.currentStock ?? 0);
         const relevanceScore = calculateRelevance(filters.query || "", [
           name,
           desc,

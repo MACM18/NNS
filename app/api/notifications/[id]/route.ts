@@ -18,7 +18,7 @@ export async function PUT(
     const existing = await prisma.notification.findFirst({
       where: {
         id,
-        user_id: session.user.id,
+        userId: session.user.id,
       },
     });
 
@@ -35,24 +35,23 @@ export async function PUT(
     const notification = await prisma.notification.update({
       where: { id },
       data: {
-        is_read: is_read !== undefined ? is_read : true,
-        updated_at: new Date(),
+        isRead: is_read !== undefined ? Boolean(is_read) : true,
       },
     });
 
     return NextResponse.json({
       data: {
         id: notification.id,
-        user_id: notification.user_id,
+        user_id: notification.userId,
         title: notification.title,
         message: notification.message,
         type: notification.type,
         category: notification.category,
-        is_read: notification.is_read,
-        action_url: notification.action_url,
+        is_read: notification.isRead,
+        action_url: notification.actionUrl,
         metadata: notification.metadata,
-        created_at: notification.created_at,
-        updated_at: notification.updated_at,
+        created_at: notification.createdAt,
+        updated_at: notification.updatedAt,
       },
     });
   } catch (error) {
@@ -80,7 +79,7 @@ export async function DELETE(
     const existing = await prisma.notification.findFirst({
       where: {
         id,
-        user_id: session.user.id,
+        userId: session.user.id,
       },
     });
 

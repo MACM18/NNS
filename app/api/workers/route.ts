@@ -51,7 +51,7 @@ export async function GET() {
 
   try {
     const workers = await prisma.worker.findMany({
-      orderBy: { created_at: "desc" },
+      orderBy: { createdAt: "desc" },
     });
 
     return new Response(JSON.stringify({ workers: workers || [] }), {
@@ -85,13 +85,13 @@ export async function POST(req: NextRequest) {
 
     const data = await prisma.worker.create({
       data: {
-        full_name,
-        phone_number,
+        fullName: full_name,
+        phoneNumber: phone_number,
         email,
         role: role || "technician",
         notes,
-        profile_id: profile_id || null,
-        created_by: auth.userId,
+        profileId: profile_id || null,
+        createdById: auth.userId,
       },
     });
 
@@ -130,14 +130,14 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    const updateData: any = { updated_at: new Date().toISOString() };
-    if (full_name !== undefined) updateData.full_name = full_name;
-    if (phone_number !== undefined) updateData.phone_number = phone_number;
+    const updateData: any = { updatedAt: new Date() };
+    if (full_name !== undefined) updateData.fullName = full_name;
+    if (phone_number !== undefined) updateData.phoneNumber = phone_number;
     if (email !== undefined) updateData.email = email;
     if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
-    if (profile_id !== undefined) updateData.profile_id = profile_id;
+    if (profile_id !== undefined) updateData.profileId = profile_id;
 
     const data = await prisma.worker.update({
       where: { id },

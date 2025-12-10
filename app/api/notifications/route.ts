@@ -10,24 +10,24 @@ export async function GET(req: NextRequest) {
     }
 
     const notifications = await prisma.notification.findMany({
-      where: { user_id: session.user.id },
-      orderBy: { created_at: "desc" },
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
       take: 50,
     });
 
     // Transform to frontend format
     const transformedNotifications = notifications.map((n: any) => ({
       id: n.id,
-      user_id: n.user_id,
+      user_id: n.userId,
       title: n.title,
       message: n.message,
       type: n.type,
       category: n.category,
-      is_read: n.is_read,
-      action_url: n.action_url,
+      is_read: n.isRead,
+      action_url: n.actionUrl,
       metadata: n.metadata,
-      created_at: n.created_at,
-      updated_at: n.updated_at,
+      created_at: n.createdAt,
+      updated_at: n.updatedAt,
     }));
 
     return NextResponse.json({ data: transformedNotifications });
@@ -52,13 +52,13 @@ export async function POST(req: NextRequest) {
 
     const notification = await prisma.notification.create({
       data: {
-        user_id: session.user.id,
+        userId: session.user.id,
         title,
         message,
         type: type || "info",
         category: category || "system",
-        is_read: false,
-        action_url,
+        isRead: false,
+        actionUrl: action_url,
         metadata,
       },
     });
@@ -66,16 +66,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       data: {
         id: notification.id,
-        user_id: notification.user_id,
+        user_id: notification.userId,
         title: notification.title,
         message: notification.message,
         type: notification.type,
         category: notification.category,
-        is_read: notification.is_read,
-        action_url: notification.action_url,
+        is_read: notification.isRead,
+        action_url: notification.actionUrl,
         metadata: notification.metadata,
-        created_at: notification.created_at,
-        updated_at: notification.updated_at,
+        created_at: notification.createdAt,
+        updated_at: notification.updatedAt,
       },
     });
   } catch (error) {
@@ -101,12 +101,11 @@ export async function PUT(req: NextRequest) {
       // Mark all as read
       await prisma.notification.updateMany({
         where: {
-          user_id: session.user.id,
-          is_read: false,
+          userId: session.user.id,
+          isRead: false,
         },
         data: {
-          is_read: true,
-          updated_at: new Date(),
+          isRead: true,
         },
       });
 

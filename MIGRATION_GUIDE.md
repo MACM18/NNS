@@ -424,3 +424,53 @@ Ensure `NEXTAUTH_SECRET` is set and `NEXTAUTH_URL` matches your development URL.
 ### TypeScript errors
 
 Some errors will resolve after generating Prisma client. For persistent issues, check that all imports point to the correct new files.
+
+## API Endpoints (Prisma + NextAuth)
+
+Key routes exposed under `app/api`:
+
+- `/api/auth/[...nextauth]` — NextAuth handlers (Credentials + Google)
+- `/api/auth/register` — Register user (email/password)
+- `/api/users` — Admin user management (list/create/update)
+- `/api/profile/[id]` — Profile CRUD
+- `/api/search` — Global search
+- `/api/lines` and `/api/lines/[id]` — Line details CRUD
+- `/api/lines/create-with-usage`, `/api/lines/[id]/usage`, `/api/lines/[id]/update-with-usage` — Line + drum usage transactional APIs
+- `/api/tasks` and `/api/tasks/[id]` — Tasks CRUD
+- `/api/tasks/available` — Available tasks (not linked to lines)
+- `/api/inventory` and `/api/inventory/[id]` — Inventory items CRUD
+- `/api/inventory/invoices` and nested routes — Inventory invoices
+- `/api/drums` and `/api/drums/[id]` — Drum tracking CRUD
+- `/api/invoices` and `/api/invoices/stats` — Invoices + stats
+- `/api/notifications` — Notifications
+- `/api/dashboard/stats` — Dashboard aggregates
+- `/api/integrations/google-sheets/*` — Google Sheets connection + sync
+
+All endpoints enforce server-side authorization via NextAuth; admin-only endpoints verify `session.user.role`.
+
+## Deployment (Coolify)
+
+Environment variables (set in Coolify):
+
+- `DATABASE_URL` — Postgres connection string
+- `NEXTAUTH_URL` — e.g., `https://your-domain`
+- `NEXTAUTH_SECRET` — long random string
+- `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_KEY` (for Sheets sync)
+- Optional: `NODE_ENV=production`
+
+Build & start commands:
+
+- Build command:
+  ```bash
+  pnpm install --frozen-lockfile && pnpm prisma generate && pnpm build
+  ```
+- Start command:
+  ```bash
+  pnpm start
+  ```
+
+Notes:
+- Ensure the `PORT` env is honored by Coolify (Next.js reads `PORT` for `next start`).
+- Configure health checks on `/` or `/auth`.
+- If you use a read-only build phase, ensure `prisma generate` runs during build.

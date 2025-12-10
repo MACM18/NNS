@@ -27,8 +27,7 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       where.OR = [
-        { drum_number: { contains: search, mode: "insensitive" } },
-        { serial_number: { contains: search, mode: "insensitive" } },
+        { drumNumber: { contains: search, mode: "insensitive" } },
       ];
     }
 
@@ -36,9 +35,9 @@ export async function GET(req: NextRequest) {
     if (all === "true") {
       const drums = await prisma.drumTracking.findMany({
         where,
-        orderBy: { created_at: "desc" },
+        orderBy: { createdAt: "desc" },
         include: {
-          inventoryItem: {
+          item: {
             select: { name: true },
           },
         },
@@ -48,10 +47,10 @@ export async function GET(req: NextRequest) {
       let usageData: any[] = [];
       if (includeUsage) {
         usageData = await prisma.drumUsage.findMany({
-          orderBy: { usage_date: "desc" },
+          orderBy: { usageDate: "desc" },
           include: {
             lineDetails: {
-              select: { telephone_no: true, name: true },
+              select: { telephoneNo: true, name: true },
             },
           },
         });
@@ -61,7 +60,7 @@ export async function GET(req: NextRequest) {
       type DrumWithRelations = (typeof drums)[number];
       const transformedDrums = drums.map((drum: DrumWithRelations) => ({
         ...drum,
-        item_name: drum.inventoryItem?.name || "",
+        item_name: drum.item?.name || "",
       }));
 
       return NextResponse.json({
@@ -73,11 +72,11 @@ export async function GET(req: NextRequest) {
     const [drums, total] = await Promise.all([
       prisma.drumTracking.findMany({
         where,
-        orderBy: { created_at: "desc" },
+        orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
         include: {
-          inventoryItem: {
+          item: {
             select: { name: true },
           },
         },
@@ -89,7 +88,7 @@ export async function GET(req: NextRequest) {
     type DrumWithRelations = (typeof drums)[number];
     const transformedDrums = drums.map((drum: DrumWithRelations) => ({
       ...drum,
-      item_name: drum.inventoryItem?.name || "",
+      item_name: drum.item?.name || "",
     }));
 
     return NextResponse.json({

@@ -15,12 +15,12 @@ export async function GET(
     const { id } = await params;
 
     const assignees = await prisma.lineAssignee.findMany({
-      where: { line_id: id },
+      where: { lineId: id },
       include: {
-        profile: {
+        user: {
           select: {
             id: true,
-            full_name: true,
+            fullName: true,
             role: true,
             email: true,
           },
@@ -29,7 +29,7 @@ export async function GET(
     });
 
     const assigneeProfiles = assignees
-      .map((a: any) => a.profile)
+      .map((a: any) => a.user)
       .filter(Boolean);
 
     return NextResponse.json({ data: assigneeProfiles });
@@ -65,11 +65,10 @@ export async function PUT(
 
     // Get current assignees
     const currentAssignees = await prisma.lineAssignee.findMany({
-      where: { line_id: lineId },
-      select: { user_id: true },
+      where: { lineId: lineId },
+      select: { userId: true },
     });
-
-    const currentIds = new Set(currentAssignees.map((a: any) => a.user_id));
+    const currentIds = new Set(currentAssignees.map((a: any) => a.userId));
     const newIds = new Set(userIds);
 
     // Find users to add and remove
@@ -82,8 +81,8 @@ export async function PUT(
       if (toRemove.length > 0) {
         await tx.lineAssignee.deleteMany({
           where: {
-            line_id: lineId,
-            user_id: { in: toRemove },
+            lineId: lineId,
+            userId: { in: toRemove },
           },
         });
       }
@@ -92,9 +91,9 @@ export async function PUT(
       if (toAdd.length > 0) {
         await tx.lineAssignee.createMany({
           data: toAdd.map((userId: string) => ({
-            line_id: lineId,
-            user_id: userId,
-            assigned_at: new Date(),
+            lineId: lineId,
+            userId: userId,
+            assignedAt: new Date(),
           })),
         });
       }
@@ -102,12 +101,12 @@ export async function PUT(
 
     // Fetch updated assignees
     const updatedAssignees = await prisma.lineAssignee.findMany({
-      where: { line_id: lineId },
+      where: { lineId: lineId },
       include: {
-        profile: {
+        user: {
           select: {
             id: true,
-            full_name: true,
+            fullName: true,
             role: true,
             email: true,
           },
@@ -116,7 +115,7 @@ export async function PUT(
     });
 
     const assigneeProfiles = updatedAssignees
-      .map((a: any) => a.profile)
+      .map((a: any) => a.user)
       .filter(Boolean);
 
     return NextResponse.json({ data: assigneeProfiles });

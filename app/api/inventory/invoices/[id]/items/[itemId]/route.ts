@@ -18,7 +18,7 @@ export async function GET(
     const item = await prisma.inventoryInvoiceItem.findUnique({
       where: { id: itemId },
       include: {
-        inventory_items: true,
+        item: true,
       },
     });
 
@@ -58,9 +58,8 @@ export async function PATCH(
       data: {
         description: body.description,
         unit: body.unit,
-        quantity_requested: body.quantity_requested,
-        quantity_issued: body.quantity_issued,
-        updated_at: new Date(),
+        quantityRequested: body.quantity_requested ?? body.quantityRequested,
+        quantityIssued: body.quantity_issued ?? body.quantityIssued,
       },
     });
 

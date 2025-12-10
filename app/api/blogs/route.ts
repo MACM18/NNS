@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const blogs = await prisma.blogs.findMany({
-      orderBy: { created_at: "desc" },
+    const blogs = await prisma.blog.findMany({
+      orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({ data: blogs });
@@ -27,16 +27,20 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const blog = await prisma.blogs.create({
+    const blog = await prisma.blog.create({
       data: {
         title: body.title,
         content: body.content,
-        excerpt: body.excerpt,
-        category: body.category,
-        tags: body.tags,
-        image_url: body.image_url,
+        excerpt: body.excerpt ?? null,
+        category: body.category ?? null,
+        tags: Array.isArray(body.tags) ? body.tags : [],
+        featuredImageUrl: body.image_url ?? body.featuredImageUrl ?? null,
         status: body.status || "active",
-        author_id: session.user.id,
+        author: session.user.name || session.user.email || "Unknown",
+        slug: body.slug ?? null,
+        metaDescription: body.metaDescription ?? null,
+        readingTime: body.readingTime ?? null,
+        publishedAt: body.publishedAt ? new Date(body.publishedAt) : null,
       },
     });
 

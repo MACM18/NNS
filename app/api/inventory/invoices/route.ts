@@ -18,14 +18,14 @@ export async function GET(req: NextRequest) {
       const year = new Date().getFullYear();
       const lastInvoice = await prisma.inventoryInvoice.findFirst({
         where: {
-          invoice_number: { startsWith: `INV-${year}` },
+          invoiceNumber: { startsWith: `INV-${year}` },
         },
-        orderBy: { invoice_number: "desc" },
+        orderBy: { invoiceNumber: "desc" },
       });
 
       let nextNumber = 1;
-      if (lastInvoice?.invoice_number) {
-        const match = lastInvoice.invoice_number.match(/INV-\d{4}-(\d+)/);
+      if (lastInvoice?.invoiceNumber) {
+        const match = lastInvoice.invoiceNumber.match(/INV-\d{4}-(\d+)/);
         if (match) {
           nextNumber = parseInt(match[1]) + 1;
         }
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     }
 
     const invoices = await prisma.inventoryInvoice.findMany({
-      orderBy: { created_at: "desc" },
+      orderBy: { createdAt: "desc" },
       take: limit,
     });
 
@@ -68,8 +68,8 @@ export async function POST(req: NextRequest) {
       const invoice = await tx.inventoryInvoice.create({
         data: {
           ...invoiceData,
-          created_by: session.user?.id,
-          total_items: items?.length || 0,
+          createdById: session.user?.id,
+          totalItems: items?.length || 0,
         },
       });
 
@@ -79,27 +79,29 @@ export async function POST(req: NextRequest) {
           // Create invoice item
           await tx.inventoryInvoiceItem.create({
             data: {
-              invoice_id: invoice.id,
-              item_id: item.item_id,
+              invoiceId: invoice.id,
+              itemId: item.item_id ?? item.itemId,
               description: item.description,
               unit: item.unit,
-              quantity_requested: Number(item.quantity_requested),
-              quantity_issued: Number(item.quantity_issued),
+              quantityRequested: Number(
+                item.quantity_requested ?? item.quantityRequested
+              ),
+              quantityIssued: Number(item.quantity_issued ?? item.quantityIssued),
             },
           });
 
           // Update inventory stock
           const inventoryItem = await tx.inventoryItem.findUnique({
-            where: { id: item.item_id },
+            where: { id: item.item_id ?? item.itemId },
           });
 
           if (inventoryItem) {
-            const currentStock = inventoryItem.current_stock || 0;
+            const currentStock = Number(inventoryItem.currentStock || 0);
             await tx.inventoryItem.update({
-              where: { id: item.item_id },
+              where: { id: item.item_id ?? item.itemId },
               data: {
-                current_stock: currentStock + Number(item.quantity_issued),
-                updated_at: new Date(),
+                currentStock:
+                  currentStock + Number(item.quantity_issued ?? item.quantityIssued),
               },
             });
 
@@ -110,11 +112,11 @@ export async function POST(req: NextRequest) {
             ) {
               await tx.drumTracking.create({
                 data: {
-                  drum_number: item.drum_number,
-                  item_id: item.item_id,
-                  initial_quantity: Number(item.quantity_issued),
-                  current_quantity: Number(item.quantity_issued),
-                  received_date: new Date(invoiceData.date),
+                  drumNumber: item.drum_number ?? item.drumNumber,
+                  itemId: item.item_id ?? item.itemId,
+                  initialQuantity: Number(item.quantity_issued ?? item.quantityIssued),
+                  currentQuantity: Number(item.quantity_issued ?? item.quantityIssued),
+                  receivedDate: new Date(invoiceData.date),
                   status: "active",
                 },
               });

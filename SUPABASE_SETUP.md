@@ -1,3 +1,15 @@
+# Deprecated: Supabase Setup (Replaced by Prisma + NextAuth)
+
+This document is kept for historical reference only. The project no longer uses Supabase.
+
+Current stack:
+- Database: PostgreSQL
+- ORM: Prisma (`@prisma/client`)
+- Auth: NextAuth v5 (Credentials + Google)
+
+Please refer to `MIGRATION_GUIDE.md` and `README.md` for up-to-date setup instructions, environment variables, and APIs.
+
+---
 # NNS Enterprise - Supabase Setup Documentation
 
 ## Overview

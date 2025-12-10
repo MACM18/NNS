@@ -19,7 +19,6 @@ export async function GET(
       select: {
         id: true,
         email: true,
-        name: true,
         emailVerified: true,
         createdAt: true,
       },
@@ -38,7 +37,7 @@ export async function GET(
         ...user,
         profile,
         role: profile?.role || "user",
-        full_name: profile?.full_name || user.name,
+        full_name: profile?.fullName || null,
       },
     });
   } catch (error) {
@@ -80,26 +79,20 @@ export async function PUT(
     const profile = await prisma.profile.upsert({
       where: { userId: id },
       update: {
-        full_name,
+        fullName: full_name,
         email,
         role,
-        updated_at: new Date(),
+        updatedAt: new Date(),
       },
       create: {
         userId: id,
-        full_name,
+        fullName: full_name,
         email,
         role: role || "user",
       },
     });
 
-    // Update user name if full_name provided
-    if (full_name) {
-      await prisma.user.update({
-        where: { id },
-        data: { name: full_name },
-      });
-    }
+    // User model does not store name; keep name in profile only
 
     return NextResponse.json({ data: profile });
   } catch (error) {

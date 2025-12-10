@@ -27,8 +27,10 @@ export async function POST(req: NextRequest) {
       select: {
         id: true,
         name: true,
-        phone_number: true,
-        total_cable: true,
+        phoneNumber: true,
+        cableStart: true,
+        cableMiddle: true,
+        cableEnd: true,
         date: true,
         address: true,
       },
@@ -38,8 +40,11 @@ export async function POST(req: NextRequest) {
     const transformedLines = lines.map((line: any) => ({
       id: line.id,
       name: line.name,
-      phone_number: line.phone_number,
-      total_cable: line.total_cable,
+      phone_number: line.phoneNumber,
+      total_cable:
+        Number(line.cableStart || 0) +
+        Number(line.cableMiddle || 0) +
+        Number(line.cableEnd || 0),
       date: line.date,
       address: line.address,
     }));
