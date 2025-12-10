@@ -1,9 +1,13 @@
-import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 
-export default auth((req) => {
-  const { nextUrl, auth: session } = req;
-  const isLoggedIn = !!session?.user;
+export default async function middleware(req: Request & { nextUrl: URL }) {
+  const nextUrl = (req as any).nextUrl as URL;
+  const token = await getToken({
+    req: req as any,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+  const isLoggedIn = !!token;
   const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
   const isOnAuth =
     nextUrl.pathname.startsWith("/login") ||
@@ -32,7 +36,9 @@ export default auth((req) => {
   }
 
   return NextResponse.next();
-});
+}
+
+// Edge-compatible middleware using JWT decoding only
 
 export const config = {
   matcher: [

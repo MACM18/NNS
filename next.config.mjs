@@ -9,6 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-}
+  // Keep middleware on Edge; we use JWT decoding to avoid Node runtime
+};
 
-export default nextConfig
+export default nextConfig;
