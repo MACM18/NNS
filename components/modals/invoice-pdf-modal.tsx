@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Download } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 
 interface GeneratedInvoice {
@@ -74,7 +73,6 @@ export function InvoicePDFModal({
     useState<CompanySettings | null>(null);
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   useEffect(() => {
@@ -88,30 +86,34 @@ export function InvoicePDFModal({
 
     setLoading(true);
     try {
-      // Fetch line details
-      const { data: lines, error: linesError } = await supabase
-        .from("line_details")
-        .select("id, name, phone_number, total_cable, date, address")
-        .in("id", invoice.line_details_ids);
+      // Fetch line details by IDs
+      const linesResponse = await fetch("/api/lines/by-ids", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: invoice.line_details_ids }),
+      });
 
-      if (linesError) throw linesError;
-
-      // Fetch company settings
-      const { data: settings, error: settingsError } = await supabase
-        .from("company_settings")
-        .select("*")
-        .single();
-
-      if (settingsError && settingsError.code !== "PGRST116") {
-        throw settingsError;
+      if (!linesResponse.ok) {
+        throw new Error("Failed to fetch line details");
       }
 
-      // Cast Supabase response to our LineDetail[] shape
-      setLineDetails((lines as unknown as LineDetail[]) || []);
+      const linesData = await linesResponse.json();
+      const lines = linesData.data || [];
+
+      // Fetch company settings
+      const settingsResponse = await fetch("/api/settings/company");
+      let settings = null;
+
+      if (settingsResponse.ok) {
+        const settingsData = await settingsResponse.json();
+        settings = settingsData.data;
+      }
+
+      setLineDetails(lines as LineDetail[]);
 
       if (settings) {
         // Work with a mutable copy and normalize pricing_tiers
-        const parsedSettings: any = { ...(settings as any) };
+        const parsedSettings: any = { ...settings };
         if (typeof parsedSettings.pricing_tiers === "string") {
           try {
             parsedSettings.pricing_tiers = JSON.parse(

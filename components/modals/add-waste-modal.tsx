@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Trash2 } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -68,7 +67,6 @@ export function AddWasteModal({
     },
   ]);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
   const { user } = useAuth();
 
@@ -80,13 +78,10 @@ export function AddWasteModal({
 
   const fetchInventoryItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from("inventory_items")
-        .select("*")
-        .order("name");
-
-      if (error) throw error;
-      setInventoryItems((data as unknown as InventoryItem[]) || []);
+      const response = await fetch("/api/inventory?all=true");
+      if (!response.ok) throw new Error("Failed to fetch inventory items");
+      const result = await response.json();
+      setInventoryItems((result.data as InventoryItem[]) || []);
     } catch (error) {
       console.error("Error fetching inventory items:", error);
     }
@@ -164,45 +159,23 @@ export function AddWasteModal({
         return;
       }
 
-      let reporterName = user?.id;
-      
-      // Create waste records and update stock
-      for (const item of validItems) {
-        // Create waste record
-        const { error: wasteError } = await supabase
-          .from("waste_tracking")
-          .insert([
-            {
-              item_id: item.item_id,
-              quantity: Number(item.quantity),
-              waste_reason: item.waste_reason,
-              waste_date: wasteDate,
-              reported_by: reporterName,
-            },
-          ]);
+      // Create waste records via API (handles stock updates)
+      const response = await fetch("/api/inventory/waste", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          waste_date: wasteDate,
+          items: validItems.map((item) => ({
+            item_id: item.item_id,
+            quantity: Number(item.quantity),
+            waste_reason: item.waste_reason,
+          })),
+        }),
+      });
 
-        if (wasteError) throw wasteError;
-
-        // Update inventory stock (reduce by waste amount)
-        const { data: currentItem } = await supabase
-          .from("inventory_items")
-          .select("current_stock")
-          .eq("id", item.item_id)
-          .single();
-
-        if (currentItem) {
-          const newStock = Math.max(
-            0,
-            (currentItem.current_stock as number) - Number(item.quantity)
-          );
-          await supabase
-            .from("inventory_items")
-            .update({
-              current_stock: newStock,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", item.item_id);
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to record waste items");
       }
 
       addNotification({

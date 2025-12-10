@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 
 interface EditUserModalProps {
@@ -58,16 +57,21 @@ export function EditUserModal({
     e.preventDefault();
     setLoading(true);
     try {
-      const supabase = getSupabaseClient();
-      const { error } = await supabase
-        .from("profiles")
-        .update({
+      const response = await fetch(`/api/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           full_name: form.full_name,
           email: form.email,
           role: form.role,
-        })
-        .eq("id", user.id);
-      if (error) throw error;
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update user");
+      }
+
       toast({
         title: "User Updated",
         description: "User details updated successfully.",

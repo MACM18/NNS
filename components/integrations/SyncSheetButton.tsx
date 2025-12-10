@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -96,15 +95,11 @@ export default function SyncSheetButton({
     setStatus("starting");
     setPopoverOpen(true);
     try {
-      const supabase = getSupabaseClient();
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data.session?.access_token ?? null;
-
       const res = await fetch(`/api/integrations/google-sheets/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ connectionId, accessToken }),
+        body: JSON.stringify({ connectionId }),
       });
       const json = await res.json();
       if (json?.ok && json.jobId) {

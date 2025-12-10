@@ -44,7 +44,6 @@ import {
   Calendar,
   SettingsIcon,
 } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useTheme } from "next-themes";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
@@ -108,8 +107,6 @@ export default function SettingsPage() {
     password_expiry: "90",
   });
 
-  const supabase = getSupabaseClient();
-
   useEffect(() => {
     if (profile) {
       setProfileData({
@@ -130,53 +127,55 @@ export default function SettingsPage() {
 
   const fetchCompanySettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from("company_settings")
-        .select("*")
-        .single();
-
-      if (data) {
-        setCompanyData({
-          company_name:
-            typeof data.company_name === "string" &&
-            data.company_name.trim() !== ""
-              ? data.company_name
-              : "NNS Enterprise",
-          address: typeof data.address === "string" ? data.address : "",
-          contact_numbers: Array.isArray(data.contact_numbers)
-            ? (data.contact_numbers as string[])
-            : [""],
-          website: typeof data.website === "string" ? data.website : "",
-          registered_number:
-            typeof data.registered_number === "string"
-              ? data.registered_number
-              : "",
-          pricing_tiers: Array.isArray(data.pricing_tiers)
-            ? data.pricing_tiers
-            : companyData.pricing_tiers,
-          bank_details:
-            data.bank_details &&
-            typeof data.bank_details === "object" &&
-            "bank_name" in data.bank_details &&
-            "account_title" in data.bank_details &&
-            "account_number" in data.bank_details &&
-            "branch_code" in data.bank_details &&
-            "iban" in data.bank_details
-              ? {
-                  bank_name: String((data.bank_details as any).bank_name ?? ""),
-                  account_title: String(
-                    (data.bank_details as any).account_title ?? ""
-                  ),
-                  account_number: String(
-                    (data.bank_details as any).account_number ?? ""
-                  ),
-                  branch_code: String(
-                    (data.bank_details as any).branch_code ?? ""
-                  ),
-                  iban: String((data.bank_details as any).iban ?? ""),
-                }
-              : companyData.bank_details,
-        });
+      const response = await fetch("/api/settings/company");
+      if (response.ok) {
+        const result = await response.json();
+        const data = result.data;
+        if (data) {
+          setCompanyData({
+            company_name:
+              typeof data.company_name === "string" &&
+              data.company_name.trim() !== ""
+                ? data.company_name
+                : "NNS Enterprise",
+            address: typeof data.address === "string" ? data.address : "",
+            contact_numbers: Array.isArray(data.contact_numbers)
+              ? (data.contact_numbers as string[])
+              : [""],
+            website: typeof data.website === "string" ? data.website : "",
+            registered_number:
+              typeof data.registered_number === "string"
+                ? data.registered_number
+                : "",
+            pricing_tiers: Array.isArray(data.pricing_tiers)
+              ? data.pricing_tiers
+              : companyData.pricing_tiers,
+            bank_details:
+              data.bank_details &&
+              typeof data.bank_details === "object" &&
+              "bank_name" in data.bank_details &&
+              "account_title" in data.bank_details &&
+              "account_number" in data.bank_details &&
+              "branch_code" in data.bank_details &&
+              "iban" in data.bank_details
+                ? {
+                    bank_name: String(
+                      (data.bank_details as any).bank_name ?? ""
+                    ),
+                    account_title: String(
+                      (data.bank_details as any).account_title ?? ""
+                    ),
+                    account_number: String(
+                      (data.bank_details as any).account_number ?? ""
+                    ),
+                    branch_code: String(
+                      (data.bank_details as any).branch_code ?? ""
+                    ),
+                    iban: String((data.bank_details as any).iban ?? ""),
+                  }
+                : companyData.bank_details,
+          });
+        }
       }
     } catch (error) {
       console.error("Error fetching company settings:", error);
@@ -206,19 +205,22 @@ export default function SettingsPage() {
       if (!user?.id) {
         throw new Error("User ID is not available.");
       }
-      const { error } = await supabase
-        .from("profiles")
-        .update({
+      const response = await fetch(`/api/profiles/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           full_name: profileData.full_name,
           phone: profileData.phone,
           address: profileData.address,
           bio: profileData.bio,
           avatar_url: profileData.avatar_url,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update profile");
+      }
 
       addNotification({
         title: "Profile Updated",
@@ -241,28 +243,15 @@ export default function SettingsPage() {
   const handleCompanyUpdate = async () => {
     setIsLoading(true);
     try {
-      const { data: existing } = await supabase
-        .from("company_settings")
-        .select("id")
-        .single();
+      const response = await fetch("/api/settings/company", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(companyData),
+      });
 
-      const settingsData = {
-        ...companyData,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (existing) {
-        const existingId = (existing as { id: number }).id;
-        const { error } = await supabase
-          .from("company_settings")
-          .update(settingsData)
-          .eq("id", existingId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("company_settings")
-          .insert([settingsData]);
-        if (error) throw error;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update company settings");
       }
 
       addNotification({

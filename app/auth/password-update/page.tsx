@@ -12,14 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "@/hooks/use-toast";
-import { getSupabaseClient } from "@/lib/supabase";
 import Link from "next/link";
 
 export default function PasswordUpdatePage() {
   const router = useRouter();
   const [codeParam, setCodeParam] = useState<string | null>(null);
-  const supabase = getSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -42,37 +39,8 @@ export default function PasswordUpdatePage() {
   }, [password]);
 
   useEffect(() => {
-    // On visiting via the magic link, Supabase will set session automatically.
-    // We can verify the type is recovery and enable the form.
-    const handle = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        // Try to exchange code if present. Read code from client-only state.
-        const code =
-          codeParam ||
-          (typeof window !== "undefined"
-            ? new URLSearchParams(window.location.search).get("code")
-            : null);
-        if (code) {
-          const { data: setData, error: setErr } =
-            await supabase.auth.exchangeCodeForSession(code);
-          if (setErr) {
-            toast({
-              title: "Invalid or expired link",
-              description: setErr.message,
-              variant: "destructive",
-            });
-          }
-        }
-      }
-      setLoading(false);
-    };
-    // populate code param on client side to avoid useSearchParams CSR bailout
-    if (typeof window !== "undefined") {
-      setCodeParam(new URLSearchParams(window.location.search).get("code"));
-    }
-    handle();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // No email-based reset supported via NextAuth here.
+    setLoading(false);
   }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -90,24 +58,8 @@ export default function PasswordUpdatePage() {
       toast({ title: "Passwords do not match", variant: "destructive" });
       return;
     }
-    setUpdating(true);
-    try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
-      toast({
-        title: "Password updated",
-        description: "You can now sign in with your new password.",
-      });
-      router.push("/login");
-    } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err.message,
-        variant: "destructive",
-      });
-    } finally {
-      setUpdating(false);
-    }
+    // Not implemented for NextAuth flow.
+    setUpdating(false);
   };
 
   return (
@@ -126,6 +78,11 @@ export default function PasswordUpdatePage() {
             </div>
           ) : (
             <form onSubmit={onSubmit} className='space-y-4'>
+              <div className='text-sm p-3 rounded border bg-muted/30'>
+                Password update via email link is not available. Please contact
+                your administrator or update your password in account settings
+                if supported.
+              </div>
               <div>
                 <Label htmlFor='password'>New Password</Label>
                 <div className='relative'>
@@ -172,8 +129,8 @@ export default function PasswordUpdatePage() {
                   required
                 />
               </div>
-              <Button type='submit' className='w-full' disabled={updating}>
-                {updating ? "Updating…" : "Update Password"}
+              <Button type='submit' className='w-full' disabled>
+                Disabled
               </Button>
               <div className='text-center'>
                 <Button asChild variant='link' className='text-sm'>

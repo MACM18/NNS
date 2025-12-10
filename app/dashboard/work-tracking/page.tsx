@@ -42,9 +42,14 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { Loader2, Plus, Users as UsersIcon, Trash2, UserPlus } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Users as UsersIcon,
+  Trash2,
+  UserPlus,
+} from "lucide-react";
 import { ManageWorkersModal } from "@/components/modals/manage-workers-modal";
 import { WorkTrackingHeader } from "@/components/work-tracking/work-tracking-header";
 
@@ -179,49 +184,6 @@ export default function WorkTrackingCalendarPage() {
 
   const isAdmin = normalizedRole === "admin";
 
-  const getAuthToken = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token || null;
-  };
-
-  const fetchWithAuth = async (
-    input: RequestInfo | URL,
-    init?: RequestInit
-  ) => {
-    let token = await getAuthToken();
-    let response = await fetch(input, {
-      ...init,
-      credentials: "include",
-      headers: (() => {
-        const headers = new Headers(init?.headers || {});
-        if (token) {
-          headers.set("Authorization", `Bearer ${token}`);
-        }
-        return headers;
-      })(),
-    });
-
-    if (response.status === 401) {
-      await supabase.auth.refreshSession();
-      token = await getAuthToken();
-      response = await fetch(input, {
-        ...init,
-        credentials: "include",
-        headers: (() => {
-          const headers = new Headers(init?.headers || {});
-          if (token) {
-            headers.set("Authorization", `Bearer ${token}`);
-          }
-          return headers;
-        })(),
-      });
-    }
-
-    return response;
-  };
-
   const handleUnauthorized = (status: number, message?: string) => {
     const description =
       message ||
@@ -249,7 +211,7 @@ export default function WorkTrackingCalendarPage() {
   const fetchData = async (month: number, year: number) => {
     setLoading(true);
     try {
-      const res = await fetchWithAuth(
+      const res = await fetch(
         `/api/work-assignments?month=${month}&year=${year}`
       );
       const json = await res.json().catch(() => ({}));
@@ -291,7 +253,7 @@ export default function WorkTrackingCalendarPage() {
 
     try {
       setAssignLoading(true);
-      const res = await fetchWithAuth("/api/work-assignments", {
+      const res = await fetch("/api/work-assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -324,7 +286,7 @@ export default function WorkTrackingCalendarPage() {
 
   const handleRemove = async (assignmentId: string) => {
     try {
-      const res = await fetchWithAuth("/api/work-assignments", {
+      const res = await fetch("/api/work-assignments", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assignmentId }),

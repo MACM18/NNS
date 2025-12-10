@@ -25,7 +25,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 
@@ -57,7 +56,6 @@ export function LineDetailsTable({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   useEffect(() => {
@@ -67,40 +65,22 @@ export function LineDetailsTable({
   const fetchData = async () => {
     setLoading(true);
     try {
-      let query = supabase.from("line_details").select("*");
+      const params = new URLSearchParams({
+        dateFilter,
+        sortField,
+        sortDirection,
+      });
 
-      // Apply date filter
-      const now = new Date();
-      let startDate: Date;
+      const response = await fetch(`/api/lines?${params}`);
 
-      switch (dateFilter) {
-        case "today":
-          startDate = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate()
-          );
-          break;
-        case "week":
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          break;
-        case "month":
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-          break;
-        default:
-          startDate = new Date(0);
+      if (!response.ok) {
+        throw new Error("Failed to fetch line details");
       }
 
-      query = query.gte("date", startDate.toISOString());
-
-      // Apply sorting
-      query = query.order(sortField, { ascending: sortDirection === "asc" });
-
-      const { data: lineDetails, error } = await query;
-
-      if (error) throw error;
-
-      setData((lineDetails ?? []).map((item) => item as unknown as LineDetail));
+      const { data: lineDetails } = await response.json();
+      setData(
+        (lineDetails ?? []).map((item: any) => item as unknown as LineDetail)
+      );
     } catch (error: any) {
       addNotification({
         title: "Error",

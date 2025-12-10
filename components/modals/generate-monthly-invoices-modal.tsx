@@ -29,7 +29,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FileText, Download, Eye, Calendar } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 
 interface GenerateMonthlyInvoicesModalProps {
@@ -70,7 +69,6 @@ export function GenerateMonthlyInvoicesModal({
   const [invoicePreviews, setInvoicePreviews] = useState<InvoicePreview[]>([]);
   const [companySettings, setCompanySettings] = useState<any>(null);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   const months = [
@@ -110,14 +108,14 @@ export function GenerateMonthlyInvoicesModal({
 
   const fetchCompanySettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from("company_settings")
-        .select("*")
-        .single();
+      const response = await fetch("/api/settings/company");
 
-      if (error && error.code !== "PGRST116") {
-        throw error;
+      if (!response.ok) {
+        throw new Error("Failed to fetch company settings");
       }
+
+      const { data } = await response.json();
+
       let parsedData = data;
       if (parsedData && typeof parsedData.pricing_tiers === "string") {
         try {
@@ -135,27 +133,15 @@ export function GenerateMonthlyInvoicesModal({
   const fetchLineDetails = async () => {
     setLoading(true);
     try {
-      const startDate = `${selectedYear}-${selectedMonth}-01`;
-      const lastDay = new Date(
-        Number(selectedYear),
-        Number(selectedMonth),
-        0
-      ).getDate();
-      const endDate = `${selectedYear}-${selectedMonth}-${lastDay
-        .toString()
-        .padStart(2, "0")}`;
+      const response = await fetch(
+        `/api/lines/for-invoice?month=${selectedMonth}&year=${selectedYear}`
+      );
 
-      const { data, error } = await supabase
-        .from("line_details")
-        .select("id, name, phone_number, total_cable, date, address")
-        .gte("date", startDate)
-        .lte("date", endDate)
-        .not("telephone_no", "is", null)
-        .not("total_cable", "is", null)
-        .gt("total_cable", -1)
-        .order("date");
+      if (!response.ok) {
+        throw new Error("Failed to fetch line details");
+      }
 
-      if (error) throw error;
+      const { data } = await response.json();
 
       setLineDetails((data as unknown as LineDetail[]) || []);
       generateInvoicePreviews((data as unknown as LineDetail[]) || []);
@@ -258,34 +244,32 @@ export function GenerateMonthlyInvoicesModal({
         months.find((m) => m.value === selectedMonth)?.label
       } ${selectedYear}`;
 
-      // Delete any existing invoices for this month/year/type before inserting new ones
-      for (const preview of invoicePreviews) {
-        // Remove existing invoice if present
-        await supabase
-          .from("generated_invoices")
-          .delete()
-          .eq("invoice_number", preview.invoiceNumber)
-          .eq("month", Number.parseInt(selectedMonth))
-          .eq("year", Number.parseInt(selectedYear));
+      // Prepare invoice data for batch generation
+      const invoicesData = invoicePreviews.map((preview) => ({
+        invoice_number: preview.invoiceNumber,
+        invoice_type: preview.type,
+        job_month: jobMonth,
+        invoice_date: invoiceDate,
+        total_amount: preview.totalAmount,
+        line_count: preview.lines.length,
+        line_details_ids: preview.lines.map((line) => line.id),
+        status: "generated",
+      }));
 
-        // Create generated invoice record
-        const invoiceData = {
-          invoice_number: preview.invoiceNumber,
-          invoice_type: preview.type,
-          month: Number.parseInt(selectedMonth),
-          year: Number.parseInt(selectedYear),
-          job_month: jobMonth,
-          invoice_date: invoiceDate,
-          total_amount: preview.totalAmount,
-          line_count: preview.lines.length,
-          line_details_ids: preview.lines.map((line) => line.id),
-          status: "generated",
-        };
+      // Generate all invoices via API
+      const response = await fetch("/api/invoices/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoices: invoicesData,
+          month: selectedMonth,
+          year: selectedYear,
+        }),
+      });
 
-        const { error } = await supabase
-          .from("generated_invoices")
-          .insert([invoiceData]);
-        if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate invoices");
       }
 
       addNotification({

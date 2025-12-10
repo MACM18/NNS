@@ -11,37 +11,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "@/hooks/use-toast";
-import { getSupabaseClient } from "@/lib/supabase";
 import Link from "next/link";
 
 export default function ForgotPasswordPage() {
-  const supabase = getSupabaseClient();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // NextAuth-managed accounts do not support email resets here.
+    // Direct users to contact an admin or use account settings.
     setLoading(true);
-    try {
-      const redirectTo = `${window.location.origin}/auth/password-update`;
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo,
-      });
-      if (error) throw error;
-      toast({
-        title: "Reset link sent",
-        description: "Check your email for the password reset link.",
-      });
-    } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+    setTimeout(() => setLoading(false), 600);
   };
 
   return (
@@ -65,8 +46,12 @@ export default function ForgotPasswordPage() {
                 required
               />
             </div>
-            <Button type='submit' className='w-full' disabled={loading}>
-              {loading ? "Sending..." : "Send reset link"}
+            <div className='text-sm p-3 rounded border bg-muted/30'>
+              Password reset by email isn’t available. Please contact your
+              administrator to reset your password.
+            </div>
+            <Button type='submit' className='w-full' disabled>
+              Disabled
             </Button>
             <div className='text-center'>
               <Button asChild variant='link' className='text-sm'>

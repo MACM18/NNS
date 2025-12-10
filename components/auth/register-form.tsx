@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { toast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
@@ -40,7 +39,6 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   const handleInputChange = (field: string, value: string) => {
@@ -99,79 +97,47 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     setLoading(true);
 
     try {
-      // Check if email is already registered (in profiles)
-      const { data: existingProfile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("email", formData.email)
-        .single();
-      if (existingProfile) {
-        toast({
-          title: "Email Already Registered",
-          description:
-            "This email is already registered and approved. Please sign in or use a different email.",
-          variant: "destructive",
-          duration: 4000,
-        });
-        setLoading(false);
-        return;
-      }
-      // Check if email is pending approval (in auth, but not in profiles)
-      const { data: authUsers } = await supabase.auth.admin.listUsers();
-      const pendingUser = (authUsers?.users || []).find(
-        (u) => u.email === formData.email && u.email_confirmed_at
-      );
-      if (pendingUser) {
-        toast({
-          title: "Pending Approval",
-          description:
-            "This email is registered and pending admin approval. Please wait for approval or contact support.",
-          variant: "destructive",
-          duration: 4000,
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Create user with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.fullName,
-            role: "user",
-          },
+      // Call the registration API endpoint
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          name: formData.fullName,
+        }),
       });
 
-      if (authError) throw authError;
+      const data = await response.json();
 
-      if (authData.user) {
-        // Do not create profile here. Profile will be created after admin approval.
-        toast({
-          title: "Registration Successful",
-          description: "Please check your email to verify your account",
-          variant: "default",
-          duration: 4000,
-        });
-
-        // Reset form
-        setFormData({
-          fullName: "",
-          email: "",
-          password: "",
-          confirmPassword: "",
-          role: "",
-        });
-
-        // Switch to login after a delay
-        setTimeout(() => {
-          if (onSwitchToLogin) {
-            onSwitchToLogin();
-          }
-        }, 2000);
+      if (!response.ok) {
+        throw new Error(data.error || "Registration failed");
       }
+
+      toast({
+        title: "Registration Successful",
+        description: "Your account has been created. You can now sign in.",
+        variant: "default",
+        duration: 4000,
+      });
+
+      // Reset form
+      setFormData({
+        fullName: "",
+        email: "",
+        password: "",
+        confirmPassword: "",
+        role: "",
+      });
+
+      // Switch to login after a delay
+      setTimeout(() => {
+        if (onSwitchToLogin) {
+          onSwitchToLogin();
+        }
+      }, 2000);
     } catch (error: any) {
       toast({
         title: "Registration Failed",

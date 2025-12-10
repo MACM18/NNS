@@ -18,7 +18,6 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Pencil, Trash2, Plus } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 
 interface InventoryItem {
@@ -49,7 +48,6 @@ export function ManageInventoryItemsModal({
   });
   const [page, setPage] = useState(1);
   const [pageSize] = useState(5);
-  const supabase = getSupabaseClient();
 
   const totalPages = Math.ceil(items.length / pageSize);
   const paginatedItems = items.slice((page - 1) * pageSize, page * pageSize);
@@ -60,18 +58,17 @@ export function ManageInventoryItemsModal({
 
   const fetchItems = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("inventory_items")
-      .select("id, name, unit, reorder_level")
-      .order("name");
-    if (error) {
+    try {
+      const response = await fetch("/api/inventory?all=true");
+      if (!response.ok) throw new Error("Failed to fetch items");
+      const result = await response.json();
+      setItems((result.data as InventoryItem[]) || []);
+    } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      setItems((data as InventoryItem[]) || []);
     }
     setLoading(false);
   };
@@ -89,20 +86,22 @@ export function ManageInventoryItemsModal({
   const saveEdit = async () => {
     if (!editingItem) return;
     const { id, ...updateData } = editingItem;
-    const { error } = await supabase
-      .from("inventory_items")
-      .update(updateData)
-      .eq("id", id);
-    if (error) {
+    try {
+      const response = await fetch(`/api/inventory/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+      if (!response.ok) throw new Error("Failed to update item");
+      toast({ title: "Item Updated" });
+      setEditingItem(null);
+      fetchItems();
+    } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Item Updated" });
-      setEditingItem(null);
-      fetchItems();
     }
   };
 
@@ -115,34 +114,39 @@ export function ManageInventoryItemsModal({
       });
       return;
     }
-    const { error } = await supabase.from("inventory_items").insert([newItem]);
-    if (error) {
+    try {
+      const response = await fetch("/api/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newItem),
+      });
+      if (!response.ok) throw new Error("Failed to create item");
+      toast({ title: "Item Added" });
+      setNewItem({ name: "", unit: "", reorder_level: 0 });
+      fetchItems();
+    } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Item Added" });
-      setNewItem({ name: "", unit: "", reorder_level: 0 });
-      fetchItems();
     }
   };
 
   const handleDelete = async (item: InventoryItem) => {
-    const { error } = await supabase
-      .from("inventory_items")
-      .delete()
-      .eq("id", item.id);
-    if (error) {
+    try {
+      const response = await fetch(`/api/inventory/${item.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete item");
+      toast({ title: "Item Deleted" });
+      fetchItems();
+    } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Item Deleted" });
-      fetchItems();
     }
   };
 

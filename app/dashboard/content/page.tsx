@@ -40,7 +40,6 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { AddPostModal } from "@/components/modals/add-post-modal";
 import { AddBlogModal } from "@/components/modals/add-blog-modal";
-import { supabase } from "@/lib/supabase";
 import type { Post, Blog } from "@/types/content";
 
 export default function ContentPage() {
@@ -69,22 +68,18 @@ export default function ContentPage() {
       setLoading(true);
 
       // Fetch posts
-      const { data: postsData, error: postsError } = await supabase
-        .from("posts")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (postsError) throw postsError;
-      setPosts(postsData || []);
+      const postsResponse = await fetch("/api/posts");
+      if (postsResponse.ok) {
+        const postsResult = await postsResponse.json();
+        setPosts(postsResult.data || []);
+      }
 
       // Fetch blogs
-      const { data: blogsData, error: blogsError } = await supabase
-        .from("blogs")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (blogsError) throw blogsError;
-      setBlogs(blogsData || []);
+      const blogsResponse = await fetch("/api/blogs");
+      if (blogsResponse.ok) {
+        const blogsResult = await blogsResponse.json();
+        setBlogs(blogsResult.data || []);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({
@@ -104,14 +99,15 @@ export default function ContentPage() {
   ) => {
     try {
       const newStatus = currentStatus === "active" ? "disabled" : "active";
-      const table = type === "post" ? "posts" : "blogs";
+      const endpoint = type === "post" ? "/api/posts" : "/api/blogs";
 
-      const { error } = await supabase
-        .from(table)
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq("id", id);
+      const response = await fetch(`${endpoint}/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error("Failed to update status");
 
       // Update local state
       if (type === "post") {
@@ -150,14 +146,13 @@ export default function ContentPage() {
     if (!deleteItem) return;
 
     try {
-      const table = deleteItem.type === "post" ? "posts" : "blogs";
+      const endpoint = deleteItem.type === "post" ? "/api/posts" : "/api/blogs";
 
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq("id", deleteItem.id);
+      const response = await fetch(`${endpoint}/${deleteItem.id}`, {
+        method: "DELETE",
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error("Failed to delete");
 
       // Update local state
       if (deleteItem.type === "post") {

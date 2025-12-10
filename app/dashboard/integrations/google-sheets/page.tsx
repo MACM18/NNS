@@ -1,4 +1,5 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
+export const dynamic = "force-dynamic";
 import {
   Card,
   CardContent,
@@ -49,26 +50,30 @@ const MONTHS = [
 ];
 
 async function fetchConnections(page = 1, pageSize = 10) {
-  const supabase = supabaseServer;
+  const skip = (page - 1) * pageSize;
 
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+  const [rows, total] = await Promise.all([
+    prisma.googleSheetConnection.findMany({
+      orderBy: { created_at: "desc" },
+      skip,
+      take: pageSize,
+      select: {
+        id: true,
+        month: true,
+        year: true,
+        sheet_url: true,
+        sheet_name: true,
+        sheet_tab: true,
+        last_synced: true,
+        status: true,
+        record_count: true,
+        created_at: true,
+      },
+    }),
+    prisma.googleSheetConnection.count(),
+  ]);
 
-  const { data, error, count } = await supabase
-    .from("google_sheet_connections")
-    .select(
-      `id, month, year, sheet_url, sheet_name, sheet_tab, last_synced, status, record_count, created_at`,
-      { count: "exact" }
-    )
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  if (error) {
-    console.error("Error fetching sheet connections:", error.message);
-    return { rows: [] as SheetConnectionRow[], total: 0 };
-  }
-
-  return { rows: (data as SheetConnectionRow[]) || [], total: count ?? 0 };
+  return { rows: rows as unknown as SheetConnectionRow[], total };
 }
 
 function formatDate(dateString: string | null | undefined) {

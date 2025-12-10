@@ -36,7 +36,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -156,7 +155,6 @@ export function LineDetailsTable({
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [completeLoading, setCompleteLoading] = useState(false);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
   const { role } = useAuth();
 
@@ -197,78 +195,16 @@ export function LineDetailsTable({
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Get start and end dates for the selected month
-      const startDate = new Date(selectedYear, selectedMonth - 1, 1);
-      const endDate = new Date(selectedYear, selectedMonth, 0);
+      const response = await fetch(
+        `/api/lines/enhanced?month=${selectedMonth}&year=${selectedYear}`
+      );
 
-      // Fetch line details with assignees (left join line_assignees and profiles)
-      const { data: lines, error } = await supabase
-        .from("line_details")
-        .select(
-          `*,
-          line_assignees(user_id, profiles(id, full_name, role))
-        `
-        )
-        .gte("date", startDate.toISOString().split("T")[0])
-        .lte("date", endDate.toISOString().split("T")[0]);
+      if (!response.ok) {
+        throw new Error("Failed to fetch line details");
+      }
 
-      if (error) throw error;
-
-      // Map assignees for each line
-      const processedLines = (lines ?? []).map((line: any) => {
-        // Extract assignees from joined data
-        const assignees = (line.line_assignees || [])
-          .map((a: any) => a.profiles)
-          .filter(Boolean);
-        let normalizedStatus = line.status;
-        if (line.completed === true || line.status === "completed") {
-          normalizedStatus = "completed";
-        } else if (line.status === "in_progress") {
-          normalizedStatus = "in_progress";
-        } else if (!line.status || line.status === "pending") {
-          normalizedStatus = "pending";
-        }
-        return {
-          ...line,
-          status: normalizedStatus,
-          assignees,
-          // default 0s for any nullable material columns
-          total_cable: line.total_cable || 0,
-          top_bolt: line.top_bolt || 0,
-          internal_wire: line.internal_wire || 0,
-          casing: line.casing || 0,
-          c_tie: line.c_tie || 0,
-          c_clip: line.c_clip || 0,
-          conduit: line.conduit || 0,
-          tag_tie: line.tag_tie || 0,
-          flexible: line.flexible || 0,
-          cat5: line.cat5 || 0,
-          pole_67: line.pole_67 || 0,
-          pole: line.pole || 0,
-          c_hook: line.c_hook ?? 0,
-          l_hook: line.l_hook || 0,
-          retainers: line.retainers || 0,
-          nut_bolt: line.nut_bolt || 0,
-          u_clip: line.u_clip || 0,
-          concrete_nail: line.concrete_nail || 0,
-          roll_plug: line.roll_plug || 0,
-          screw_nail: line.screw_nail || 0,
-          socket: line.socket || 0,
-          bend: line.bend || 0,
-          rj11: line.rj11 || 0,
-          rj12: line.rj12 || 0,
-          rj45: line.rj45 || 0,
-          fiber_rosette: line.fiber_rosette || 0,
-          s_rosette: line.s_rosette || 0,
-          fac: line.fac || 0,
-          drum_number: line.drum_number || "",
-          ont_serial: line.ont_serial || "",
-          voice_test_no: line.voice_test_no || "",
-          stb_serial: line.stb_serial || "",
-        };
-      }) as LineDetail[];
-
-      setData(processedLines);
+      const result = await response.json();
+      setData(result.data || []);
     } catch (error: any) {
       console.error("Fetch error:", error);
       addNotification({
@@ -568,14 +504,20 @@ export function LineDetailsTable({
     if (!completingLineId) return;
     setCompleteLoading(true);
     try {
-      const { error } = await supabase
-        .from("line_details")
-        .update({
+      const response = await fetch(`/api/lines/${completingLineId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           completed_date: new Date().toISOString(),
           status: "completed",
-        })
-        .eq("id", completingLineId);
-      if (error) throw error;
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to complete line");
+      }
+
       addNotification({
         title: "Success",
         message: "Line marked as completed.",
@@ -606,32 +548,15 @@ export function LineDetailsTable({
     if (!selectedLine) return;
     setDeleteLoading(true);
     try {
-      // Remove dependent drum usage records that reference this line first
-      const { error: drumError } = await supabase
-        .from("drum_usage")
-        .delete()
-        .eq("line_details_id", selectedLine.id);
-      if (drumError) throw drumError;
+      const response = await fetch(`/api/lines/${selectedLine.id}`, {
+        method: "DELETE",
+      });
 
-      // Remove any line assignees that reference this line
-      const { error: assigneeError } = await supabase
-        .from("line_assignees")
-        .delete()
-        .eq("line_id", selectedLine.id);
-      if (assigneeError) throw assigneeError;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete line");
+      }
 
-      // Null out any tasks that reference this line to avoid FK violations
-      const { error: taskUpdateError } = await supabase
-        .from("tasks")
-        .update({ line_details_id: null })
-        .eq("line_details_id", selectedLine.id);
-      if (taskUpdateError) throw taskUpdateError;
-
-      const { error } = await supabase
-        .from("line_details")
-        .delete()
-        .eq("id", selectedLine.id);
-      if (error) throw error;
       addNotification({
         title: "Deleted",
         message: "Line deleted successfully.",
@@ -829,11 +754,29 @@ export function LineDetailsTable({
                               l.id === line.id ? { ...l, status: newStatus } : l
                             )
                           );
-                          const { error } = await supabase
-                            .from("line_details")
-                            .update({ status: newStatus })
-                            .eq("id", line.id);
-                          if (error) {
+                          try {
+                            const response = await fetch(
+                              `/api/lines/${line.id}`,
+                              {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ status: newStatus }),
+                              }
+                            );
+                            if (!response.ok) {
+                              const error = await response.json();
+                              throw new Error(
+                                error.error || "Failed to update status"
+                              );
+                            }
+                            addNotification({
+                              title: "Success",
+                              message: `Status updated to ${newStatus}.`,
+                              type: "success",
+                              category: "system",
+                            });
+                            onRefresh();
+                          } catch (error: any) {
                             addNotification({
                               title: "Error",
                               message: error.message,
@@ -847,14 +790,6 @@ export function LineDetailsTable({
                                   : l
                               )
                             );
-                          } else {
-                            addNotification({
-                              title: "Success",
-                              message: `Status updated to ${newStatus}.`,
-                              type: "success",
-                              category: "system",
-                            });
-                            onRefresh();
                           }
                           setStatusLoadingId(null);
                         }}

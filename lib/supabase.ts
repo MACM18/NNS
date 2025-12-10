@@ -1,16 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
+// Supabase client removed during migration to NextAuth + Prisma.
+// This stub remains only to avoid breaking imports in docs/backups.
+// Do not use in application code.
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+export const supabase = undefined as never;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Client-side Supabase client (singleton pattern)
-let supabaseClient: ReturnType<typeof createClient> | null = null;
-
-export function getSupabaseClient() {
-  if (!supabaseClient) {
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-  }
-  return supabaseClient;
+export function getSupabaseClient(): never {
+  throw new Error("Supabase client is no longer available in this project.");
 }

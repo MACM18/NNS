@@ -52,9 +52,9 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { 
+      {
         message: "User created successfully",
-        user: { id: user.id, email: user.email }
+        user: { id: user.id, email: user.email },
       },
       { status: 201 }
     );

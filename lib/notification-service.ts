@@ -1,9 +1,16 @@
-import { getSupabaseClient } from "@/lib/supabase"
+// NotificationService - Server-side notification creation utilities
+// For client-side use, call /api/notifications POST endpoint directly
 
 export class NotificationService {
-  private static supabase = getSupabaseClient()
-
-  static async createLineAddedNotification(phoneNumber: string, customerName: string) {
+  /**
+   * Creates a notification via the API
+   * Note: This should only be called from server-side code (API routes)
+   * For client-side, use fetch('/api/notifications', { method: 'POST', ... })
+   */
+  static async createLineAddedNotification(
+    phoneNumber: string,
+    customerName: string
+  ) {
     return this.createNotification({
       title: "New Line Added",
       message: `Line ${phoneNumber} for ${customerName} has been successfully added`,
@@ -11,10 +18,13 @@ export class NotificationService {
       category: "line_added",
       action_url: "/lines",
       metadata: { phoneNumber, customerName },
-    })
+    });
   }
 
-  static async createTaskCompletedNotification(taskId: string, phoneNumber: string) {
+  static async createTaskCompletedNotification(
+    taskId: string,
+    phoneNumber: string
+  ) {
     return this.createNotification({
       title: "Task Completed",
       message: `Installation task for ${phoneNumber} has been completed`,
@@ -22,10 +32,13 @@ export class NotificationService {
       category: "task_completed",
       action_url: "/tasks",
       metadata: { taskId, phoneNumber },
-    })
+    });
   }
 
-  static async createInvoiceGeneratedNotification(invoiceNumber: string, amount: number) {
+  static async createInvoiceGeneratedNotification(
+    invoiceNumber: string,
+    amount: number
+  ) {
     return this.createNotification({
       title: "Invoice Generated",
       message: `Invoice ${invoiceNumber} for LKR ${amount.toLocaleString()} has been generated`,
@@ -33,10 +46,13 @@ export class NotificationService {
       category: "invoice_generated",
       action_url: "/invoices",
       metadata: { invoiceNumber, amount },
-    })
+    });
   }
 
-  static async createReportReadyNotification(reportType: string, month: string) {
+  static async createReportReadyNotification(
+    reportType: string,
+    month: string
+  ) {
     return this.createNotification({
       title: "Report Ready",
       message: `${reportType} report for ${month} is ready for download`,
@@ -44,10 +60,13 @@ export class NotificationService {
       category: "report_ready",
       action_url: "/reports",
       metadata: { reportType, month },
-    })
+    });
   }
 
-  static async createInventoryLowNotification(itemName: string, currentStock: number) {
+  static async createInventoryLowNotification(
+    itemName: string,
+    currentStock: number
+  ) {
     return this.createNotification({
       title: "Low Inventory Alert",
       message: `${itemName} is running low (${currentStock} remaining)`,
@@ -55,41 +74,53 @@ export class NotificationService {
       category: "inventory_low",
       action_url: "/inventory",
       metadata: { itemName, currentStock },
-    })
+    });
   }
 
-  static async createSystemNotification(title: string, message: string, type: "info" | "warning" | "error" = "info") {
+  static async createSystemNotification(
+    title: string,
+    message: string,
+    type: "info" | "warning" | "error" = "info"
+  ) {
     return this.createNotification({
       title,
       message,
       type,
       category: "system",
       action_url: "/dashboard",
-    })
+    });
   }
 
-  private static async createNotification(notification: any) {
+  /**
+   * Creates a notification via API call
+   * This method is designed to be called from client-side code
+   */
+  private static async createNotification(notification: {
+    title: string;
+    message: string;
+    type: "success" | "info" | "warning" | "error";
+    category: string;
+    action_url?: string;
+    metadata?: Record<string, any>;
+  }) {
     try {
-      // Get current user (you might need to adjust this based on your auth setup)
-      const {
-        data: { user },
-      } = await this.supabase.auth.getUser()
-      if (!user) return
-
-      const { data, error } = await this.supabase
-        .from("notifications")
-        .insert({
+      const response = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           ...notification,
-          user_id: user.id,
           is_read: false,
-        })
-        .select()
-        .single()
+        }),
+      });
 
-      if (error) throw error
-      return data
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create notification");
+      }
+
+      return await response.json();
     } catch (error) {
-      console.error("Error creating notification:", error)
+      console.error("Error creating notification:", error);
     }
   }
 }

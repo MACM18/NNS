@@ -7,7 +7,6 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
 import type {
@@ -23,7 +22,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
-  const supabase = getSupabaseClient();
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -32,15 +30,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setNotifications((data as unknown as Notification[]) || []);
+      const response = await fetch("/api/notifications");
+      if (!response.ok) throw new Error("Failed to fetch notifications");
+      const result = await response.json();
+      setNotifications(result.data || []);
     } catch (error) {
       console.error("Error fetching notifications:", error);
     } finally {
@@ -57,19 +50,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from("notifications")
-        .insert({
-          ...notification,
-          user_id: user.id,
-          is_read: false,
-        })
-        .select()
-        .single();
+      const response = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(notification),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error("Failed to create notification");
+      const result = await response.json();
+      const data = result.data;
 
-      setNotifications((prev) => [data as unknown as Notification, ...prev]);
+      setNotifications((prev) => [data as Notification, ...prev]);
 
       // Show toast for immediate feedback
       toast(notification.title, {
@@ -88,12 +79,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const markAsRead = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ is_read: true, updated_at: new Date().toISOString() })
-        .eq("id", id);
+      const response = await fetch(`/api/notifications/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_read: true }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error("Failed to mark notification as read");
 
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
@@ -107,13 +99,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ is_read: true, updated_at: new Date().toISOString() })
-        .eq("user_id", user.id)
-        .eq("is_read", false);
+      const response = await fetch("/api/notifications?action=markAllRead", {
+        method: "PUT",
+      });
 
-      if (error) throw error;
+      if (!response.ok)
+        throw new Error("Failed to mark all notifications as read");
 
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     } catch (error) {
@@ -123,12 +114,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const deleteNotification = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .delete()
-        .eq("id", id);
+      const response = await fetch(`/api/notifications/${id}`, {
+        method: "DELETE",
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error("Failed to delete notification");
 
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch (error) {
@@ -143,40 +133,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // Set up real-time subscription
+  // Poll for new notifications every 30 seconds (replacement for real-time subscription)
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
-      .channel("notifications")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            setNotifications((prev) => [payload.new as Notification, ...prev]);
-          } else if (payload.eventType === "UPDATE") {
-            setNotifications((prev) =>
-              prev.map((n) =>
-                n.id === payload.new.id ? (payload.new as Notification) : n
-              )
-            );
-          } else if (payload.eventType === "DELETE") {
-            setNotifications((prev) =>
-              prev.filter((n) => n.id !== payload.old.id)
-            );
-          }
-        }
-      )
-      .subscribe();
+    const pollInterval = setInterval(() => {
+      fetchNotifications();
+    }, 30000); // 30 seconds
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [user]);
 

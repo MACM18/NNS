@@ -2,6 +2,7 @@ import type React from "react";
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AuthSessionProvider } from "@/components/auth/session-provider";
 import { AuthProvider } from "@/contexts/auth-context";
 import { NotificationProvider } from "@/contexts/notification-context";
 import { DataCacheProvider } from "@/contexts/data-cache-context";
@@ -19,16 +20,6 @@ export const metadata: Metadata = {
   applicationName: "NNS Telecom Dashboard",
   generator: "v0.dev",
   manifest: "/manifest.webmanifest",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-  },
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#020617" },
-  ],
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -43,6 +34,17 @@ export const metadata: Metadata = {
       { url: "/placeholder-logo.png", type: "image/png", sizes: "192x192" },
     ],
   },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  ],
 };
 
 export default function RootLayout({
@@ -60,15 +62,17 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AuthProvider>
-            <NotificationProvider>
-              <DataCacheProvider>
-                {children}
-                <Toaster />
-                <PWAInitializer />
-              </DataCacheProvider>
-            </NotificationProvider>
-          </AuthProvider>
+          <AuthSessionProvider>
+            <AuthProvider>
+              <NotificationProvider>
+                <DataCacheProvider>
+                  {children}
+                  <Toaster />
+                  <PWAInitializer />
+                </DataCacheProvider>
+              </NotificationProvider>
+            </AuthProvider>
+          </AuthSessionProvider>
         </ThemeProvider>
       </body>
     </html>

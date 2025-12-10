@@ -90,13 +90,13 @@ export const authConfig: NextAuthConfig = {
         token.role = profile?.role || "user";
         token.fullName = profile?.fullName || user.name;
       }
-      
+
       // Handle session updates (e.g., when role changes)
       if (trigger === "update" && session) {
         token.role = session.role || token.role;
         token.fullName = session.fullName || token.fullName;
       }
-      
+
       return token;
     },
     async session({ session, token }) {
@@ -115,7 +115,7 @@ export const authConfig: NextAuthConfig = {
         const existingProfile = await prisma.profile.findUnique({
           where: { userId: user.id },
         });
-        
+
         if (!existingProfile) {
           await prisma.profile.create({
             data: {

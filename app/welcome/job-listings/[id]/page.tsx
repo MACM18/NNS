@@ -1,4 +1,4 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 import { PublicLayout } from "@/components/layout/public-layout";
 import {
   Card,
@@ -24,20 +24,33 @@ interface JobVacancy {
 }
 
 async function fetchJobVacancy(id: string): Promise<JobVacancy | null> {
-  const supabase = supabaseServer;
-  const { data, error } = await supabase
-    .from("job_vacancies")
-    .select(
-      "id, title, description, location, employment_type, salary_range, created_at, end_date"
-    )
-    .eq("id", id)
-    .single();
-
-  if (error) {
-    console.error("Error fetching job vacancy:", error.message);
-    return null;
-  }
-  return data as JobVacancy;
+  const row = await prisma.jobVacancy.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      location: true,
+      employmentType: true,
+      salaryRange: true,
+      createdAt: true,
+      endDate: true,
+    },
+  });
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    location: row.location,
+    employment_type: (row as any).employmentType,
+    salary_range: (row as any).salaryRange,
+    created_at:
+      (row.createdAt as Date).toISOString?.() || (row as any).createdAt,
+    end_date:
+      (row.endDate as Date | null)?.toISOString?.() ||
+      ((row as any).endDate ?? null),
+  } as JobVacancy;
 }
 
 export default async function JobDetailsPage({ params }: any) {

@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-
-import { supabaseServer } from "@/lib/supabase-server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 const ALLOWED_ROLES = ["admin"];
 
@@ -21,77 +19,40 @@ type AuthorizedContext = {
   role: string;
 };
 
-async function authorize(
-  req?: NextRequest
-): Promise<AuthorizedContext | Response> {
-  const cookieStore = await cookies();
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set(name, value, options);
-        },
-        remove(name: string, options: any) {
-          cookieStore.set(name, "", { ...(options || {}), maxAge: 0 });
-        },
-      },
-    }
-  );
-
-  const authHeader = req?.headers.get("authorization");
-  const bearer = authHeader?.startsWith("Bearer ")
-    ? authHeader.split(" ")[1]
-    : undefined;
-
-  const { data: userRes } = bearer
-    ? await authClient.auth.getUser(bearer)
-    : await authClient.auth.getUser();
-  const user = userRes?.user;
-  if (!user) {
+async function authorize(): Promise<AuthorizedContext | Response> {
+  const session = await auth();
+  if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
     });
   }
 
-  const { data: profile, error: profileErr } = await supabaseServer
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profileErr) {
-    return new Response(JSON.stringify({ error: "Profile lookup failed" }), {
-      status: 403,
-    });
-  }
+  // Look up role from profiles via Prisma
+  const profile = await prisma.profile.findUnique({
+    where: { userId: session.user.id },
+    select: { role: true },
+  });
 
   const role = (profile?.role || "").toLowerCase();
   if (!ALLOWED_ROLES.includes(role)) {
-    return new Response(JSON.stringify({ error: "Forbidden - Admin access required" }), {
-      status: 403,
-    });
+    return new Response(
+      JSON.stringify({ error: "Forbidden - Admin access required" }),
+      { status: 403 }
+    );
   }
 
-  return { userId: user.id, role };
+  return { userId: session.user.id, role };
 }
 
 // GET /api/workers - List all workers
-export async function GET(req: NextRequest) {
-  const auth = await authorize(req);
+export async function GET() {
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
-    const { data: workers, error } = await supabaseServer
-      .from("workers")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
+    const workers = await prisma.worker.findMany({
+      orderBy: { created_at: "desc" },
+    });
 
     return new Response(JSON.stringify({ workers: workers || [] }), {
       status: 200,
@@ -108,7 +69,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/workers - Create a new worker
 export async function POST(req: NextRequest) {
-  const auth = await authorize(req);
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
@@ -117,15 +78,13 @@ export async function POST(req: NextRequest) {
       body || {};
 
     if (!full_name) {
-      return new Response(
-        JSON.stringify({ error: "Full name is required" }),
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ error: "Full name is required" }), {
+        status: 400,
+      });
     }
 
-    const { data, error } = await supabaseServer
-      .from("workers")
-      .insert({
+    const data = await prisma.worker.create({
+      data: {
         full_name,
         phone_number,
         email,
@@ -133,11 +92,8 @@ export async function POST(req: NextRequest) {
         notes,
         profile_id: profile_id || null,
         created_by: auth.userId,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
+      },
+    });
 
     return new Response(JSON.stringify({ worker: data }), { status: 201 });
   } catch (error: any) {
@@ -152,13 +108,21 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/workers - Update a worker
 export async function PATCH(req: NextRequest) {
-  const auth = await authorize(req);
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
     const body = await req.json();
-    const { id, full_name, phone_number, email, role, status, notes, profile_id } =
-      body || {};
+    const {
+      id,
+      full_name,
+      phone_number,
+      email,
+      role,
+      status,
+      notes,
+      profile_id,
+    } = body || {};
 
     if (!id) {
       return new Response(JSON.stringify({ error: "Worker ID is required" }), {
@@ -175,14 +139,10 @@ export async function PATCH(req: NextRequest) {
     if (notes !== undefined) updateData.notes = notes;
     if (profile_id !== undefined) updateData.profile_id = profile_id;
 
-    const { data, error } = await supabaseServer
-      .from("workers")
-      .update(updateData)
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) throw error;
+    const data = await prisma.worker.update({
+      where: { id },
+      data: updateData,
+    });
 
     return new Response(JSON.stringify({ worker: data }), { status: 200 });
   } catch (error: any) {
@@ -197,7 +157,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/workers - Delete a worker
 export async function DELETE(req: NextRequest) {
-  const auth = await authorize(req);
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
@@ -210,12 +170,7 @@ export async function DELETE(req: NextRequest) {
       });
     }
 
-    const { error } = await supabaseServer
-      .from("workers")
-      .delete()
-      .eq("id", id);
-
-    if (error) throw error;
+    await prisma.worker.delete({ where: { id } });
 
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   } catch (error: any) {

@@ -5,12 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { Icons } from "@/components/icons";
 import { toast } from "@/hooks/use-toast";
-import { getSupabaseClient } from "@/lib/supabase";
 
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = getSupabaseClient();
 
   useEffect(() => {
     const exchangeCode = async () => {
@@ -100,7 +98,7 @@ function AuthCallbackContent() {
     };
 
     void exchangeCode();
-  }, [router, searchParams, supabase]);
+  }, [router, searchParams]);
 
   return <LoadingState />;
 }

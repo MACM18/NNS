@@ -9,7 +9,7 @@ export async function GET(
   try {
     const session = await auth();
     const { id } = await params;
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -44,7 +44,7 @@ export async function PATCH(
   try {
     const session = await auth();
     const { id } = await params;
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

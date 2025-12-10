@@ -5,12 +5,13 @@ export default auth((req) => {
   const { nextUrl, auth: session } = req;
   const isLoggedIn = !!session?.user;
   const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
-  const isOnAuth = nextUrl.pathname.startsWith("/login") || 
-                   nextUrl.pathname.startsWith("/register") ||
-                   nextUrl.pathname.startsWith("/auth");
+  const isOnAuth =
+    nextUrl.pathname.startsWith("/login") ||
+    nextUrl.pathname.startsWith("/register") ||
+    nextUrl.pathname.startsWith("/auth");
   const isOnApi = nextUrl.pathname.startsWith("/api");
-  const isOnPublic = nextUrl.pathname === "/" || 
-                     nextUrl.pathname.startsWith("/welcome");
+  const isOnPublic =
+    nextUrl.pathname === "/" || nextUrl.pathname.startsWith("/welcome");
 
   // Allow public routes
   if (isOnPublic || isOnApi) {
@@ -25,7 +26,9 @@ export default auth((req) => {
   // Protect dashboard routes
   if (isOnDashboard && !isLoggedIn) {
     const callbackUrl = encodeURIComponent(nextUrl.pathname);
-    return NextResponse.redirect(new URL(`/login?callbackUrl=${callbackUrl}`, nextUrl));
+    return NextResponse.redirect(
+      new URL(`/login?callbackUrl=${callbackUrl}`, nextUrl)
+    );
   }
 
   return NextResponse.next();

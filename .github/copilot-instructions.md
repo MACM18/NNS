@@ -9,7 +9,7 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
 - **app/**: Next.js App Router pages (auth, inventory, invoices, tasks, reports, profile, welcome, etc.)
 - **components/**: Reusable UI (layout, modals, tables, shadcn/ui)
 - **contexts/**: React Context providers (auth, theme, notifications)
-- **lib/**: Utilities (Supabase client, AI suggestions, report services)
+- **lib/**: Utilities (Prisma client, AI suggestions, report services)
 - **hooks/**: Custom React hooks
 - **styles/**: Tailwind CSS config and global styles
 
@@ -17,7 +17,7 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
 
 - Next.js 15 (App Router), React 19, TypeScript
 - Tailwind CSS, Radix UI, shadcn/ui
-- Supabase (PostgreSQL, RLS, real-time)
+- PostgreSQL via Prisma ORM, NextAuth for authentication
 - React Context API for state
 - React Hook Form + Zod for forms
 - Lucide React for icons
@@ -33,20 +33,20 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
 
 - Use `PublicLayout` for landing/marketing pages, `DashboardLayout` for authenticated app
 - Modals in `components/modals/`, tables in `components/tables/`, forms use React Hook Form + Zod
-- Supabase client: `import { getSupabaseClient } from "@/lib/supabase"`
+- Prisma client: `import { prisma } from "@/lib/prisma"`
 - AI suggestions: `import { AIService } from "@/lib/ai-suggestions"`
 
 ## Database Integration
 
-- Use singleton Supabase client
+- Use singleton Prisma client (`lib/prisma.ts`)
 - Key tables: `line_details`, `tasks`, `inventory_items`, `drum_tracking`, `invoices`, `profiles`
 - Enforced rules: DP regex, wastage ≤ 20%, drum quantity checks, power warnings, serial validation
 
 ## Authentication
 
-- Email/password flows use Supabase; see `LoginForm` for client handling and `AuthProvider` for session management
-- Google OAuth is available via Supabase: enable the Google provider in the Supabase dashboard and add `https://<your-domain>/auth/callback` (plus local `http://localhost:3000/auth/callback`) to the redirect URLs
-- The `/auth/callback` page exchanges the Supabase OAuth code for a session and redirects to the dashboard once complete
+- Authentication uses NextAuth; see `AuthProvider` for session management and `app/api/auth/[...nextauth]` for providers
+- Google OAuth is available via NextAuth: configure the Google provider in environment variables and NextAuth, with redirect URL `https://<your-domain>/auth/callback` (plus local `http://localhost:3000/auth/callback`)
+- The `/auth/callback` page uses NextAuth to finalize the OAuth flow and redirects to the dashboard once complete
 
 ## Google Sheets Import (Admin/Moderator)
 
@@ -58,7 +58,7 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
   - Overwrite behavior: for the given month, existing `line_details` rows with phone numbers present in the import are deleted, then new rows inserted
 - Mappings: Columns map to `line_details` fields; `Pole-5.6` -> `pole`, `Pole-6.7` -> `pole_67`, `Total` -> `total_cable`, etc.
 - Status defaults to `completed` on import
-- Auth: UI is gated by role, and the API enforces server-side role check via Supabase session (admin/moderator only)
+- Auth: UI is gated by role, and the API enforces server-side role checks via NextAuth session (admin/moderator only)
 - Dry-run response includes: totals, existingByPhone, sampleInserts
 - Env vars:
   - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
@@ -83,7 +83,7 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
 ## Best Practices
 
 - Use semantic HTML, ARIA labels, and error boundaries
-- Validate all inputs, use Supabase RLS, sanitize user data
+- Validate all inputs, enforce server-side authorization (NextAuth), sanitize user data, and apply database constraints via Prisma migrations
 - Optimize queries and use loading states
 - Document new domain rules and patterns in this file
 

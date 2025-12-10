@@ -25,7 +25,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Trash2, Camera, Loader2, CheckCircle } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -81,7 +80,6 @@ export function AddInventoryInvoiceModal({
     },
   ]);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
   const { user } = useAuth();
 
@@ -94,14 +92,10 @@ export function AddInventoryInvoiceModal({
 
   const fetchInventoryItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from("inventory_items")
-        .select("*")
-        .order("name");
-
-      if (error) throw error;
-      setInventoryItems((data as unknown as InventoryItem[]) || []);
-      console.log(inventoryItems);
+      const response = await fetch("/api/inventory?all=true");
+      if (!response.ok) throw new Error("Failed to fetch inventory items");
+      const result = await response.json();
+      setInventoryItems((result.data as InventoryItem[]) || []);
     } catch (error) {
       console.error("Error fetching inventory items:", error);
     }
@@ -109,10 +103,12 @@ export function AddInventoryInvoiceModal({
 
   const generateInvoiceNumber = async () => {
     try {
-      const { data, error } = await supabase.rpc("generate_invoice_number");
-
-      if (error) throw error;
-      setAutoInvoiceNumber(String(data));
+      const response = await fetch(
+        "/api/inventory/invoices?generateNumber=true"
+      );
+      if (!response.ok) throw new Error("Failed to generate invoice number");
+      const result = await response.json();
+      setAutoInvoiceNumber(result.data);
     } catch (error) {
       console.error("Error generating invoice number:", error);
       // Fallback to timestamp-based number
@@ -215,23 +211,9 @@ export function AddInventoryInvoiceModal({
     setOcrProcessing(true);
 
     try {
-      // Upload image to Supabase Storage (you'll need to set up a bucket)
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `invoice-images/${fileName}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("invoice-images")
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from("invoice-images")
-        .getPublicUrl(filePath);
-
-      setFormData((prev) => ({ ...prev, ocr_image_url: urlData.publicUrl }));
+      // Use a temporary object URL for preview; replace with server upload if needed
+      const objectUrl = URL.createObjectURL(file);
+      setFormData((prev) => ({ ...prev, ocr_image_url: objectUrl }));
 
       // Simulate OCR processing (you would integrate with actual OCR service here)
       await simulateOCRProcessing();
@@ -306,87 +288,33 @@ export function AddInventoryInvoiceModal({
         return;
       }
 
-      // Create invoice
-      const invoiceData = {
-        invoice_number: autoInvoiceNumber,
-        warehouse: formData.warehouse,
-        date: formData.date,
-        issued_by: formData.issued_by,
-        drawn_by: formData.drawn_by,
-        created_by: user?.id,
-        total_items: validItems.length,
-        status: "completed",
-        ocr_processed: !!formData.ocr_image_url,
-        ocr_image_url: formData.ocr_image_url || null,
-      };
+      // Create invoice with items via API (handles stock updates and drum tracking)
+      const response = await fetch("/api/inventory/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoice_number: autoInvoiceNumber,
+          warehouse: formData.warehouse,
+          date: formData.date,
+          issued_by: formData.issued_by,
+          drawn_by: formData.drawn_by,
+          status: "completed",
+          ocr_processed: !!formData.ocr_image_url,
+          ocr_image_url: formData.ocr_image_url || null,
+          items: validItems.map((item) => ({
+            item_id: item.item_id,
+            description: item.description,
+            unit: item.unit,
+            quantity_requested: Number(item.quantity_requested),
+            quantity_issued: Number(item.quantity_issued),
+            drum_number: item.drum_number,
+          })),
+        }),
+      });
 
-      const { data: invoice, error: invoiceError } = await supabase
-        .from("inventory_invoices")
-        .insert([invoiceData])
-        .select()
-        .single();
-
-      if (invoiceError) throw invoiceError;
-
-      // Create invoice items and update stock
-      for (const item of validItems) {
-        // Create invoice item
-        const { error: itemError } = await supabase
-          .from("inventory_invoice_items")
-          .insert([
-            {
-              invoice_id: invoice.id,
-              item_id: item.item_id,
-              description: item.description,
-              unit: item.unit,
-              quantity_requested: Number(item.quantity_requested),
-              quantity_issued: Number(item.quantity_issued),
-            },
-          ]);
-
-        if (itemError) throw itemError;
-
-        // Update inventory stock
-
-        // If RPC doesn't exist, update manually
-        const { data: currentItem } = await supabase
-          .from("inventory_items")
-          .select("current_stock")
-          .eq("id", item.item_id)
-          .single();
-
-        if (currentItem) {
-          const currentStock = (currentItem as { current_stock: number })
-            .current_stock;
-          await supabase
-            .from("inventory_items")
-            .update({
-              current_stock: currentStock + Number(item.quantity_issued),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", item.item_id);
-        }
-
-        // Create drum tracking for cable items
-        const inventoryItem = inventoryItems.find(
-          (inv) => inv.id === item.item_id
-        );
-        if (inventoryItem?.name?.toLowerCase().includes("drop wire cable")) {
-          // Only use the provided drum_number for Drop Wire Cable
-          console.log(item);
-          if (item.drum_number) {
-            await supabase.from("drum_tracking").insert([
-              {
-                drum_number: item.drum_number,
-                item_id: item.item_id,
-                initial_quantity: Number(item.quantity_issued),
-                current_quantity: Number(item.quantity_issued),
-                received_date: formData.date,
-                status: "active",
-              },
-            ]);
-          }
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create invoice");
       }
 
       addNotification({
@@ -401,7 +329,7 @@ export function AddInventoryInvoiceModal({
 
       // Reset form
       setFormData({
-        warehouse: "Main Warehouse", // Reset to default warehouse
+        warehouse: "Main Warehouse",
         date: new Date().toISOString().split("T")[0],
         issued_by: "",
         drawn_by: "",

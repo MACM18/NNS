@@ -1,4 +1,5 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
+export const dynamic = "force-dynamic";
 import {
   Card,
   CardContent,
@@ -18,22 +19,36 @@ interface Post {
   content: string;
   author: string;
   category: string;
-  created_at: string;
+  created_at: Date;
 }
 
 async function fetchPosts(): Promise<Post[]> {
-  const supabase = supabaseServer;
-  const { data, error } = await supabase
-    .from("posts")
-    .select("id, title, content, author, category, created_at")
-    .eq("status", "active") // Only show active posts
-    .order("created_at", { ascending: false });
+  try {
+    const rows = await prisma.post.findMany({
+      where: { status: "active" },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        author: true,
+        category: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
-  if (error) {
-    console.error("Error fetching posts:", error.message);
+    return rows.map((r: any) => ({
+      id: String(r.id),
+      title: r.title,
+      content: r.content,
+      author: r.author,
+      category: r.category ?? "General",
+      created_at: r.createdAt as Date,
+    }));
+  } catch (error) {
+    console.error("Error fetching posts:", error);
     return [];
   }
-  return data as Post[];
 }
 
 export default async function ArticlesPage() {

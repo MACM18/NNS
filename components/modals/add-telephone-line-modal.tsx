@@ -45,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getSupabaseClient } from "@/lib/supabase";
+// Supabase removed: now using server APIs (Prisma + NextAuth)
 import { useNotification } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
@@ -159,7 +159,6 @@ export function AddTelephoneLineModal({
     rj12: "0",
   });
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
   const { user } = useAuth();
 
@@ -238,29 +237,17 @@ export function AddTelephoneLineModal({
 
   const fetchDrumOptions = async () => {
     try {
-      const { data, error } = await supabase
-        .from("drum_tracking")
-        .select(
-          `
-          id,
-          drum_number,
-          current_quantity,
-          inventory_items(name)
-        `
-        )
-        .eq("status", "active")
-        .gt("current_quantity", 10) // Only show drums with more than 10m
-        .order("drum_number");
-
-      if (error) throw error;
-
-      const drums = data.map((drum: any) => ({
-        id: drum.id,
-        drum_number: drum.drum_number,
-        current_quantity: drum.current_quantity,
-        item_name: drum.inventory_items?.name || "Unknown",
-      }));
-
+      const res = await fetch(`/api/drums?status=active&all=true`);
+      if (!res.ok) throw new Error("Failed to fetch drums");
+      const json = await res.json();
+      const drums = (json.data || [])
+        .filter((d: any) => (d.current_quantity || 0) > 10)
+        .map((drum: any) => ({
+          id: drum.id,
+          drum_number: drum.drum_number,
+          current_quantity: drum.current_quantity,
+          item_name: drum.item_name || "Unknown",
+        }));
       setDrumOptions(drums);
     } catch (error) {
       console.error("Error fetching drum options:", error);
@@ -269,10 +256,10 @@ export function AddTelephoneLineModal({
 
   const generateDrumInvoiceNumber = async () => {
     try {
-      const { data, error } = await supabase.rpc("generate_invoice_number");
-
-      if (error) throw error;
-      setDrumInvoiceNumber(String(data));
+      const res = await fetch(`/api/inventory/invoices?generateNumber=true`);
+      if (!res.ok) throw new Error("Failed to generate invoice number");
+      const json = await res.json();
+      setDrumInvoiceNumber(String(json.data));
     } catch (error) {
       console.error("Error generating invoice number:", error);
       const fallback = `INV-${new Date().getFullYear()}-${Date.now()
@@ -284,18 +271,16 @@ export function AddTelephoneLineModal({
 
   const fetchDrumInventoryItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from("inventory_items")
-        .select("id, name, unit")
-        .order("name");
-
-      if (error) throw error;
-
-      const items: InventoryItemOption[] = (data || []).map((item: any) => ({
-        id: String(item.id),
-        name: item.name ? String(item.name) : "Unnamed Item",
-        unit: item.unit ? String(item.unit) : "",
-      }));
+      const res = await fetch(`/api/inventory?all=true`);
+      if (!res.ok) throw new Error("Failed to load inventory items");
+      const json = await res.json();
+      const items: InventoryItemOption[] = (json.data || []).map(
+        (item: any) => ({
+          id: String(item.id),
+          name: item.name ? String(item.name) : "Unnamed Item",
+          unit: item.unit ? String(item.unit) : "",
+        })
+      );
 
       setDrumInventoryItems(items);
 
@@ -404,12 +389,17 @@ export function AddTelephoneLineModal({
     setIsCreatingDrum(true);
 
     try {
-      const { data: existingDrums, error: existingError } = await supabase
-        .from("drum_tracking")
-        .select("id")
-        .ilike("drum_number", trimmedDrumNumber);
-
-      if (existingError) throw existingError;
+      // Check duplication on server list
+      const existingRes = await fetch(
+        `/api/drums?all=true&search=${encodeURIComponent(trimmedDrumNumber)}`
+      );
+      if (!existingRes.ok) throw new Error("Failed to check existing drums");
+      const existingJson = await existingRes.json();
+      const existingDrums = (existingJson.data || []).filter(
+        (d: any) =>
+          (d.drum_number || "").toLowerCase() ===
+          trimmedDrumNumber.toLowerCase()
+      );
 
       if (existingDrums && existingDrums.length > 0) {
         addNotification({
@@ -425,87 +415,40 @@ export function AddTelephoneLineModal({
       const invoiceNumber =
         drumInvoiceNumber ||
         `INV-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
-
-      const invoicePayload = {
-        invoice_number: invoiceNumber,
-        warehouse: drumForm.warehouse,
-        date: drumForm.date,
-        issued_by: drumForm.issued_by,
-        drawn_by: drumForm.drawn_by,
-        created_by: user?.id ?? null,
-        total_items: 1,
-        status: "completed",
-        ocr_processed: false,
-        ocr_image_url: null,
-      };
-
-      const { data: invoice, error: invoiceError } = await supabase
-        .from("inventory_invoices")
-        .insert([invoicePayload])
-        .select()
-        .single();
-
-      if (invoiceError) throw invoiceError;
-
       const selectedInventoryItem = drumInventoryItems.find(
         (item) => item.id === drumForm.item_id
       );
 
       const description = selectedInventoryItem?.name || "Inventory Item";
       const unit = selectedInventoryItem?.unit || "";
-
-      const { error: invoiceItemError } = await supabase
-        .from("inventory_invoice_items")
-        .insert([
-          {
-            invoice_id: invoice.id,
-            item_id: drumForm.item_id,
-            description,
-            unit,
-            quantity_requested: quantityNumber,
-            quantity_issued: quantityNumber,
-          },
-        ]);
-
-      if (invoiceItemError) throw invoiceItemError;
-
-      const { data: currentItem, error: currentItemError } = await supabase
-        .from("inventory_items")
-        .select("current_stock")
-        .eq("id", drumForm.item_id)
-        .single();
-
-      if (currentItemError) throw currentItemError;
-
-      const currentStock =
-        typeof (currentItem as any)?.current_stock === "number"
-          ? (currentItem as any).current_stock
-          : Number((currentItem as any)?.current_stock) || 0;
-
-      await supabase
-        .from("inventory_items")
-        .update({
-          current_stock: currentStock + quantityNumber,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", drumForm.item_id);
-
-      const { data: newDrum, error: drumInsertError } = await supabase
-        .from("drum_tracking")
-        .insert([
-          {
-            drum_number: trimmedDrumNumber,
-            item_id: drumForm.item_id,
-            initial_quantity: quantityNumber,
-            current_quantity: quantityNumber,
-            received_date: drumForm.date,
-            status: "active",
-          },
-        ])
-        .select()
-        .single();
-
-      if (drumInsertError) throw drumInsertError;
+      // Use inventory invoice API to create invoice + item + drum tracking
+      const resp = await fetch(`/api/inventory/invoices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoice_number: invoiceNumber,
+          warehouse: drumForm.warehouse,
+          date: drumForm.date,
+          issued_by: drumForm.issued_by,
+          drawn_by: drumForm.drawn_by,
+          status: "completed",
+          ocr_processed: false,
+          ocr_image_url: null,
+          items: [
+            {
+              item_id: drumForm.item_id,
+              description,
+              unit,
+              quantity_requested: quantityNumber,
+              quantity_issued: quantityNumber,
+              drum_number: trimmedDrumNumber,
+            },
+          ],
+        }),
+      });
+      if (!resp.ok) throw new Error("Failed to create inventory invoice");
+      // Re-fetch drums list to get the new drum
+      await fetchDrumOptions();
 
       addNotification({
         title: "Drum Added",
@@ -514,8 +457,10 @@ export function AddTelephoneLineModal({
         category: "system",
       });
 
-      await fetchDrumOptions();
-
+      // Try to find newly created drum from refreshed list
+      const newDrum = drumOptions.find(
+        (d) => d.drum_number.toLowerCase() === trimmedDrumNumber.toLowerCase()
+      );
       const newDrumId = newDrum?.id ? String(newDrum.id) : "";
 
       setFormData((prev) => ({
@@ -543,28 +488,12 @@ export function AddTelephoneLineModal({
 
   const fetchDPSuggestions = async () => {
     try {
-      const { data, error } = await supabase
-        .from("line_details")
-        .select("dp")
-        .ilike("dp", `${formData.dp}%`)
-        .limit(10);
-
-      if (error) throw error;
-
-      // Fix DP suggestions accumulator type
-      const suggestions = (data as { dp: string }[]).reduce(
-        (acc: Record<string, number>, item) => {
-          if (item.dp) {
-            acc[item.dp] = (acc[item.dp] || 0) + 1;
-          }
-          return acc;
-        },
-        {} as Record<string, number>
+      const res = await fetch(
+        `/api/lines/dp-suggestions?q=${encodeURIComponent(formData.dp)}`
       );
-
-      setDpSuggestions(
-        Object.entries(suggestions).map(([dp, count]) => ({ dp, count }))
-      );
+      if (!res.ok) throw new Error("Failed to fetch DP suggestions");
+      const json = await res.json();
+      setDpSuggestions(json.data || []);
     } catch (error) {
       console.error("Error fetching DP suggestions:", error);
     }
@@ -572,27 +501,10 @@ export function AddTelephoneLineModal({
 
   const fetchAvailableTasks = async () => {
     try {
-      // 1. Get all assigned task_ids
-      const { data: assigned, error: assignedError } = await supabase
-        .from("line_details")
-        .select("task_id")
-        .not("task_id", "is", null);
-
-      const assignedTaskIds = assigned?.map((row) => row.task_id) ?? [];
-
-      // 2. Get all accepted tasks not in assignedTaskIds
-      const { data: tasks, error: tasksError } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("status", "accepted")
-        .not(
-          "id",
-          "in",
-          `(${assignedTaskIds.map((id) => `"${id}"`).join(",")})`
-        );
-
-      if (assignedError) throw assignedError;
-      setAvailableTasks(tasks || []);
+      const res = await fetch(`/api/tasks/available`);
+      if (!res.ok) throw new Error("Failed to load available tasks");
+      const json = await res.json();
+      setAvailableTasks(json.data || []);
     } catch (error) {
       console.error("Error fetching available tasks:", error);
     }
@@ -620,14 +532,14 @@ export function AddTelephoneLineModal({
     const lastValue = parts[4];
 
     try {
-      const { data, error } = await supabase
-        .from("line_details")
-        .select("dp")
-        .ilike("dp", `${baseDP}-${lastValue}`);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
+      const res = await fetch(
+        `/api/lines/validate-dp?dp=${encodeURIComponent(
+          `${baseDP}-${lastValue}`
+        )}`
+      );
+      if (!res.ok) throw new Error("Failed to validate DP");
+      const json = await res.json();
+      if (json.exists) {
         setDpValidationError(
           `DP ${dp} already exists. Please use a different last value (01-08).`
         );
@@ -735,47 +647,7 @@ export function AddTelephoneLineModal({
         }
       }
 
-      // Calculate wastage if there's a previous usage on the same drum
-      let calculatedWastage = Number.parseFloat(formData.wastage_input) || 0;
-      let previousLineId = null;
-
-      if (formData.selected_drum_id && totalCableNeeded > 0) {
-        // Get the last usage of this drum
-        const { data: lastUsageData, error: lastUsageError } = await supabase
-          .from("drum_usage")
-          .select("*, line_details(id, cable_end)")
-          .eq("drum_id", formData.selected_drum_id)
-          .order("usage_date", { ascending: false })
-          .limit(1);
-
-        if (lastUsageError) throw lastUsageError;
-
-        const lastUsage = (lastUsageData as any[]) || [];
-
-        if (lastUsage.length > 0) {
-          const usage = lastUsage[0] as any;
-          // prefer drum_usage.cable_end_point, fallback to nested line_details.cable_end if available
-          const previousEndPoint =
-            usage.cable_end_point ??
-            usage.cable_end ??
-            usage.line_details?.cable_end ??
-            0;
-          const currentStartPoint = Number.parseFloat(formData.cable_start);
-          previousLineId = usage.line_details?.id ?? null;
-
-          // If current start is less than previous end, there's wastage
-          if (currentStartPoint < previousEndPoint) {
-            calculatedWastage += previousEndPoint - currentStartPoint;
-            console.log(
-              `Wastage calculated: ${previousEndPoint} - ${currentStartPoint} = ${
-                previousEndPoint - currentStartPoint
-              }`
-            );
-          }
-        }
-      }
-
-      // Prepare data for insertion
+      // Prepare data for server API
       const insertData = {
         task_id: selectedTask?.id || null,
         // Basic Information
@@ -790,8 +662,8 @@ export function AddTelephoneLineModal({
         cable_start: Number.parseFloat(formData.cable_start),
         cable_middle: Number.parseFloat(formData.cable_middle),
         cable_end: Number.parseFloat(formData.cable_end),
-        wastage_input: calculatedWastage,
-        wastage: calculatedWastage,
+        wastage_input: Number.parseFloat(formData.wastage_input) || 0,
+        wastage: Number.parseFloat(formData.wastage_input) || 0,
         drum_number: formData.drum_number,
 
         // Inventory Fields
@@ -827,105 +699,22 @@ export function AddTelephoneLineModal({
         rj12: Number(formData.rj12) || 0,
       };
 
-      const { data: lineDetails, error } = await supabase
-        .from("line_details")
-        .insert([insertData])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Record drum usage and update drum quantity if drum was selected
-      if (formData.selected_drum_id && totalCableNeeded > 0) {
-        // Get current drum data
-        const { data: currentDrum, error: drumError } = await supabase
-          .from("drum_tracking")
-          .select("current_quantity, initial_quantity")
-          .eq("id", formData.selected_drum_id)
-          .single();
-
-        if (drumError) throw drumError;
-
-        // Record drum usage
-        await supabase.from("drum_usage").insert([
-          {
-            drum_id: formData.selected_drum_id,
-            line_details_id: lineDetails.id,
-            quantity_used: totalCableNeeded,
-            usage_date: formData.date,
-            cable_start_point: Number.parseFloat(formData.cable_start),
-            cable_end_point: Number.parseFloat(formData.cable_end),
-            wastage_calculated: calculatedWastage,
-          },
-        ]);
-
-        // Update drum current quantity - subtract the total cable used AND wastage
-        const totalDeduction = totalCableNeeded + calculatedWastage;
-
-        // coerce current_quantity to a number with a safe fallback
-        const currentQuantity =
-          typeof (currentDrum as any)?.current_quantity === "number"
-            ? (currentDrum as any).current_quantity
-            : Number((currentDrum as any)?.current_quantity) || 0;
-
-        const newQuantity = currentQuantity - totalDeduction;
-        const newStatus =
-          newQuantity <= 0
-            ? "empty"
-            : newQuantity <= 10
-            ? "inactive"
-            : "active";
-
-        await supabase
-          .from("drum_tracking")
-          .update({
-            current_quantity: Math.max(0, newQuantity),
-            status: newStatus,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", formData.selected_drum_id);
-
-        // Update inventory_items current_stock for Drop wire cable - subtract cable used AND wastage
-        const { data: dropWireItem } = await supabase
-          .from("inventory_items")
-          .select("id,current_stock")
-          .eq("name", "Drop Wire Cable")
-          .single();
-
-        if (dropWireItem) {
-          // coerce current_stock to a number safely (Supabase returns unknown)
-          const currentStock =
-            typeof (dropWireItem as any).current_stock === "number"
-              ? (dropWireItem as any).current_stock
-              : Number((dropWireItem as any).current_stock) || 0;
-
-          const newStock = currentStock - totalDeduction;
-
-          await supabase
-            .from("inventory_items")
-            .update({
-              current_stock: Math.max(0, newStock),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", (dropWireItem as any).id);
-        }
-        // Update previous line's wastage if there was wastage calculated
-        if (
-          previousLineId &&
-          calculatedWastage > Number.parseFloat(formData.wastage_input || "0")
-        ) {
-          const additionalWastage =
-            calculatedWastage -
-            Number.parseFloat(formData.wastage_input || "0");
-          await supabase
-            .from("line_details")
-            .update({
-              wastage: additionalWastage,
-              wastage_input: additionalWastage,
-            })
-            .eq("id", previousLineId);
-        }
+      // Call server API to create line and handle drum usage and inventory in a transaction
+      const resp = await fetch(`/api/lines/create-with-usage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...insertData,
+          selected_drum_id: formData.selected_drum_id,
+          total_cable: Number.parseFloat(formData.total_cable) || 0,
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err?.error || "Failed to add telephone line details");
       }
+      const created = await resp.json();
+      const calculatedWastage = Number(created?.data?.wastage || 0);
 
       addNotification({
         title: "Success",

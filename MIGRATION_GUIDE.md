@@ -5,12 +5,14 @@ This guide documents the migration from Supabase to a self-hosted PostgreSQL dat
 ## Overview
 
 ### Before (Supabase Stack)
+
 - **Database**: Supabase PostgreSQL (managed)
 - **Authentication**: Supabase Auth
 - **Client**: `@supabase/supabase-js`
 - **RLS**: Row Level Security policies in Supabase
 
 ### After (Self-Hosted Stack)
+
 - **Database**: Self-hosted PostgreSQL (Docker)
 - **ORM**: Prisma
 - **Authentication**: NextAuth.js v5
@@ -21,6 +23,7 @@ This guide documents the migration from Supabase to a self-hosted PostgreSQL dat
 ### ✅ Completed Steps
 
 1. **Installed Dependencies**
+
    - `prisma` - Prisma ORM
    - `@prisma/client` - Prisma client
    - `next-auth@beta` - NextAuth.js v5
@@ -28,33 +31,60 @@ This guide documents the migration from Supabase to a self-hosted PostgreSQL dat
    - `bcryptjs` - Password hashing
 
 2. **Created Prisma Schema** (`prisma/schema.prisma`)
+
    - All 23+ tables from Supabase
    - User/Account/Session models for NextAuth
    - Proper relationships and indexes
 
 3. **Created Auth Configuration** (`lib/auth.ts`)
+
    - Credentials provider (email/password)
    - Google OAuth provider
    - JWT session strategy
    - Profile auto-creation on sign-in
 
 4. **Created Database Service Layer** (`lib/db.ts`)
+
    - Unified API for all database operations
    - Similar interface to Supabase client
    - Helper functions for computed fields
 
 5. **Created New Auth Context** (`contexts/auth-context-new.tsx`)
+
    - Uses NextAuth's `useSession` hook
    - Compatible with existing `useAuth()` hook API
 
 6. **Created API Routes**
+
    - `/api/auth/[...nextauth]/route.ts` - NextAuth handlers
    - `/api/auth/register/route.ts` - User registration
    - `/api/profile/[id]/route.ts` - Profile CRUD
+   - `/api/search/route.ts` - Global search
+   - `/api/lines/route.ts` - Line details CRUD
+   - `/api/lines/[id]/route.ts` - Single line operations
+   - `/api/tasks/route.ts` - Tasks CRUD
+   - `/api/tasks/[id]/route.ts` - Single task operations
+   - `/api/inventory/route.ts` - Inventory CRUD
+   - `/api/inventory/[id]/route.ts` - Single inventory item operations
+   - `/api/invoices/route.ts` - Invoices listing
+   - `/api/drums/route.ts` - Drum tracking CRUD
+   - `/api/drums/[id]/route.ts` - Single drum operations
+   - `/api/users/route.ts` - User management (admin)
 
 7. **Created Middleware** (`middleware.ts`)
+
    - Route protection
    - Redirect logic for auth pages
+
+8. **Updated Root Layout** (`app/layout.tsx`)
+
+   - Added `AuthSessionProvider` wrapper
+   - Updated to use new `auth-context-new.tsx`
+
+9. **Updated Auth Components**
+   - `components/auth/login-form.tsx` - Now uses NextAuth `signIn`
+   - `components/auth/register-form.tsx` - Now uses `/api/auth/register`
+   - `components/layout/header.tsx` - Updated to use new auth context and search API
 
 ### 🔄 Steps To Complete
 
@@ -103,9 +133,7 @@ export default function RootLayout({ children }) {
       <body>
         <ThemeProvider>
           <AuthSessionProvider>
-            <AuthProvider>
-              {/* ... rest of providers */}
-            </AuthProvider>
+            <AuthProvider>{/* ... rest of providers */}</AuthProvider>
           </AuthSessionProvider>
         </ThemeProvider>
       </body>
@@ -132,7 +160,7 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
+
     const result = await signIn("credentials", {
       email: formData.get("email"),
       password: formData.get("password"),
@@ -186,6 +214,7 @@ const handleSubmit = async (data: FormValues) => {
 Replace Supabase client calls with Prisma/db service:
 
 ### Before (Supabase):
+
 ```tsx
 import { supabase } from "@/lib/supabase";
 
@@ -196,6 +225,7 @@ const { data, error } = await supabase
 ```
 
 ### After (Prisma):
+
 ```tsx
 import db from "@/lib/db";
 // or
@@ -208,25 +238,26 @@ const data = await db.lineDetails.findMany({
 
 ### Common Query Patterns
 
-| Supabase | Prisma |
-|----------|--------|
-| `.select("*")` | `findMany()` |
-| `.select("id, name")` | `findMany({ select: { id: true, name: true } })` |
-| `.eq("field", value)` | `findMany({ where: { field: value } })` |
-| `.in("field", [values])` | `findMany({ where: { field: { in: [values] } } })` |
-| `.order("field", { ascending: false })` | `findMany({ orderBy: { field: 'desc' } })` |
-| `.limit(10)` | `findMany({ take: 10 })` |
-| `.single()` | `findUnique()` or `findFirst()` |
-| `.insert({})` | `create({ data: {} })` |
-| `.update({})` | `update({ where: {}, data: {} })` |
-| `.upsert({})` | `upsert({ where: {}, create: {}, update: {} })` |
-| `.delete()` | `delete({ where: {} })` |
+| Supabase                                | Prisma                                             |
+| --------------------------------------- | -------------------------------------------------- |
+| `.select("*")`                          | `findMany()`                                       |
+| `.select("id, name")`                   | `findMany({ select: { id: true, name: true } })`   |
+| `.eq("field", value)`                   | `findMany({ where: { field: value } })`            |
+| `.in("field", [values])`                | `findMany({ where: { field: { in: [values] } } })` |
+| `.order("field", { ascending: false })` | `findMany({ orderBy: { field: 'desc' } })`         |
+| `.limit(10)`                            | `findMany({ take: 10 })`                           |
+| `.single()`                             | `findUnique()` or `findFirst()`                    |
+| `.insert({})`                           | `create({ data: {} })`                             |
+| `.update({})`                           | `update({ where: {}, data: {} })`                  |
+| `.upsert({})`                           | `upsert({ where: {}, create: {}, update: {} })`    |
+| `.delete()`                             | `delete({ where: {} })`                            |
 
 ## Step 7: Update Server Actions
 
 For server actions in `app/dashboard/integrations/google-sheets/actions.ts`:
 
 ### Before:
+
 ```tsx
 import { supabaseServer } from "@/lib/supabase-server";
 
@@ -238,6 +269,7 @@ const { data, error } = await supabaseServer
 ```
 
 ### After:
+
 ```tsx
 import db from "@/lib/db";
 
@@ -248,15 +280,19 @@ const role = profile?.role;
 ## Step 8: Handle Auth in Server Components
 
 ### Before (Supabase):
+
 ```tsx
 import { supabaseServer } from "@/lib/supabase-server";
 
 export default async function Page() {
-  const { data: { user } } = await supabaseServer.auth.getUser();
+  const {
+    data: { user },
+  } = await supabaseServer.auth.getUser();
 }
 ```
 
 ### After (NextAuth):
+
 ```tsx
 import { auth } from "@/lib/auth";
 
@@ -300,12 +336,14 @@ mv contexts/auth-context-new.tsx contexts/auth-context.tsx
 Here's a list of files that import Supabase and need updates:
 
 ### High Priority (Auth-related):
+
 - `components/auth/login-form.tsx`
 - `components/auth/register-form.tsx`
 - `components/modals/create-user-modal.tsx`
 - `components/users/user-management-tabs.tsx`
 
 ### Medium Priority (Dashboard pages):
+
 - `app/dashboard/page.tsx`
 - `app/dashboard/lines/page.tsx`
 - `app/dashboard/integrations/google-sheets/actions.ts`
@@ -314,12 +352,14 @@ Here's a list of files that import Supabase and need updates:
 - `app/dashboard/careers/page.tsx`
 
 ### Lower Priority (Utilities):
+
 - `lib/ai-suggestions.ts`
 - `lib/enhanced-report-service.ts`
 - `lib/export-utils.ts`
 - `lib/notification-service.ts`
 
 ### Components with Supabase:
+
 - `components/integrations/SyncSheetButton.tsx`
 - `components/tables/line-details-table.tsx`
 - `components/tables/task-management-table.tsx`
@@ -331,14 +371,16 @@ Here's a list of files that import Supabase and need updates:
 ## Security Considerations
 
 1. **RLS Replacement**: Supabase RLS policies are replaced with:
+
    - NextAuth middleware for route protection
    - Server-side auth checks in API routes
    - Role-based access control in auth context
 
 2. **API Routes**: All API routes should verify session:
+
    ```tsx
    import { auth } from "@/lib/auth";
-   
+
    export async function GET() {
      const session = await auth();
      if (!session) {
@@ -368,13 +410,17 @@ Here's a list of files that import Supabase and need updates:
 ## Troubleshooting
 
 ### "Module not found" errors
+
 Run `pnpm exec prisma generate` to generate the Prisma client.
 
 ### Database connection errors
+
 Check your `DATABASE_URL` in `.env` and ensure PostgreSQL is running.
 
 ### Auth errors
+
 Ensure `NEXTAUTH_SECRET` is set and `NEXTAUTH_URL` matches your development URL.
 
 ### TypeScript errors
+
 Some errors will resolve after generating Prisma client. For persistent issues, check that all imports point to the correct new files.

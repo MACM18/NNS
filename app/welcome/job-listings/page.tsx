@@ -1,4 +1,5 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
+export const dynamic = "force-dynamic";
 import {
   Card,
   CardContent,
@@ -18,27 +19,45 @@ interface JobVacancy {
   description: string;
   location: string;
   employment_type: string;
-  created_at: string;
-  end_date: string;
+  created_at: Date;
+  end_date: Date | null;
 }
 
 async function fetchJobVacancies(): Promise<JobVacancy[]> {
-  const supabase = supabaseServer;
-  const today = new Date().toISOString().split("T")[0]; // Get current date in YYYY-MM-DD format
-  const { data, error } = await supabase
-    .from("job_vacancies")
-    .select(
-      "id, title, description, location, employment_type, created_at, end_date"
-    )
-    .eq("status", "active") // Only show active jobs
-    .gte("end_date", today) // Filter to show only jobs not yet expired
-    .order("created_at", { ascending: false });
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  if (error) {
-    console.error("Error fetching job vacancies:", error.message);
+    const rows = await prisma.jobVacancy.findMany({
+      where: {
+        status: "active",
+        endDate: { gte: today },
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        location: true,
+        employmentType: true,
+        createdAt: true,
+        endDate: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return rows.map((r: any) => ({
+      id: String(r.id),
+      title: r.title,
+      description: r.description,
+      location: r.location ?? "",
+      employment_type: r.employmentType,
+      created_at: r.createdAt as Date,
+      end_date: (r.endDate as Date) ?? null,
+    }));
+  } catch (error) {
+    console.error("Error fetching job vacancies:", error);
     return [];
   }
-  return data as JobVacancy[];
 }
 
 export default async function JobListingsPage() {

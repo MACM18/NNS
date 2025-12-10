@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Trash2, Building, CreditCard } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 
 interface CompanySettingsModalProps {
@@ -61,7 +60,6 @@ export function CompanySettingsModal({
     },
   });
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   useEffect(() => {
@@ -72,14 +70,16 @@ export function CompanySettingsModal({
 
   const fetchCompanySettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from("company_settings")
-        .select("*")
-        .single();
+      const response = await fetch("/api/settings/company");
 
-      if (error && error.code !== "PGRST116") {
-        // PGRST116 is "not found" error
-        throw error;
+      if (!response.ok) {
+        throw new Error("Failed to fetch company settings");
+      }
+
+      const { data } = await response.json();
+
+      if (!data) {
+        return; // No settings found, use defaults
       }
 
       let tiers: PricingTier[] = [];
@@ -225,28 +225,18 @@ export function CompanySettingsModal({
         registered_number: formData.registered_number,
         pricing_tiers: validTiers,
         bank_details: formData.bank_details,
-        updated_at: new Date().toISOString(),
       };
 
-      // Check if settings exist
-      const { data: existing } = await supabase
-        .from("company_settings")
-        .select("id")
-        .single();
+      // Use PUT to update/create settings
+      const response = await fetch("/api/settings/company", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settingsData),
+      });
 
-      if (existing) {
-        // Update existing settings
-        const { error } = await supabase
-          .from("company_settings")
-          .update(settingsData)
-          .eq("id", (existing as { id: number }).id);
-        if (error) throw error;
-      } else {
-        // Create new settings
-        const { error } = await supabase
-          .from("company_settings")
-          .insert([settingsData]);
-        if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update settings");
       }
 
       addNotification({
