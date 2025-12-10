@@ -2,6 +2,9 @@
   "name": "nns-enterprise",
   "version": "0.7",
   "private": true,
+  "engines": {
+    "node": "22.12"
+  },
   "scripts": {
     "build": "next build",
     "dev": "next dev",
