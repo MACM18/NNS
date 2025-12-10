@@ -7,6 +7,8 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 
 export const authConfig: NextAuthConfig = {
+  // Allow runtime host when behind a trusted proxy (e.g., Coolify)
+  trustHost: true,
   adapter: PrismaAdapter(prisma),
   session: {
     strategy: "jwt",
