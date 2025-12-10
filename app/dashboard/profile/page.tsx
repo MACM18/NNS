@@ -137,7 +137,9 @@ export default function ProfilePage() {
                   <Calendar className='h-4 w-4 text-muted-foreground' />
                   <span>
                     Joined{" "}
-                    {new Date((user as any)?.createdAt || "").toLocaleDateString()}
+                    {new Date(
+                      (user as any)?.createdAt || ""
+                    ).toLocaleDateString()}
                   </span>
                 </div>
               </CardContent>

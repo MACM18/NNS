@@ -225,7 +225,10 @@ export function AddTelephoneLineModal({
       date: prev.date || preparedDate,
       warehouse: prev.warehouse || "Main Warehouse",
       issued_by:
-        prev.issued_by || (user as any)?.profile?.fullName || (user as any)?.name || "",
+        prev.issued_by ||
+        (user as any)?.profile?.fullName ||
+        (user as any)?.name ||
+        "",
     }));
 
     void (async () => {

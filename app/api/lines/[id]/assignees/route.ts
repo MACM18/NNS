@@ -28,9 +28,7 @@ export async function GET(
       },
     });
 
-    const assigneeProfiles = assignees
-      .map((a: any) => a.user)
-      .filter(Boolean);
+    const assigneeProfiles = assignees.map((a: any) => a.user).filter(Boolean);
 
     return NextResponse.json({ data: assigneeProfiles });
   } catch (error) {

@@ -471,6 +471,7 @@ Build & start commands:
   ```
 
 Notes:
+
 - Ensure the `PORT` env is honored by Coolify (Next.js reads `PORT` for `next start`).
 - Configure health checks on `/` or `/auth`.
 - If you use a read-only build phase, ensure `prisma generate` runs during build.

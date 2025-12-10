@@ -26,9 +26,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
-      where.OR = [
-        { drumNumber: { contains: search, mode: "insensitive" } },
-      ];
+      where.OR = [{ drumNumber: { contains: search, mode: "insensitive" } }];
     }
 
     // If "all" param is present, return all drums without pagination

@@ -35,9 +35,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
-      where.OR = [
-        { invoiceNumber: { contains: search, mode: "insensitive" } },
-      ];
+      where.OR = [{ invoiceNumber: { contains: search, mode: "insensitive" } }];
     }
 
     const [invoices, total] = await Promise.all([

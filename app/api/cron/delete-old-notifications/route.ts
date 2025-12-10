@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
     const onlyReadParam = searchParams.get("onlyRead");
 
     const days = Math.max(1, Number(daysParam || 90));
-    const onlyRead = (onlyReadParam ?? "true").toString().toLowerCase() === "true";
+    const onlyRead =
+      (onlyReadParam ?? "true").toString().toLowerCase() === "true";
 
     const threshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 

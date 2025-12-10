@@ -86,7 +86,9 @@ export async function POST(req: NextRequest) {
               quantityRequested: Number(
                 item.quantity_requested ?? item.quantityRequested
               ),
-              quantityIssued: Number(item.quantity_issued ?? item.quantityIssued),
+              quantityIssued: Number(
+                item.quantity_issued ?? item.quantityIssued
+              ),
             },
           });
 
@@ -101,7 +103,8 @@ export async function POST(req: NextRequest) {
               where: { id: item.item_id ?? item.itemId },
               data: {
                 currentStock:
-                  currentStock + Number(item.quantity_issued ?? item.quantityIssued),
+                  currentStock +
+                  Number(item.quantity_issued ?? item.quantityIssued),
               },
             });
 
@@ -114,8 +117,12 @@ export async function POST(req: NextRequest) {
                 data: {
                   drumNumber: item.drum_number ?? item.drumNumber,
                   itemId: item.item_id ?? item.itemId,
-                  initialQuantity: Number(item.quantity_issued ?? item.quantityIssued),
-                  currentQuantity: Number(item.quantity_issued ?? item.quantityIssued),
+                  initialQuantity: Number(
+                    item.quantity_issued ?? item.quantityIssued
+                  ),
+                  currentQuantity: Number(
+                    item.quantity_issued ?? item.quantityIssued
+                  ),
                   receivedDate: new Date(invoiceData.date),
                   status: "active",
                 },

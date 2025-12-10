@@ -28,12 +28,14 @@ export async function GET(req: NextRequest) {
 
     // Calculate stats
     const thisMonth = monthlyInvoices.length;
-    const totalAmount = monthlyInvoices.reduce((sum, inv) =>
-      sum + Number(inv.totalAmount ?? 0),
-    0);
-    const linesBilled = monthlyInvoices.reduce((sum, inv) =>
-      sum + Number(inv.lineCount ?? 0),
-    0);
+    const totalAmount = monthlyInvoices.reduce(
+      (sum, inv) => sum + Number(inv.totalAmount ?? 0),
+      0
+    );
+    const linesBilled = monthlyInvoices.reduce(
+      (sum, inv) => sum + Number(inv.lineCount ?? 0),
+      0
+    );
     const averageLinesBilled = thisMonth > 0 ? linesBilled / thisMonth : 0;
     const avgRate =
       averageLinesBilled > 0 ? Math.round(totalAmount / averageLinesBilled) : 0;

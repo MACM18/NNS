@@ -28,15 +28,13 @@ async function authorize(): Promise<AuthContext> {
   return { userId: session.user.id, role };
 }
 
-export async function createConnection(
-  payload: {
-    month: number;
-    year: number;
-    sheet_url: string;
-    sheet_name?: string | null;
-    sheet_tab?: string | null;
-  }
-) {
+export async function createConnection(payload: {
+  month: number;
+  year: number;
+  sheet_url: string;
+  sheet_name?: string | null;
+  sheet_tab?: string | null;
+}) {
   try {
     const auth = await authorize();
 
@@ -139,15 +137,13 @@ export async function createConnectionFromForm(formData: FormData) {
       return { ok: false, error: "Invalid month or year format" };
     }
 
-    const result = await createConnection(
-      {
-        month,
-        year,
-        sheet_url: sheet_url.trim(),
-        sheet_name: sheet_name?.trim() || null,
-        sheet_tab: sheet_tab?.trim() || null,
-      }
-    );
+    const result = await createConnection({
+      month,
+      year,
+      sheet_url: sheet_url.trim(),
+      sheet_name: sheet_name?.trim() || null,
+      sheet_tab: sheet_tab?.trim() || null,
+    });
     return { ok: true, id: result.id };
   } catch (error: any) {
     console.error("[createConnectionFromForm] Error:", error);

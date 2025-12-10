@@ -27,11 +27,13 @@ export async function GET(req: NextRequest) {
 
     // Transform the data to match the expected format
     type WasteReportWithRelations = (typeof wasteReports)[number];
-    const formattedReports = wasteReports.map((report: WasteReportWithRelations) => ({
-      ...report,
-      item_name: report.item?.name || "",
-      full_name: report.reportedBy?.fullName || "",
-    }));
+    const formattedReports = wasteReports.map(
+      (report: WasteReportWithRelations) => ({
+        ...report,
+        item_name: report.item?.name || "",
+        full_name: report.reportedBy?.fullName || "",
+      })
+    );
 
     return NextResponse.json({ data: formattedReports });
   } catch (error) {

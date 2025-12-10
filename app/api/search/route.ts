@@ -109,7 +109,8 @@ export async function GET(req: NextRequest) {
       ...tasks.map((task: TaskResult) => ({
         id: task.id,
         type: "task" as const,
-        title: (task as any).customerName || (task as any).telephoneNo || "Task",
+        title:
+          (task as any).customerName || (task as any).telephoneNo || "Task",
         subtitle:
           [
             (task as any).telephoneNo,
@@ -136,7 +137,9 @@ export async function GET(req: NextRequest) {
         title: item.name || "Inventory Item",
         subtitle:
           (item as any).currentStock != null
-            ? `Stock: ${(item as any).currentStock}${item.unit ? ` ${item.unit}` : ""}`
+            ? `Stock: ${(item as any).currentStock}${
+                item.unit ? ` ${item.unit}` : ""
+              }`
             : "",
         data: item,
       })),

@@ -134,7 +134,8 @@ export async function PATCH(
 
     // Map potential snake_case to camelCase
     const updateData: any = {};
-    if (body.itemId ?? body.item_id) updateData.itemId = body.itemId ?? body.item_id;
+    if (body.itemId ?? body.item_id)
+      updateData.itemId = body.itemId ?? body.item_id;
     if (body.quantity != null) updateData.quantity = Number(body.quantity);
     if (body.wasteReason ?? body.waste_reason)
       updateData.wasteReason = body.wasteReason ?? body.waste_reason;

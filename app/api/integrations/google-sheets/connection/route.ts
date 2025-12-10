@@ -37,15 +37,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await createConnection(
-      {
-        month: Number(month),
-        year: Number(year),
-        sheet_url: String(sheet_url),
-        sheet_name: sheet_name ? String(sheet_name) : null,
-        sheet_tab: sheet_tab ? String(sheet_tab) : null,
-      }
-    );
+    const result = await createConnection({
+      month: Number(month),
+      year: Number(year),
+      sheet_url: String(sheet_url),
+      sheet_name: sheet_name ? String(sheet_name) : null,
+      sheet_tab: sheet_tab ? String(sheet_tab) : null,
+    });
 
     return NextResponse.json({ ok: true, id: result.id }, { status: 200 });
   } catch (error: any) {
