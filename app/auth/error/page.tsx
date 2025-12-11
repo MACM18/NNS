@@ -1,10 +1,11 @@
 // app/auth/error/page.tsx
-export default function AuthErrorPage({
+export default async function AuthErrorPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const code = searchParams?.error ?? "Unknown";
+  const params = await searchParams;
+  const code = params?.error ?? "Unknown";
   const message =
     code === "AccessDenied"
       ? "You don't have permission to access this page. Please contact an administrator."
