@@ -69,10 +69,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       try {
-        const response = await fetch(`/api/profiles/${user.id}`);
+        const response = await fetch(`/api/profile/${user.id}`);
         if (response.ok) {
           const data = await response.json();
-          setProfile(data.data);
+          setProfile(data.profile);
 
           // Check if user is a Google OAuth user
           const accountsResponse = await fetch(`/api/users/${user.id}`);

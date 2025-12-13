@@ -205,15 +205,12 @@ export default function SettingsPage() {
       if (!user?.id) {
         throw new Error("User ID is not available.");
       }
-      const response = await fetch(`/api/profiles/${user.id}`, {
-        method: "PUT",
+      const response = await fetch(`/api/profile/${user.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          full_name: profileData.full_name,
-          phone: profileData.phone,
-          address: profileData.address,
-          bio: profileData.bio,
-          avatar_url: profileData.avatar_url,
+          fullName: profileData.full_name,
+          email: profileData.email,
         }),
       });
 
