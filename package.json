@@ -50,6 +50,7 @@
     "clsx": "^2.1.1",
     "cmdk": "latest",
     "date-fns": "latest",
+    "dotenv": "^16.4.5",
     "embla-carousel-react": "latest",
     "googleapis": "^131.0.0",
     "http": "latest",
