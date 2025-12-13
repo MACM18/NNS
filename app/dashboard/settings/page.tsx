@@ -211,6 +211,10 @@ export default function SettingsPage() {
         body: JSON.stringify({
           fullName: profileData.full_name,
           email: profileData.email,
+          phone: profileData.phone,
+          address: profileData.address,
+          bio: profileData.bio,
+          avatarUrl: profileData.avatar_url,
         }),
       });
 

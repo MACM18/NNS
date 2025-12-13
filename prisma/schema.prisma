@@ -78,6 +78,10 @@ model Profile {
   userId    String   @unique
   email     String?
   fullName  String?  @map("full_name")
+  phone     String?  @map("phone")
+  address   String?  @map("address")
+  bio       String?  @map("bio")
+  avatarUrl String?  @map("avatar_url")
   role      String   @default("user")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

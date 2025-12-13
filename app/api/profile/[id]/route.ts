@@ -55,13 +55,17 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { fullName, email } = body;
+    const { fullName, email, phone, address, bio, avatarUrl } = body;
 
     const profile = await prisma.profile.update({
       where: { userId: id },
       data: {
         ...(fullName !== undefined && { fullName }),
         ...(email !== undefined && { email }),
+        ...(phone !== undefined && { phone }),
+        ...(address !== undefined && { address }),
+        ...(bio !== undefined && { bio }),
+        ...(avatarUrl !== undefined && { avatarUrl }),
       },
     });
 
