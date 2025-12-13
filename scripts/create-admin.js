@@ -8,8 +8,23 @@
 require("dotenv").config();
 const bcrypt = require("bcryptjs");
 const { PrismaClient } = require("@prisma/client");
+const { PrismaPg } = require("@prisma/adapter-pg");
+const { Pool } = require("pg");
 
-const prisma = new PrismaClient();
+// Create Prisma client with driver adapter (same as lib/prisma.ts)
+function createPrismaClient() {
+  const connectionString = process.env.DATABASE_URL;
+
+  const pool = new Pool({ connectionString });
+  const adapter = new PrismaPg(pool);
+
+  return new PrismaClient({
+    adapter,
+    log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+  });
+}
+
+const prisma = createPrismaClient();
 
 async function main() {
   const email = "hello@macm.dev";
