@@ -63,8 +63,8 @@ export const authConfig: NextAuthConfig = {
   ],
   callbacks: {
     async signIn({ user, account }) {
-      // Auto-create profile if it doesn't exist for any provider
-      if (user.id) {
+      // For OAuth providers, auto-create profile if it doesn't exist
+      if (account?.provider === "google" && user.id) {
         const existingProfile = await prisma.profile.findUnique({
           where: { userId: user.id },
         });
