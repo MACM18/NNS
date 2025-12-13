@@ -59,6 +59,7 @@ export default function SettingsPage() {
   // Profile form data
   const [profileData, setProfileData] = useState({
     full_name: "",
+    email: "",
     phone: "",
     address: "",
     bio: "",
@@ -111,6 +112,7 @@ export default function SettingsPage() {
     if (profile) {
       setProfileData({
         full_name: profile.full_name || "",
+        email: profile.email || "",
         phone: profile.phone || "",
         address: profile.address || "",
         bio: profile.bio || "",
