@@ -1,13 +1,28 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-export default async function middleware(req: Request & { nextUrl: URL }) {
-  const nextUrl = (req as any).nextUrl as URL;
-  const jwtSecret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
-  const token = await getToken({
-    req: req as any,
-    secret: jwtSecret,
-  });
+export default async function middleware(req: NextRequest) {
+  const nextUrl = req.nextUrl;
+  const jwtSecret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+
+  // NextAuth/Auth.js cookie names vary across versions and secure contexts.
+  const cookieNamesToTry = [
+    "__Secure-authjs.session-token",
+    "authjs.session-token",
+    "__Secure-next-auth.session-token",
+    "next-auth.session-token",
+  ];
+
+  let token: Awaited<ReturnType<typeof getToken>> | null = null;
+  for (const cookieName of cookieNamesToTry) {
+    token = await getToken({
+      req,
+      secret: jwtSecret,
+      cookieName,
+    });
+    if (token) break;
+  }
+
   const isLoggedIn = !!token;
   const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
   const isOnAuth =
