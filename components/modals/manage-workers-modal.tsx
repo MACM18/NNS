@@ -79,7 +79,19 @@ export function ManageWorkersModal({
       if (!res.ok) {
         throw new Error(json.error || "Failed to fetch workers");
       }
-      setWorkers(json.workers || []);
+      // Normalize worker fields from API (camelCase) to UI shape (snake_case)
+      const normalized = (json.workers || []).map((w: any) => ({
+        id: w.id,
+        full_name: w.fullName || w.full_name || "",
+        phone_number: w.phoneNumber || w.phone_number || null,
+        email: w.email || null,
+        role: w.role || null,
+        status: w.status || "active",
+        notes: w.notes || null,
+        profile_id: w.profileId || w.profile_id || null,
+        created_at: w.createdAt || w.created_at || null,
+      }));
+      setWorkers(normalized);
     } catch (error: any) {
       toast({
         title: "Failed to load workers",

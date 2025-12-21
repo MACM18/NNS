@@ -39,8 +39,9 @@ type AssignmentRow = {
 type Worker = {
   /** Unique identifier for the worker */
   id: string;
-  /** Worker's full name */
+  /** Worker's full name (DB uses camelCase `fullName`, some responses normalize to `full_name`) */
   full_name: string | null;
+  fullName?: string | null;
   /** Worker's role/position (e.g., technician, installer) */
   role: string | null;
   /** Worker's current status (active or inactive) */
@@ -170,7 +171,7 @@ export async function GET(req: NextRequest) {
       lineEntry.assignments.push({
         id: assignment.id,
         worker_id: assignment.workerId,
-        worker_name: worker?.full_name || "Unnamed",
+        worker_name: worker?.fullName || worker?.full_name || "Unnamed",
         worker_role: worker?.role || null,
         assigned_date: dateKey,
       });
@@ -187,7 +188,7 @@ export async function GET(req: NextRequest) {
         days,
         workers: (workerOptions || []).map((worker: any) => ({
           id: worker.id,
-          full_name: worker.full_name,
+          full_name: worker.fullName || worker.full_name || null,
           role: worker.role,
         })),
       }),
