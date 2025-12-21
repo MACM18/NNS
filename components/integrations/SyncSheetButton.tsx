@@ -47,9 +47,9 @@ export default function SyncSheetButton({
                 typeof r === "object"
                   ? `Lines: ${r.upserted ?? 0} updated, ${
                       r.appended ?? 0
-                    } added • Hardware: ${
-                      r.hardwareUpdated ?? 0
-                    } items • Drums: ${r.drumProcessed ?? 0} updated, ${
+                    } added • Hardware: ${r.hardwareUpdated ?? 0} updated, ${
+                      r.hardwareCreated ?? 0
+                    } created • Drums: ${r.drumProcessed ?? 0} updated, ${
                       r.drumUsageInserted ?? 0
                     } usages`
                   : undefined;

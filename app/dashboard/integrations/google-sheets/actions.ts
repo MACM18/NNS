@@ -345,6 +345,7 @@ export async function syncConnection(
 
     // Decrement hardware inventory items based on line usage
     let hardwareUpdated = 0;
+    let hardwareCreated = 0;
     try {
       progress("Updating hardware inventory");
 
@@ -391,17 +392,24 @@ export async function syncConnection(
         }
       }
 
-      // Update inventory items
+      console.log(
+        `[syncConnection] Hardware totals aggregated:`,
+        hardwareTotals
+      );
+
+      // Update or create inventory items
       for (const [itemName, totalUsed] of Object.entries(hardwareTotals)) {
         if (totalUsed <= 0) continue;
 
         try {
-          const item = await prisma.inventoryItem.findFirst({
+          // Try to find existing item
+          let item = await prisma.inventoryItem.findFirst({
             where: { name: { equals: itemName, mode: "insensitive" } },
-            select: { id: true, currentStock: true },
+            select: { id: true, currentStock: true, name: true },
           });
 
           if (item) {
+            // Update existing item - decrement stock
             const currentStock = Number(item.currentStock);
             const newStock = Math.max(0, currentStock - totalUsed);
 
@@ -409,17 +417,42 @@ export async function syncConnection(
               where: { id: item.id },
               data: { currentStock: newStock },
             });
+            console.log(
+              `[syncConnection] Updated ${item.name}: ${currentStock} -> ${newStock} (used: ${totalUsed})`
+            );
             hardwareUpdated++;
+          } else {
+            // Create new inventory item with initial stock of 1000 minus usage
+            const initialStock = Math.max(1000, totalUsed * 10); // Start with 10x usage or 1000
+            const newStock = initialStock - totalUsed;
+
+            const created = await prisma.inventoryItem.create({
+              data: {
+                name: itemName,
+                unit: "pcs",
+                currentStock: newStock,
+                reorderLevel: 100,
+              },
+            });
+            console.log(
+              `[syncConnection] Created ${created.name}: initial ${initialStock}, after usage: ${newStock}`
+            );
+            hardwareCreated++;
           }
         } catch (err) {
-          console.warn(`Failed to update inventory for ${itemName}:`, err);
+          console.error(
+            `[syncConnection] Failed to update/create inventory for ${itemName}:`,
+            err
+          );
         }
       }
 
-      progress(`Updated ${hardwareUpdated} hardware inventory items`);
+      progress(
+        `Updated ${hardwareUpdated} items, created ${hardwareCreated} new items`
+      );
     } catch (hardwareError) {
-      console.warn(
-        "[syncConnection] Hardware inventory update warning:",
+      console.error(
+        "[syncConnection] Hardware inventory error:",
         hardwareError
       );
       progress("Warning: Some hardware inventory updates failed");
@@ -450,6 +483,10 @@ export async function syncConnection(
         },
       });
 
+      console.log(
+        `[syncConnection] Found ${monthLines.length} lines with drum numbers for ${year}-${month}`
+      );
+
       if (monthLines.length > 0) {
         // Extract unique drum numbers
         const drumNumbers = Array.from(
@@ -460,18 +497,39 @@ export async function syncConnection(
           )
         );
 
+        console.log(`[syncConnection] Unique drum numbers:`, drumNumbers);
+
         // Ensure drum tracking records exist
-        const { byNumber } = await ensureDrumTrackingForNumbers(drumNumbers);
+        const { byNumber, createdNumbers } = await ensureDrumTrackingForNumbers(
+          drumNumbers
+        );
+
+        if (createdNumbers.length > 0) {
+          console.log(
+            `[syncConnection] Created ${createdNumbers.length} new drum tracking entries:`,
+            createdNumbers
+          );
+        }
 
         // Process each line's drum usage
         for (const line of monthLines) {
           if (!line.drumNumber) continue;
 
           const drumInfo = byNumber.get(line.drumNumber);
-          if (!drumInfo) continue;
+          if (!drumInfo) {
+            console.warn(
+              `[syncConnection] No drum tracking found for drum: ${line.drumNumber}`
+            );
+            continue;
+          }
 
           const quantityUsed = computeQuantityUsed(line);
-          if (quantityUsed <= 0) continue;
+          if (quantityUsed <= 0) {
+            console.warn(
+              `[syncConnection] Zero quantity used for line ${line.id}, drum ${line.drumNumber}`
+            );
+            continue;
+          }
 
           // Check if usage record exists
           const existingUsage = await prisma.drumUsage.findFirst({
@@ -493,6 +551,9 @@ export async function syncConnection(
                 usageDate: line.date || new Date(),
               },
             });
+            console.log(
+              `[syncConnection] Updated drum usage for line ${line.id}, drum ${line.drumNumber}: ${quantityUsed}m`
+            );
           } else {
             // Create new usage record
             await prisma.drumUsage.create({
@@ -505,6 +566,9 @@ export async function syncConnection(
                 usageDate: line.date || new Date(),
               },
             });
+            console.log(
+              `[syncConnection] Created drum usage for line ${line.id}, drum ${line.drumNumber}: ${quantityUsed}m`
+            );
           }
           drumUsageProcessed++;
         }
@@ -514,14 +578,20 @@ export async function syncConnection(
         const recalculated = await recalcDrumAggregates(drumIds, month, year);
         drumUpdated = recalculated;
 
+        console.log(
+          `[syncConnection] Drum summary: ${drumUsageProcessed} usages processed, ${drumUpdated} drums recalculated`
+        );
         progress(
           `Processed ${drumUsageProcessed} drum usages, updated ${drumUpdated} drums`
         );
       } else {
+        console.log(
+          `[syncConnection] No drum numbers found in lines for ${year}-${month}`
+        );
         progress("No drum numbers found in this period");
       }
     } catch (drumError) {
-      console.warn("[syncConnection] Drum processing warning:", drumError);
+      console.error("[syncConnection] Drum processing error:", drumError);
       progress("Warning: Some drum tracking operations failed");
     }
 
@@ -545,6 +615,7 @@ export async function syncConnection(
       drumUsageInserted: drumUsageProcessed,
       drumProcessed: drumUpdated,
       hardwareUpdated,
+      hardwareCreated,
     };
   } catch (error) {
     console.error("[syncConnection] Error:", error);
@@ -976,10 +1047,18 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
     };
   }
 
+  console.log(
+    `[ensureDrumTrackingForNumbers] Processing ${unique.length} drum numbers`
+  );
+
   const existing = await prisma.drumTracking.findMany({
     where: { drumNumber: { in: unique } },
     select: { id: true, drumNumber: true, itemId: true, status: true },
   });
+
+  console.log(
+    `[ensureDrumTrackingForNumbers] Found ${existing.length} existing drums`
+  );
 
   const byNumber = new Map<
     string,
@@ -1010,13 +1089,27 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
         id: item.id,
         drumSize: item.drumSize ? Number(item.drumSize) : null,
       };
+      console.log(
+        `[ensureDrumTrackingForNumbers] Found Drop Wire Cable item: ${item.id}, size: ${defaultItem.drumSize}`
+      );
+    } else {
+      console.warn(
+        `[ensureDrumTrackingForNumbers] No 'Drop Wire Cable' inventory item found, will create drums with default 2000m capacity`
+      );
     }
   } catch (err) {
-    console.warn("Could not find Drop Wire Cable item:", err);
+    console.error(
+      "[ensureDrumTrackingForNumbers] Error finding Drop Wire Cable item:",
+      err
+    );
   }
 
   const toCreate = unique.filter((n) => !byNumber.has(n));
   const createdNumbers: string[] = [];
+
+  console.log(
+    `[ensureDrumTrackingForNumbers] Need to create ${toCreate.length} new drums`
+  );
 
   for (const num of toCreate) {
     try {
@@ -1039,9 +1132,15 @@ async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
           status: created.status || "active",
         });
         createdNumbers.push(created.drumNumber);
+        console.log(
+          `[ensureDrumTrackingForNumbers] Created drum ${created.drumNumber} with ID ${created.id}`
+        );
       }
     } catch (e) {
-      console.error(`Failed to create drum tracking for ${num}:`, e);
+      console.error(
+        `[ensureDrumTrackingForNumbers] Failed to create drum tracking for ${num}:`,
+        e
+      );
     }
   }
 
