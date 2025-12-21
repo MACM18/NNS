@@ -138,14 +138,49 @@ export function TaskManagementTable({
     }
   };
 
-  const filteredData = data.filter(
-    (item) =>
-      item.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.telephone_no?.includes(searchTerm) ||
-      item.contact_no?.includes(searchTerm) ||
-      item.dp?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.address?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredData = data.filter((item) => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (item.customer_name || "").toLowerCase().includes(q) ||
+      (item.telephone_no || "").includes(q) ||
+      (item.contact_no || "").includes(q) ||
+      (item.dp || "").toLowerCase().includes(q) ||
+      (item.address || "").toLowerCase().includes(q)
+    );
+  });
+
+  const sortedData = [...filteredData].sort((a, b) => {
+    const getValue = (item: Task, field: string) => {
+      switch (field) {
+        case "task_date":
+          return item.task_date ? new Date(item.task_date).getTime() : 0;
+        case "created_at":
+          return item.created_at ? new Date(item.created_at).getTime() : 0;
+        case "customer_name":
+          return (item.customer_name || "").toLowerCase();
+        case "status":
+          return (item.status || "").toLowerCase();
+        default:
+          return (item.customer_name || "").toLowerCase();
+      }
+    };
+
+    const av = getValue(a, sortField);
+    const bv = getValue(b, sortField);
+
+    if (typeof av === "number" && typeof bv === "number") {
+      return sortDirection === "asc" ? av - bv : bv - av;
+    }
+
+    if (typeof av === "string" && typeof bv === "string") {
+      return sortDirection === "asc"
+        ? av.localeCompare(bv)
+        : bv.localeCompare(av);
+    }
+
+    return 0;
+  });
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -243,6 +278,16 @@ export function TaskManagementTable({
     try {
       // Check if line details exist for this task
       const tel = data.find((t) => t.id === taskId)?.telephone_no ?? "";
+      if (!tel) {
+        addNotification({
+          title: "Cannot Complete Task",
+          message: "Telephone number is missing for this task.",
+          type: "error",
+          category: "system",
+        });
+        return;
+      }
+
       const checkResponse = await fetch(
         `/api/lines/check?telephone_no=${encodeURIComponent(tel)}`
       );
@@ -584,7 +629,7 @@ export function TaskManagementTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredData.map((item) => (
+              {sortedData.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     {new Date(item.task_date).toLocaleDateString()}
