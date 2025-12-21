@@ -66,6 +66,12 @@ export async function createConnection(payload: {
       throw new Error("Invalid Google Sheets URL format");
     }
 
+    // Get Profile ID from User ID (createdById references Profile, not User)
+    const profile = await prisma.profile.findUnique({
+      where: { userId: auth.userId },
+      select: { id: true },
+    });
+
     try {
       const created = await prisma.googleSheetConnection.create({
         data: {
@@ -75,7 +81,7 @@ export async function createConnection(payload: {
           sheetName: sheet_name,
           sheetTab: sheet_tab,
           sheetId: spreadsheetId,
-          createdById: auth.userId,
+          createdById: profile?.id || null,
         },
         select: { id: true },
       });
