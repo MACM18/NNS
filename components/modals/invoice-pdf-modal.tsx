@@ -299,8 +299,10 @@ export function InvoicePDFModal({
                     <td></td>
                     <td></td>
                     <td>${data.count}</td>
-                    <td>${data.rate.toLocaleString()}.00</td>
-                    <td class="amount">${data.amount.toLocaleString()}.00</td>
+                    <td>${Number(data.rate || 0).toLocaleString()}.00</td>
+                    <td class="amount">${Number(
+                      data.amount || 0
+                    ).toLocaleString()}.00</td>
                 </tr>
             `
               )
@@ -325,14 +327,18 @@ export function InvoicePDFModal({
             </tr>
             <tr class="total-row">
                 <td colspan="6"><strong>Grand Total (Rs.)</strong></td>
-                <td class="amount"><strong>${totalAmount.toLocaleString()}.00</strong></td>
+                <td class="amount"><strong>${Number(
+                  totalAmount || 0
+                ).toLocaleString()}.00</strong></td>
             </tr>
             ${
               invoice.invoice_type === "A"
                 ? `
             <tr class="total-row">
                 <td colspan="6"><strong>90%</strong></td>
-                <td class="amount"><strong>${adjustedAmount.toLocaleString()}.00</strong></td>
+                <td class="amount"><strong>${Number(
+                  adjustedAmount || 0
+                ).toLocaleString()}.00</strong></td>
             </tr>
             `
                 : ""
@@ -469,10 +475,10 @@ export function InvoicePDFModal({
                               {data.count}
                             </td>
                             <td className='border border-gray-300 p-2'>
-                              {data.rate.toLocaleString()}.00
+                              {Number(data.rate || 0).toLocaleString()}.00
                             </td>
                             <td className='border border-gray-300 p-2 text-right'>
-                              {data.amount.toLocaleString()}.00
+                              {Number(data.amount || 0).toLocaleString()}.00
                             </td>
                           </tr>
                         )
@@ -482,7 +488,8 @@ export function InvoicePDFModal({
                           Grand Total (Rs.)
                         </td>
                         <td className='border border-gray-300 p-2 text-right'>
-                          {invoice.total_amount.toLocaleString()}.00
+                          {Number(invoice.total_amount || 0).toLocaleString()}
+                          .00
                         </td>
                       </tr>
                       {invoice.invoice_type === "A" && (
@@ -494,8 +501,10 @@ export function InvoicePDFModal({
                             90%
                           </td>
                           <td className='border border-gray-300 p-2 text-right'>
-                            {Math.round(
-                              invoice.total_amount * 0.9
+                            {Number(
+                              Math.round(
+                                Number(invoice.total_amount || 0) * 0.9
+                              )
                             ).toLocaleString()}
                             .00
                           </td>

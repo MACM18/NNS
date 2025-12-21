@@ -58,7 +58,7 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
   };
 
   const formatCurrency = (amount: number): string => {
-    return `LKR ${amount.toLocaleString()}`;
+    return `LKR ${Number(amount || 0).toLocaleString()}`;
   };
 
   return (
@@ -164,13 +164,13 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
                     {new Date(line.date).toLocaleDateString()}
                   </TableCell>
                   <TableCell className='text-right'>
-                    {line.total_cable.toFixed(2)}
+                    {Number(line.total_cable || 0).toFixed(2)}
                   </TableCell>
                   <TableCell className='text-right'>
-                    {rate.toLocaleString()}
+                    {Number(rate || 0).toLocaleString()}
                   </TableCell>
                   <TableCell className='text-right'>
-                    {rate.toLocaleString()}
+                    {Number(rate || 0).toLocaleString()}
                   </TableCell>
                 </TableRow>
               );

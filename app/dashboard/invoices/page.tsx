@@ -333,7 +333,7 @@ export default function InvoicesPage() {
           </CardHeader>
           <CardContent>
             <div className='text-2xl font-bold'>
-              LKR {stats.totalAmount.toLocaleString()}
+              LKR {Number(stats.totalAmount || 0).toLocaleString()}
             </div>
             <p className='text-xs text-muted-foreground'>
               {new Date().toLocaleDateString("en-US", {
@@ -362,7 +362,7 @@ export default function InvoicesPage() {
           </CardHeader>
           <CardContent>
             <div className='text-2xl font-bold'>
-              LKR {stats.avgRate.toLocaleString()}
+              LKR {Number(stats.avgRate || 0).toLocaleString()}
             </div>
             <p className='text-xs text-muted-foreground'>Per installation</p>
           </CardContent>
@@ -421,7 +421,8 @@ export default function InvoicesPage() {
                         <TableCell>{invoice.job_month}</TableCell>
                         <TableCell>{invoice.line_count}</TableCell>
                         <TableCell>
-                          LKR {invoice.total_amount.toLocaleString()}
+                          LKR{" "}
+                          {Number(invoice.total_amount || 0).toLocaleString()}
                         </TableCell>
                         <TableCell>{getStatusBadge(invoice.status)}</TableCell>
                         <TableCell>
@@ -468,7 +469,7 @@ export default function InvoicesPage() {
                         {tier.min_length}-{tier.max_length}m
                       </div>
                       <div className='text-2xl font-bold'>
-                        LKR {tier.rate.toLocaleString()}
+                        LKR {Number(tier.rate || 0).toLocaleString()}
                       </div>
                     </div>
                   ))}

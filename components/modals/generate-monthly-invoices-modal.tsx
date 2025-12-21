@@ -444,7 +444,8 @@ export function GenerateMonthlyInvoicesModal({
                         </Badge>
                         <span className='text-sm text-muted-foreground'>
                           {preview.percentage}% • {preview.lines.length} lines •
-                          LKR {preview.totalAmount.toLocaleString()}
+                          LKR{" "}
+                          {Number(preview.totalAmount || 0).toLocaleString()}
                         </span>
                       </div>
                       <div className='flex gap-2'>
@@ -486,18 +487,18 @@ export function GenerateMonthlyInvoicesModal({
                               <TableCell>{line.name}</TableCell>
                               <TableCell>{line.phone_number}</TableCell>
                               <TableCell>
-                                {line.total_cable.toFixed(2)}m
+                                {Number(line.total_cable || 0).toFixed(2)}m
                               </TableCell>
                               <TableCell>
                                 LKR{" "}
-                                {calculateRate(
-                                  line.total_cable
+                                {Number(
+                                  calculateRate(line.total_cable) || 0
                                 ).toLocaleString()}
                               </TableCell>
                               <TableCell>
                                 LKR{" "}
-                                {calculateRate(
-                                  line.total_cable
+                                {Number(
+                                  calculateRate(line.total_cable) || 0
                                 ).toLocaleString()}
                               </TableCell>
                             </TableRow>

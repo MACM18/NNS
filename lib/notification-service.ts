@@ -41,7 +41,9 @@ export class NotificationService {
   ) {
     return this.createNotification({
       title: "Invoice Generated",
-      message: `Invoice ${invoiceNumber} for LKR ${amount.toLocaleString()} has been generated`,
+      message: `Invoice ${invoiceNumber} for LKR ${Number(
+        amount || 0
+      ).toLocaleString()} has been generated`,
       type: "info",
       category: "invoice_generated",
       action_url: "/invoices",
