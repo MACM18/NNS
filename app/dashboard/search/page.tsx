@@ -35,6 +35,8 @@ interface SearchResult {
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
+  const router = require("next/navigation").useRouter();
+
   const [filters, setFilters] = useState<SearchFilters>({
     query: searchParams.get("q") || "",
     categories: ["line", "task", "invoice", "inventory"],
@@ -43,17 +45,29 @@ export default function SearchPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchTime, setSearchTime] = useState<number | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [page, setPage] = useState<number>(1);
+  const [limit] = useState<number>(20);
+  const [total, setTotal] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const query = searchParams.get("q");
     if (query) {
       setFilters((prev) => ({ ...prev, query }));
-      performSearch({ ...filters, query });
+      performSearch({ ...filters, query, page: 1 }, false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const performSearch = async (searchFilters = filters) => {
-    if (!searchFilters.query.trim() && searchFilters.categories.length === 0) {
+  const performSearch = async (
+    searchFilters: any = filters,
+    append: boolean = false,
+    pageOverride?: number
+  ) => {
+    setError(null);
+
+    const effectiveQuery = (searchFilters.query || "").trim();
+    if (!effectiveQuery && searchFilters.categories.length === 0) {
       setResults([]);
       setHasSearched(false);
       setSearchTime(null);
@@ -66,13 +80,11 @@ export default function SearchPage() {
     const startTime = Date.now();
 
     try {
-      // Transform filters for API
       const apiFilters = {
-        query: searchFilters.query,
+        query: effectiveQuery,
         categories: searchFilters.categories,
         lineStatus: searchFilters.lineStatus,
         taskStatus: searchFilters.taskStatus,
-        // taskPriority removed; not part of filters
         invoiceType: searchFilters.invoiceType,
         inventoryLowStock: searchFilters.inventoryLowStock,
         lengthRange: searchFilters.lengthRange,
@@ -83,7 +95,16 @@ export default function SearchPage() {
               to: searchFilters.dateRange.to?.toISOString(),
             }
           : undefined,
+        page: pageOverride ?? page,
+        limit,
       };
+
+      // Update URL with query and page
+      const params = new URLSearchParams();
+      if (apiFilters.query) params.set("q", apiFilters.query);
+      if (apiFilters.page && Number(apiFilters.page) > 1)
+        params.set("page", String(apiFilters.page));
+      router.push(`/dashboard/search?${params.toString()}`, { shallow: true });
 
       const response = await fetch("/api/search", {
         method: "POST",
@@ -92,15 +113,29 @@ export default function SearchPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Search failed");
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Search failed");
       }
 
       const result = await response.json();
-      setResults(result.data || []);
+      const data = result.data || [];
+      const meta = result.meta || {
+        total: null,
+        page: pageOverride ?? page,
+        limit,
+      };
+
+      setTotal(meta.total ?? null);
+      setPage(meta.page ?? page);
+
+      if (append) setResults((prev) => [...prev, ...data]);
+      else setResults(data);
+
       setSearchTime(Date.now() - startTime);
-    } catch (error) {
-      console.error("Advanced search error:", error);
-      setResults([]);
+    } catch (err: any) {
+      console.error("Advanced search error:", err);
+      setError(String(err?.message ?? "Search failed"));
+      if (!append) setResults([]);
     } finally {
       setIsSearching(false);
     }
@@ -157,7 +192,10 @@ export default function SearchPage() {
           <AdvancedSearchFilters
             filters={filters}
             onFiltersChange={setFilters}
-            onSearch={() => performSearch()}
+            onSearch={() => {
+              setPage(1);
+              performSearch({ ...filters }, false, 1);
+            }}
             onClear={() => {
               setFilters({
                 query: "",
@@ -186,8 +224,11 @@ export default function SearchPage() {
               </CardTitle>
               {hasSearched && (
                 <p className='text-sm text-muted-foreground'>
-                  Found {results.length} result
-                  {results.length !== 1 ? "s" : ""}
+                  Found {typeof total === "number" ? total : results.length}{" "}
+                  result
+                  {(typeof total === "number" ? total : results.length) !== 1
+                    ? "s"
+                    : ""}
                   {filters.query && ` for "${filters.query}"`}
                 </p>
               )}
@@ -205,10 +246,17 @@ export default function SearchPage() {
                 </div>
               ) : results.length > 0 ? (
                 <div className='space-y-4'>
+                  {error && (
+                    <div className='bg-red-50 border border-red-100 text-red-800 p-3 rounded'>
+                      <strong className='font-semibold'>Error: </strong>
+                      <span>{error}</span>
+                    </div>
+                  )}
+
                   {results.map((result) => (
                     <Link
                       key={`${result.type}-${result.id}`}
-                      href={`/search/details/${result.type}/${result.id}`}
+                      href={`/dashboard/search/details/${result.type}/${result.id}`}
                       className='block'
                     >
                       <Card className='hover:shadow-md transition-shadow cursor-pointer'>
@@ -253,6 +301,33 @@ export default function SearchPage() {
                       </Card>
                     </Link>
                   ))}
+
+                  {/* Pagination Controls */}
+                  <div className='flex items-center justify-between mt-4'>
+                    <div className='text-sm text-muted-foreground'>
+                      {typeof total === "number" ? (
+                        <span>
+                          Showing {results.length} of {total} result
+                          {total !== 1 ? "s" : ""}
+                        </span>
+                      ) : (
+                        <span>
+                          Showing {results.length} result
+                          {results.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                    {typeof total === "number" && results.length < total && (
+                      <div>
+                        <Button
+                          onClick={() => performSearch(filters, true, page + 1)}
+                          disabled={isSearching}
+                        >
+                          {isSearching ? "Loading..." : "Load more"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : hasSearched ? (
                 <div className='text-center py-8'>

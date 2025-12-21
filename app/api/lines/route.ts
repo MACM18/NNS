@@ -24,8 +24,15 @@ export async function GET(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {};
 
-    // Date filter based on 'today', 'week', 'month'
-    if (dateFilter) {
+    // Support explicit startDate/endDate query params (YYYY-MM-DD)
+    const startDateParam = searchParams.get("startDate");
+    const endDateParam = searchParams.get("endDate");
+
+    if (startDateParam && endDateParam) {
+      const startDate = new Date(startDateParam);
+      const endDate = new Date(endDateParam + "T23:59:59.999Z");
+      where.date = { gte: startDate, lte: endDate };
+    } else if (dateFilter) {
       const now = new Date();
       let startDate: Date;
 

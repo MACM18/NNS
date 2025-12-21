@@ -490,7 +490,14 @@ export async function POST(req: NextRequest) {
     // Sort by relevance
     searchResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
 
-    return NextResponse.json({ data: searchResults });
+    // Pagination
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(filters.limit) || 50));
+    const total = searchResults.length;
+    const start = (page - 1) * limit;
+    const data = searchResults.slice(start, start + limit);
+
+    return NextResponse.json({ data, meta: { total, page, limit } });
   } catch (error) {
     console.error("Advanced search error:", error);
     return NextResponse.json(

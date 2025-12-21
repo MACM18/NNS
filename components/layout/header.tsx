@@ -183,7 +183,7 @@ export function Header() {
       setIsMobileSearchOpen(false);
     }
 
-    router.push(`/search/details/${result.type}/${result.id}`);
+    router.push(`/dashboard/search/details/${result.type}/${result.id}`);
   };
 
   const clearSearch = (closeMobileSheet = false) => {
@@ -197,7 +197,7 @@ export function Header() {
   };
 
   const openAdvancedSearch = (closeMobileSheet = false) => {
-    router.push("/search");
+    router.push("/dashboard/search");
     setShowSearchResults(false);
 
     if (closeMobileSheet) {

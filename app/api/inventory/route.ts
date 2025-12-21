@@ -34,9 +34,17 @@ export async function GET(req: NextRequest) {
 
     // If "all" param is present, return all items without pagination
     if (all === "true") {
+      const includeRelations = searchParams.get("includeRelations") === "true";
+
       const items = await prisma.inventoryItem.findMany({
         where,
         orderBy: { name: "asc" },
+        include: includeRelations
+          ? {
+              inventoryInvoiceItems: { include: { invoice: true } },
+              wasteTracking: true,
+            }
+          : undefined,
       });
 
       const formatted = items.map((it) => ({
@@ -51,10 +59,36 @@ export async function GET(req: NextRequest) {
         reorder_level: Number(it.reorderLevel ?? 0),
         created_at: it.createdAt?.toISOString(),
         updated_at: it.updatedAt?.toISOString(),
+        inventory_invoice_items: includeRelations
+          ? (((it as any).inventoryInvoiceItems || []) as any[]).map(
+              (ii: any) => ({
+                id: ii.id,
+                invoice_id: ii.invoiceId,
+                item_id: ii.itemId,
+                quantity_issued: Number(ii.quantityIssued ?? 0),
+                quantity_requested: Number(ii.quantityRequested ?? 0),
+                created_at: ii.createdAt?.toISOString(),
+                inventory_invoices: ii.invoice
+                  ? { date: ii.invoice.date?.toISOString().split("T")[0] }
+                  : null,
+              })
+            )
+          : undefined,
+        waste_tracking: includeRelations
+          ? (((it as any).wasteTracking || []) as any[]).map((w: any) => ({
+              id: w.id,
+              quantity: Number(w.quantity),
+              waste_date: w.wasteDate
+                ? w.wasteDate.toISOString().split("T")[0]
+                : null,
+            }))
+          : undefined,
       }));
 
       return NextResponse.json({ data: formatted });
     }
+
+    const includeRelations = searchParams.get("includeRelations") === "true";
 
     const [items, total] = await Promise.all([
       prisma.inventoryItem.findMany({
@@ -62,11 +96,17 @@ export async function GET(req: NextRequest) {
         orderBy: { name: "asc" },
         skip: (page - 1) * limit,
         take: limit,
+        include: includeRelations
+          ? {
+              inventoryInvoiceItems: { include: { invoice: true } },
+              wasteTracking: true,
+            }
+          : undefined,
       }),
       prisma.inventoryItem.count({ where }),
     ]);
 
-    const formatted = items.map((it) => ({
+    const formatted = items.map((it: any) => ({
       id: it.id,
       name: it.name,
       unit: it.unit,
@@ -78,6 +118,30 @@ export async function GET(req: NextRequest) {
       reorder_level: Number(it.reorderLevel ?? 0),
       created_at: it.createdAt?.toISOString(),
       updated_at: it.updatedAt?.toISOString(),
+      inventory_invoice_items: includeRelations
+        ? (((it as any).inventoryInvoiceItems || []) as any[]).map(
+            (ii: any) => ({
+              id: ii.id,
+              invoice_id: ii.invoiceId,
+              item_id: ii.itemId,
+              quantity_issued: Number(ii.quantityIssued ?? 0),
+              quantity_requested: Number(ii.quantityRequested ?? 0),
+              created_at: ii.createdAt?.toISOString(),
+              inventory_invoices: ii.invoice
+                ? { date: ii.invoice.date?.toISOString().split("T")[0] }
+                : null,
+            })
+          )
+        : undefined,
+      waste_tracking: includeRelations
+        ? (((it as any).wasteTracking || []) as any[]).map((w: any) => ({
+            id: w.id,
+            quantity: Number(w.quantity),
+            waste_date: w.wasteDate
+              ? w.wasteDate.toISOString().split("T")[0]
+              : null,
+          }))
+        : undefined,
     }));
 
     return NextResponse.json({
