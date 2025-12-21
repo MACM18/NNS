@@ -16,13 +16,82 @@ export async function GET(
 
     const line = await prisma.lineDetails.findUnique({
       where: { id },
+      include: {
+        lineAssignees: {
+          include: {
+            user: { select: { id: true, fullName: true, role: true } },
+          },
+        },
+      },
     });
 
     if (!line) {
       return NextResponse.json({ error: "Line not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ data: line });
+    const assignees = (line.lineAssignees || [])
+      .map((a: any) => a.user)
+      .filter(Boolean);
+
+    const formatted = {
+      id: line.id,
+      name: line.name,
+      address: line.address,
+      telephone_no: line.telephoneNo,
+      dp: line.dp,
+      date: line.date,
+      status: line.status,
+      task_id: line.taskId,
+      power_dp: Number(line.powerDp || 0),
+      power_inbox: Number(line.powerInbox || 0),
+      cable_start: Number(line.cableStart || 0),
+      cable_middle: Number(line.cableMiddle || 0),
+      cable_end: Number(line.cableEnd || 0),
+      total_cable:
+        Number(line.cableStart || 0) +
+        Number(line.cableMiddle || 0) +
+        Number(line.cableEnd || 0),
+      wastage: Number(line.wastage || 0),
+      internal_wire: Number(line.internalWire || 0),
+      casing: Number(line.casing || 0),
+      conduit: Number(line.conduit || 0),
+      cat5: Number(line.cat5 || 0),
+      c_tie: Number(line.cTie || 0),
+      c_clip: Number(line.cClip || 0),
+      tag_tie: Number(line.tagTie || 0),
+      flexible: Number(line.flexible || 0),
+      pole: Number(line.pole || 0),
+      pole_67: Number(line.pole67 || 0),
+      top_bolt: Number(line.topBolt || 0),
+      // Compute segment lengths and totals
+      f1: Number(line.cableStart || 0),
+      g1: Number(line.cableMiddle || 0),
+      c_hook: Number(line.cHook || 0),
+      l_hook: Number(line.lHook || 0),
+      retainers: Number(line.retainers || 0),
+      nut_bolt: Number(line.nutBolt || 0),
+      u_clip: Number(line.uClip || 0),
+      concrete_nail: Number(line.concreteNail || 0),
+      roll_plug: Number(line.rollPlug || 0),
+      screw_nail: Number(line.screwNail || 0),
+      socket: Number(line.socket || 0),
+      bend: Number(line.bend || 0),
+      rj11: Number(line.rj11 || 0),
+      rj12: Number(line.rj12 || 0),
+      rj45: Number(line.rj45 || 0),
+      fiber_rosette: Number(line.fiberRosette || 0),
+      s_rosette: Number(line.sRosette || 0),
+      fac: Number(line.fac || 0),
+      assignees,
+      created_at: line.createdAt,
+      completed: Boolean(line.completedDate || line.status === "completed"),
+      drum_number: line.drumNumber || null,
+      ont_serial: line.ontSerial || null,
+      voice_test_no: line.voiceTestNo || null,
+      stb_serial: line.stbSerial || null,
+    };
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error fetching line:", error);
     return NextResponse.json(
@@ -45,12 +114,37 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
+    // Whitelist allowed fields (accept snake_case or camelCase)
+    const updateData: any = {};
+    if (body.status !== undefined) updateData.status = body.status;
+    if (body.completed_date !== undefined || body.completedDate !== undefined)
+      updateData.completedDate = body.completed_date ?? body.completedDate;
+    if (body.drum_number !== undefined || body.drumNumber !== undefined)
+      updateData.drumNumber = body.drum_number ?? body.drumNumber;
+    if (body.ont_serial !== undefined || body.ontSerial !== undefined)
+      updateData.ontSerial = body.ont_serial ?? body.ontSerial;
+
     const line = await prisma.lineDetails.update({
       where: { id },
-      data: body,
+      data: updateData,
     });
 
-    return NextResponse.json({ data: line });
+    // Return formatted snake_case response to match front-end expectations
+    const formatted = {
+      id: line.id,
+      name: line.name,
+      address: line.address,
+      telephone_no: line.telephoneNo,
+      dp: line.dp,
+      date: line.date,
+      status: line.status,
+      task_id: line.taskId,
+      created_at: line.createdAt,
+      completed: Boolean(line.completedDate || line.status === "completed"),
+      drum_number: line.drumNumber || null,
+    };
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error updating line:", error);
     return NextResponse.json(
@@ -74,20 +168,20 @@ export async function DELETE(
 
     // Use a transaction to handle cascading deletes
     await prisma.$transaction(async (tx: any) => {
-      // Remove dependent drum usage records
+      // Remove dependent drum usage records (use Prisma field names)
       await tx.drumUsage.deleteMany({
-        where: { line_details_id: id },
+        where: { lineDetailsId: id },
       });
 
       // Remove any line assignees
-      await tx.lineAssignees.deleteMany({
-        where: { line_id: id },
+      await tx.lineAssignee.deleteMany({
+        where: { lineId: id },
       });
 
       // Null out any tasks that reference this line
-      await tx.tasks.updateMany({
-        where: { line_details_id: id },
-        data: { line_details_id: null },
+      await tx.task.updateMany({
+        where: { lineDetailsId: id },
+        data: { lineDetailsId: null },
       });
 
       // Finally delete the line
