@@ -651,6 +651,32 @@ function normalizeTelephoneCanonical(raw: any): string {
   return "";
 }
 
+// Enforce that the date's month/year match the google_sheet_connections (month/year),
+// keeping the day part; if the day exceeds the target month's length, clamp to last day.
+function enforceConnectionDate(
+  dateISO: string | null,
+  monthContext?: number,
+  yearContext?: number
+): string | null {
+  if (!dateISO) return null;
+  if (typeof monthContext !== "number" || typeof yearContext !== "number") {
+    return dateISO;
+  }
+
+  // Extract day from parsed date
+  const parsed = new Date(dateISO);
+  const day = parsed.getUTCDate();
+
+  // Get last day of the target month
+  const lastDay = new Date(Date.UTC(yearContext, monthContext, 0)).getUTCDate();
+  const safeDay = Math.min(day, lastDay);
+
+  // Return date with enforced month/year
+  return new Date(Date.UTC(yearContext, monthContext - 1, safeDay))
+    .toISOString()
+    .slice(0, 10);
+}
+
 function toDateISO(
   v: any,
   monthContext?: number,
@@ -664,7 +690,9 @@ function toDateISO(
     const epoch = new Date(Date.UTC(1899, 11, 30));
     const d = new Date(epoch.getTime() + serial * 24 * 60 * 60 * 1000);
     if (isNaN(d.getTime())) return null;
-    return d.toISOString().slice(0, 10);
+    const dateISO = d.toISOString().slice(0, 10);
+    // Enforce connection month/year even for serial dates
+    return enforceConnectionDate(dateISO, monthContext, yearContext);
   }
 
   const s = String(v).trim();
@@ -682,11 +710,40 @@ function toDateISO(
     }
   }
 
-  // Try parsing as full date
+  // Handle two-part dates like "8/1" or "1-8" (day/month or month/day)
+  const twoPart = s.match(/^(\d{1,2})[/\-](\d{1,2})$/);
+  if (
+    twoPart &&
+    typeof monthContext === "number" &&
+    typeof yearContext === "number"
+  ) {
+    const part1 = Number(twoPart[1]);
+    const part2 = Number(twoPart[2]);
+
+    // Assume it's day/month if part1 <= 31 and part2 matches monthContext
+    if (part1 <= 31 && part2 === monthContext) {
+      const dt = new Date(Date.UTC(yearContext, monthContext - 1, part1));
+      return dt.toISOString().slice(0, 10);
+    }
+    // Or if part2 <= 31 and part1 matches monthContext (month/day format)
+    if (part2 <= 31 && part1 === monthContext) {
+      const dt = new Date(Date.UTC(yearContext, monthContext - 1, part2));
+      return dt.toISOString().slice(0, 10);
+    }
+    // Default: treat as day and use connection month
+    if (part1 <= 31) {
+      const dt = new Date(Date.UTC(yearContext, monthContext - 1, part1));
+      return dt.toISOString().slice(0, 10);
+    }
+  }
+
+  // Try parsing as full date, then enforce connection month/year
   try {
     const parsed = new Date(s);
     if (!isNaN(parsed.getTime())) {
-      return parsed.toISOString().slice(0, 10);
+      const dateISO = parsed.toISOString().slice(0, 10);
+      // CRITICAL: Always enforce connection month/year to prevent wrong years like 2001
+      return enforceConnectionDate(dateISO, monthContext, yearContext);
     }
   } catch {}
 
