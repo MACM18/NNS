@@ -348,31 +348,35 @@ export async function syncConnection(
     try {
       progress("Updating hardware inventory");
 
-      // Map of hardware field names to inventory item names
+      // Map of hardware field names (as they appear in sheetRows) to inventory item names
       const hardwareMapping: Record<string, string> = {
         retainers: "Retainers",
-        lHook: "L-Hook",
-        topBolt: "Top-Bolt",
-        cHook: "C-Hook",
-        fiberRosette: "Fiber-rosette",
-        sRosette: "S-Rosette",
+        l_hook: "L-Hook",
+        top_bolt: "Top-Bolt",
+        c_hook: "C-Hook",
+        fiber_rosette: "Fiber-rosette",
+        s_rosette: "S-Rosette",
         fac: "FAC",
-        cTie: "C-Tie",
-        cClip: "C-Clip",
-        tagTie: "Tag Tie",
+        c_tie: "C-Tie",
+        c_clip: "C-Clip",
+        tag_tie: "Tag Tie",
         flexible: "Flexible",
         rj45: "RJ 45",
-        pole67: "Pole-6.7",
+        cat5: "Cat 5",
+        pole_67: "Pole-6.7",
         pole: "Pole-5.6",
-        concreteNail: "Concrete nail",
-        rollPlug: "Roll Plug",
-        uClip: "U-Clip",
+        concrete_nail: "Concrete nail",
+        roll_plug: "Roll Plug",
+        u_clip: "U-Clip",
         socket: "Socket",
         bend: "Bend",
         rj11: "RJ 11",
         rj12: "RJ 12",
-        nutBolt: "Nut Bolt",
-        screwNail: "Screw Nail",
+        nut_bolt: "Nut Bolt",
+        screw_nail: "Screw Nail",
+        internal_wire: "Internal Wire",
+        conduit: "Conduit",
+        casing: "Casing",
       };
 
       // Aggregate hardware usage from all synced lines
@@ -380,9 +384,7 @@ export async function syncConnection(
 
       for (const row of sheetRows) {
         for (const [field, itemName] of Object.entries(hardwareMapping)) {
-          const qty = Number(
-            row[field.replace(/([A-Z])/g, "_$1").toLowerCase()] || 0
-          );
+          const qty = Number(row[field] || 0);
           if (qty > 0) {
             hardwareTotals[itemName] = (hardwareTotals[itemName] || 0) + qty;
           }
@@ -710,6 +712,9 @@ function headerIndex(headers: string[]) {
     bend: pick("Bend"),
     rj11: pick("RJ 11"),
     rj12: pick("RJ 12"),
+    nut_bolt: pick("Nut&Bolt", ["Nut Bolt"]),
+    screw_nail: pick("Screw Nail", ["Screw Nail 1 1/2"]),
+    drum_number: pick("Drum Number", ["Drum No", "Drum", "Drum #"]),
   } as const;
 }
 
@@ -874,6 +879,9 @@ function mapSheetRow(r: any[], idx: any, month: number, year: number): any {
     bend: toNumber(r[idx.bend]),
     rj11: toNumber(r[idx.rj11]),
     rj12: toNumber(r[idx.rj12]),
+    nut_bolt: toNumber(r[idx.nut_bolt]),
+    screw_nail: toNumber(r[idx.screw_nail]),
+    drum_number: (r[idx.drum_number] ?? "").toString().trim(),
   };
 }
 
@@ -934,6 +942,9 @@ function sheetToLinePayload(r: any): any | null {
     bend: Number(r.bend || 0),
     rj11: Number(r.rj11 || 0),
     rj12: Number(r.rj12 || 0),
+    nutBolt: Number(r.nut_bolt || 0),
+    screwNail: Number(r.screw_nail || 0),
+    drumNumber: r.drum_number || null,
   };
 }
 
