@@ -517,8 +517,8 @@ export async function syncConnection(
               where: { id: existingUsage.id },
               data: {
                 quantityUsed,
-                cableStartPoint: line.cableStart || 0,
-                cableEndPoint: line.cableEnd || 0,
+                cableStartPoint: Number(line.cableStart || 0),
+                cableEndPoint: Number(line.cableEnd || 0),
                 usageDate: line.date || new Date(),
               },
             });
@@ -529,8 +529,8 @@ export async function syncConnection(
                 drumId: drumInfo.id,
                 lineDetailsId: line.id,
                 quantityUsed,
-                cableStartPoint: line.cableStart || 0,
-                cableEndPoint: line.cableEnd || 0,
+                cableStartPoint: Number(line.cableStart || 0),
+                cableEndPoint: Number(line.cableEnd || 0),
                 usageDate: line.date || new Date(),
               },
             });
@@ -984,13 +984,30 @@ function sheetToLinePayload(r: any): any | null {
 
 // Compute quantity used for a line (computed from cableStart/cableEnd since totalCable is generated)
 function computeQuantityUsed(l: any): number {
-  const start = Number(l.cableStart || 0);
-  const middle = Number(l.cableMiddle || 0);
-  const end = Number(l.cableEnd || 0);
-  const f1 = middle - start;
-  const g1 = end - middle;
-  const total = f1 + g1;
-  return Number.isFinite(total) && total > 0 ? total : 0;
+  // Prefer explicit cable start/middle/end when available, otherwise fall back to total_cable
+  const start = Number(l.cableStart ?? l.cable_start ?? 0);
+  const middle = Number(l.cableMiddle ?? l.cable_middle ?? 0);
+  const end = Number(l.cableEnd ?? l.cable_end ?? 0);
+
+  if (
+    (middle !== 0 || start !== 0 || end !== 0) &&
+    Number.isFinite(middle) &&
+    Number.isFinite(start) &&
+    Number.isFinite(end)
+  ) {
+    const f1 = middle - start;
+    const g1 = end - middle;
+    const total = f1 + g1;
+    if (Number.isFinite(total) && total > 0) return total;
+  }
+
+  // If middle is missing but start and end exist, use end - start as a fallback
+  if (Number.isFinite(end) && Number.isFinite(start) && end > start) {
+    const fallback = end - start;
+    if (fallback > 0) return fallback;
+  }
+
+  return 0;
 }
 
 // Ensure drum_tracking rows exist for the given drum numbers

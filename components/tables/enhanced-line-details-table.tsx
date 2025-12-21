@@ -425,7 +425,7 @@ export function LineDetailsTable({
               <div className='flex justify-between'>
                 <span className='text-sm text-muted-foreground'>Wastage:</span>
                 <span className='font-medium text-orange-600'>
-                  {line.wastage?.toFixed(2) || "0.00"}m
+                  {Number(line.wastage || 0).toFixed(2)}m
                 </span>
               </div>
               <div className='flex justify-between'>
@@ -740,7 +740,7 @@ export function LineDetailsTable({
                   </TableCell>
                   <TableCell>
                     <span className='font-medium'>
-                      {line.total_cable?.toFixed(2) || "0.00"}m
+                      {Number(line.total_cable || 0).toFixed(2)}m
                     </span>
                   </TableCell>
                   <TableCell>
