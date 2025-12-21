@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { google } from "googleapis";
+import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -309,6 +310,7 @@ export async function syncConnection(
     progress("Syncing data to database");
     let insertedCount = 0;
     let updatedCount = 0;
+    const lineIds: string[] = [];
 
     for (const row of sheetRows) {
       const payload = sheetToLinePayload(row);
@@ -329,14 +331,116 @@ export async function syncConnection(
           where: { id: existing.id },
           data: payload,
         });
+        lineIds.push(existing.id);
         updatedCount++;
       } else {
         // Create new record
-        await prisma.lineDetails.create({
+        const created = await prisma.lineDetails.create({
           data: { ...payload, status: "completed" },
         });
+        lineIds.push(created.id);
         insertedCount++;
       }
+    }
+
+    // Process drum tracking and inventory management
+    let drumUsageProcessed = 0;
+    let inventoryUpdated = 0;
+    try {
+      progress("Processing drum usage & inventory");
+
+      // Get all lines for this month with drum numbers
+      const monthStart = new Date(Date.UTC(year, month - 1, 1));
+      const monthEnd = new Date(Date.UTC(year, month, 0));
+
+      const monthLines = await prisma.lineDetails.findMany({
+        where: {
+          date: { gte: monthStart, lte: monthEnd },
+          drumNumber: { not: null },
+        },
+        select: {
+          id: true,
+          drumNumber: true,
+          cableStart: true,
+          cableMiddle: true,
+          cableEnd: true,
+          date: true,
+        },
+      });
+
+      if (monthLines.length > 0) {
+        // Extract unique drum numbers
+        const drumNumbers = Array.from(
+          new Set(
+            monthLines
+              .map((l) => l.drumNumber)
+              .filter((n): n is string => Boolean(n))
+          )
+        );
+
+        // Ensure drum tracking records exist
+        const { byNumber } = await ensureDrumTrackingForNumbers(drumNumbers);
+
+        // Process each line's drum usage
+        for (const line of monthLines) {
+          if (!line.drumNumber) continue;
+
+          const drumInfo = byNumber.get(line.drumNumber);
+          if (!drumInfo) continue;
+
+          const quantityUsed = computeQuantityUsed(line);
+          if (quantityUsed <= 0) continue;
+
+          // Check if usage record exists
+          const existingUsage = await prisma.drumUsage.findFirst({
+            where: {
+              drumId: drumInfo.id,
+              lineDetailsId: line.id,
+            },
+            select: { id: true },
+          });
+
+          if (existingUsage) {
+            // Update existing usage
+            await prisma.drumUsage.update({
+              where: { id: existingUsage.id },
+              data: {
+                quantityUsed,
+                cableStartPoint: line.cableStart || 0,
+                cableEndPoint: line.cableEnd || 0,
+                usageDate: line.date || new Date(),
+              },
+            });
+          } else {
+            // Create new usage record
+            await prisma.drumUsage.create({
+              data: {
+                drumId: drumInfo.id,
+                lineDetailsId: line.id,
+                quantityUsed,
+                cableStartPoint: line.cableStart || 0,
+                cableEndPoint: line.cableEnd || 0,
+                usageDate: line.date || new Date(),
+              },
+            });
+          }
+          drumUsageProcessed++;
+        }
+
+        // Recalculate drum quantities
+        const drumIds = Array.from(byNumber.values()).map((d) => d.id);
+        const recalculated = await recalcDrumAggregates(drumIds, month, year);
+        inventoryUpdated = recalculated;
+
+        progress(
+          `Processed ${drumUsageProcessed} drum usages, updated ${inventoryUpdated} drums`
+        );
+      } else {
+        progress("No drum numbers found in this period");
+      }
+    } catch (drumError) {
+      console.warn("[syncConnection] Drum processing warning:", drumError);
+      progress("Warning: Some drum tracking operations failed");
     }
 
     // Update connection status
@@ -356,6 +460,8 @@ export async function syncConnection(
       inserted: insertedCount,
       updated: updatedCount,
       total: insertedCount + updatedCount,
+      drumUsageProcessed,
+      inventoryUpdated,
     };
   } catch (error) {
     console.error("[syncConnection] Error:", error);
@@ -691,4 +797,195 @@ function sheetToLinePayload(r: any): any | null {
     rj11: Number(r.rj11 || 0),
     rj12: Number(r.rj12 || 0),
   };
+}
+
+// ==========================================
+// DRUM TRACKING & INVENTORY HELPERS
+// ==========================================
+
+// Compute quantity used for a line (computed from cableStart/cableEnd since totalCable is generated)
+function computeQuantityUsed(l: any): number {
+  const start = Number(l.cableStart || 0);
+  const middle = Number(l.cableMiddle || 0);
+  const end = Number(l.cableEnd || 0);
+  const f1 = middle - start;
+  const g1 = end - middle;
+  const total = f1 + g1;
+  return Number.isFinite(total) && total > 0 ? total : 0;
+}
+
+// Ensure drum_tracking rows exist for the given drum numbers
+async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
+  const unique = Array.from(new Set((drumNumbers || []).filter(Boolean)));
+  if (!unique.length) {
+    return {
+      byNumber: new Map<
+        string,
+        { id: string; itemId?: string; status: string }
+      >(),
+      createdNumbers: [],
+    };
+  }
+
+  const existing = await prisma.drumTracking.findMany({
+    where: { drumNumber: { in: unique } },
+    select: { id: true, drumNumber: true, itemId: true, status: true },
+  });
+
+  const byNumber = new Map<
+    string,
+    { id: string; itemId?: string; status: string }
+  >();
+  for (const d of existing || []) {
+    if (d.drumNumber) {
+      byNumber.set(d.drumNumber, {
+        id: d.id,
+        itemId: d.itemId || undefined,
+        status: d.status || "active",
+      });
+    }
+  }
+
+  // Find the 'Drop Wire Cable' inventory item
+  let defaultItem: { id: string; drumSize?: number | null } | null = null;
+  try {
+    const item = await prisma.inventoryItem.findFirst({
+      where: {
+        name: { contains: "Drop Wire Cable", mode: "insensitive" },
+      },
+      select: { id: true, drumSize: true },
+    });
+
+    if (item) {
+      defaultItem = {
+        id: item.id,
+        drumSize: item.drumSize ? Number(item.drumSize) : null,
+      };
+    }
+  } catch (err) {
+    console.warn("Could not find Drop Wire Cable item:", err);
+  }
+
+  const toCreate = unique.filter((n) => !byNumber.has(n));
+  const createdNumbers: string[] = [];
+
+  for (const num of toCreate) {
+    try {
+      const initialQty = defaultItem?.drumSize || 2000;
+      const created = await prisma.drumTracking.create({
+        data: {
+          drumNumber: num,
+          itemId: defaultItem?.id || null,
+          initialQuantity: initialQty,
+          currentQuantity: initialQty,
+          status: "active",
+        },
+        select: { id: true, drumNumber: true, itemId: true, status: true },
+      });
+
+      if (created.drumNumber) {
+        byNumber.set(created.drumNumber, {
+          id: created.id,
+          itemId: created.itemId || undefined,
+          status: created.status || "active",
+        });
+        createdNumbers.push(created.drumNumber);
+      }
+    } catch (e) {
+      console.error(`Failed to create drum tracking for ${num}:`, e);
+    }
+  }
+
+  return { byNumber, createdNumbers };
+}
+
+// Recalculate drum current quantities using calculateSmartWastage
+async function recalcDrumAggregates(
+  drumIds: string[],
+  month: number,
+  year: number
+): Promise<number> {
+  if (!drumIds.length) return 0;
+  let recalced = 0;
+
+  // Fetch drums with related item capacity
+  const drums = await prisma.drumTracking.findMany({
+    where: { id: { in: drumIds } },
+    include: {
+      item: { select: { drumSize: true } },
+      drumUsages: {
+        select: {
+          id: true,
+          cableStartPoint: true,
+          cableEndPoint: true,
+          usageDate: true,
+          quantityUsed: true,
+        },
+      },
+    },
+  });
+
+  for (const d of drums || []) {
+    try {
+      const drumSizeDecimal = d.item?.drumSize;
+      const capacity = drumSizeDecimal ? Number(drumSizeDecimal) : 2000;
+      const usages = (d.drumUsages || []).map((u: any) => ({
+        id: u.id,
+        cable_start_point: Number(u.cableStartPoint || 0),
+        cable_end_point: Number(u.cableEndPoint || 0),
+        usage_date: u.usageDate?.toISOString() || new Date().toISOString(),
+        quantity_used: Number(u.quantityUsed || 0),
+      }));
+
+      const result = calculateSmartWastage(
+        usages,
+        capacity,
+        undefined,
+        d.status || "active"
+      );
+
+      // Update drum with calculated values
+      await prisma.drumTracking.update({
+        where: { id: d.id },
+        data: {
+          currentQuantity: result.calculatedCurrentQuantity,
+        },
+      });
+      recalced++;
+    } catch (err) {
+      console.error(`Failed to recalc drum ${d.id}:`, err);
+    }
+  }
+
+  return recalced;
+}
+
+// Exported function to recalculate all drum quantities
+export async function recalculateAllDrumQuantities() {
+  try {
+    await authorize();
+
+    const drums = await prisma.drumTracking.findMany({
+      select: { id: true },
+    });
+
+    if (!drums.length) {
+      return { success: true, recalculated: 0 };
+    }
+
+    const drumIds = drums.map((d) => d.id);
+    const now = new Date();
+    const recalculated = await recalcDrumAggregates(
+      drumIds,
+      now.getMonth() + 1,
+      now.getFullYear()
+    );
+
+    return { success: true, recalculated };
+  } catch (error) {
+    console.error("[recalculateAllDrumQuantities] Error:", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Unknown error occurred while recalculating drum quantities");
+  }
 }
