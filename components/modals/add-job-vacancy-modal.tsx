@@ -111,7 +111,6 @@ export function AddJobVacancyModal({
         benefits: formData.benefits
           ? formData.benefits.split(",").map((b) => b.trim())
           : [],
-        updated_at: new Date().toISOString(),
       };
       if (editingJob) {
         const response = await fetch(`/api/job-vacancies/${editingJob.id}`, {
