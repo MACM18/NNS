@@ -77,7 +77,9 @@ export async function GET(req: NextRequest) {
         initial_quantity: Number(drum.initialQuantity),
         current_quantity: Number(drum.currentQuantity),
         status: drum.status,
-        received_date: drum.receivedDate ? drum.receivedDate.toISOString() : null,
+        received_date: drum.receivedDate
+          ? drum.receivedDate.toISOString()
+          : null,
         created_at: drum.createdAt?.toISOString(),
         updated_at: drum.updatedAt?.toISOString(),
       }));
@@ -148,8 +150,12 @@ export async function POST(req: NextRequest) {
     // Accept snake_case or camelCase inputs
     const drumNumber = body.drum_number ?? body.drumNumber;
     const itemId = body.item_id ?? body.itemId ?? null;
-    const initialQuantity = Number(body.initial_quantity ?? body.initialQuantity ?? 0);
-    const currentQuantity = Number(body.current_quantity ?? body.currentQuantity ?? initialQuantity);
+    const initialQuantity = Number(
+      body.initial_quantity ?? body.initialQuantity ?? 0
+    );
+    const currentQuantity = Number(
+      body.current_quantity ?? body.currentQuantity ?? initialQuantity
+    );
     const receivedDate = body.received_date ?? body.receivedDate ?? undefined;
     const status = body.status ?? "active";
 

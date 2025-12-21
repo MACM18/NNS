@@ -44,7 +44,10 @@ export async function GET(req: NextRequest) {
         name: it.name,
         unit: it.unit,
         current_stock: Number(it.currentStock ?? 0),
-        drum_size: it.drumSize !== null && it.drumSize !== undefined ? Number(it.drumSize) : null,
+        drum_size:
+          it.drumSize !== null && it.drumSize !== undefined
+            ? Number(it.drumSize)
+            : null,
         reorder_level: Number(it.reorderLevel ?? 0),
         created_at: it.createdAt?.toISOString(),
         updated_at: it.updatedAt?.toISOString(),
@@ -68,7 +71,10 @@ export async function GET(req: NextRequest) {
       name: it.name,
       unit: it.unit,
       current_stock: Number(it.currentStock ?? 0),
-      drum_size: it.drumSize !== null && it.drumSize !== undefined ? Number(it.drumSize) : null,
+      drum_size:
+        it.drumSize !== null && it.drumSize !== undefined
+          ? Number(it.drumSize)
+          : null,
       reorder_level: Number(it.reorderLevel ?? 0),
       created_at: it.createdAt?.toISOString(),
       updated_at: it.updatedAt?.toISOString(),
@@ -123,7 +129,10 @@ export async function POST(req: NextRequest) {
       name: item.name,
       unit: item.unit,
       current_stock: Number(item.currentStock ?? 0),
-      drum_size: item.drumSize !== null && item.drumSize !== undefined ? Number(item.drumSize) : null,
+      drum_size:
+        item.drumSize !== null && item.drumSize !== undefined
+          ? Number(item.drumSize)
+          : null,
       reorder_level: Number(item.reorderLevel ?? 0),
       created_at: item.createdAt?.toISOString(),
       updated_at: item.updatedAt?.toISOString(),

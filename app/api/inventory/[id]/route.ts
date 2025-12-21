@@ -27,7 +27,10 @@ export async function GET(
       name: item.name,
       unit: item.unit,
       current_stock: Number(item.currentStock ?? 0),
-      drum_size: item.drumSize !== null && item.drumSize !== undefined ? Number(item.drumSize) : null,
+      drum_size:
+        item.drumSize !== null && item.drumSize !== undefined
+          ? Number(item.drumSize)
+          : null,
       reorder_level: Number(item.reorderLevel ?? 0),
       created_at: item.createdAt?.toISOString(),
       updated_at: item.updatedAt?.toISOString(),
@@ -61,11 +64,15 @@ export async function PUT(
     if (body.name !== undefined) updateData.name = body.name;
     if (body.unit !== undefined) updateData.unit = body.unit;
     if (body.current_stock !== undefined || body.currentStock !== undefined)
-      updateData.currentStock = Number(body.current_stock ?? body.currentStock ?? 0);
+      updateData.currentStock = Number(
+        body.current_stock ?? body.currentStock ?? 0
+      );
     if (body.drum_size !== undefined || body.drumSize !== undefined)
       updateData.drumSize = body.drum_size ?? body.drumSize;
     if (body.reorder_level !== undefined || body.reorderLevel !== undefined)
-      updateData.reorderLevel = Number(body.reorder_level ?? body.reorderLevel ?? 0);
+      updateData.reorderLevel = Number(
+        body.reorder_level ?? body.reorderLevel ?? 0
+      );
 
     const item = await prisma.inventoryItem.update({
       where: { id },
@@ -77,7 +84,10 @@ export async function PUT(
       name: item.name,
       unit: item.unit,
       current_stock: Number(item.currentStock ?? 0),
-      drum_size: item.drumSize !== null && item.drumSize !== undefined ? Number(item.drumSize) : null,
+      drum_size:
+        item.drumSize !== null && item.drumSize !== undefined
+          ? Number(item.drumSize)
+          : null,
       reorder_level: Number(item.reorderLevel ?? 0),
       created_at: item.createdAt?.toISOString(),
       updated_at: item.updatedAt?.toISOString(),

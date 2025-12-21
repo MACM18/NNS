@@ -60,12 +60,24 @@ export async function PUT(
     const updateData: any = {};
     if (body.drum_number !== undefined || body.drumNumber !== undefined)
       updateData.drumNumber = body.drum_number ?? body.drumNumber;
-    if (body.initial_quantity !== undefined || body.initialQuantity !== undefined)
-      updateData.initialQuantity = Number(body.initial_quantity ?? body.initialQuantity);
-    if (body.current_quantity !== undefined || body.currentQuantity !== undefined)
-      updateData.currentQuantity = Number(body.current_quantity ?? body.currentQuantity);
+    if (
+      body.initial_quantity !== undefined ||
+      body.initialQuantity !== undefined
+    )
+      updateData.initialQuantity = Number(
+        body.initial_quantity ?? body.initialQuantity
+      );
+    if (
+      body.current_quantity !== undefined ||
+      body.currentQuantity !== undefined
+    )
+      updateData.currentQuantity = Number(
+        body.current_quantity ?? body.currentQuantity
+      );
     if (body.received_date !== undefined || body.receivedDate !== undefined)
-      updateData.receivedDate = body.received_date ? new Date(body.received_date) : new Date(body.receivedDate);
+      updateData.receivedDate = body.received_date
+        ? new Date(body.received_date)
+        : new Date(body.receivedDate);
     if (body.status !== undefined) updateData.status = body.status;
 
     const drum = await prisma.drumTracking.update({

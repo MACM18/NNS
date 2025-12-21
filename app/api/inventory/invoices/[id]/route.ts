@@ -46,7 +46,7 @@ export async function GET(
       id: invoice.id,
       invoice_number: invoice.invoiceNumber,
       warehouse: invoice.warehouse,
-      date: invoice.date ? invoice.date.toISOString().slice(0,10) : null,
+      date: invoice.date ? invoice.date.toISOString().slice(0, 10) : null,
       issued_by: invoice.issuedBy || "",
       drawn_by: invoice.drawnBy || "",
       total_items: Number(invoice.totalItems || 0),
