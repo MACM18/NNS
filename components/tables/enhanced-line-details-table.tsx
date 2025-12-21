@@ -334,7 +334,7 @@ export function LineDetailsTable({
                   isPowerHigh(line.power_dp) ? "text-red-600" : "text-green-600"
                 }`}
               >
-                {line.power_dp?.toFixed(2) || "N/A"}
+                {line.power_dp ? Number(line.power_dp).toFixed(2) : "N/A"}
                 {isPowerHigh(line.power_dp) && " ⚠️"}
               </span>
             </div>
@@ -349,7 +349,7 @@ export function LineDetailsTable({
                     : "text-green-600"
                 }`}
               >
-                {line.power_inbox?.toFixed(2) || "N/A"}
+                {line.power_inbox ? Number(line.power_inbox).toFixed(2) : "N/A"}
                 {isPowerHigh(line.power_inbox) && " ⚠️"}
               </span>
             </div>
@@ -386,34 +386,40 @@ export function LineDetailsTable({
             <div className='grid grid-cols-3 gap-2 text-xs'>
               <div>
                 <span className='text-muted-foreground'>Start:</span>
-                <p className='font-medium'>{line.cable_start?.toFixed(2)}m</p>
+                <p className='font-medium'>
+                  {Number(line.cable_start || 0).toFixed(2)}m
+                </p>
               </div>
               <div>
                 <span className='text-muted-foreground'>Middle:</span>
-                <p className='font-medium'>{line.cable_middle?.toFixed(2)}m</p>
+                <p className='font-medium'>
+                  {Number(line.cable_middle || 0).toFixed(2)}m
+                </p>
               </div>
               <div>
                 <span className='text-muted-foreground'>End:</span>
-                <p className='font-medium'>{line.cable_end?.toFixed(2)}m</p>
+                <p className='font-medium'>
+                  {Number(line.cable_end || 0).toFixed(2)}m
+                </p>
               </div>
             </div>
             <div className='border-t pt-2 space-y-1'>
               <div className='flex justify-between'>
                 <span className='text-sm text-muted-foreground'>F1:</span>
                 <span className='font-medium text-blue-600'>
-                  {line.f1?.toFixed(2)}m
+                  {Number(line.f1 || 0).toFixed(2)}m
                 </span>
               </div>
               <div className='flex justify-between'>
                 <span className='text-sm text-muted-foreground'>G1:</span>
                 <span className='font-medium text-blue-600'>
-                  {line.g1?.toFixed(2)}m
+                  {Number(line.g1 || 0).toFixed(2)}m
                 </span>
               </div>
               <div className='flex justify-between'>
                 <span className='text-sm text-muted-foreground'>Total:</span>
                 <span className='font-medium text-green-600'>
-                  {line.total_cable?.toFixed(2)}m
+                  {Number(line.total_cable || 0).toFixed(2)}m
                 </span>
               </div>
               <div className='flex justify-between'>
