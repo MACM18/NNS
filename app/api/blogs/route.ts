@@ -8,7 +8,25 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ data: blogs });
+    const transformed = blogs.map((b: any) => ({
+      id: b.id,
+      title: b.title,
+      content: b.content,
+      excerpt: b.excerpt,
+      author: b.author,
+      category: b.category,
+      tags: b.tags,
+      featured_image_url: b.featuredImageUrl,
+      slug: b.slug,
+      meta_description: b.metaDescription,
+      reading_time: b.readingTime,
+      status: b.status,
+      published_at: b.publishedAt,
+      created_at: b.createdAt,
+      updated_at: b.updatedAt,
+    }));
+
+    return NextResponse.json({ data: transformed });
   } catch (error) {
     console.error("Error fetching blogs:", error);
     return NextResponse.json(

@@ -40,14 +40,47 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
+    // Whitelist and map incoming update fields
+    const dataToUpdate: any = {};
+    if (body.title !== undefined) dataToUpdate.title = body.title;
+    if (body.content !== undefined) dataToUpdate.content = body.content;
+    if (body.excerpt !== undefined) dataToUpdate.excerpt = body.excerpt;
+    if (body.author !== undefined) dataToUpdate.author = body.author;
+    if (body.category !== undefined) dataToUpdate.category = body.category;
+    if (body.status !== undefined) dataToUpdate.status = body.status;
+    // tags can be array or comma string
+    if (body.tags !== undefined)
+      dataToUpdate.tags = Array.isArray(body.tags)
+        ? body.tags
+        : String(body.tags)
+            .split(",")
+            .map((s) => s.trim());
+    if (body.featured_image_url !== undefined)
+      dataToUpdate.featuredImageUrl = body.featured_image_url;
+    else if (body.featuredImageUrl !== undefined)
+      dataToUpdate.featuredImageUrl = body.featuredImageUrl;
+
     const post = await prisma.post.update({
       where: { id: parseInt(id) },
-      data: {
-        ...body,
-      },
+      data: dataToUpdate,
     });
 
-    return NextResponse.json({ data: post });
+    // return transformed snake_case
+    const transformed = {
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      excerpt: post.excerpt,
+      author: post.author,
+      category: post.category,
+      tags: post.tags,
+      featured_image_url: post.featuredImageUrl,
+      status: post.status,
+      created_at: post.createdAt,
+      updated_at: post.updatedAt,
+    };
+
+    return NextResponse.json({ data: transformed });
   } catch (error) {
     console.error("Error updating post:", error);
     return NextResponse.json(

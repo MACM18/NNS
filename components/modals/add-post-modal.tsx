@@ -86,7 +86,6 @@ export function AddPostModal({
         tags: formData.tags
           ? formData.tags.split(",").map((tag) => tag.trim())
           : [],
-        updated_at: new Date().toISOString(),
       };
 
       if (editingPost) {

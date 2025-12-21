@@ -8,7 +8,22 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ data: posts });
+    // Transform to snake_case for frontend compatibility
+    const transformed = posts.map((p: any) => ({
+      id: p.id,
+      title: p.title,
+      content: p.content,
+      excerpt: p.excerpt,
+      author: p.author,
+      category: p.category,
+      tags: p.tags,
+      featured_image_url: p.featuredImageUrl,
+      status: p.status,
+      created_at: p.createdAt,
+      updated_at: p.updatedAt,
+    }));
+
+    return NextResponse.json({ data: transformed });
   } catch (error) {
     console.error("Error fetching posts:", error);
     return NextResponse.json(

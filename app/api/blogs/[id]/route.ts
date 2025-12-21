@@ -40,15 +40,57 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
+    const dataToUpdate: any = {};
+    if (body.title !== undefined) dataToUpdate.title = body.title;
+    if (body.content !== undefined) dataToUpdate.content = body.content;
+    if (body.excerpt !== undefined) dataToUpdate.excerpt = body.excerpt;
+    if (body.author !== undefined) dataToUpdate.author = body.author;
+    if (body.category !== undefined) dataToUpdate.category = body.category;
+    if (body.status !== undefined) dataToUpdate.status = body.status;
+    if (body.slug !== undefined) dataToUpdate.slug = body.slug;
+    if (body.meta_description !== undefined)
+      dataToUpdate.metaDescription = body.meta_description;
+    if (body.reading_time !== undefined)
+      dataToUpdate.readingTime = body.reading_time;
+    if (
+      body.published_at !== undefined &&
+      body.published_at !== null &&
+      body.published_at !== ""
+    )
+      dataToUpdate.publishedAt = new Date(body.published_at);
+    if (body.tags !== undefined)
+      dataToUpdate.tags = Array.isArray(body.tags)
+        ? body.tags
+        : String(body.tags)
+            .split(",")
+            .map((s) => s.trim());
+    if (body.featured_image_url !== undefined)
+      dataToUpdate.featuredImageUrl = body.featured_image_url;
+
     const blog = await prisma.blog.update({
       where: { id: parseInt(id) },
-      data: {
-        ...body,
-        updated_at: new Date(),
-      },
+      data: dataToUpdate,
     });
 
-    return NextResponse.json({ data: blog });
+    const transformed = {
+      id: blog.id,
+      title: blog.title,
+      content: blog.content,
+      excerpt: blog.excerpt,
+      author: blog.author,
+      category: blog.category,
+      tags: blog.tags,
+      featured_image_url: blog.featuredImageUrl,
+      slug: blog.slug,
+      meta_description: blog.metaDescription,
+      reading_time: blog.readingTime,
+      status: blog.status,
+      published_at: blog.publishedAt,
+      created_at: blog.createdAt,
+      updated_at: blog.updatedAt,
+    };
+
+    return NextResponse.json({ data: transformed });
   } catch (error) {
     console.error("Error updating blog:", error);
     return NextResponse.json(

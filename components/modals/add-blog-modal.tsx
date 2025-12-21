@@ -103,7 +103,6 @@ export function AddBlogModal({
         published_at: formData.published_at
           ? new Date(formData.published_at).toISOString()
           : null,
-        updated_at: new Date().toISOString(),
       };
       if (editingBlog) {
         const response = await fetch(`/api/blogs/${editingBlog.id}`, {
