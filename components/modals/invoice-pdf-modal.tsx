@@ -123,10 +123,23 @@ export function InvoicePDFModal({
             parsedSettings.pricing_tiers = getDefaultPricingTiers();
           }
         }
-        setCompanySettings(parsedSettings as CompanySettings);
-        setPricingTiers(
+
+        // Ensure numeric fields in tiers
+        const normalizedTiers = (
           (parsedSettings.pricing_tiers as any[]) || getDefaultPricingTiers()
-        );
+        ).map((t: any) => ({
+          min_length: Number(t.min_length) || 0,
+          max_length:
+            t.max_length === 999999 ||
+            String(t.max_length) === "" ||
+            t.max_length == null
+              ? 999999
+              : Number(t.max_length) || 999999,
+          rate: Number(t.rate) || 0,
+        }));
+
+        setCompanySettings(parsedSettings as CompanySettings);
+        setPricingTiers(normalizedTiers);
       } else {
         setCompanySettings(getDefaultCompanySettings());
         setPricingTiers(getDefaultPricingTiers());

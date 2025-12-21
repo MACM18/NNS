@@ -50,6 +50,59 @@ export async function PUT(req: NextRequest) {
 
     const body = await req.json();
 
+    // Normalize incoming data
+    const contactNumbers = Array.isArray(body.contact_numbers)
+      ? body.contact_numbers
+          .map((n: any) => String(n).trim())
+          .filter((n: string) => n !== "")
+      : [];
+
+    const normalizeTiers = (tiers: any) => {
+      if (!tiers) return [];
+      if (typeof tiers === "object" && !Array.isArray(tiers)) {
+        return Object.entries(tiers).map(([range, rate]) => {
+          if (range === "500+")
+            return {
+              min_length: 501,
+              max_length: 999999,
+              rate: Number(rate) || 0,
+            };
+          const [min, max] = range.split("-").map(Number);
+          return {
+            min_length: Number(min) || 0,
+            max_length: Number(max) || 999999,
+            rate: Number(rate) || 0,
+          };
+        });
+      }
+      if (Array.isArray(tiers)) {
+        return tiers.map((t: any) => ({
+          min_length: Number(t.min_length) || 0,
+          max_length:
+            t.max_length === 999999 ||
+            String(t.max_length) === "" ||
+            t.max_length == null
+              ? 999999
+              : Number(t.max_length) || 999999,
+          rate: Number(t.rate) || 0,
+        }));
+      }
+      return [];
+    };
+
+    const pricingTiers = normalizeTiers(body.pricing_tiers);
+
+    const bankDetails =
+      body.bank_details && typeof body.bank_details === "object"
+        ? {
+            bank_name: String(body.bank_details.bank_name ?? ""),
+            account_title: String(body.bank_details.account_title ?? ""),
+            account_number: String(body.bank_details.account_number ?? ""),
+            branch_code: String(body.bank_details.branch_code ?? ""),
+            iban: String(body.bank_details.iban ?? ""),
+          }
+        : null;
+
     // Check if settings exist
     const existingSettings = await prisma.companySettings.findFirst();
 
@@ -60,11 +113,11 @@ export async function PUT(req: NextRequest) {
         data: {
           companyName: body.company_name,
           address: body.address,
-          contactNumbers: body.contact_numbers,
+          contactNumbers,
           website: body.website,
           registeredNumber: body.registered_number,
-          bankDetails: body.bank_details,
-          pricingTiers: body.pricing_tiers,
+          bankDetails: bankDetails ?? undefined,
+          pricingTiers,
         },
       });
     } else {
@@ -72,11 +125,11 @@ export async function PUT(req: NextRequest) {
         data: {
           companyName: body.company_name || "NNS Enterprise",
           address: body.address,
-          contactNumbers: body.contact_numbers || [],
+          contactNumbers,
           website: body.website || "nns.lk",
           registeredNumber: body.registered_number,
-          bankDetails: body.bank_details,
-          pricingTiers: body.pricing_tiers,
+          bankDetails: bankDetails ?? undefined,
+          pricingTiers,
         },
       });
     }

@@ -117,13 +117,48 @@ export function GenerateMonthlyInvoicesModal({
       const { data } = await response.json();
 
       let parsedData = data;
-      if (parsedData && typeof parsedData.pricing_tiers === "string") {
-        try {
-          parsedData.pricing_tiers = JSON.parse(parsedData.pricing_tiers);
-        } catch {
-          parsedData.pricing_tiers = [];
+      if (!parsedData) parsedData = {};
+
+      // Normalize pricing_tiers into array with numeric fields
+      const normalizeTiers = (tiers: any) => {
+        if (!tiers) return [];
+        if (typeof tiers === "string") {
+          try {
+            tiers = JSON.parse(tiers);
+          } catch {
+            return [];
+          }
         }
-      }
+        if (typeof tiers === "object" && !Array.isArray(tiers)) {
+          return Object.entries(tiers).map(([range, rate]) => {
+            if (range === "500+")
+              return {
+                min_length: 501,
+                max_length: 999999,
+                rate: Number(rate) || 0,
+              };
+            const [min, max] = range.split("-").map(Number);
+            return {
+              min_length: Number(min) || 0,
+              max_length: Number(max) || 999999,
+              rate: Number(rate) || 0,
+            };
+          });
+        }
+        if (Array.isArray(tiers)) {
+          return tiers.map((t: any) => ({
+            min_length: Number(t.min_length) || 0,
+            max_length:
+              t.max_length === 999999 || String(t.max_length) === ""
+                ? 999999
+                : Number(t.max_length) || 999999,
+            rate: Number(t.rate) || 0,
+          }));
+        }
+        return [];
+      };
+
+      parsedData.pricing_tiers = normalizeTiers(parsedData.pricing_tiers);
       setCompanySettings(parsedData);
     } catch (error) {
       console.error("Error fetching company settings:", error);

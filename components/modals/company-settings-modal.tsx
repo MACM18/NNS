@@ -96,7 +96,17 @@ export function CompanySettingsModal({
           return { min_length: min, max_length: max, rate: Number(rate) };
         });
       } else if (Array.isArray(data?.pricing_tiers)) {
-        tiers = data?.pricing_tiers as any[] as PricingTier[];
+        // Coerce array entries to numeric types
+        tiers = (data?.pricing_tiers as any[]).map((t: any) => ({
+          min_length: Number(t.min_length) || 0,
+          max_length:
+            t.max_length === 999999 ||
+            String(t.max_length) === "" ||
+            t.max_length == null
+              ? 999999
+              : Number(t.max_length) || 999999,
+          rate: Number(t.rate) || 0,
+        }));
       }
 
       setFormData({
@@ -108,7 +118,7 @@ export function CompanySettingsModal({
         address:
           typeof data?.address === "string" ? (data?.address as string) : "",
         contact_numbers: Array.isArray(data?.contact_numbers)
-          ? (data?.contact_numbers as string[])
+          ? (data?.contact_numbers as string[]).map((n) => String(n))
           : [""],
         website:
           typeof data?.website === "string" ? (data?.website as string) : "",
@@ -213,18 +223,35 @@ export function CompanySettingsModal({
       }
 
       // Filter out empty contact numbers
-      const validContacts = formData.contact_numbers.filter((num) =>
-        num.trim()
-      );
+      const validContacts = formData.contact_numbers
+        .map((n) => String(n).trim())
+        .filter((n) => n !== "");
+
+      const pricing_tiers = (validTiers || []).map((t) => ({
+        min_length: Number(t.min_length) || 0,
+        max_length:
+          t.max_length === 999999 ||
+          String(t.max_length) === "" ||
+          t.max_length == null
+            ? 999999
+            : Number(t.max_length) || 999999,
+        rate: Number(t.rate) || 0,
+      }));
 
       const settingsData = {
-        company_name: formData.company_name,
-        address: formData.address,
+        company_name: String(formData.company_name || "NNS Enterprise"),
+        address: String(formData.address || ""),
         contact_numbers: validContacts,
-        website: formData.website,
-        registered_number: formData.registered_number,
-        pricing_tiers: validTiers,
-        bank_details: formData.bank_details,
+        website: String(formData.website || ""),
+        registered_number: String(formData.registered_number || ""),
+        pricing_tiers,
+        bank_details: {
+          bank_name: String(formData.bank_details.bank_name || ""),
+          account_title: String(formData.bank_details.account_title || ""),
+          account_number: String(formData.bank_details.account_number || ""),
+          branch_code: String(formData.bank_details.branch_code || ""),
+          iban: String(formData.bank_details.iban || ""),
+        },
       };
 
       // Use PUT to update/create settings

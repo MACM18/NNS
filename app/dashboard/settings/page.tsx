@@ -127,6 +127,43 @@ export default function SettingsPage() {
     fetchSecuritySettings();
   }, []);
 
+  const normalizeTiers = (tiers: any): typeof companyData.pricing_tiers => {
+    if (!tiers) return companyData.pricing_tiers;
+    // If tiers is an object keyed by range like { "0-100": 6000, "500+": 8400 }
+    if (typeof tiers === "object" && !Array.isArray(tiers)) {
+      return Object.entries(tiers).map(([range, rate]) => {
+        if (range === "500+") {
+          return {
+            min_length: 501,
+            max_length: 999999,
+            rate: Number(rate) || 0,
+          };
+        }
+        const [min, max] = range.split("-").map((v) => Number(v));
+        return {
+          min_length: Number.isFinite(min) ? min : 0,
+          max_length: Number.isFinite(max) ? max : 999999,
+          rate: Number(rate) || 0,
+        };
+      });
+    }
+
+    if (Array.isArray(tiers)) {
+      return tiers.map((t: any) => ({
+        min_length: Number(t.min_length) || 0,
+        max_length:
+          t.max_length === 999999 ||
+          String(t.max_length) === "" ||
+          t.max_length == null
+            ? 999999
+            : Number(t.max_length) || 999999,
+        rate: Number(t.rate) || 0,
+      }));
+    }
+
+    return companyData.pricing_tiers;
+  };
+
   const fetchCompanySettings = async () => {
     try {
       const response = await fetch("/api/settings/company");
@@ -142,16 +179,14 @@ export default function SettingsPage() {
                 : "NNS Enterprise",
             address: typeof data.address === "string" ? data.address : "",
             contact_numbers: Array.isArray(data.contact_numbers)
-              ? (data.contact_numbers as string[])
+              ? (data.contact_numbers as string[]).map((n) => String(n))
               : [""],
             website: typeof data.website === "string" ? data.website : "",
             registered_number:
               typeof data.registered_number === "string"
                 ? data.registered_number
                 : "",
-            pricing_tiers: Array.isArray(data.pricing_tiers)
-              ? data.pricing_tiers
-              : companyData.pricing_tiers,
+            pricing_tiers: normalizeTiers(data.pricing_tiers),
             bank_details:
               data.bank_details &&
               typeof data.bank_details === "object" &&
@@ -185,19 +220,28 @@ export default function SettingsPage() {
   };
 
   const fetchNotificationSettings = async () => {
-    // In a real app, you'd fetch from user preferences table
-    // For now, using localStorage as fallback
-    const saved = localStorage.getItem("notification_settings");
-    if (saved) {
-      setNotificationSettings(JSON.parse(saved));
+    try {
+      const saved = localStorage.getItem("notification_settings");
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === "object") {
+        setNotificationSettings((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch (err) {
+      console.error("Failed to parse notification settings from storage", err);
     }
   };
 
   const fetchSecuritySettings = async () => {
-    // In a real app, you'd fetch from user security settings table
-    const saved = localStorage.getItem("security_settings");
-    if (saved) {
-      setSecuritySettings(JSON.parse(saved));
+    try {
+      const saved = localStorage.getItem("security_settings");
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === "object") {
+        setSecuritySettings((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch (err) {
+      console.error("Failed to parse security settings from storage", err);
     }
   };
 
@@ -243,13 +287,50 @@ export default function SettingsPage() {
     }
   };
 
+  const prepareCompanyPayload = (data: typeof companyData) => {
+    const contact_numbers = (data.contact_numbers || [])
+      .map((n) => String(n).trim())
+      .filter((n) => n !== "");
+
+    const pricing_tiers = (data.pricing_tiers || []).map((t) => ({
+      min_length: Number(t.min_length) || 0,
+      max_length:
+        t.max_length === 999999 ||
+        String(t.max_length) === "" ||
+        t.max_length == null
+          ? 999999
+          : Number(t.max_length) || 999999,
+      rate: Number(t.rate) || 0,
+    }));
+
+    const bank_details = {
+      bank_name: String(data.bank_details.bank_name ?? ""),
+      account_title: String(data.bank_details.account_title ?? ""),
+      account_number: String(data.bank_details.account_number ?? ""),
+      branch_code: String(data.bank_details.branch_code ?? ""),
+      iban: String(data.bank_details.iban ?? ""),
+    };
+
+    return {
+      company_name: String(data.company_name || "NNS Enterprise"),
+      address: String(data.address || ""),
+      contact_numbers,
+      website: String(data.website || ""),
+      registered_number: String(data.registered_number || ""),
+      pricing_tiers,
+      bank_details,
+    };
+  };
+
   const handleCompanyUpdate = async () => {
     setIsLoading(true);
     try {
+      const payload = prepareCompanyPayload(companyData);
+
       const response = await fetch("/api/settings/company", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(companyData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
