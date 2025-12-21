@@ -50,7 +50,24 @@ export async function POST(req: NextRequest) {
       results.push(createdInvoice);
     }
 
-    return NextResponse.json({ data: results });
+    const formatted = results.map((inv) => ({
+      id: inv.id,
+      invoice_number: inv.invoiceNumber,
+      invoice_type: inv.invoiceType,
+      month: inv.month ?? null,
+      year: inv.year ?? null,
+      job_month: inv.jobMonth || null,
+      invoice_date: inv.invoiceDate
+        ? inv.invoiceDate.toISOString().slice(0, 10)
+        : null,
+      total_amount: inv.totalAmount ? Number(inv.totalAmount) : 0,
+      line_count: inv.lineCount ? Number(inv.lineCount) : 0,
+      line_details_ids: inv.lineDetailsIds || null,
+      status: inv.status || null,
+      created_at: inv.createdAt?.toISOString(),
+    }));
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error generating invoices:", error);
     return NextResponse.json(

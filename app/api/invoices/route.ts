@@ -48,8 +48,25 @@ export async function GET(req: NextRequest) {
       prisma.generatedInvoice.count({ where }),
     ]);
 
+    const formatted = invoices.map((inv) => ({
+      id: inv.id,
+      invoice_number: inv.invoiceNumber,
+      invoice_type: inv.invoiceType,
+      month: inv.month ?? null,
+      year: inv.year ?? null,
+      job_month: inv.jobMonth || null,
+      invoice_date: inv.invoiceDate
+        ? inv.invoiceDate.toISOString().slice(0, 10)
+        : null,
+      total_amount: inv.totalAmount ? Number(inv.totalAmount) : 0,
+      line_count: inv.lineCount ? Number(inv.lineCount) : 0,
+      line_details_ids: inv.lineDetailsIds || null,
+      status: inv.status || null,
+      created_at: inv.createdAt?.toISOString(),
+    }));
+
     return NextResponse.json({
-      data: invoices,
+      data: formatted,
       pagination: {
         page,
         limit,
@@ -75,11 +92,51 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
+    // Accept snake_case or camelCase inputs
+    const invoiceNumber = body.invoice_number ?? body.invoiceNumber;
+    const invoiceType = body.invoice_type ?? body.invoiceType;
+    const month = body.month !== undefined ? Number(body.month) : undefined;
+    const year = body.year !== undefined ? Number(body.year) : undefined;
+    const jobMonth = body.job_month ?? body.jobMonth;
+    const invoiceDate = body.invoice_date ?? body.invoiceDate;
+    const totalAmount = Number(body.total_amount ?? body.totalAmount ?? 0);
+    const lineCount = Number(body.line_count ?? body.lineCount ?? 0);
+    const lineDetailsIds = body.line_details_ids ?? body.lineDetailsIds ?? null;
+    const status = body.status ?? "generated";
+
     const invoice = await prisma.generatedInvoice.create({
-      data: body,
+      data: {
+        invoiceNumber,
+        invoiceType,
+        month,
+        year,
+        jobMonth,
+        invoiceDate: invoiceDate ? new Date(invoiceDate) : undefined,
+        totalAmount,
+        lineCount,
+        lineDetailsIds,
+        status,
+      },
     });
 
-    return NextResponse.json({ data: invoice });
+    const formatted = {
+      id: invoice.id,
+      invoice_number: invoice.invoiceNumber,
+      invoice_type: invoice.invoiceType,
+      month: invoice.month ?? null,
+      year: invoice.year ?? null,
+      job_month: invoice.jobMonth || null,
+      invoice_date: invoice.invoiceDate
+        ? invoice.invoiceDate.toISOString().slice(0, 10)
+        : null,
+      total_amount: invoice.totalAmount ? Number(invoice.totalAmount) : 0,
+      line_count: invoice.lineCount ? Number(invoice.lineCount) : 0,
+      line_details_ids: invoice.lineDetailsIds || null,
+      status: invoice.status || null,
+      created_at: invoice.createdAt?.toISOString(),
+    };
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error creating invoice:", error);
     return NextResponse.json(
