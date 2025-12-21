@@ -72,7 +72,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         const response = await fetch(`/api/profile/${user.id}`);
         if (response.ok) {
           const data = await response.json();
-          setProfile(data.profile);
+          const p = data.profile || {};
+          // Normalize API camelCase profile to UI snake_case shape
+          const normalizedProfile = {
+            id: p.id,
+            email: p.email ?? null,
+            full_name: p.fullName ?? p.full_name ?? null,
+            role: p.role ?? "user",
+            created_at: p.createdAt
+              ? new Date(p.createdAt).toISOString()
+              : undefined,
+            updated_at: p.updatedAt
+              ? new Date(p.updatedAt).toISOString()
+              : undefined,
+            phone: p.phone ?? null,
+            address: p.address ?? null,
+            bio: p.bio ?? null,
+            avatar_url: p.avatarUrl ?? p.avatar_url ?? null,
+          };
+          setProfile(normalizedProfile as any);
 
           // Check if user is a Google OAuth user
           const accountsResponse = await fetch(`/api/users/${user.id}`);
