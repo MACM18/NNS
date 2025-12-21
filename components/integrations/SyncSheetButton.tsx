@@ -45,11 +45,13 @@ export default function SyncSheetButton({
               const r = json.job.result || {};
               const details =
                 typeof r === "object"
-                  ? `Upserted ${r.upserted ?? 0}, Appended ${
+                  ? `Lines: ${r.upserted ?? 0} updated, ${
                       r.appended ?? 0
-                    }, Drums: updated ${r.drumProcessed ?? 0}, appended ${
-                      r.drumAppended ?? 0
-                    }, usages ${r.drumUsageInserted ?? 0}`
+                    } added • Hardware: ${
+                      r.hardwareUpdated ?? 0
+                    } items • Drums: ${r.drumProcessed ?? 0} updated, ${
+                      r.drumUsageInserted ?? 0
+                    } usages`
                   : undefined;
               toast({
                 title: "✅ Sync Completed Successfully",

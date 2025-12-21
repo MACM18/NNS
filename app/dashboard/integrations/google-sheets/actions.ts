@@ -343,11 +343,91 @@ export async function syncConnection(
       }
     }
 
+    // Decrement hardware inventory items based on line usage
+    let hardwareUpdated = 0;
+    try {
+      progress("Updating hardware inventory");
+
+      // Map of hardware field names to inventory item names
+      const hardwareMapping: Record<string, string> = {
+        retainers: "Retainers",
+        lHook: "L-Hook",
+        topBolt: "Top-Bolt",
+        cHook: "C-Hook",
+        fiberRosette: "Fiber-rosette",
+        sRosette: "S-Rosette",
+        fac: "FAC",
+        cTie: "C-Tie",
+        cClip: "C-Clip",
+        tagTie: "Tag Tie",
+        flexible: "Flexible",
+        rj45: "RJ 45",
+        pole67: "Pole-6.7",
+        pole: "Pole-5.6",
+        concreteNail: "Concrete nail",
+        rollPlug: "Roll Plug",
+        uClip: "U-Clip",
+        socket: "Socket",
+        bend: "Bend",
+        rj11: "RJ 11",
+        rj12: "RJ 12",
+        nutBolt: "Nut Bolt",
+        screwNail: "Screw Nail",
+      };
+
+      // Aggregate hardware usage from all synced lines
+      const hardwareTotals: Record<string, number> = {};
+
+      for (const row of sheetRows) {
+        for (const [field, itemName] of Object.entries(hardwareMapping)) {
+          const qty = Number(
+            row[field.replace(/([A-Z])/g, "_$1").toLowerCase()] || 0
+          );
+          if (qty > 0) {
+            hardwareTotals[itemName] = (hardwareTotals[itemName] || 0) + qty;
+          }
+        }
+      }
+
+      // Update inventory items
+      for (const [itemName, totalUsed] of Object.entries(hardwareTotals)) {
+        if (totalUsed <= 0) continue;
+
+        try {
+          const item = await prisma.inventoryItem.findFirst({
+            where: { name: { equals: itemName, mode: "insensitive" } },
+            select: { id: true, currentStock: true },
+          });
+
+          if (item) {
+            const currentStock = Number(item.currentStock);
+            const newStock = Math.max(0, currentStock - totalUsed);
+
+            await prisma.inventoryItem.update({
+              where: { id: item.id },
+              data: { currentStock: newStock },
+            });
+            hardwareUpdated++;
+          }
+        } catch (err) {
+          console.warn(`Failed to update inventory for ${itemName}:`, err);
+        }
+      }
+
+      progress(`Updated ${hardwareUpdated} hardware inventory items`);
+    } catch (hardwareError) {
+      console.warn(
+        "[syncConnection] Hardware inventory update warning:",
+        hardwareError
+      );
+      progress("Warning: Some hardware inventory updates failed");
+    }
+
     // Process drum tracking and inventory management
     let drumUsageProcessed = 0;
-    let inventoryUpdated = 0;
+    let drumUpdated = 0;
     try {
-      progress("Processing drum usage & inventory");
+      progress("Processing drum usage & tracking");
 
       // Get all lines for this month with drum numbers
       const monthStart = new Date(Date.UTC(year, month - 1, 1));
@@ -430,10 +510,10 @@ export async function syncConnection(
         // Recalculate drum quantities
         const drumIds = Array.from(byNumber.values()).map((d) => d.id);
         const recalculated = await recalcDrumAggregates(drumIds, month, year);
-        inventoryUpdated = recalculated;
+        drumUpdated = recalculated;
 
         progress(
-          `Processed ${drumUsageProcessed} drum usages, updated ${inventoryUpdated} drums`
+          `Processed ${drumUsageProcessed} drum usages, updated ${drumUpdated} drums`
         );
       } else {
         progress("No drum numbers found in this period");
@@ -457,11 +537,12 @@ export async function syncConnection(
 
     return {
       success: true,
-      inserted: insertedCount,
-      updated: updatedCount,
+      upserted: updatedCount,
+      appended: insertedCount,
       total: insertedCount + updatedCount,
-      drumUsageProcessed,
-      inventoryUpdated,
+      drumUsageInserted: drumUsageProcessed,
+      drumProcessed: drumUpdated,
+      hardwareUpdated,
     };
   } catch (error) {
     console.error("[syncConnection] Error:", error);
