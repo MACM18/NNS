@@ -22,7 +22,19 @@ export async function GET(
       return NextResponse.json({ error: "Drum not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ data: drum });
+    const formatted = {
+      id: drum.id,
+      drum_number: drum.drumNumber,
+      item_id: drum.itemId ?? null,
+      initial_quantity: Number(drum.initialQuantity),
+      current_quantity: Number(drum.currentQuantity),
+      status: drum.status,
+      received_date: drum.receivedDate ? drum.receivedDate.toISOString() : null,
+      created_at: drum.createdAt?.toISOString(),
+      updated_at: drum.updatedAt?.toISOString(),
+    };
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error fetching drum:", error);
     return NextResponse.json(
@@ -45,12 +57,35 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
+    const updateData: any = {};
+    if (body.drum_number !== undefined || body.drumNumber !== undefined)
+      updateData.drumNumber = body.drum_number ?? body.drumNumber;
+    if (body.initial_quantity !== undefined || body.initialQuantity !== undefined)
+      updateData.initialQuantity = Number(body.initial_quantity ?? body.initialQuantity);
+    if (body.current_quantity !== undefined || body.currentQuantity !== undefined)
+      updateData.currentQuantity = Number(body.current_quantity ?? body.currentQuantity);
+    if (body.received_date !== undefined || body.receivedDate !== undefined)
+      updateData.receivedDate = body.received_date ? new Date(body.received_date) : new Date(body.receivedDate);
+    if (body.status !== undefined) updateData.status = body.status;
+
     const drum = await prisma.drumTracking.update({
       where: { id },
-      data: body,
+      data: updateData,
     });
 
-    return NextResponse.json({ data: drum });
+    const formatted = {
+      id: drum.id,
+      drum_number: drum.drumNumber,
+      item_id: drum.itemId ?? null,
+      initial_quantity: Number(drum.initialQuantity),
+      current_quantity: Number(drum.currentQuantity),
+      status: drum.status,
+      received_date: drum.receivedDate ? drum.receivedDate.toISOString() : null,
+      created_at: drum.createdAt?.toISOString(),
+      updated_at: drum.updatedAt?.toISOString(),
+    };
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error updating drum:", error);
     return NextResponse.json(
@@ -74,9 +109,9 @@ export async function DELETE(
 
     // Delete in transaction to ensure consistency
     await prisma.$transaction(async (tx: any) => {
-      // First delete related drum usage records
+      // First delete related drum usage records (use Prisma field name drumId)
       await tx.drumUsage.deleteMany({
-        where: { drum_id: id },
+        where: { drumId: id },
       });
 
       // Then delete the drum

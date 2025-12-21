@@ -42,7 +42,20 @@ export async function GET(req: NextRequest) {
       take: limit,
     });
 
-    return NextResponse.json({ data: invoices });
+    const formatted = invoices.map((inv) => ({
+      id: inv.id,
+      invoice_number: inv.invoiceNumber,
+      warehouse: inv.warehouse,
+      date: inv.date ? inv.date.toISOString().slice(0,10) : null,
+      issued_by: inv.issuedBy || "",
+      drawn_by: inv.drawnBy || "",
+      total_items: Number(inv.totalItems || 0),
+      status: inv.status,
+      created_at: inv.createdAt?.toISOString(),
+      updated_at: inv.updatedAt?.toISOString(),
+    }));
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error fetching inventory invoices:", error);
     return NextResponse.json(
@@ -135,7 +148,21 @@ export async function POST(req: NextRequest) {
       return invoice;
     });
 
-    return NextResponse.json({ data: result });
+    const created = result;
+    const formatted = {
+      id: created.id,
+      invoice_number: created.invoiceNumber,
+      warehouse: created.warehouse,
+      date: created.date ? created.date.toISOString().slice(0,10) : null,
+      issued_by: created.issuedBy || "",
+      drawn_by: created.drawnBy || "",
+      total_items: Number(created.totalItems || 0),
+      status: created.status,
+      created_at: created.createdAt?.toISOString(),
+      updated_at: created.updatedAt?.toISOString(),
+    };
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error creating inventory invoice:", error);
     return NextResponse.json(

@@ -38,7 +38,19 @@ export async function GET(req: NextRequest) {
         where,
         orderBy: { name: "asc" },
       });
-      return NextResponse.json({ data: items });
+
+      const formatted = items.map((it) => ({
+        id: it.id,
+        name: it.name,
+        unit: it.unit,
+        current_stock: Number(it.currentStock ?? 0),
+        drum_size: it.drumSize !== null && it.drumSize !== undefined ? Number(it.drumSize) : null,
+        reorder_level: Number(it.reorderLevel ?? 0),
+        created_at: it.createdAt?.toISOString(),
+        updated_at: it.updatedAt?.toISOString(),
+      }));
+
+      return NextResponse.json({ data: formatted });
     }
 
     const [items, total] = await Promise.all([
@@ -51,8 +63,19 @@ export async function GET(req: NextRequest) {
       prisma.inventoryItem.count({ where }),
     ]);
 
+    const formatted = items.map((it) => ({
+      id: it.id,
+      name: it.name,
+      unit: it.unit,
+      current_stock: Number(it.currentStock ?? 0),
+      drum_size: it.drumSize !== null && it.drumSize !== undefined ? Number(it.drumSize) : null,
+      reorder_level: Number(it.reorderLevel ?? 0),
+      created_at: it.createdAt?.toISOString(),
+      updated_at: it.updatedAt?.toISOString(),
+    }));
+
     return NextResponse.json({
-      data: items,
+      data: formatted,
       pagination: {
         page,
         limit,
@@ -78,11 +101,35 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
+    // Whitelist supported fields (snake_case accepted)
+    const name = body.name;
+    const unit = body.unit;
+    const current_stock = body.current_stock ?? body.currentStock ?? 0;
+    const drum_size = body.drum_size ?? body.drumSize ?? undefined;
+    const reorder_level = body.reorder_level ?? body.reorderLevel ?? 0;
+
     const item = await prisma.inventoryItem.create({
-      data: body,
+      data: {
+        name,
+        unit,
+        currentStock: Number(current_stock || 0),
+        drumSize: drum_size !== undefined ? Number(drum_size) : undefined,
+        reorderLevel: Number(reorder_level || 0),
+      },
     });
 
-    return NextResponse.json({ data: item });
+    const formatted = {
+      id: item.id,
+      name: item.name,
+      unit: item.unit,
+      current_stock: Number(item.currentStock ?? 0),
+      drum_size: item.drumSize !== null && item.drumSize !== undefined ? Number(item.drumSize) : null,
+      reorder_level: Number(item.reorderLevel ?? 0),
+      created_at: item.createdAt?.toISOString(),
+      updated_at: item.updatedAt?.toISOString(),
+    };
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error creating inventory item:", error);
     return NextResponse.json(

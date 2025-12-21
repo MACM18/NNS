@@ -16,9 +16,22 @@ export async function GET(
 
     const items = await prisma.inventoryInvoiceItem.findMany({
       where: { invoiceId: id },
+      include: { item: true },
     });
 
-    return NextResponse.json({ data: items });
+    const formatted = items.map((it) => ({
+      id: it.id,
+      invoice_id: it.invoiceId,
+      item_id: it.itemId,
+      description: it.description,
+      unit: it.unit,
+      quantity_requested: Number(it.quantityRequested ?? 0),
+      quantity_issued: Number(it.quantityIssued ?? 0),
+      created_at: it.createdAt?.toISOString(),
+      item_name: it.item?.name || "",
+    }));
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error fetching invoice items:", error);
     return NextResponse.json(

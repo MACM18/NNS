@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       // Include usage data if requested
       let usageData: any[] = [];
       if (includeUsage) {
-        usageData = await prisma.drumUsage.findMany({
+        const rawUsage = await prisma.drumUsage.findMany({
           orderBy: { usageDate: "desc" },
           include: {
             lineDetails: {
@@ -52,13 +52,34 @@ export async function GET(req: NextRequest) {
             },
           },
         });
+
+        usageData = rawUsage.map((u) => ({
+          id: u.id,
+          quantity_used: Number(u.quantityUsed),
+          usage_date: u.usageDate ? u.usageDate.toISOString() : null,
+          cable_start_point: Number(u.cableStartPoint ?? 0),
+          cable_end_point: Number(u.cableEndPoint ?? 0),
+          wastage_calculated: Number(u.wastageCalculated ?? 0),
+          line_details: {
+            telephone_no: u.lineDetails?.telephoneNo ?? "",
+            name: u.lineDetails?.name ?? "",
+          },
+        }));
       }
 
-      // Transform drums with item name
+      // Transform drums with item name and snake_case fields
       type DrumWithRelations = (typeof drums)[number];
       const transformedDrums = drums.map((drum: DrumWithRelations) => ({
-        ...drum,
+        id: drum.id,
+        drum_number: drum.drumNumber,
+        item_id: drum.itemId ?? null,
         item_name: drum.item?.name || "",
+        initial_quantity: Number(drum.initialQuantity),
+        current_quantity: Number(drum.currentQuantity),
+        status: drum.status,
+        received_date: drum.receivedDate ? drum.receivedDate.toISOString() : null,
+        created_at: drum.createdAt?.toISOString(),
+        updated_at: drum.updatedAt?.toISOString(),
       }));
 
       return NextResponse.json({
@@ -82,11 +103,19 @@ export async function GET(req: NextRequest) {
       prisma.drumTracking.count({ where }),
     ]);
 
-    // Transform drums with item name
+    // Transform drums with item name and snake_case fields
     type DrumWithRelations = (typeof drums)[number];
     const transformedDrums = drums.map((drum: DrumWithRelations) => ({
-      ...drum,
+      id: drum.id,
+      drum_number: drum.drumNumber,
+      item_id: drum.itemId ?? null,
       item_name: drum.item?.name || "",
+      initial_quantity: Number(drum.initialQuantity),
+      current_quantity: Number(drum.currentQuantity),
+      status: drum.status,
+      received_date: drum.receivedDate ? drum.receivedDate.toISOString() : null,
+      created_at: drum.createdAt?.toISOString(),
+      updated_at: drum.updatedAt?.toISOString(),
     }));
 
     return NextResponse.json({
@@ -116,11 +145,38 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
+    // Accept snake_case or camelCase inputs
+    const drumNumber = body.drum_number ?? body.drumNumber;
+    const itemId = body.item_id ?? body.itemId ?? null;
+    const initialQuantity = Number(body.initial_quantity ?? body.initialQuantity ?? 0);
+    const currentQuantity = Number(body.current_quantity ?? body.currentQuantity ?? initialQuantity);
+    const receivedDate = body.received_date ?? body.receivedDate ?? undefined;
+    const status = body.status ?? "active";
+
     const drum = await prisma.drumTracking.create({
-      data: body,
+      data: {
+        drumNumber,
+        itemId,
+        initialQuantity: initialQuantity,
+        currentQuantity: currentQuantity,
+        receivedDate: receivedDate ? new Date(receivedDate) : undefined,
+        status,
+      },
     });
 
-    return NextResponse.json({ data: drum });
+    const formatted = {
+      id: drum.id,
+      drum_number: drum.drumNumber,
+      item_id: drum.itemId ?? null,
+      initial_quantity: Number(drum.initialQuantity),
+      current_quantity: Number(drum.currentQuantity),
+      status: drum.status,
+      received_date: drum.receivedDate ? drum.receivedDate.toISOString() : null,
+      created_at: drum.createdAt?.toISOString(),
+      updated_at: drum.updatedAt?.toISOString(),
+    };
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error creating drum:", error);
     return NextResponse.json(

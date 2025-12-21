@@ -24,6 +24,7 @@ export async function GET(
         currentQuantity: true,
         drumNumber: true,
         status: true,
+        receivedDate: true,
       },
     });
 
@@ -46,10 +47,34 @@ export async function GET(
       },
     });
 
+    // Transform to snake_case
+    const formattedDrum = {
+      id: drum.id,
+      initial_quantity: Number(drum.initialQuantity),
+      current_quantity: Number(drum.currentQuantity),
+      drum_number: drum.drumNumber,
+      status: drum.status,
+      manual_wastage_override: null,
+    };
+
+    const formattedUsage = usageRecords.map((u) => ({
+      id: u.id,
+      quantity_used: Number(u.quantityUsed),
+      usage_date: u.usageDate ? u.usageDate.toISOString() : null,
+      cable_start_point: Number(u.cableStartPoint ?? 0),
+      cable_end_point: Number(u.cableEndPoint ?? 0),
+      wastage_calculated: Number(u.wastageCalculated ?? 0),
+      line_details: {
+        telephone_no: u.lineDetails?.telephoneNo ?? "",
+        name: u.lineDetails?.name ?? "",
+        dp: u.lineDetails?.dp ?? "",
+      },
+    }));
+
     return NextResponse.json({
       data: {
-        drum,
-        usageRecords,
+        drum: formattedDrum,
+        usageRecords: formattedUsage,
       },
     });
   } catch (error) {

@@ -30,7 +30,33 @@ export async function GET(
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ data: invoice });
+    const formattedItems = (invoice.items || []).map((it) => ({
+      id: it.id,
+      invoice_id: it.invoiceId,
+      item_id: it.itemId,
+      description: it.description,
+      unit: it.unit,
+      quantity_requested: Number(it.quantityRequested ?? 0),
+      quantity_issued: Number(it.quantityIssued ?? 0),
+      created_at: it.createdAt?.toISOString(),
+      item_name: it.item?.name || "",
+    }));
+
+    const formatted = {
+      id: invoice.id,
+      invoice_number: invoice.invoiceNumber,
+      warehouse: invoice.warehouse,
+      date: invoice.date ? invoice.date.toISOString().slice(0,10) : null,
+      issued_by: invoice.issuedBy || "",
+      drawn_by: invoice.drawnBy || "",
+      total_items: Number(invoice.totalItems || 0),
+      status: invoice.status,
+      created_at: invoice.createdAt?.toISOString(),
+      updated_at: invoice.updatedAt?.toISOString(),
+      items: formattedItems,
+    };
+
+    return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error fetching invoice:", error);
     return NextResponse.json(

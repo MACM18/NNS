@@ -25,13 +25,19 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Transform the data to match the expected format
+    // Transform the data to match the expected format (snake_case)
     type WasteReportWithRelations = (typeof wasteReports)[number];
     const formattedReports = wasteReports.map(
       (report: WasteReportWithRelations) => ({
-        ...report,
-        item_name: report.item?.name || "",
+        id: report.id,
+        item_id: report.itemId,
+        quantity: Number(report.quantity),
+        waste_reason: report.wasteReason || "",
+        waste_date: report.wasteDate ? report.wasteDate.toISOString().slice(0,10) : null,
+        reported_by: report.reportedById ?? null,
         full_name: report.reportedBy?.fullName || "",
+        created_at: report.createdAt?.toISOString(),
+        item_name: report.item?.name || "",
       })
     );
 
@@ -93,8 +99,18 @@ export async function POST(req: NextRequest) {
         return createdRecords;
       });
 
+      const formatted = results.map((r: any) => ({
+        id: r.id,
+        item_id: r.itemId,
+        quantity: Number(r.quantity),
+        waste_reason: r.wasteReason || "",
+        waste_date: r.wasteDate ? r.wasteDate.toISOString().slice(0,10) : null,
+        reported_by: r.reportedById ?? null,
+        created_at: r.createdAt?.toISOString(),
+      }));
+
       return NextResponse.json({
-        data: results,
+        data: formatted,
         message: `${results.length} waste records created successfully`,
       });
     }
