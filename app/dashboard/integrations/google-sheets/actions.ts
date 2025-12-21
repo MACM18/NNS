@@ -67,15 +67,15 @@ export async function createConnection(payload: {
     }
 
     try {
-      const created = await prisma.google_sheet_connections.create({
+      const created = await prisma.googleSheetConnection.create({
         data: {
           month: Number(month),
           year: Number(year),
-          sheet_url,
-          sheet_name,
-          sheet_tab,
-          sheet_id: spreadsheetId,
-          created_by: auth.userId,
+          sheetUrl: sheet_url,
+          sheetName: sheet_name,
+          sheetTab: sheet_tab,
+          sheetId: spreadsheetId,
+          createdById: auth.userId,
         },
         select: { id: true },
       });
@@ -171,9 +171,9 @@ export async function deleteConnection(connectionId: string) {
     }
 
     // Check if connection exists first
-    const existing = await prisma.google_sheet_connections.findUnique({
+    const existing = await prisma.googleSheetConnection.findUnique({
       where: { id: connectionId },
-      select: { id: true, created_by: true },
+      select: { id: true, createdById: true },
     });
     if (!existing) {
       throw new Error("Connection not found");
@@ -181,7 +181,7 @@ export async function deleteConnection(connectionId: string) {
 
     // Optionally, ensure the user is the owner or admin - for now admin/moderator can delete any
     try {
-      await prisma.google_sheet_connections.delete({
+      await prisma.googleSheetConnection.delete({
         where: { id: connectionId },
       });
     } catch (e: any) {
@@ -228,16 +228,16 @@ export async function syncConnection(
     // Fetch connection with better error handling
     let conn: any;
     try {
-      const connData = await prisma.google_sheet_connections.findUnique({
+      const connData = await prisma.googleSheetConnection.findUnique({
         where: { id: connectionId },
         select: {
           id: true,
           month: true,
           year: true,
-          sheet_url: true,
-          sheet_name: true,
-          sheet_tab: true,
-          sheet_id: true,
+          sheetUrl: true,
+          sheetName: true,
+          sheetTab: true,
+          sheetId: true,
         },
       });
 
@@ -252,22 +252,22 @@ export async function syncConnection(
 
     const month: number = Number(conn.month);
     const year: number = Number(conn.year);
-    const storedSheetTab = conn.sheet_tab
-      ? conn.sheet_tab.toString().trim()
+    const storedSheetTab = conn.sheetTab
+      ? conn.sheetTab.toString().trim()
       : null;
     let sheetTab = storedSheetTab;
     const spreadsheetId =
-      conn.sheet_id || extractSpreadsheetId(conn.sheet_url || "");
+      conn.sheetId || extractSpreadsheetId(conn.sheetUrl || "");
 
     if (!spreadsheetId) {
       throw new Error("Unable to determine spreadsheetId from URL or sheet_id");
     }
 
-    if (!conn.sheet_id || conn.sheet_id !== spreadsheetId) {
+    if (!conn.sheetId || conn.sheetId !== spreadsheetId) {
       try {
-        await prisma.google_sheet_connections.update({
+        await prisma.googleSheetConnection.update({
           where: { id: connectionId },
-          data: { sheet_id: spreadsheetId },
+          data: { sheetId: spreadsheetId },
         });
       } catch (persistErr) {
         console.warn(
@@ -312,9 +312,9 @@ export async function syncConnection(
         sheetTab = availableTabs[0];
         if (!storedSheetTab) {
           try {
-            await prisma.google_sheet_connections.update({
+            await prisma.googleSheetConnection.update({
               where: { id: connectionId },
-              data: { sheet_tab: sheetTab },
+              data: { sheetTab: sheetTab },
             });
           } catch (persistTabErr) {
             console.warn(
@@ -961,18 +961,18 @@ export async function syncConnection(
 
     try {
       progress("Updating connection status");
-      const data = await prisma.google_sheet_connections.update({
+      const data = await prisma.googleSheetConnection.update({
         where: { id: connectionId },
         data: {
-          last_synced: new Date(now),
+          lastSynced: new Date(now),
           status: "active",
-          record_count: totalProcessed,
+          recordCount: totalProcessed,
         },
         select: {
           id: true,
-          last_synced: true,
+          lastSynced: true,
           status: true,
-          record_count: true,
+          recordCount: true,
         },
       });
 
@@ -1014,9 +1014,9 @@ export async function syncConnection(
 
     // Try to update connection status to error state
     try {
-      await prisma.google_sheet_connections.update({
+      await prisma.googleSheetConnection.update({
         where: { id: connectionId },
-        data: { status: "error", last_synced: new Date() },
+        data: { status: "error", lastSynced: new Date() },
       });
     } catch (statusError) {
       console.error(
