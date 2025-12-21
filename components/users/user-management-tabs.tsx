@@ -56,10 +56,10 @@ export function UserManagementTabs() {
         return {
           id: user.id,
           email: user.email,
-          full_name: profile?.full_name || user.name,
+          full_name: profile?.fullName || user.email || "",
           role: profile?.role || "user",
-          created_at: profile?.created_at || user.createdAt,
-          updated_at: profile?.updated_at,
+          created_at: profile?.createdAt || user.createdAt,
+          updated_at: profile?.updatedAt || null,
           provider: isGoogleUser ? "google" : "email",
           identities: user.accounts || [],
         };
