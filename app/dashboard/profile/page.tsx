@@ -111,7 +111,7 @@ export default function ProfilePage() {
       {loading ? (
         <PageSkeleton />
       ) : (
-        <div className='max-w-4xl mx-auto'>
+        <div className='mx-auto'>
           <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
             <div>
               <h1 className='text-3xl font-bold'>Profile</h1>
