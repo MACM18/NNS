@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { computeCableMeasurements } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -53,13 +54,20 @@ export async function GET(req: NextRequest) {
 
       // Determine status
       let normalizedStatus = line.status;
-      if (line.completed === true || line.status === "completed") {
+      if (line.completedDate || line.status === "completed") {
         normalizedStatus = "completed";
       } else if (line.status === "in_progress") {
         normalizedStatus = "in_progress";
       } else if (!line.status || line.status === "pending") {
         normalizedStatus = "pending";
       }
+
+      // Compute derived cable measurements (f1, g1, totalCable)
+      const { f1, g1, totalCable } = computeCableMeasurements(
+        Number(line.cableStart || 0),
+        Number(line.cableMiddle || 0),
+        Number(line.cableEnd || 0)
+      );
 
       return {
         id: line.id,
@@ -75,10 +83,7 @@ export async function GET(req: NextRequest) {
         cable_start: Number(line.cableStart || 0),
         cable_middle: Number(line.cableMiddle || 0),
         cable_end: Number(line.cableEnd || 0),
-        total_cable:
-          Number(line.cableStart || 0) +
-          Number(line.cableMiddle || 0) +
-          Number(line.cableEnd || 0),
+        total_cable: totalCable,
         wastage: line.wastage || 0,
         internal_wire: Number(line.internalWire || 0),
         casing: line.casing || 0,
@@ -90,14 +95,14 @@ export async function GET(req: NextRequest) {
         flexible: line.flexible || 0,
         pole: line.pole || 0,
         pole_67: line.pole67 || 0,
-        top_bolt: line.top_bolt || 0,
-        f1: line.f1 || 0,
-        g1: line.g1 || 0,
+        top_bolt: line.topBolt || 0,
+        f1: f1 || 0,
+        g1: g1 || 0,
         c_hook: line.cHook || 0,
         l_hook: line.lHook || 0,
         retainers: line.retainers || 0,
         nut_bolt: line.nutBolt || 0,
-        u_clip: line.u_clip || 0,
+        u_clip: line.uClip || 0,
         concrete_nail: line.concreteNail || 0,
         roll_plug: line.rollPlug || 0,
         screw_nail: line.screwNail || 0,
@@ -111,7 +116,7 @@ export async function GET(req: NextRequest) {
         fac: line.fac || 0,
         assignees,
         created_at: line.createdAt,
-        completed: line.completed,
+        completed: Boolean(line.completedDate || line.status === "completed"),
         drum_number: line.drumNumber || "",
         ont_serial: line.ontSerial || "",
         voice_test_no: line.voiceTestNo || "",
