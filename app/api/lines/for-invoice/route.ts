@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { computeCableMeasurements } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -43,19 +44,23 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Transform to snake_case
+    // Transform to snake_case and compute cable measurements correctly
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transformedLines = lines.map((line: any) => ({
-      id: line.id,
-      name: line.name,
-      phone_number: line.telephoneNo,
-      total_cable:
-        Number(line.cableStart || 0) +
-        Number(line.cableMiddle || 0) +
-        Number(line.cableEnd || 0),
-      date: line.date?.toISOString().split("T")[0],
-      address: line.address,
-    }));
+    const transformedLines = lines.map((line: any) => {
+      const { totalCable } = computeCableMeasurements(
+        Number(line.cableStart || 0),
+        Number(line.cableMiddle || 0),
+        Number(line.cableEnd || 0)
+      );
+      return {
+        id: line.id,
+        name: line.name,
+        phone_number: line.telephoneNo,
+        total_cable: totalCable,
+        date: line.date?.toISOString().split("T")[0],
+        address: line.address,
+      };
+    });
 
     return NextResponse.json({ data: transformedLines });
   } catch (error) {
