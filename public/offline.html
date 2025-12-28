@@ -5,44 +5,165 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Offline - NNS Telecom</title>
     <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
       body {
         font-family: system-ui, -apple-system, "Segoe UI", Roboto,
-          "Helvetica Neue", Arial;
-        background: #0f172a;
+          "Helvetica Neue", Arial, sans-serif;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         color: #e6eef8;
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 100vh;
-        margin: 0;
+        min-height: 100vh;
+        padding: 20px;
       }
-      .box {
+      .container {
         text-align: center;
         max-width: 560px;
-        padding: 24px;
+        width: 100%;
+      }
+      .icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 24px;
+        background: #1e293b;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
       }
       h1 {
-        margin: 0 0 8px 0;
-        font-size: 24px;
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        color: #f1f5f9;
       }
       p {
-        margin: 0 0 12px 0;
-        color: #c9d6e8;
+        font-size: 16px;
+        line-height: 1.6;
+        margin-bottom: 16px;
+        color: #cbd5e1;
       }
-      a {
-        color: #60a5fa;
-        text-decoration: underline;
+      .actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 32px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: #2563eb;
+        color: white;
+      }
+      .btn-primary:hover {
+        background: #1d4ed8;
+        transform: translateY(-1px);
+      }
+      .btn-secondary {
+        background: #334155;
+        color: #e6eef8;
+      }
+      .btn-secondary:hover {
+        background: #475569;
+        transform: translateY(-1px);
+      }
+      .status {
+        margin-top: 24px;
+        padding: 16px;
+        background: #1e293b;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ef4444;
+        margin-right: 8px;
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .cached-note {
+        margin-top: 16px;
+        font-size: 13px;
+        color: #94a3b8;
       }
     </style>
   </head>
   <body>
-    <div class="box">
-      <h1>You're offline</h1>
+    <div class="container">
+      <div class="icon">📡</div>
+      <h1>You're Offline</h1>
       <p>
-        It looks like you're not connected to the internet. Some features may be
-        unavailable.
+        It looks like you've lost your internet connection. Don't worry, you can
+        still access some features of the app.
       </p>
-      <p><a href="/">Return to the app home</a></p>
+      <div class="status">
+        <span class="status-dot"></span>
+        <strong>Connection Status:</strong> Offline
+      </div>
+      <div class="actions">
+        <a href="/dashboard" class="btn btn-primary"> Go to Dashboard </a>
+        <a href="/" class="btn btn-secondary"> Go to Home </a>
+        <button onclick="location.reload()" class="btn btn-secondary">
+          Try Again
+        </button>
+      </div>
+      <p class="cached-note">
+        📦 Some pages and data may be available from cache while offline.
+      </p>
     </div>
+    <script>
+      // Auto-retry connection
+      let retryCount = 0;
+      const maxRetries = 5;
+
+      function checkConnection() {
+        if (navigator.onLine && retryCount < maxRetries) {
+          retryCount++;
+          fetch("/")
+            .then(() => {
+              location.reload();
+            })
+            .catch(() => {
+              setTimeout(checkConnection, 5000);
+            });
+        }
+      }
+
+      window.addEventListener("online", () => {
+        location.reload();
+      });
+
+      // Start checking after 2 seconds
+      setTimeout(checkConnection, 2000);
+    </script>
   </body>
 </html>
