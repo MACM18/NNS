@@ -36,17 +36,22 @@ type AssignmentRow = {
  * Worker data structure representing a field technician or installer.
  * Workers are tracked separately from user accounts for flexibility.
  */
-type Worker = {
+interface Worker {
   /** Unique identifier for the worker */
   id: string;
-  /** Worker's full name (DB uses camelCase `fullName`, some responses normalize to `full_name`) */
-  full_name: string | null;
-  fullName?: string | null;
+  /** Worker's full name */
+  fullName: string | null;
   /** Worker's role/position (e.g., technician, installer) */
   role: string | null;
   /** Worker's current status (active or inactive) */
   status: string | null;
-};
+}
+
+interface WorkerResponse {
+  id: string;
+  full_name: string | null;
+  role: string | null;
+}
 
 async function authorize(): Promise<AuthorizedContext | Response> {
   const session = await auth();
@@ -126,7 +131,7 @@ export async function GET(req: NextRequest) {
         where: { id: { in: workerIds } },
         select: { id: true, fullName: true, role: true, status: true },
       });
-      workerDetails = workers as unknown as Worker[];
+      workerDetails = workers as Worker[];
     }
 
     const workerOptions = await prisma.worker.findMany({
@@ -171,7 +176,7 @@ export async function GET(req: NextRequest) {
       lineEntry.assignments.push({
         id: assignment.id,
         worker_id: assignment.workerId,
-        worker_name: worker?.fullName || worker?.full_name || "Unnamed",
+        worker_name: worker?.fullName || "Unnamed",
         worker_role: worker?.role || null,
         assigned_date: dateKey,
       });
@@ -186,11 +191,13 @@ export async function GET(req: NextRequest) {
         month,
         year,
         days,
-        workers: (workerOptions || []).map((worker: any) => ({
-          id: worker.id,
-          full_name: worker.fullName || worker.full_name || null,
-          role: worker.role,
-        })),
+        workers: (workerOptions || []).map(
+          (worker: Worker): WorkerResponse => ({
+            id: worker.id,
+            full_name: worker.fullName,
+            role: worker.role,
+          })
+        ),
       }),
       { status: 200 }
     );

@@ -33,18 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
-
-interface Worker {
-  id: string;
-  full_name: string;
-  phone_number: string | null;
-  email: string | null;
-  role: string | null;
-  status: string;
-  notes: string | null;
-  profile_id: string | null;
-  created_at: string;
-}
+import type { Worker, WorkerFormData } from "@/types/workers";
 
 interface ManageWorkersModalProps {
   open: boolean;
@@ -79,19 +68,7 @@ export function ManageWorkersModal({
       if (!res.ok) {
         throw new Error(json.error || "Failed to fetch workers");
       }
-      // Normalize worker fields from API (camelCase) to UI shape (snake_case)
-      const normalized = (json.workers || []).map((w: any) => ({
-        id: w.id,
-        full_name: w.fullName || w.full_name || "",
-        phone_number: w.phoneNumber || w.phone_number || null,
-        email: w.email || null,
-        role: w.role || null,
-        status: w.status || "active",
-        notes: w.notes || null,
-        profile_id: w.profileId || w.profile_id || null,
-        created_at: w.createdAt || w.created_at || null,
-      }));
-      setWorkers(normalized);
+      setWorkers(json.workers || []);
     } catch (error: any) {
       toast({
         title: "Failed to load workers",
