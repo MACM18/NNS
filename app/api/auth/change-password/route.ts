@@ -76,11 +76,13 @@ export async function POST(req: NextRequest) {
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    // Update password
+    // Update password and reset password expiry tracking
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
         password: hashedPassword,
+        lastPasswordChange: new Date(),
+        passwordExpireWarned: false,
         updatedAt: new Date(),
       },
     });

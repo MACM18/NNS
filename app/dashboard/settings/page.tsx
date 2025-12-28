@@ -43,14 +43,23 @@ import {
   Mail,
   Calendar,
   SettingsIcon,
+  Smartphone,
+  Key,
+  Loader2,
+  Copy,
+  CheckCircle,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { useNotification } from "@/contexts/notification-context";
 import { useTheme } from "next-themes";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SettingsPage() {
   const { user, profile, loading } = useAuth();
   const { addNotification } = useNotification();
+  const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("profile");
   const [isLoading, setIsLoading] = useState(false);
@@ -103,10 +112,8 @@ export default function SettingsPage() {
   const [notificationSettings, setNotificationSettings] = useState({
     email_notifications: true,
     push_notifications: true,
-    task_reminders: true,
     invoice_alerts: true,
     system_updates: false,
-    marketing_emails: false,
   });
 
   // Security settings
@@ -115,6 +122,44 @@ export default function SettingsPage() {
     session_timeout: "30",
     login_alerts: true,
     password_expiry: "90",
+  });
+
+  // 2FA state
+  const [twoFactorStatus, setTwoFactorStatus] = useState({
+    enabled: false,
+    canEnable: true,
+    backupCodesRemaining: null as number | null,
+    isOAuthUser: false,
+  });
+  const [twoFactorSetup, setTwoFactorSetup] = useState({
+    loading: false,
+    qrCode: "",
+    secret: "",
+    backupCodes: [] as string[],
+    showBackupCodes: false,
+    verificationCode: "",
+    step: "idle" as "idle" | "setup" | "qr" | "verify" | "backup" | "complete",
+    regeneratePassword: "",
+    showRegenerateDialog: false,
+    disablePassword: "",
+    showDisableDialog: false,
+    error: "",
+  });
+
+  // Email settings state (Admin only)
+  const [emailSettings, setEmailSettings] = useState({
+    provider: "resend" as "resend" | "smtp",
+    fromEmail: "noreply@nns.lk",
+    fromName: "NNS Enterprise",
+    resendApiKey: "",
+    smtpHost: "",
+    smtpPort: 587,
+    smtpSecure: true,
+    smtpUser: "",
+    smtpPassword: "",
+    hasEnvConfig: false,
+    loading: false,
+    testing: false,
   });
 
   useEffect(() => {
@@ -135,7 +180,11 @@ export default function SettingsPage() {
     fetchNotificationSettings();
     fetchSecuritySettings();
     checkOAuthUser();
-  }, [user]);
+    fetch2FAStatus();
+    if (["admin", "moderator"].includes((profile?.role || "").toLowerCase())) {
+      fetchEmailSettings();
+    }
+  }, [user, profile?.role]);
 
   const checkOAuthUser = async () => {
     if (!user?.id) return;
@@ -268,6 +317,55 @@ export default function SettingsPage() {
       }
     } catch (err) {
       console.error("Failed to fetch security settings", err);
+    }
+  };
+
+  const fetch2FAStatus = async () => {
+    try {
+      const response = await fetch("/api/auth/2fa/status");
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data) {
+          setTwoFactorStatus({
+            enabled: result.data.twoFactorEnabled,
+            canEnable: result.data.canEnable2FA,
+            backupCodesRemaining: result.data.backupCodesRemaining,
+            isOAuthUser: result.data.isOAuthUser,
+          });
+          setSecuritySettings((prev) => ({
+            ...prev,
+            two_factor_enabled: result.data.twoFactorEnabled,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch 2FA status", err);
+    }
+  };
+
+  const fetchEmailSettings = async () => {
+    try {
+      const response = await fetch("/api/settings/email");
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data) {
+          setEmailSettings((prev) => ({
+            ...prev,
+            provider: result.data.provider,
+            fromEmail: result.data.fromEmail,
+            fromName: result.data.fromName,
+            resendApiKey: result.data.resendApiKey,
+            smtpHost: result.data.smtpHost,
+            smtpPort: result.data.smtpPort,
+            smtpSecure: result.data.smtpSecure,
+            smtpUser: result.data.smtpUser,
+            smtpPassword: result.data.smtpPassword,
+            hasEnvConfig: result.data.hasEnvConfig,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch email settings", err);
     }
   };
 
@@ -525,6 +623,295 @@ export default function SettingsPage() {
     }
   };
 
+  // 2FA Functions
+  const handleSetup2FA = async () => {
+    setTwoFactorSetup((prev) => ({ ...prev, loading: true }));
+    try {
+      const response = await fetch("/api/auth/2fa/setup", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to set up 2FA");
+      }
+
+      const result = await response.json();
+      setTwoFactorSetup((prev) => ({
+        ...prev,
+        loading: false,
+        qrCode: result.data.qrCode,
+        secret: result.data.secret,
+        backupCodes: result.data.backupCodes,
+        showBackupCodes: false,
+        verificationCode: "",
+        step: "qr",
+        error: "",
+      }));
+    } catch (error: unknown) {
+      setTwoFactorSetup((prev) => ({ ...prev, loading: false }));
+      const errorMessage =
+        error instanceof Error ? error.message : "An error occurred";
+      addNotification({
+        title: "2FA Setup Failed",
+        message: errorMessage,
+        type: "error",
+        category: "system",
+      });
+    }
+  };
+
+  const handleVerify2FA = async () => {
+    setTwoFactorSetup((prev) => ({ ...prev, loading: true }));
+    try {
+      const response = await fetch("/api/auth/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: twoFactorSetup.verificationCode,
+          purpose: "setup",
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Invalid verification code");
+      }
+
+      setTwoFactorSetup((prev) => ({
+        ...prev,
+        loading: false,
+        step: "backup",
+        showBackupCodes: true,
+      }));
+
+      // Update status
+      setTwoFactorStatus((prev) => ({
+        ...prev,
+        enabled: true,
+        backupCodesRemaining: 10,
+      }));
+      setSecuritySettings((prev) => ({
+        ...prev,
+        two_factor_enabled: true,
+      }));
+
+      addNotification({
+        title: "2FA Enabled",
+        message:
+          "Two-factor authentication has been enabled. Save your backup codes!",
+        type: "success",
+        category: "system",
+      });
+    } catch (error: any) {
+      setTwoFactorSetup((prev) => ({ ...prev, loading: false }));
+      addNotification({
+        title: "Verification Failed",
+        message: error.message,
+        type: "error",
+        category: "system",
+      });
+    }
+  };
+
+  const handleDisable2FA = async (password: string) => {
+    setTwoFactorSetup((prev) => ({ ...prev, loading: true }));
+    try {
+      const response = await fetch("/api/auth/2fa/disable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to disable 2FA");
+      }
+
+      setTwoFactorStatus({
+        enabled: false,
+        canEnable: true,
+        backupCodesRemaining: null,
+        isOAuthUser: false,
+      });
+      setSecuritySettings((prev) => ({
+        ...prev,
+        two_factor_enabled: false,
+      }));
+      setTwoFactorSetup({
+        loading: false,
+        qrCode: "",
+        secret: "",
+        backupCodes: [],
+        showBackupCodes: false,
+        verificationCode: "",
+        step: "idle",
+        regeneratePassword: "",
+        showRegenerateDialog: false,
+        disablePassword: "",
+        showDisableDialog: false,
+        error: "",
+      });
+
+      addNotification({
+        title: "2FA Disabled",
+        message: "Two-factor authentication has been disabled.",
+        type: "success",
+        category: "system",
+      });
+    } catch (error: unknown) {
+      setTwoFactorSetup((prev) => ({ ...prev, loading: false }));
+      const errorMessage =
+        error instanceof Error ? error.message : "An error occurred";
+      addNotification({
+        title: "Disable Failed",
+        message: errorMessage,
+        type: "error",
+        category: "system",
+      });
+    }
+  };
+
+  const handleRegenerateBackupCodes = async (password: string) => {
+    setTwoFactorSetup((prev) => ({ ...prev, loading: true }));
+    try {
+      const response = await fetch("/api/auth/2fa/backup-codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to regenerate backup codes");
+      }
+
+      const result = await response.json();
+      setTwoFactorSetup((prev) => ({
+        ...prev,
+        loading: false,
+        backupCodes: result.data.backupCodes,
+        showBackupCodes: true,
+        step: "backup",
+        showRegenerateDialog: false,
+        regeneratePassword: "",
+      }));
+      setTwoFactorStatus((prev) => ({
+        ...prev,
+        backupCodesRemaining: 10,
+      }));
+
+      addNotification({
+        title: "Backup Codes Regenerated",
+        message: "New backup codes have been generated. Save them securely!",
+        type: "success",
+        category: "system",
+      });
+    } catch (error: unknown) {
+      setTwoFactorSetup((prev) => ({ ...prev, loading: false }));
+      const errorMessage =
+        error instanceof Error ? error.message : "An error occurred";
+      addNotification({
+        title: "Regeneration Failed",
+        message: errorMessage,
+        type: "error",
+        category: "system",
+      });
+    }
+  };
+
+  const handleDownloadBackupCodes = () => {
+    const content = `NNS Enterprise - 2FA Backup Codes
+Generated: ${new Date().toISOString()}
+
+Keep these codes in a safe place. Each code can only be used once.
+
+${twoFactorSetup.backupCodes.map((code, i) => `${i + 1}. ${code}`).join("\n")}
+
+If you lose access to your authenticator app, you can use these codes to sign in.
+`;
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "nns-backup-codes.txt";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCancel2FASetup = async () => {
+    try {
+      await fetch("/api/auth/2fa/setup", { method: "DELETE" });
+    } catch {
+      // Ignore errors
+    }
+    setTwoFactorSetup({
+      loading: false,
+      qrCode: "",
+      secret: "",
+      backupCodes: [],
+      showBackupCodes: false,
+      verificationCode: "",
+      step: "idle",
+      regeneratePassword: "",
+      showRegenerateDialog: false,
+      disablePassword: "",
+      showDisableDialog: false,
+      error: "",
+    });
+  };
+
+  // Email Settings Functions (Admin only)
+  const handleEmailSettingsUpdate = async (testOnly = false) => {
+    setEmailSettings((prev) => ({
+      ...prev,
+      loading: !testOnly,
+      testing: testOnly,
+    }));
+    try {
+      const response = await fetch("/api/settings/email", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: emailSettings.provider,
+          fromEmail: emailSettings.fromEmail,
+          fromName: emailSettings.fromName,
+          resendApiKey: emailSettings.resendApiKey,
+          smtpHost: emailSettings.smtpHost,
+          smtpPort: emailSettings.smtpPort,
+          smtpSecure: emailSettings.smtpSecure,
+          smtpUser: emailSettings.smtpUser,
+          smtpPassword: emailSettings.smtpPassword,
+          testOnly,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update email settings");
+      }
+
+      addNotification({
+        title: testOnly ? "Test Email" : "Email Settings Updated",
+        message: result.message,
+        type: result.success ? "success" : "error",
+        category: "system",
+      });
+    } catch (error: any) {
+      addNotification({
+        title: testOnly ? "Test Failed" : "Update Failed",
+        message: error.message,
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setEmailSettings((prev) => ({ ...prev, loading: false, testing: false }));
+    }
+  };
+
   const handleExportData = async () => {
     setExportLoading(true);
     try {
@@ -644,10 +1031,18 @@ export default function SettingsPage() {
             onValueChange={setActiveTab}
             className='space-y-6'
           >
-            <TabsList className='grid w-full grid-cols-6'>
+            <TabsList
+              className={`grid w-full ${
+                ["admin", "moderator"].includes(
+                  (profile?.role || "").toLowerCase()
+                )
+                  ? "grid-cols-7"
+                  : "grid-cols-6"
+              }`}
+            >
               <TabsTrigger value='profile' className='flex items-center gap-2'>
                 <User className='h-4 w-4' />
-                Profile
+                <span className='hidden sm:inline'>Profile</span>
               </TabsTrigger>
               <TabsTrigger
                 value='company'
@@ -659,37 +1054,38 @@ export default function SettingsPage() {
                 }
               >
                 <Building className='h-4 w-4' />
-                Company
-                {["admin", "moderator"].includes(
-                  (profile?.role || "").toLowerCase()
-                ) && (
-                  <Badge variant='secondary' className='ml-1 text-xs'>
-                    Admin
-                  </Badge>
-                )}
+                <span className='hidden sm:inline'>Company</span>
               </TabsTrigger>
               <TabsTrigger
                 value='notifications'
                 className='flex items-center gap-2'
               >
                 <Bell className='h-4 w-4' />
-                Notifications
+                <span className='hidden sm:inline'>Notifications</span>
               </TabsTrigger>
               <TabsTrigger value='security' className='flex items-center gap-2'>
                 <Shield className='h-4 w-4' />
-                Security
+                <span className='hidden sm:inline'>Security</span>
               </TabsTrigger>
               <TabsTrigger
                 value='appearance'
                 className='flex items-center gap-2'
               >
                 <Palette className='h-4 w-4' />
-                Appearance
+                <span className='hidden sm:inline'>Appearance</span>
               </TabsTrigger>
               <TabsTrigger value='data' className='flex items-center gap-2'>
                 <Database className='h-4 w-4' />
-                Data
+                <span className='hidden sm:inline'>Data</span>
               </TabsTrigger>
+              {["admin", "moderator"].includes(
+                (profile?.role || "").toLowerCase()
+              ) && (
+                <TabsTrigger value='email' className='flex items-center gap-2'>
+                  <Mail className='h-4 w-4' />
+                  <span className='hidden sm:inline'>Email</span>
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {/* Profile Settings */}
@@ -1160,24 +1556,6 @@ export default function SettingsPage() {
 
                     <div className='flex items-center justify-between'>
                       <div className='space-y-0.5'>
-                        <Label>Task Reminders</Label>
-                        <p className='text-sm text-muted-foreground'>
-                          Get reminded about pending tasks
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationSettings.task_reminders}
-                        onCheckedChange={(checked) =>
-                          setNotificationSettings({
-                            ...notificationSettings,
-                            task_reminders: checked,
-                          })
-                        }
-                      />
-                    </div>
-
-                    <div className='flex items-center justify-between'>
-                      <div className='space-y-0.5'>
                         <Label>Invoice Alerts</Label>
                         <p className='text-sm text-muted-foreground'>
                           Notifications about invoice generation and payments
@@ -1207,24 +1585,6 @@ export default function SettingsPage() {
                           setNotificationSettings({
                             ...notificationSettings,
                             system_updates: checked,
-                          })
-                        }
-                      />
-                    </div>
-
-                    <div className='flex items-center justify-between'>
-                      <div className='space-y-0.5'>
-                        <Label>Marketing Emails</Label>
-                        <p className='text-sm text-muted-foreground'>
-                          Receive promotional emails and newsletters
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationSettings.marketing_emails}
-                        onCheckedChange={(checked) =>
-                          setNotificationSettings({
-                            ...notificationSettings,
-                            marketing_emails: checked,
                           })
                         }
                       />
@@ -1338,6 +1698,428 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
+              {/* Two-Factor Authentication Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className='flex items-center gap-2'>
+                    <Smartphone className='h-5 w-5' />
+                    Two-Factor Authentication
+                  </CardTitle>
+                  <CardDescription>
+                    Add an extra layer of security using an authenticator app
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  {twoFactorStatus.enabled ? (
+                    // 2FA is enabled - show status and management options
+                    <div className='space-y-4'>
+                      <div className='flex items-center gap-2 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg'>
+                        <CheckCircle className='h-5 w-5 text-green-600' />
+                        <span className='text-green-700 dark:text-green-300 font-medium'>
+                          Two-factor authentication is enabled
+                        </span>
+                      </div>
+
+                      <div className='flex items-center justify-between p-4 border rounded-lg'>
+                        <div>
+                          <p className='font-medium'>Backup Codes</p>
+                          <p className='text-sm text-muted-foreground'>
+                            {twoFactorStatus.backupCodesRemaining} of 10 backup
+                            codes remaining
+                          </p>
+                        </div>
+                        <Button
+                          variant='outline'
+                          onClick={() =>
+                            setTwoFactorSetup((prev) => ({
+                              ...prev,
+                              showRegenerateDialog: true,
+                            }))
+                          }
+                          disabled={twoFactorSetup.loading}
+                        >
+                          {twoFactorSetup.loading ? (
+                            <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                          ) : (
+                            <RefreshCw className='h-4 w-4 mr-2' />
+                          )}
+                          Regenerate Codes
+                        </Button>
+                      </div>
+
+                      {/* Regenerate Backup Codes Dialog */}
+                      {twoFactorSetup.showRegenerateDialog && (
+                        <div className='p-4 border rounded-lg space-y-3 bg-muted/50'>
+                          <p className='text-sm font-medium'>
+                            Confirm your password to regenerate backup codes
+                          </p>
+                          <Input
+                            type='password'
+                            value={twoFactorSetup.regeneratePassword}
+                            onChange={(e) =>
+                              setTwoFactorSetup((prev) => ({
+                                ...prev,
+                                regeneratePassword: e.target.value,
+                              }))
+                            }
+                            placeholder='Enter your password'
+                          />
+                          <div className='flex gap-2'>
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={() =>
+                                setTwoFactorSetup((prev) => ({
+                                  ...prev,
+                                  showRegenerateDialog: false,
+                                  regeneratePassword: "",
+                                }))
+                              }
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size='sm'
+                              onClick={() =>
+                                handleRegenerateBackupCodes(
+                                  twoFactorSetup.regeneratePassword
+                                )
+                              }
+                              disabled={
+                                !twoFactorSetup.regeneratePassword ||
+                                twoFactorSetup.loading
+                              }
+                            >
+                              {twoFactorSetup.loading ? (
+                                <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                              ) : null}
+                              Confirm
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Show newly regenerated backup codes */}
+                      {twoFactorSetup.backupCodes.length > 0 && (
+                        <div className='p-4 border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950 rounded-lg space-y-3'>
+                          <div className='flex items-center gap-2'>
+                            <AlertTriangle className='h-5 w-5 text-yellow-600' />
+                            <p className='font-medium text-yellow-700 dark:text-yellow-300'>
+                              New Backup Codes Generated
+                            </p>
+                          </div>
+                          <p className='text-sm text-yellow-600 dark:text-yellow-400'>
+                            Save these codes in a secure location. They will
+                            only be shown once.
+                          </p>
+                          <div className='grid grid-cols-2 gap-2 p-3 bg-white dark:bg-gray-900 rounded border font-mono text-sm'>
+                            {twoFactorSetup.backupCodes.map((code, index) => (
+                              <div key={index} className='p-1'>
+                                {code}
+                              </div>
+                            ))}
+                          </div>
+                          <div className='flex gap-2'>
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  twoFactorSetup.backupCodes.join("\n")
+                                );
+                                toast({ title: "Copied to clipboard" });
+                              }}
+                            >
+                              <Copy className='h-4 w-4 mr-2' />
+                              Copy Codes
+                            </Button>
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={handleDownloadBackupCodes}
+                            >
+                              <Download className='h-4 w-4 mr-2' />
+                              Download
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className='pt-4 border-t space-y-3'>
+                        <Button
+                          variant='destructive'
+                          onClick={() =>
+                            setTwoFactorSetup((prev) => ({
+                              ...prev,
+                              showDisableDialog: true,
+                            }))
+                          }
+                          disabled={twoFactorSetup.loading}
+                        >
+                          Disable Two-Factor Authentication
+                        </Button>
+
+                        {/* Disable 2FA Dialog */}
+                        {twoFactorSetup.showDisableDialog && (
+                          <div className='p-4 border border-destructive/50 rounded-lg space-y-3 bg-destructive/5'>
+                            <p className='text-sm font-medium text-destructive'>
+                              This will remove the extra security from your
+                              account
+                            </p>
+                            <Input
+                              type='password'
+                              value={twoFactorSetup.disablePassword}
+                              onChange={(e) =>
+                                setTwoFactorSetup((prev) => ({
+                                  ...prev,
+                                  disablePassword: e.target.value,
+                                }))
+                              }
+                              placeholder='Enter your password to confirm'
+                            />
+                            <div className='flex gap-2'>
+                              <Button
+                                variant='outline'
+                                size='sm'
+                                onClick={() =>
+                                  setTwoFactorSetup((prev) => ({
+                                    ...prev,
+                                    showDisableDialog: false,
+                                    disablePassword: "",
+                                  }))
+                                }
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                variant='destructive'
+                                size='sm'
+                                onClick={() =>
+                                  handleDisable2FA(
+                                    twoFactorSetup.disablePassword
+                                  )
+                                }
+                                disabled={
+                                  !twoFactorSetup.disablePassword ||
+                                  twoFactorSetup.loading
+                                }
+                              >
+                                {twoFactorSetup.loading ? (
+                                  <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                                ) : null}
+                                Disable 2FA
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : twoFactorSetup.step === "idle" ? (
+                    // 2FA not enabled and not setting up - show enable button
+                    <div className='space-y-4'>
+                      <p className='text-sm text-muted-foreground'>
+                        Two-factor authentication adds an additional layer of
+                        security to your account by requiring a code from your
+                        authenticator app when signing in.
+                      </p>
+                      {!twoFactorStatus.canEnable && (
+                        <div className='p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg'>
+                          <p className='text-sm text-yellow-700 dark:text-yellow-300'>
+                            You need to set a password before enabling
+                            two-factor authentication.
+                          </p>
+                        </div>
+                      )}
+                      <Button
+                        onClick={handleSetup2FA}
+                        disabled={
+                          !twoFactorStatus.canEnable || twoFactorSetup.loading
+                        }
+                      >
+                        {twoFactorSetup.loading ? (
+                          <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                        ) : (
+                          <Key className='h-4 w-4 mr-2' />
+                        )}
+                        Enable Two-Factor Authentication
+                      </Button>
+                    </div>
+                  ) : twoFactorSetup.step === "qr" ? (
+                    // Step 1: Show QR code
+                    <div className='space-y-4'>
+                      <div className='p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg'>
+                        <p className='text-sm text-blue-700 dark:text-blue-300'>
+                          <strong>Step 1:</strong> Scan this QR code with your
+                          authenticator app (Google Authenticator, Authy, etc.)
+                        </p>
+                      </div>
+
+                      <div className='flex justify-center p-4 bg-white rounded-lg'>
+                        {twoFactorSetup.qrCode && (
+                          <img
+                            src={twoFactorSetup.qrCode}
+                            alt='2FA QR Code'
+                            className='w-48 h-48'
+                          />
+                        )}
+                      </div>
+
+                      <div className='p-3 bg-gray-50 dark:bg-gray-900 rounded-lg'>
+                        <p className='text-xs text-muted-foreground mb-1'>
+                          Can&apos;t scan? Enter this code manually:
+                        </p>
+                        <div className='flex items-center gap-2'>
+                          <code className='flex-1 p-2 bg-white dark:bg-gray-800 border rounded font-mono text-sm break-all'>
+                            {twoFactorSetup.secret}
+                          </code>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                twoFactorSetup.secret
+                              );
+                              toast({ title: "Secret copied to clipboard" });
+                            }}
+                          >
+                            <Copy className='h-4 w-4' />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className='space-y-2'>
+                        <Label htmlFor='verify_code'>
+                          <strong>Step 2:</strong> Enter the 6-digit code from
+                          your app
+                        </Label>
+                        <Input
+                          id='verify_code'
+                          type='text'
+                          inputMode='numeric'
+                          pattern='[0-9]*'
+                          maxLength={6}
+                          value={twoFactorSetup.verificationCode}
+                          onChange={(e) =>
+                            setTwoFactorSetup({
+                              ...twoFactorSetup,
+                              verificationCode: e.target.value.replace(
+                                /\D/g,
+                                ""
+                              ),
+                            })
+                          }
+                          placeholder='Enter 6-digit code'
+                          className='font-mono text-center text-lg tracking-widest'
+                        />
+                        {twoFactorSetup.error && (
+                          <p className='text-sm text-red-500'>
+                            {twoFactorSetup.error}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className='flex gap-2'>
+                        <Button
+                          variant='outline'
+                          onClick={handleCancel2FASetup}
+                          disabled={twoFactorSetup.loading}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleVerify2FA}
+                          disabled={
+                            twoFactorSetup.verificationCode.length !== 6 ||
+                            twoFactorSetup.loading
+                          }
+                        >
+                          {twoFactorSetup.loading ? (
+                            <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                          ) : null}
+                          Verify & Enable
+                        </Button>
+                      </div>
+                    </div>
+                  ) : twoFactorSetup.step === "backup" ? (
+                    // Step 2: Show backup codes
+                    <div className='space-y-4'>
+                      <div className='flex items-center gap-2 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg'>
+                        <CheckCircle className='h-5 w-5 text-green-600' />
+                        <span className='text-green-700 dark:text-green-300 font-medium'>
+                          Two-factor authentication enabled successfully!
+                        </span>
+                      </div>
+
+                      <div className='p-4 border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950 rounded-lg space-y-3'>
+                        <div className='flex items-center gap-2'>
+                          <AlertTriangle className='h-5 w-5 text-yellow-600' />
+                          <p className='font-medium text-yellow-700 dark:text-yellow-300'>
+                            Save Your Backup Codes
+                          </p>
+                        </div>
+                        <p className='text-sm text-yellow-600 dark:text-yellow-400'>
+                          These codes can be used to access your account if you
+                          lose your authenticator device. Each code can only be
+                          used once. Store them in a secure location.
+                        </p>
+                        <div className='grid grid-cols-2 gap-2 p-3 bg-white dark:bg-gray-900 rounded border font-mono text-sm'>
+                          {twoFactorSetup.backupCodes.map((code, index) => (
+                            <div key={index} className='p-1'>
+                              {code}
+                            </div>
+                          ))}
+                        </div>
+                        <div className='flex gap-2'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                twoFactorSetup.backupCodes.join("\n")
+                              );
+                              toast({ title: "Copied to clipboard" });
+                            }}
+                          >
+                            <Copy className='h-4 w-4 mr-2' />
+                            Copy Codes
+                          </Button>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={handleDownloadBackupCodes}
+                          >
+                            <Download className='h-4 w-4 mr-2' />
+                            Download
+                          </Button>
+                        </div>
+                      </div>
+
+                      <Button
+                        onClick={() => {
+                          setTwoFactorSetup({
+                            step: "idle",
+                            qrCode: "",
+                            secret: "",
+                            backupCodes: [],
+                            showBackupCodes: false,
+                            verificationCode: "",
+                            loading: false,
+                            error: "",
+                            regeneratePassword: "",
+                            showRegenerateDialog: false,
+                            disablePassword: "",
+                            showDisableDialog: false,
+                          });
+                          fetch2FAStatus();
+                        }}
+                      >
+                        Done
+                      </Button>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Security Preferences</CardTitle>
@@ -1346,24 +2128,6 @@ export default function SettingsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className='space-y-6'>
-                  <div className='flex items-center justify-between'>
-                    <div className='space-y-0.5'>
-                      <Label>Two-Factor Authentication</Label>
-                      <p className='text-sm text-muted-foreground'>
-                        Add an extra layer of security to your account
-                      </p>
-                    </div>
-                    <Switch
-                      checked={securitySettings.two_factor_enabled}
-                      onCheckedChange={(checked) =>
-                        setSecuritySettings({
-                          ...securitySettings,
-                          two_factor_enabled: checked,
-                        })
-                      }
-                    />
-                  </div>
-
                   <div className='flex items-center justify-between'>
                     <div className='space-y-0.5'>
                       <Label>Login Alerts</Label>
@@ -1629,6 +2393,297 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* Email Settings - Admin/Moderator Only */}
+            {["admin", "moderator"].includes(
+              (profile?.role || "").toLowerCase()
+            ) && (
+              <TabsContent value='email' className='space-y-6'>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className='flex items-center gap-2'>
+                      <Mail className='h-5 w-5' />
+                      Email Provider Configuration
+                    </CardTitle>
+                    <CardDescription>
+                      Configure the email provider for system notifications and
+                      alerts
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className='space-y-6'>
+                    {/* Provider Selection */}
+                    <div className='space-y-3'>
+                      <Label>Email Provider</Label>
+                      <div className='grid grid-cols-2 gap-4'>
+                        <div
+                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                            emailSettings.provider === "resend"
+                              ? "border-primary bg-primary/5"
+                              : "hover:border-muted-foreground/50"
+                          }`}
+                          onClick={() =>
+                            setEmailSettings({
+                              ...emailSettings,
+                              provider: "resend",
+                            })
+                          }
+                        >
+                          <div className='flex items-center gap-2'>
+                            <div
+                              className={`w-4 h-4 rounded-full border-2 ${
+                                emailSettings.provider === "resend"
+                                  ? "border-primary bg-primary"
+                                  : "border-muted-foreground"
+                              }`}
+                            />
+                            <span className='font-medium'>Resend</span>
+                          </div>
+                          <p className='text-sm text-muted-foreground mt-1 ml-6'>
+                            Modern email API service
+                          </p>
+                        </div>
+                        <div
+                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                            emailSettings.provider === "smtp"
+                              ? "border-primary bg-primary/5"
+                              : "hover:border-muted-foreground/50"
+                          }`}
+                          onClick={() =>
+                            setEmailSettings({
+                              ...emailSettings,
+                              provider: "smtp",
+                            })
+                          }
+                        >
+                          <div className='flex items-center gap-2'>
+                            <div
+                              className={`w-4 h-4 rounded-full border-2 ${
+                                emailSettings.provider === "smtp"
+                                  ? "border-primary bg-primary"
+                                  : "border-muted-foreground"
+                              }`}
+                            />
+                            <span className='font-medium'>SMTP</span>
+                          </div>
+                          <p className='text-sm text-muted-foreground mt-1 ml-6'>
+                            Traditional email server
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Resend Settings */}
+                    {emailSettings.provider === "resend" && (
+                      <div className='space-y-4 p-4 border rounded-lg'>
+                        <h4 className='font-medium'>
+                          Resend API Configuration
+                        </h4>
+                        <div>
+                          <Label htmlFor='resend_api_key'>API Key</Label>
+                          <Input
+                            id='resend_api_key'
+                            type='password'
+                            value={emailSettings.resendApiKey}
+                            onChange={(e) =>
+                              setEmailSettings({
+                                ...emailSettings,
+                                resendApiKey: e.target.value,
+                              })
+                            }
+                            placeholder='re_xxxxxxxxxxxxxxxxxxxxxxxxx'
+                          />
+                          <p className='text-xs text-muted-foreground mt-1'>
+                            Get your API key from{" "}
+                            <a
+                              href='https://resend.com/api-keys'
+                              target='_blank'
+                              rel='noopener noreferrer'
+                              className='text-primary hover:underline'
+                            >
+                              resend.com/api-keys
+                            </a>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SMTP Settings */}
+                    {emailSettings.provider === "smtp" && (
+                      <div className='space-y-4 p-4 border rounded-lg'>
+                        <h4 className='font-medium'>SMTP Configuration</h4>
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                          <div>
+                            <Label htmlFor='smtp_host'>SMTP Host</Label>
+                            <Input
+                              id='smtp_host'
+                              value={emailSettings.smtpHost}
+                              onChange={(e) =>
+                                setEmailSettings({
+                                  ...emailSettings,
+                                  smtpHost: e.target.value,
+                                })
+                              }
+                              placeholder='smtp.example.com'
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor='smtp_port'>SMTP Port</Label>
+                            <Input
+                              id='smtp_port'
+                              type='number'
+                              value={emailSettings.smtpPort}
+                              onChange={(e) =>
+                                setEmailSettings({
+                                  ...emailSettings,
+                                  smtpPort: parseInt(e.target.value) || 587,
+                                })
+                              }
+                              placeholder='587'
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor='smtp_user'>SMTP Username</Label>
+                            <Input
+                              id='smtp_user'
+                              value={emailSettings.smtpUser}
+                              onChange={(e) =>
+                                setEmailSettings({
+                                  ...emailSettings,
+                                  smtpUser: e.target.value,
+                                })
+                              }
+                              placeholder='your-email@example.com'
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor='smtp_password'>SMTP Password</Label>
+                            <Input
+                              id='smtp_password'
+                              type='password'
+                              value={emailSettings.smtpPassword}
+                              onChange={(e) =>
+                                setEmailSettings({
+                                  ...emailSettings,
+                                  smtpPassword: e.target.value,
+                                })
+                              }
+                              placeholder='App password or SMTP password'
+                            />
+                          </div>
+                        </div>
+                        <div className='flex items-center gap-2'>
+                          <Switch
+                            checked={emailSettings.smtpSecure}
+                            onCheckedChange={(checked) =>
+                              setEmailSettings({
+                                ...emailSettings,
+                                smtpSecure: checked,
+                              })
+                            }
+                          />
+                          <Label>Use SSL/TLS</Label>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* From Email Settings */}
+                    <div className='space-y-4 p-4 border rounded-lg'>
+                      <h4 className='font-medium'>Sender Information</h4>
+                      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                        <div>
+                          <Label htmlFor='from_email'>From Email</Label>
+                          <Input
+                            id='from_email'
+                            type='email'
+                            value={emailSettings.fromEmail}
+                            onChange={(e) =>
+                              setEmailSettings({
+                                ...emailSettings,
+                                fromEmail: e.target.value,
+                              })
+                            }
+                            placeholder='noreply@yourdomain.com'
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor='from_name'>From Name</Label>
+                          <Input
+                            id='from_name'
+                            value={emailSettings.fromName}
+                            onChange={(e) =>
+                              setEmailSettings({
+                                ...emailSettings,
+                                fromName: e.target.value,
+                              })
+                            }
+                            placeholder='NNS System'
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Test Email */}
+                    <div className='p-4 border rounded-lg bg-muted/50'>
+                      <div className='flex items-center justify-between'>
+                        <div>
+                          <h4 className='font-medium'>
+                            Test Email Configuration
+                          </h4>
+                          <p className='text-sm text-muted-foreground'>
+                            Send a test email to verify your configuration
+                          </p>
+                        </div>
+                        <Button
+                          variant='outline'
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(
+                                "/api/settings/email/test",
+                                {
+                                  method: "POST",
+                                }
+                              );
+                              const data = await res.json();
+                              if (res.ok) {
+                                toast({
+                                  title: "Test email sent",
+                                  description:
+                                    "Check your inbox for the test email.",
+                                });
+                              } else {
+                                toast({
+                                  title: "Test failed",
+                                  description:
+                                    data.error || "Failed to send test email",
+                                  variant: "destructive",
+                                });
+                              }
+                            } catch {
+                              toast({
+                                title: "Error",
+                                description: "Failed to send test email",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                        >
+                          <Mail className='h-4 w-4 mr-2' />
+                          Send Test Email
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Save Button */}
+                    <div className='flex justify-end'>
+                      <Button onClick={() => handleEmailSettingsUpdate(false)}>
+                        <Save className='h-4 w-4 mr-2' />
+                        Save Email Settings
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       )}
