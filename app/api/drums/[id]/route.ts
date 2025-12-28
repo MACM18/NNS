@@ -57,7 +57,7 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (body.drum_number !== undefined || body.drumNumber !== undefined)
       updateData.drumNumber = body.drum_number ?? body.drumNumber;
     if (

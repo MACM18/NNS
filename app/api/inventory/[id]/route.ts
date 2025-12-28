@@ -60,7 +60,7 @@ export async function PUT(
     const body = await req.json();
 
     // Accept snake_case or camelCase
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (body.name !== undefined) updateData.name = body.name;
     if (body.unit !== undefined) updateData.unit = body.unit;
     if (body.current_stock !== undefined || body.currentStock !== undefined)

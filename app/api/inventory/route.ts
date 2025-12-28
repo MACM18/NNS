@@ -17,8 +17,7 @@ export async function GET(req: NextRequest) {
     const all = searchParams.get("all");
 
     // Build where clause
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
     if (category) {
       where.category = category;

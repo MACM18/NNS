@@ -44,7 +44,7 @@ export async function PUT(
     const body = await req.json();
 
     // Whitelist and map incoming fields to Prisma model field names
-    const dataToUpdate: any = {};
+    const dataToUpdate: Record<string, unknown> = {};
     if (body.title !== undefined) dataToUpdate.title = body.title;
     if (body.description !== undefined)
       dataToUpdate.description = body.description;
