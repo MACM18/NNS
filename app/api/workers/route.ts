@@ -30,6 +30,7 @@ function escapeHtml(text: string): string {
 
 type AuthorizedContext = {
   userId: string;
+  profileId: string;
   role: string;
 };
 
@@ -44,10 +45,16 @@ async function authorize(): Promise<AuthorizedContext | Response> {
   // Look up role from profiles via Prisma
   const profile = await prisma.profile.findUnique({
     where: { userId: session.user.id },
-    select: { role: true },
+    select: { id: true, role: true },
   });
 
-  const role = (profile?.role || "").toLowerCase();
+  if (!profile) {
+    return new Response(JSON.stringify({ error: "Profile not found" }), {
+      status: 404,
+    });
+  }
+
+  const role = (profile.role || "").toLowerCase();
   if (!ALLOWED_ROLES.includes(role)) {
     return new Response(
       JSON.stringify({ error: "Forbidden - Admin access required" }),
@@ -55,7 +62,7 @@ async function authorize(): Promise<AuthorizedContext | Response> {
     );
   }
 
-  return { userId: session.user.id, role };
+  return { userId: session.user.id, profileId: profile.id, role };
 }
 
 // GET /api/workers - List all workers
@@ -168,7 +175,7 @@ export async function POST(req: NextRequest) {
         role: role || "technician",
         notes: notes?.trim() || null,
         profileId: profile_id || null,
-        createdById: auth.userId,
+        createdById: auth.profileId,
       },
     });
 
