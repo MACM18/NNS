@@ -200,16 +200,18 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
           ) : (
             <>
               {/* Desktop Table */}
-              <div className='hidden md:block overflow-x-auto'>
+              <div className='hidden lg:block overflow-x-auto rounded-md border'>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Period</TableHead>
-                      <TableHead>Sheet Name</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Records</TableHead>
-                      <TableHead>Last Synced</TableHead>
-                      <TableHead className='text-right'>Actions</TableHead>
+                      <TableHead className='w-[180px]'>Period</TableHead>
+                      <TableHead className='min-w-[200px]'>Sheet</TableHead>
+                      <TableHead className='w-[120px]'>Status</TableHead>
+                      <TableHead className='w-[100px]'>Records</TableHead>
+                      <TableHead className='w-[180px]'>Last Synced</TableHead>
+                      <TableHead className='w-[120px] text-right'>
+                        Actions
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -223,7 +225,9 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
                           <TableCell className='font-medium'>
                             <div className='flex items-center gap-2'>
                               <Calendar className='h-4 w-4 text-muted-foreground' />
-                              {monthLabel} {connection.year}
+                              <span className='whitespace-nowrap'>
+                                {monthLabel} {connection.year}
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -233,16 +237,79 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
                               rel='noopener noreferrer'
                               className='flex items-center gap-2 hover:underline text-blue-600'
                             >
-                              {connection.sheet_name ?? connection.sheet_url}
-                              <ExternalLink className='h-3 w-3' />
+                              <span className='truncate max-w-[250px]'>
+                                {"Link to Sheet"}
+                              </span>
+                              <ExternalLink className='h-3 w-3 flex-shrink-0' />
                             </a>
                           </TableCell>
                           <TableCell>
                             {getStatusBadge(connection.status)}
                           </TableCell>
-                          <TableCell>{connection.record_count ?? 0}</TableCell>
+                          <TableCell className='text-center'>
+                            {connection.record_count ?? 0}
+                          </TableCell>
                           <TableCell className='text-muted-foreground text-sm'>
                             {formatDate(connection.last_synced)}
+                          </TableCell>
+                          <TableCell className='text-right'>
+                            <ConnectionActions connectionId={connection.id} />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Tablet Table */}
+              <div className='hidden md:block lg:hidden overflow-x-auto rounded-md border'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Period</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Records</TableHead>
+                      <TableHead className='text-right'>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((connection) => {
+                      const monthLabel =
+                        typeof connection.month === "number"
+                          ? MONTHS[connection.month - 1]
+                          : String(connection.month);
+                      return (
+                        <TableRow key={connection.id}>
+                          <TableCell>
+                            <div className='space-y-1'>
+                              <div className='flex items-center gap-2 font-medium'>
+                                <Calendar className='h-4 w-4 text-muted-foreground' />
+                                {monthLabel} {connection.year}
+                              </div>
+                              <a
+                                href={connection.sheet_url}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                                className='flex items-center gap-1 hover:underline text-blue-600 text-xs'
+                              >
+                                View Sheet
+                                <ExternalLink className='h-3 w-3' />
+                              </a>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {getStatusBadge(connection.status)}
+                          </TableCell>
+                          <TableCell className='text-center'>
+                            <div className='space-y-1'>
+                              <div className='font-medium'>
+                                {connection.record_count ?? 0}
+                              </div>
+                              <div className='text-xs text-muted-foreground'>
+                                {formatDate(connection.last_synced)}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell className='text-right'>
                             <ConnectionActions connectionId={connection.id} />
