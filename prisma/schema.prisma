@@ -18,12 +18,26 @@ model User {
   password      String?   // Hashed password (null for OAuth users)
   emailVerified DateTime?
   
+  // Two-Factor Authentication
+  twoFactorEnabled     Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret      String?   @map("two_factor_secret") // Encrypted TOTP secret
+  twoFactorBackupCodes Json?     @map("two_factor_backup_codes") // Array of hashed backup codes
+  
+  // Password Security
+  lastPasswordChange   DateTime? @map("last_password_change")
+  passwordExpireWarned Boolean   @default(false) @map("password_expire_warned")
+  
+  // Account Security
+  loginAttempts        Int       @default(0) @map("login_attempts")
+  accountLockedUntil   DateTime? @map("account_locked_until")
+  
   // Relationships
   profile       Profile?
   accounts      Account[]
   sessions      Session[]
   notifications Notification[]
   lineEntries   LineEntry[]
+  loginHistory  LoginHistory[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -123,6 +137,56 @@ model CompanySettings {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("company_settings")
+}
+
+// ==========================================
+// EMAIL SETTINGS (System-wide)
+// ==========================================
+model EmailSettings {
+  id            String   @id @default(uuid())
+  provider      String   @default("resend") // 'resend' or 'smtp'
+  isActive      Boolean  @default(true) @map("is_active")
+  
+  // Resend Configuration
+  resendApiKey  String?  @map("resend_api_key") // Encrypted
+  
+  // SMTP Configuration (all encrypted)
+  smtpHost      String?  @map("smtp_host")
+  smtpPort      Int?     @map("smtp_port")
+  smtpSecure    Boolean  @default(true) @map("smtp_secure")
+  smtpUser      String?  @map("smtp_user")
+  smtpPassword  String?  @map("smtp_password") // Encrypted
+  
+  // Common Settings
+  fromEmail     String   @default("noreply@nns.lk") @map("from_email")
+  fromName      String   @default("NNS Enterprise") @map("from_name")
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("email_settings")
+}
+
+// ==========================================
+// LOGIN HISTORY (Security Audit)
+// ==========================================
+model LoginHistory {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  location    String?  // City, Country derived from IP
+  device      String?  // Device type parsed from user agent
+  success     Boolean  @default(true)
+  failReason  String?  @map("fail_reason") // 'invalid_password', 'account_locked', '2fa_failed'
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("login_history")
 }
 
 // ==========================================

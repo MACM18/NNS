@@ -4,6 +4,20 @@ import { prisma } from "@/lib/prisma";
 
 const ALLOWED_ROLES = ["admin"];
 
+interface WorkerResponse {
+  id: string;
+  full_name: string;
+  phone_number: string | null;
+  email: string | null;
+  role: string;
+  status: string;
+  notes: string | null;
+  profile_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -54,7 +68,22 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    return new Response(JSON.stringify({ workers: workers || [] }), {
+    // Normalize to snake_case for consistent API response
+    const normalized: WorkerResponse[] = (workers || []).map((w) => ({
+      id: w.id,
+      full_name: w.fullName,
+      phone_number: w.phoneNumber,
+      email: w.email,
+      role: w.role,
+      status: w.status,
+      notes: w.notes,
+      profile_id: w.profileId,
+      created_by: w.createdById,
+      created_at: w.createdAt.toISOString(),
+      updated_at: w.updatedAt.toISOString(),
+    }));
+
+    return new Response(JSON.stringify({ workers: normalized }), {
       status: 200,
     });
   } catch (error: any) {
@@ -77,25 +106,89 @@ export async function POST(req: NextRequest) {
     const { full_name, phone_number, email, role, notes, profile_id } =
       body || {};
 
-    if (!full_name) {
+    // Validation
+    if (!full_name || full_name.trim().length === 0) {
       return new Response(JSON.stringify({ error: "Full name is required" }), {
         status: 400,
       });
     }
 
+    if (full_name.trim().length < 2) {
+      return new Response(
+        JSON.stringify({ error: "Full name must be at least 2 characters" }),
+        { status: 400 }
+      );
+    }
+
+    if (full_name.trim().length > 100) {
+      return new Response(
+        JSON.stringify({
+          error: "Full name must not exceed 100 characters",
+        }),
+        { status: 400 }
+      );
+    }
+
+    // Email validation
+    if (email && email.trim().length > 0) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return new Response(JSON.stringify({ error: "Invalid email format" }), {
+          status: 400,
+        });
+      }
+    }
+
+    // Phone validation
+    if (phone_number && phone_number.trim().length > 0) {
+      const cleaned = phone_number.replace(/[\s\-()]/g, "");
+      if (!/^\+?\d{9,15}$/.test(cleaned)) {
+        return new Response(
+          JSON.stringify({
+            error: "Phone number must be 9-15 digits",
+          }),
+          { status: 400 }
+        );
+      }
+    }
+
+    // Notes validation
+    if (notes && notes.length > 500) {
+      return new Response(
+        JSON.stringify({ error: "Notes must not exceed 500 characters" }),
+        { status: 400 }
+      );
+    }
+
     const data = await prisma.worker.create({
       data: {
-        fullName: full_name,
-        phoneNumber: phone_number,
-        email,
+        fullName: full_name.trim(),
+        phoneNumber: phone_number?.trim() || null,
+        email: email?.trim() || null,
         role: role || "technician",
-        notes,
+        notes: notes?.trim() || null,
         profileId: profile_id || null,
         createdById: auth.userId,
       },
     });
 
-    return new Response(JSON.stringify({ worker: data }), { status: 201 });
+    const normalized: WorkerResponse = {
+      id: data.id,
+      full_name: data.fullName,
+      phone_number: data.phoneNumber,
+      email: data.email,
+      role: data.role,
+      status: data.status,
+      notes: data.notes,
+      profile_id: data.profileId,
+      created_by: data.createdById,
+      created_at: data.createdAt.toISOString(),
+      updated_at: data.updatedAt.toISOString(),
+    };
+
+    return new Response(JSON.stringify({ worker: normalized }), {
+      status: 201,
+    });
   } catch (error: any) {
     return new Response(
       JSON.stringify({
@@ -130,13 +223,83 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
+    // Validate full_name if provided
+    if (full_name !== undefined) {
+      if (!full_name || full_name.trim().length === 0) {
+        return new Response(
+          JSON.stringify({ error: "Full name cannot be empty" }),
+          { status: 400 }
+        );
+      }
+      if (full_name.trim().length < 2) {
+        return new Response(
+          JSON.stringify({
+            error: "Full name must be at least 2 characters",
+          }),
+          { status: 400 }
+        );
+      }
+      if (full_name.trim().length > 100) {
+        return new Response(
+          JSON.stringify({
+            error: "Full name must not exceed 100 characters",
+          }),
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate email if provided
+    if (email !== undefined && email && email.trim().length > 0) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return new Response(JSON.stringify({ error: "Invalid email format" }), {
+          status: 400,
+        });
+      }
+    }
+
+    // Validate phone if provided
+    if (
+      phone_number !== undefined &&
+      phone_number &&
+      phone_number.trim().length > 0
+    ) {
+      const cleaned = phone_number.replace(/[\s\-()]/g, "");
+      if (!/^\+?\d{9,15}$/.test(cleaned)) {
+        return new Response(
+          JSON.stringify({
+            error: "Phone number must be 9-15 digits",
+          }),
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate notes if provided
+    if (notes !== undefined && notes && notes.length > 500) {
+      return new Response(
+        JSON.stringify({ error: "Notes must not exceed 500 characters" }),
+        { status: 400 }
+      );
+    }
+
+    // Validate status if provided
+    if (status !== undefined && !["active", "inactive"].includes(status)) {
+      return new Response(
+        JSON.stringify({ error: "Status must be 'active' or 'inactive'" }),
+        { status: 400 }
+      );
+    }
+
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
-    if (full_name !== undefined) updateData.fullName = full_name;
-    if (phone_number !== undefined) updateData.phoneNumber = phone_number;
-    if (email !== undefined) updateData.email = email;
+    if (full_name !== undefined) updateData.fullName = full_name.trim();
+    if (phone_number !== undefined)
+      updateData.phoneNumber = phone_number?.trim() || null;
+    if (email !== undefined) updateData.email = email?.trim() || null;
     if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
-    if (notes !== undefined) updateData.notes = notes;
+    if (notes !== undefined) updateData.notes = notes?.trim() || null;
     if (profile_id !== undefined) updateData.profileId = profile_id;
 
     const data = await prisma.worker.update({
@@ -144,7 +307,23 @@ export async function PATCH(req: NextRequest) {
       data: updateData,
     });
 
-    return new Response(JSON.stringify({ worker: data }), { status: 200 });
+    const normalized: WorkerResponse = {
+      id: data.id,
+      full_name: data.fullName,
+      phone_number: data.phoneNumber,
+      email: data.email,
+      role: data.role,
+      status: data.status,
+      notes: data.notes,
+      profile_id: data.profileId,
+      created_by: data.createdById,
+      created_at: data.createdAt.toISOString(),
+      updated_at: data.updatedAt.toISOString(),
+    };
+
+    return new Response(JSON.stringify({ worker: normalized }), {
+      status: 200,
+    });
   } catch (error: any) {
     return new Response(
       JSON.stringify({

@@ -52,42 +52,13 @@ import {
 } from "lucide-react";
 import { ManageWorkersModal } from "@/components/modals/manage-workers-modal";
 import { WorkTrackingHeader } from "@/components/work-tracking/work-tracking-header";
-
-interface WorkerOption {
-  id: string;
-  full_name: string | null;
-  role: string | null;
-}
-
-interface AssignmentInfo {
-  id: string;
-  worker_id: string;
-  worker_name: string;
-  worker_role: string | null;
-  assigned_date: string;
-}
-
-interface LineInfo {
-  id: string;
-  date: string;
-  telephone_no: string | null;
-  customer_name: string | null;
-  address: string | null;
-  dp: string | null;
-  assignments: AssignmentInfo[];
-}
-
-interface DayInfo {
-  date: string;
-  lines: LineInfo[];
-}
-
-interface CalendarResponse {
-  month: number;
-  year: number;
-  days: DayInfo[];
-  workers: WorkerOption[];
-}
+import type {
+  WorkerOption,
+  WorkAssignment as AssignmentInfo,
+  LineWithAssignments as LineInfo,
+  DayWorkView as DayInfo,
+  WorkAssignmentsCalendar as CalendarResponse,
+} from "@/types/workers";
 
 const months = [
   { value: 1, label: "January" },

@@ -32,14 +32,16 @@ export default async function middleware(req: NextRequest) {
   const isOnApi = nextUrl.pathname.startsWith("/api");
   const isOnPublic =
     nextUrl.pathname === "/" || nextUrl.pathname.startsWith("/welcome");
+  const isOnForcePasswordChange =
+    nextUrl.pathname === "/dashboard/force-password-change";
 
   // Allow public routes
   if (isOnPublic || isOnApi) {
     return NextResponse.next();
   }
 
-  // Redirect logged-in users away from auth pages
-  if (isOnAuth && isLoggedIn) {
+  // Redirect logged-in users away from auth pages (except 2FA page during login)
+  if (isOnAuth && isLoggedIn && !nextUrl.pathname.startsWith("/auth/2fa")) {
     return NextResponse.redirect(new URL("/dashboard", nextUrl));
   }
 
@@ -49,6 +51,16 @@ export default async function middleware(req: NextRequest) {
     return NextResponse.redirect(
       new URL(`/login?callbackUrl=${callbackUrl}`, nextUrl)
     );
+  }
+
+  // Check for password expiry - redirect to force password change
+  if (isOnDashboard && isLoggedIn && !isOnForcePasswordChange) {
+    const passwordExpired = token?.passwordExpired as boolean | undefined;
+    if (passwordExpired) {
+      return NextResponse.redirect(
+        new URL("/dashboard/force-password-change", nextUrl)
+      );
+    }
   }
 
   return NextResponse.next();
