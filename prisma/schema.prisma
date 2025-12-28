@@ -223,10 +223,35 @@ model DrumTracking {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Relations
-  item       InventoryItem? @relation(fields: [itemId], references: [id])
-  drumUsages DrumUsage[]
+  item                 InventoryItem?         @relation(fields: [itemId], references: [id])
+  drumUsages           DrumUsage[]
+  drumTrackingHistories DrumTrackingHistory[]
 
   @@map("drum_tracking")
+}
+
+// Audit trail for drum quantity changes
+model DrumTrackingHistory {
+  id               String   @id @default(uuid())
+  drumId           String   @map("drum_id")
+  action           String   // 'created', 'usage_added', 'quantity_adjusted', 'status_changed'
+  previousQuantity Decimal? @map("previous_quantity")
+  newQuantity      Decimal  @map("new_quantity")
+  quantityChange   Decimal  @map("quantity_change")
+  previousStatus   String?  @map("previous_status")
+  newStatus        String?  @map("new_status")
+  lineDetailsId    String?  @map("line_details_id")
+  syncConnectionId String?  @map("sync_connection_id")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  // Relations
+  drum DrumTracking @relation(fields: [drumId], references: [id], onDelete: Cascade)
+
+  @@index([drumId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("drum_tracking_history")
 }
 
 model DrumUsage {

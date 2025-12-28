@@ -5,6 +5,10 @@ import prisma from "@/lib/prisma";
 import { google } from "googleapis";
 import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
 import { updateInventoryFromSheetSync } from "@/lib/inventory-usage-service";
+import {
+  ensureDrumsExistWithHistory,
+  recalculateDrumWithHistory,
+} from "@/lib/drum-tracking-service";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -381,9 +385,10 @@ export async function syncConnection(
       progress("Warning: Some hardware inventory updates failed");
     }
 
-    // Process drum tracking and inventory management
+    // Process drum tracking and inventory management with enhanced tracking
     let drumUsageProcessed = 0;
     let drumUpdated = 0;
+    let drumsCreated = 0;
     try {
       progress("Processing drum usage & tracking");
 
@@ -416,24 +421,24 @@ export async function syncConnection(
           )
         );
 
-        // Ensure drum tracking records exist
-        const { byNumber, createdNumbers } = await ensureDrumTrackingForNumbers(
-          drumNumbers
+        // Ensure drum tracking records exist with history
+        const drumMap = await ensureDrumsExistWithHistory(
+          drumNumbers,
+          connectionId
         );
+        drumsCreated = Array.from(drumMap.values()).filter(
+          (d) => d.isNew
+        ).length;
 
         // Process each line's drum usage
         for (const line of monthLines) {
           if (!line.drumNumber) continue;
 
-          const drumInfo = byNumber.get(line.drumNumber);
-          if (!drumInfo) {
-            continue;
-          }
+          const drumInfo = drumMap.get(line.drumNumber);
+          if (!drumInfo) continue;
 
           const quantityUsed = computeQuantityUsed(line);
-          if (quantityUsed <= 0) {
-            continue;
-          }
+          if (quantityUsed <= 0) continue;
 
           // Check if usage record exists
           const existingUsage = await prisma.drumUsage.findFirst({
@@ -471,13 +476,15 @@ export async function syncConnection(
           drumUsageProcessed++;
         }
 
-        // Recalculate drum quantities
-        const drumIds = Array.from(byNumber.values()).map((d) => d.id);
-        const recalculated = await recalcDrumAggregates(drumIds, month, year);
-        drumUpdated = recalculated;
+        // Recalculate drum quantities with history tracking
+        const drumIds = Array.from(drumMap.values()).map((d) => d.id);
+        for (const drumId of drumIds) {
+          await recalculateDrumWithHistory(drumId, connectionId);
+          drumUpdated++;
+        }
 
         progress(
-          `Processed ${drumUsageProcessed} drum usages, updated ${drumUpdated} drums`
+          `Processed ${drumUsageProcessed} usages, created ${drumsCreated} drums, updated ${drumUpdated} drums`
         );
       } else {
         progress("No drum numbers found in this period");
@@ -944,153 +951,7 @@ function computeQuantityUsed(l: any): number {
   return 0;
 }
 
-// Ensure drum_tracking rows exist for the given drum numbers
-async function ensureDrumTrackingForNumbers(drumNumbers: string[]) {
-  const unique = Array.from(new Set((drumNumbers || []).filter(Boolean)));
-  if (!unique.length) {
-    return {
-      byNumber: new Map<
-        string,
-        { id: string; itemId?: string; status: string }
-      >(),
-      createdNumbers: [],
-    };
-  }
-
-  const existing = await prisma.drumTracking.findMany({
-    where: { drumNumber: { in: unique } },
-    select: { id: true, drumNumber: true, itemId: true, status: true },
-  });
-
-  const byNumber = new Map<
-    string,
-    { id: string; itemId?: string; status: string }
-  >();
-  for (const d of existing || []) {
-    if (d.drumNumber) {
-      byNumber.set(d.drumNumber, {
-        id: d.id,
-        itemId: d.itemId || undefined,
-        status: d.status || "active",
-      });
-    }
-  }
-
-  // Find the 'Drop Wire Cable' inventory item
-  let defaultItem: { id: string; drumSize?: number | null } | null = null;
-  try {
-    const item = await prisma.inventoryItem.findFirst({
-      where: {
-        name: { contains: "Drop Wire Cable", mode: "insensitive" },
-      },
-      select: { id: true, drumSize: true },
-    });
-
-    if (item) {
-      defaultItem = {
-        id: item.id,
-        drumSize: item.drumSize ? Number(item.drumSize) : null,
-      };
-    }
-  } catch (err) {
-    // Silent fail
-  }
-
-  const toCreate = unique.filter((n) => !byNumber.has(n));
-  const createdNumbers: string[] = [];
-
-  for (const num of toCreate) {
-    try {
-      const initialQty = defaultItem?.drumSize || 2000;
-      const created = await prisma.drumTracking.create({
-        data: {
-          drumNumber: num,
-          itemId: defaultItem?.id || null,
-          initialQuantity: initialQty,
-          currentQuantity: initialQty,
-          status: "active",
-        },
-        select: { id: true, drumNumber: true, itemId: true, status: true },
-      });
-
-      if (created.drumNumber) {
-        byNumber.set(created.drumNumber, {
-          id: created.id,
-          itemId: created.itemId || undefined,
-          status: created.status || "active",
-        });
-        createdNumbers.push(created.drumNumber);
-      }
-    } catch (e) {
-      // Silent fail for individual drum creations
-    }
-  }
-
-  return { byNumber, createdNumbers };
-}
-
-// Recalculate drum current quantities using calculateSmartWastage
-async function recalcDrumAggregates(
-  drumIds: string[],
-  month: number,
-  year: number
-): Promise<number> {
-  if (!drumIds.length) return 0;
-  let recalced = 0;
-
-  // Fetch drums with related item capacity
-  const drums = await prisma.drumTracking.findMany({
-    where: { id: { in: drumIds } },
-    include: {
-      item: { select: { drumSize: true } },
-      drumUsages: {
-        select: {
-          id: true,
-          cableStartPoint: true,
-          cableEndPoint: true,
-          usageDate: true,
-          quantityUsed: true,
-        },
-      },
-    },
-  });
-
-  for (const d of drums || []) {
-    try {
-      const drumSizeDecimal = d.item?.drumSize;
-      const capacity = drumSizeDecimal ? Number(drumSizeDecimal) : 2000;
-      const usages = (d.drumUsages || []).map((u: any) => ({
-        id: u.id,
-        cable_start_point: Number(u.cableStartPoint || 0),
-        cable_end_point: Number(u.cableEndPoint || 0),
-        usage_date: u.usageDate?.toISOString() || new Date().toISOString(),
-        quantity_used: Number(u.quantityUsed || 0),
-      }));
-
-      const result = calculateSmartWastage(
-        usages,
-        capacity,
-        undefined,
-        d.status || "active"
-      );
-
-      // Update drum with calculated values
-      await prisma.drumTracking.update({
-        where: { id: d.id },
-        data: {
-          currentQuantity: result.calculatedCurrentQuantity,
-        },
-      });
-      recalced++;
-    } catch (err) {
-      console.error(`Failed to recalc drum ${d.id}:`, err);
-    }
-  }
-
-  return recalced;
-}
-
-// Exported function to recalculate all drum quantities
+// Exported function to recalculate all drum quantities using the new service
 export async function recalculateAllDrumQuantities() {
   try {
     await authorize();
@@ -1103,13 +964,11 @@ export async function recalculateAllDrumQuantities() {
       return { success: true, recalculated: 0 };
     }
 
-    const drumIds = drums.map((d) => d.id);
-    const now = new Date();
-    const recalculated = await recalcDrumAggregates(
-      drumIds,
-      now.getMonth() + 1,
-      now.getFullYear()
-    );
+    let recalculated = 0;
+    for (const drum of drums) {
+      await recalculateDrumWithHistory(drum.id, undefined);
+      recalculated++;
+    }
 
     return { success: true, recalculated };
   } catch (error) {

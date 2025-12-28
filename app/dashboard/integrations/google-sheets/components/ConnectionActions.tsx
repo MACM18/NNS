@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
-import SyncSheetButton from "@/components/integrations/SyncSheetButton";
+import SyncSheetButtonV2 from "@/components/integrations/SyncSheetButtonV2";
 
 type Props = {
   connectionId: string;
@@ -65,8 +65,8 @@ export default function ConnectionActions({ connectionId }: Props) {
 
   return (
     <div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2'>
-      {/* New sync with background job + progress + toasts */}
-      <SyncSheetButton
+      {/* New enhanced sync button with terminal-like progress */}
+      <SyncSheetButtonV2
         connectionId={connectionId}
         onSyncComplete={handleSyncComplete}
       />
