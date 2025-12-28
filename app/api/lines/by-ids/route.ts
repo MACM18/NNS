@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { computeCableMeasurements } from "@/lib/db";
 
 // POST to fetch multiple line details by IDs
 export async function POST(req: NextRequest) {
@@ -37,17 +38,23 @@ export async function POST(req: NextRequest) {
     });
 
     // Transform to snake_case for frontend compatibility
-    const transformedLines = lines.map((line: any) => ({
-      id: line.id,
-      name: line.name,
-      phone_number: line.phoneNumber,
-      total_cable:
-        Number(line.cableStart || 0) +
-        Number(line.cableMiddle || 0) +
-        Number(line.cableEnd || 0),
-      date: line.date,
-      address: line.address,
-    }));
+    const transformedLines = lines.map((line: any) => {
+      // Compute total_cable properly as f1 + g1
+      const { totalCable } = computeCableMeasurements(
+        Number(line.cableStart || 0),
+        Number(line.cableMiddle || 0),
+        Number(line.cableEnd || 0)
+      );
+
+      return {
+        id: line.id,
+        name: line.name,
+        phone_number: line.phoneNumber,
+        total_cable: totalCable,
+        date: line.date,
+        address: line.address,
+      };
+    });
 
     return NextResponse.json({ data: transformedLines });
   } catch (error) {
