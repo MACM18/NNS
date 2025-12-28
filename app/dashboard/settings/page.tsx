@@ -1194,8 +1194,16 @@ If you lose access to your authenticator app, you can use these codes to sign in
                   </div>
 
                   <div className='flex justify-end'>
-                    <Button onClick={handleProfileUpdate} disabled={isLoading}>
-                      <Save className='h-4 w-4 mr-2' />
+                    <Button
+                      onClick={handleProfileUpdate}
+                      disabled={isLoading}
+                      className='transition-all duration-200 hover:scale-105 active:scale-95'
+                    >
+                      {isLoading ? (
+                        <Loader2 className='h-4 w-4 mr-2 animate-spin' />
+                      ) : (
+                        <Save className='h-4 w-4 mr-2' />
+                      )}
                       {isLoading ? "Saving..." : "Save Changes"}
                     </Button>
                   </div>
@@ -1346,8 +1354,16 @@ If you lose access to your authenticator app, you can use these codes to sign in
                   </div>
 
                   <div className='flex justify-end'>
-                    <Button onClick={handleCompanyUpdate} disabled={isLoading}>
-                      <Save className='h-4 w-4 mr-2' />
+                    <Button
+                      onClick={handleCompanyUpdate}
+                      disabled={isLoading}
+                      className='transition-all duration-200 hover:scale-105 active:scale-95'
+                    >
+                      {isLoading ? (
+                        <Loader2 className='h-4 w-4 mr-2 animate-spin' />
+                      ) : (
+                        <Save className='h-4 w-4 mr-2' />
+                      )}
                       {isLoading ? "Saving..." : "Save Company Info"}
                     </Button>
                   </div>
@@ -1592,7 +1608,10 @@ If you lose access to your authenticator app, you can use these codes to sign in
                   </div>
 
                   <div className='flex justify-end'>
-                    <Button onClick={handleNotificationUpdate}>
+                    <Button
+                      onClick={handleNotificationUpdate}
+                      className='transition-all duration-200 hover:scale-105 active:scale-95'
+                    >
                       <Save className='h-4 w-4 mr-2' />
                       Save Preferences
                     </Button>
@@ -1690,8 +1709,16 @@ If you lose access to your authenticator app, you can use these codes to sign in
                       <Button
                         onClick={handlePasswordChange}
                         disabled={isLoading}
+                        className='transition-all duration-200 hover:scale-105'
                       >
-                        {isLoading ? "Updating..." : "Update Password"}
+                        {isLoading ? (
+                          <>
+                            <Loader2 className='h-4 w-4 mr-2 animate-spin' />
+                            Updating...
+                          </>
+                        ) : (
+                          "Update Password"
+                        )}
                       </Button>
                     </div>
                   )}
@@ -1713,8 +1740,8 @@ If you lose access to your authenticator app, you can use these codes to sign in
                   {twoFactorStatus.enabled ? (
                     // 2FA is enabled - show status and management options
                     <div className='space-y-4'>
-                      <div className='flex items-center gap-2 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg'>
-                        <CheckCircle className='h-5 w-5 text-green-600' />
+                      <div className='flex items-center gap-2 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg animate-in slide-in-from-left duration-500'>
+                        <CheckCircle className='h-5 w-5 text-green-600 animate-in zoom-in duration-300 delay-150' />
                         <span className='text-green-700 dark:text-green-300 font-medium'>
                           Two-factor authentication is enabled
                         </span>
@@ -1737,11 +1764,12 @@ If you lose access to your authenticator app, you can use these codes to sign in
                             }))
                           }
                           disabled={twoFactorSetup.loading}
+                          className='transition-all duration-200 hover:scale-105 active:scale-95'
                         >
                           {twoFactorSetup.loading ? (
                             <Loader2 className='h-4 w-4 animate-spin mr-2' />
                           ) : (
-                            <RefreshCw className='h-4 w-4 mr-2' />
+                            <RefreshCw className='h-4 w-4 mr-2 transition-transform hover:rotate-180 duration-300' />
                           )}
                           Regenerate Codes
                         </Button>
@@ -1749,7 +1777,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
 
                       {/* Regenerate Backup Codes Dialog */}
                       {twoFactorSetup.showRegenerateDialog && (
-                        <div className='p-4 border rounded-lg space-y-3 bg-muted/50'>
+                        <div className='p-4 border rounded-lg space-y-3 bg-muted/50 animate-in slide-in-from-top duration-300'>
                           <p className='text-sm font-medium'>
                             Confirm your password to regenerate backup codes
                           </p>
@@ -1801,9 +1829,9 @@ If you lose access to your authenticator app, you can use these codes to sign in
 
                       {/* Show newly regenerated backup codes */}
                       {twoFactorSetup.backupCodes.length > 0 && (
-                        <div className='p-4 border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950 rounded-lg space-y-3'>
+                        <div className='p-4 border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950 rounded-lg space-y-3 animate-in slide-in-from-bottom duration-500'>
                           <div className='flex items-center gap-2'>
-                            <AlertTriangle className='h-5 w-5 text-yellow-600' />
+                            <AlertTriangle className='h-5 w-5 text-yellow-600 animate-pulse' />
                             <p className='font-medium text-yellow-700 dark:text-yellow-300'>
                               New Backup Codes Generated
                             </p>
@@ -1827,8 +1855,13 @@ If you lose access to your authenticator app, you can use these codes to sign in
                                 navigator.clipboard.writeText(
                                   twoFactorSetup.backupCodes.join("\n")
                                 );
-                                toast({ title: "Copied to clipboard" });
+                                toast({
+                                  title: "Copied to clipboard",
+                                  description:
+                                    "Backup codes copied successfully",
+                                });
                               }}
+                              className='transition-all duration-200 hover:scale-105 active:scale-95'
                             >
                               <Copy className='h-4 w-4 mr-2' />
                               Copy Codes
@@ -1837,6 +1870,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                               variant='outline'
                               size='sm'
                               onClick={handleDownloadBackupCodes}
+                              className='transition-all duration-200 hover:scale-105 active:scale-95'
                             >
                               <Download className='h-4 w-4 mr-2' />
                               Download
@@ -1855,13 +1889,14 @@ If you lose access to your authenticator app, you can use these codes to sign in
                             }))
                           }
                           disabled={twoFactorSetup.loading}
+                          className='transition-all duration-200 hover:scale-105 active:scale-95'
                         >
                           Disable Two-Factor Authentication
                         </Button>
 
                         {/* Disable 2FA Dialog */}
                         {twoFactorSetup.showDisableDialog && (
-                          <div className='p-4 border border-destructive/50 rounded-lg space-y-3 bg-destructive/5'>
+                          <div className='p-4 border border-destructive/50 rounded-lg space-y-3 bg-destructive/5 animate-in slide-in-from-bottom duration-300'>
                             <p className='text-sm font-medium text-destructive'>
                               This will remove the extra security from your
                               account
@@ -1935,6 +1970,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                         disabled={
                           !twoFactorStatus.canEnable || twoFactorSetup.loading
                         }
+                        className='transition-all duration-200 hover:scale-105 active:scale-95'
                       >
                         {twoFactorSetup.loading ? (
                           <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -1946,7 +1982,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                     </div>
                   ) : twoFactorSetup.step === "qr" ? (
                     // Step 1: Show QR code
-                    <div className='space-y-4'>
+                    <div className='space-y-4 animate-in slide-in-from-bottom-4 duration-500'>
                       <div className='p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg'>
                         <p className='text-sm text-blue-700 dark:text-blue-300'>
                           <strong>Step 1:</strong> Scan this QR code with your
@@ -1954,7 +1990,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                         </p>
                       </div>
 
-                      <div className='flex justify-center p-4 bg-white rounded-lg'>
+                      <div className='flex justify-center p-4 bg-white rounded-lg animate-in zoom-in-50 duration-500 delay-100'>
                         {twoFactorSetup.qrCode && (
                           <img
                             src={twoFactorSetup.qrCode}
@@ -2023,6 +2059,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                           variant='outline'
                           onClick={handleCancel2FASetup}
                           disabled={twoFactorSetup.loading}
+                          className='transition-all duration-200 hover:scale-105 active:scale-95'
                         >
                           Cancel
                         </Button>
@@ -2032,6 +2069,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                             twoFactorSetup.verificationCode.length !== 6 ||
                             twoFactorSetup.loading
                           }
+                          className='transition-all duration-200 hover:scale-105 active:scale-95'
                         >
                           {twoFactorSetup.loading ? (
                             <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -2079,6 +2117,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                               );
                               toast({ title: "Copied to clipboard" });
                             }}
+                            className='transition-all duration-200 hover:scale-105 active:scale-95'
                           >
                             <Copy className='h-4 w-4 mr-2' />
                             Copy Codes
@@ -2087,6 +2126,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                             variant='outline'
                             size='sm'
                             onClick={handleDownloadBackupCodes}
+                            className='transition-all duration-200 hover:scale-105 active:scale-95'
                           >
                             <Download className='h-4 w-4 mr-2' />
                             Download
@@ -2112,6 +2152,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                           });
                           fetch2FAStatus();
                         }}
+                        className='transition-all duration-200 hover:scale-105 active:scale-95'
                       >
                         Done
                       </Button>
@@ -2202,7 +2243,10 @@ If you lose access to your authenticator app, you can use these codes to sign in
                   </div>
 
                   <div className='flex justify-end'>
-                    <Button onClick={handleSecurityUpdate}>
+                    <Button
+                      onClick={handleSecurityUpdate}
+                      className='transition-all duration-200 hover:scale-105 active:scale-95'
+                    >
                       <Save className='h-4 w-4 mr-2' />
                       Save Security Settings
                     </Button>
@@ -2416,7 +2460,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                       <Label>Email Provider</Label>
                       <div className='grid grid-cols-2 gap-4'>
                         <div
-                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                          className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-md ${
                             emailSettings.provider === "resend"
                               ? "border-primary bg-primary/5"
                               : "hover:border-muted-foreground/50"
@@ -2443,7 +2487,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                           </p>
                         </div>
                         <div
-                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                          className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-md ${
                             emailSettings.provider === "smtp"
                               ? "border-primary bg-primary/5"
                               : "hover:border-muted-foreground/50"
@@ -2474,7 +2518,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
 
                     {/* Resend Settings */}
                     {emailSettings.provider === "resend" && (
-                      <div className='space-y-4 p-4 border rounded-lg'>
+                      <div className='space-y-4 p-4 border rounded-lg animate-in slide-in-from-bottom-4 duration-500'>
                         <h4 className='font-medium'>
                           Resend API Configuration
                         </h4>
@@ -2509,7 +2553,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
 
                     {/* SMTP Settings */}
                     {emailSettings.provider === "smtp" && (
-                      <div className='space-y-4 p-4 border rounded-lg'>
+                      <div className='space-y-4 p-4 border rounded-lg animate-in slide-in-from-bottom-4 duration-500'>
                         <h4 className='font-medium'>SMTP Configuration</h4>
                         <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                           <div>
@@ -2666,6 +2710,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                               });
                             }
                           }}
+                          className='transition-all duration-200 hover:scale-105 active:scale-95'
                         >
                           <Mail className='h-4 w-4 mr-2' />
                           Send Test Email
@@ -2675,7 +2720,10 @@ If you lose access to your authenticator app, you can use these codes to sign in
 
                     {/* Save Button */}
                     <div className='flex justify-end'>
-                      <Button onClick={() => handleEmailSettingsUpdate(false)}>
+                      <Button
+                        onClick={() => handleEmailSettingsUpdate(false)}
+                        className='transition-all duration-200 hover:scale-105 active:scale-95'
+                      >
                         <Save className='h-4 w-4 mr-2' />
                         Save Email Settings
                       </Button>

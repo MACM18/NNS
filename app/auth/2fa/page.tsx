@@ -13,18 +13,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Key, Loader2, AlertCircle } from "lucide-react";
+import { Shield, Key, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 function TwoFactorVerificationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [code, setCode] = useState("");
   const [backupCode, setBackupCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("authenticator");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -48,12 +48,15 @@ function TwoFactorVerificationContent() {
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
 
     const codeToVerify = activeTab === "authenticator" ? code : backupCode;
 
     if (!codeToVerify) {
-      setError("Please enter a verification code");
+      toast({
+        title: "Verification code required",
+        description: "Please enter a verification code",
+        variant: "destructive",
+      });
       setLoading(false);
       return;
     }
@@ -63,8 +66,12 @@ function TwoFactorVerificationContent() {
       const storedPassword = sessionStorage.getItem("2fa_temp_password");
 
       if (!storedPassword) {
-        setError("Session expired. Please log in again.");
-        router.push("/login");
+        toast({
+          title: "Session expired",
+          description: "Please log in again",
+          variant: "destructive",
+        });
+        setTimeout(() => router.push("/login"), 1000);
         return;
       }
 
@@ -79,16 +86,26 @@ function TwoFactorVerificationContent() {
       sessionStorage.removeItem("2fa_temp_password");
 
       if (result?.error) {
-        if (result.error.includes("Invalid 2FA")) {
-          setError("Invalid verification code. Please try again.");
-        } else {
-          setError(result.error);
-        }
+        toast({
+          title: "Verification failed",
+          description: result.error.includes("Invalid 2FA")
+            ? "Invalid verification code. Please try again."
+            : result.error,
+          variant: "destructive",
+        });
       } else if (result?.ok) {
-        router.push(callbackUrl);
+        toast({
+          title: "Success!",
+          description: "Two-factor authentication verified",
+        });
+        setTimeout(() => router.push(callbackUrl), 500);
       }
     } catch (err) {
-      setError("Verification failed. Please try again.");
+      toast({
+        title: "Error",
+        description: "Verification failed. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -118,8 +135,8 @@ function TwoFactorVerificationContent() {
   }
 
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4'>
-      <Card className='w-full max-w-md'>
+    <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4 animate-in fade-in duration-500'>
+      <Card className='w-full max-w-md animate-in slide-in-from-bottom-4 duration-700'>
         <CardHeader className='text-center space-y-2'>
           <div className='mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center'>
             <Shield className='h-6 w-6 text-primary' />
@@ -185,13 +202,6 @@ function TwoFactorVerificationContent() {
                   </p>
                 </div>
               </TabsContent>
-
-              {error && (
-                <Alert variant='destructive' className='mt-4'>
-                  <AlertCircle className='h-4 w-4' />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
 
               <Button
                 type='submit'
