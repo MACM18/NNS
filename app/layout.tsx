@@ -18,12 +18,42 @@ export const metadata: Metadata = {
   description:
     "AI-powered telecom management platform for fiber optic operations.",
   applicationName: "NNS Telecom Dashboard",
-  generator: "v0.dev",
+  generator: "Next.js",
   manifest: "/manifest.webmanifest",
+  keywords: [
+    "telecom",
+    "fiber optic",
+    "inventory management",
+    "task management",
+    "NNS",
+    "telecommunications",
+  ],
+  authors: [{ name: "NNS Telecom" }],
+  creator: "NNS Telecom",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
+    title: "NNS Telecom",
+    startupImage: [
+      {
+        url: "/placeholder-logo.png",
+        media: "(device-width: 768px) and (device-height: 1024px)",
+      },
+    ],
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  openGraph: {
+    type: "website",
+    siteName: "NNS Telecom Dashboard",
     title: "NNS Telecom Dashboard",
+    description: "AI-powered telecom management platform",
+  },
+  twitter: {
+    card: "summary",
+    title: "NNS Telecom Dashboard",
+    description: "AI-powered telecom management platform",
   },
   icons: {
     icon: [
