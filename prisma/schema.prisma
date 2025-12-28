@@ -138,12 +138,33 @@ model InventoryItem {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  inventoryInvoiceItems InventoryInvoiceItem[]
-  drumTracking          DrumTracking[]
-  monthlyWastage        MonthlyWastage[]
-  wasteTracking         WasteTracking[]
+  inventoryInvoiceItems  InventoryInvoiceItem[]
+  drumTracking           DrumTracking[]
+  monthlyWastage         MonthlyWastage[]
+  wasteTracking          WasteTracking[]
+  monthlyInventoryUsages MonthlyInventoryUsage[]
 
   @@map("inventory_items")
+}
+
+// Monthly inventory usage tracking to prevent duplicate deductions on Google Sheet syncs
+model MonthlyInventoryUsage {
+  id            String   @id @default(uuid())
+  itemId        String   @map("item_id")
+  month         Int
+  year          Int
+  totalUsed     Decimal  @default(0) @map("total_used")
+  lastSyncedAt  DateTime @default(now()) @map("last_synced_at")
+  connectionId  String?  @map("connection_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, month, year])
+  @@index([month, year])
+  @@map("monthly_inventory_usage")
 }
 
 model InventoryInvoice {

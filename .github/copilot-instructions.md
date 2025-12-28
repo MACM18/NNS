@@ -65,6 +65,39 @@ NNS is a Next.js-based telecom management platform for fiber optic line installa
   - `GOOGLE_SERVICE_ACCOUNT_KEY` (PEM; escape newlines as `\n`)
 - Access model: The Google Sheet must grant at least Viewer access to the service account email; public sheets may still require explicit sharing.
 
+## Inventory Management
+
+### Stock Flow
+
+- **Adding Stock**: Inventory items are added/increased via:
+  - Creating inventory invoices (primary method)
+  - Manual editing of individual items (admin)
+
+### Google Sheets Sync & Usage Tracking
+
+- When syncing from Google Sheets, inventory is reduced based on hardware usage from imported lines
+- **Monthly Inventory Usage** table (`monthly_inventory_usage`) tracks:
+  - Total usage per item per month/year
+  - Prevents duplicate deductions on multiple syncs
+  - Only the **difference** between new and previous usage is deducted
+
+### Key Tables
+
+- `inventory_items`: Current stock levels, reorder thresholds
+- `monthly_inventory_usage`: Tracks usage per item per month (unique constraint on item+month+year)
+- `inventory_invoice_items`: Records stock additions from invoices
+- `waste_tracking`: Manual waste entries
+
+### API Endpoints
+
+- `GET /api/inventory/usage?month=X&year=Y`: Get monthly usage summary
+- `DELETE /api/inventory/usage`: Reset monthly usage (admin, restores inventory)
+- `POST /api/inventory/usage` with `{action: "recalculate"}`: Recalculate all inventory from usage records
+
+### Service Location
+
+- `lib/inventory-usage-service.ts`: Core logic for usage tracking and inventory updates
+
 ## Workflows & Conventions
 
 - Add new features by following modal/form/table patterns

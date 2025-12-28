@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { google } from "googleapis";
 import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
+import { updateInventoryFromSheetSync } from "@/lib/inventory-usage-service";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -343,108 +344,40 @@ export async function syncConnection(
       }
     }
 
-    // Decrement hardware inventory items based on line usage
+    // Update hardware inventory using the monthly usage tracking service
+    // This prevents duplicate deductions when syncing multiple times
     let hardwareUpdated = 0;
     let hardwareCreated = 0;
+    let usageRecordsUpdated = 0;
     try {
-      progress("Updating hardware inventory");
+      progress("Updating hardware inventory (with usage tracking)");
 
-      // Map of hardware field names (as they appear in sheetRows) to inventory item names
-      const hardwareMapping: Record<string, string> = {
-        retainers: "Retainers",
-        l_hook: "L-Hook",
-        top_bolt: "Top-Bolt",
-        c_hook: "C-Hook",
-        fiber_rosette: "Fiber-rosette",
-        s_rosette: "S-Rosette",
-        fac: "FAC",
-        c_tie: "C-Tie",
-        c_clip: "C-Clip",
-        tag_tie: "Tag Tie",
-        flexible: "Flexible",
-        rj45: "RJ 45",
-        cat5: "Cat 5",
-        pole_67: "Pole-6.7",
-        pole: "Pole-5.6",
-        concrete_nail: "Concrete nail",
-        roll_plug: "Roll Plug",
-        u_clip: "U-Clip",
-        socket: "Socket",
-        bend: "Bend",
-        rj11: "RJ 11",
-        rj12: "RJ 12",
-        nut_bolt: "Nut Bolt",
-        screw_nail: "Screw Nail",
-        internal_wire: "Internal Wire",
-        conduit: "Conduit",
-        casing: "Casing",
-      };
-
-      // Aggregate hardware usage from all synced lines
-      const hardwareTotals: Record<string, number> = {};
-
-      for (const row of sheetRows) {
-        for (const [field, itemName] of Object.entries(hardwareMapping)) {
-          const qty = Number(row[field] || 0);
-          if (qty > 0) {
-            hardwareTotals[itemName] = (hardwareTotals[itemName] || 0) + qty;
-          }
-        }
-      }
-
-      console.log(
-        `[syncConnection] Hardware totals aggregated:`,
-        hardwareTotals
+      const inventoryResult = await updateInventoryFromSheetSync(
+        sheetRows,
+        month,
+        year,
+        connectionId
       );
 
-      // Update or create inventory items
-      for (const [itemName, totalUsed] of Object.entries(hardwareTotals)) {
-        if (totalUsed <= 0) continue;
+      hardwareUpdated = inventoryResult.itemsUpdated;
+      hardwareCreated = inventoryResult.itemsCreated;
+      usageRecordsUpdated = inventoryResult.usageRecordsUpdated;
 
-        try {
-          // Try to find existing item
-          let item = await prisma.inventoryItem.findFirst({
-            where: { name: { equals: itemName, mode: "insensitive" } },
-            select: { id: true, currentStock: true, name: true },
-          });
-
-          if (item) {
-            // Update existing item - decrement stock
-            const currentStock = Number(item.currentStock);
-            const newStock = Math.max(0, currentStock - totalUsed);
-
-            await prisma.inventoryItem.update({
-              where: { id: item.id },
-              data: { currentStock: newStock },
-            });
-            console.log(
-              `[syncConnection] Updated ${item.name}: ${currentStock} -> ${newStock} (used: ${totalUsed})`
-            );
-            hardwareUpdated++;
-          } else {
-            // Create new inventory item with initial stock of 1000 minus usage
-            const initialStock = Math.max(1000, totalUsed * 10); // Start with 10x usage or 1000
-            const newStock = initialStock - totalUsed;
-
-            const created = await prisma.inventoryItem.create({
-              data: {
-                name: itemName,
-                unit: "pcs",
-                currentStock: newStock,
-                reorderLevel: 100,
-              },
-            });
-            hardwareCreated++;
-          }
-        } catch (err) {
-          // Silent fail for individual items
-        }
+      if (inventoryResult.errors.length > 0) {
+        console.warn(
+          `[syncConnection] Inventory update warnings:`,
+          inventoryResult.errors
+        );
       }
 
       progress(
-        `Updated ${hardwareUpdated} items, created ${hardwareCreated} new items`
+        `Updated ${hardwareUpdated} items, created ${hardwareCreated} new items, ${usageRecordsUpdated} usage records`
       );
     } catch (hardwareError) {
+      console.error(
+        "[syncConnection] Hardware inventory update error:",
+        hardwareError
+      );
       progress("Warning: Some hardware inventory updates failed");
     }
 
@@ -575,6 +508,7 @@ export async function syncConnection(
       drumProcessed: drumUpdated,
       hardwareUpdated,
       hardwareCreated,
+      usageRecordsUpdated,
     };
   } catch (error) {
     console.error("[syncConnection] Error:", error);
