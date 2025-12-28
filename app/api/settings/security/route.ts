@@ -56,7 +56,10 @@ export async function PUT(req: NextRequest) {
     // Validate security preferences
     const security: any = {};
 
-    if ("two_factor_enabled" in body && typeof body.two_factor_enabled === "boolean") {
+    if (
+      "two_factor_enabled" in body &&
+      typeof body.two_factor_enabled === "boolean"
+    ) {
       security.two_factor_enabled = body.two_factor_enabled;
     }
 
