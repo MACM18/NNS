@@ -393,7 +393,9 @@ export default function SettingsPage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to update notification preferences");
+        throw new Error(
+          error.error || "Failed to update notification preferences"
+        );
       }
 
       addNotification({
@@ -448,7 +450,11 @@ export default function SettingsPage() {
 
   const handlePasswordChange = async () => {
     // Validation
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+    if (
+      !passwordData.currentPassword ||
+      !passwordData.newPassword ||
+      !passwordData.confirmPassword
+    ) {
       addNotification({
         title: "Validation Error",
         message: "Please fill in all password fields.",
@@ -528,14 +534,16 @@ export default function SettingsPage() {
       }
 
       const result = await response.json();
-      
+
       // Convert to JSON and download
       const dataStr = JSON.stringify(result.data, null, 2);
       const dataBlob = new Blob([dataStr], { type: "application/json" });
       const url = URL.createObjectURL(dataBlob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `nns-data-export-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `nns-data-export-${new Date()
+        .toISOString()
+        .slice(0, 10)}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -543,7 +551,9 @@ export default function SettingsPage() {
 
       addNotification({
         title: "Data Exported",
-        message: `Successfully exported ${Object.values(result.recordCounts).reduce((a: any, b: any) => a + b, 0)} records.`,
+        message: `Successfully exported ${Object.values(
+          result.recordCounts
+        ).reduce((a: any, b: any) => a + b, 0)} records.`,
         type: "success",
         category: "system",
       });
@@ -639,15 +649,23 @@ export default function SettingsPage() {
                 <User className='h-4 w-4' />
                 Profile
               </TabsTrigger>
-              <TabsTrigger 
-                value='company' 
+              <TabsTrigger
+                value='company'
                 className='flex items-center gap-2'
-                disabled={!['admin', 'moderator'].includes((profile?.role || '').toLowerCase())}
+                disabled={
+                  !["admin", "moderator"].includes(
+                    (profile?.role || "").toLowerCase()
+                  )
+                }
               >
                 <Building className='h-4 w-4' />
                 Company
-                {['admin', 'moderator'].includes((profile?.role || '').toLowerCase()) && (
-                  <Badge variant='secondary' className='ml-1 text-xs'>Admin</Badge>
+                {["admin", "moderator"].includes(
+                  (profile?.role || "").toLowerCase()
+                ) && (
+                  <Badge variant='secondary' className='ml-1 text-xs'>
+                    Admin
+                  </Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger
@@ -1236,17 +1254,20 @@ export default function SettingsPage() {
                   {isOAuthUser ? (
                     <div className='p-4 border rounded-lg bg-muted'>
                       <p className='text-sm text-muted-foreground'>
-                        You signed in with Google. Password changes are not available for OAuth accounts.
+                        You signed in with Google. Password changes are not
+                        available for OAuth accounts.
                       </p>
                     </div>
                   ) : (
                     <div className='space-y-4'>
                       <div>
-                        <Label htmlFor='current_password'>Current Password</Label>
+                        <Label htmlFor='current_password'>
+                          Current Password
+                        </Label>
                         <div className='relative'>
                           <Input
                             id='current_password'
-                            type={showPassword ? 'text' : 'password'}
+                            type={showPassword ? "text" : "password"}
                             value={passwordData.currentPassword}
                             onChange={(e) =>
                               setPasswordData({
@@ -1306,8 +1327,11 @@ export default function SettingsPage() {
                         />
                       </div>
 
-                      <Button onClick={handlePasswordChange} disabled={isLoading}>
-                        {isLoading ? 'Updating...' : 'Update Password'}
+                      <Button
+                        onClick={handlePasswordChange}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? "Updating..." : "Update Password"}
                       </Button>
                     </div>
                   )}
@@ -1505,17 +1529,17 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent className='space-y-4'>
                   <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                    <Button 
-                      variant='outline' 
+                    <Button
+                      variant='outline'
                       className='h-20 flex-col gap-2'
                       onClick={handleExportData}
                       disabled={exportLoading}
                     >
                       <Download className='h-6 w-6' />
-                      {exportLoading ? 'Exporting...' : 'Export All Data'}
+                      {exportLoading ? "Exporting..." : "Export All Data"}
                     </Button>
-                    <Button 
-                      variant='outline' 
+                    <Button
+                      variant='outline'
                       className='h-20 flex-col gap-2'
                       disabled
                     >
@@ -1524,11 +1548,11 @@ export default function SettingsPage() {
                     </Button>
                   </div>
                   <p className='text-sm text-muted-foreground'>
-                    {(profile?.role || '').toLowerCase() === 'admin'
-                      ? 'As an admin, you can export all system data.'
-                      : (profile?.role || '').toLowerCase() === 'moderator'
-                      ? 'As a moderator, you can export operational data (lines, tasks, inventory).'
-                      : 'You can export your personal data including profile and assigned tasks.'}
+                    {(profile?.role || "").toLowerCase() === "admin"
+                      ? "As an admin, you can export all system data."
+                      : (profile?.role || "").toLowerCase() === "moderator"
+                      ? "As a moderator, you can export operational data (lines, tasks, inventory)."
+                      : "You can export your personal data including profile and assigned tasks."}
                   </p>
                 </CardContent>
               </Card>
@@ -1561,14 +1585,18 @@ export default function SettingsPage() {
                           Archive data older than 2 years
                         </p>
                       </div>
-                      <Button 
-                        variant='outline' 
+                      <Button
+                        variant='outline'
                         size='sm'
-                        disabled={!['admin'].includes((profile?.role || '').toLowerCase())}
+                        disabled={
+                          !["admin"].includes(
+                            (profile?.role || "").toLowerCase()
+                          )
+                        }
                       >
-                        {['admin'].includes((profile?.role || '').toLowerCase())
-                          ? 'Coming Soon'
-                          : 'Admin Only'}
+                        {["admin"].includes((profile?.role || "").toLowerCase())
+                          ? "Coming Soon"
+                          : "Admin Only"}
                       </Button>
                     </div>
 
@@ -1582,15 +1610,19 @@ export default function SettingsPage() {
                           be undone.
                         </p>
                       </div>
-                      <Button 
-                        variant='destructive' 
+                      <Button
+                        variant='destructive'
                         size='sm'
-                        disabled={!['admin'].includes((profile?.role || '').toLowerCase())}
+                        disabled={
+                          !["admin"].includes(
+                            (profile?.role || "").toLowerCase()
+                          )
+                        }
                       >
                         <Trash2 className='h-4 w-4 mr-2' />
-                        {['admin'].includes((profile?.role || '').toLowerCase())
-                          ? 'Delete All'
-                          : 'Admin Only'}
+                        {["admin"].includes((profile?.role || "").toLowerCase())
+                          ? "Delete All"
+                          : "Admin Only"}
                       </Button>
                     </div>
                   </div>

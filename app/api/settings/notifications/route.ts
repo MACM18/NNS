@@ -29,14 +29,15 @@ export async function GET(req: NextRequest) {
 
     // Extract notification preferences from JSON or return defaults
     const preferences = profile.preferences as any;
-    const notifications: NotificationPreferences = preferences?.notifications || {
-      email_notifications: true,
-      push_notifications: true,
-      task_reminders: true,
-      invoice_alerts: true,
-      system_updates: false,
-      marketing_emails: false,
-    };
+    const notifications: NotificationPreferences =
+      preferences?.notifications || {
+        email_notifications: true,
+        push_notifications: true,
+        task_reminders: true,
+        invoice_alerts: true,
+        system_updates: false,
+        marketing_emails: false,
+      };
 
     return NextResponse.json({ data: notifications });
   } catch (error) {

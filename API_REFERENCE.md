@@ -1,6 +1,7 @@
 # Settings API Reference
 
 ## Authentication
+
 All endpoints require authentication via NextAuth session. Include session in requests.
 
 ---
@@ -8,11 +9,13 @@ All endpoints require authentication via NextAuth session. Include session in re
 ## Password Management
 
 ### Change Password
+
 **Endpoint:** `POST /api/auth/change-password`
 
 **Authorization:** Authenticated users (non-OAuth only)
 
 **Request Body:**
+
 ```json
 {
   "currentPassword": "string (required)",
@@ -21,6 +24,7 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Response (Success):**
+
 ```json
 {
   "message": "Password changed successfully"
@@ -28,6 +32,7 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Response (Error):**
+
 ```json
 {
   "error": "Current password is incorrect"
@@ -39,6 +44,7 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Status Codes:**
+
 - `200` - Password changed successfully
 - `400` - Missing fields or validation error
 - `401` - Unauthorized or incorrect current password
@@ -50,11 +56,13 @@ All endpoints require authentication via NextAuth session. Include session in re
 ## Company Settings
 
 ### Get Company Settings
+
 **Endpoint:** `GET /api/settings/company`
 
 **Authorization:** Authenticated users
 
 **Response:**
+
 ```json
 {
   "invoiceLogo": "string (URL)",
@@ -67,11 +75,13 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 ### Update Company Settings
+
 **Endpoint:** `PUT /api/settings/company`
 
 **Authorization:** Admin or Moderator only
 
 **Request Body:**
+
 ```json
 {
   "invoiceLogo": "string (optional)",
@@ -84,6 +94,7 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Response (Success):**
+
 ```json
 {
   "message": "Company settings updated successfully"
@@ -91,6 +102,7 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Response (Error):**
+
 ```json
 {
   "error": "Forbidden. Only admins and moderators can update company settings."
@@ -98,6 +110,7 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Status Codes:**
+
 - `200` - Settings updated successfully
 - `403` - Forbidden (non-admin/moderator)
 - `500` - Server error
@@ -107,11 +120,13 @@ All endpoints require authentication via NextAuth session. Include session in re
 ## Notification Preferences
 
 ### Get Notification Settings
+
 **Endpoint:** `GET /api/settings/notifications`
 
 **Authorization:** Authenticated users
 
 **Response:**
+
 ```json
 {
   "email_notifications": true,
@@ -124,11 +139,13 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 ### Update Notification Settings
+
 **Endpoint:** `PUT /api/settings/notifications`
 
 **Authorization:** Authenticated users
 
 **Request Body:**
+
 ```json
 {
   "email_notifications": true,
@@ -141,18 +158,20 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Response (Success):**
+
 ```json
 {
   "message": "Notification settings updated successfully",
   "settings": {
     "email_notifications": true,
-    "push_notifications": false,
+    "push_notifications": false
     // ... all settings
   }
 }
 ```
 
 **Response (Error):**
+
 ```json
 {
   "error": "Invalid setting key: unknown_key"
@@ -160,6 +179,7 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Status Codes:**
+
 - `200` - Settings updated successfully
 - `400` - Invalid setting key or value type
 - `401` - Unauthorized
@@ -170,11 +190,13 @@ All endpoints require authentication via NextAuth session. Include session in re
 ## Security Settings
 
 ### Get Security Settings
+
 **Endpoint:** `GET /api/settings/security`
 
 **Authorization:** Authenticated users
 
 **Response:**
+
 ```json
 {
   "two_factor_enabled": false,
@@ -185,11 +207,13 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 ### Update Security Settings
+
 **Endpoint:** `PUT /api/settings/security`
 
 **Authorization:** Authenticated users
 
 **Request Body:**
+
 ```json
 {
   "two_factor_enabled": false,
@@ -200,23 +224,26 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Valid Values:**
+
 - `two_factor_enabled`: boolean
 - `session_timeout`: "30m", "1h", "4h", "never"
 - `login_alerts`: boolean
 - `password_expiry`: "never", "30d", "60d", "90d"
 
 **Response (Success):**
+
 ```json
 {
   "message": "Security settings updated successfully",
   "settings": {
-    "two_factor_enabled": false,
+    "two_factor_enabled": false
     // ... all settings
   }
 }
 ```
 
 **Response (Error):**
+
 ```json
 {
   "error": "Invalid setting key: unknown_key"
@@ -224,6 +251,7 @@ All endpoints require authentication via NextAuth session. Include session in re
 ```
 
 **Status Codes:**
+
 - `200` - Settings updated successfully
 - `400` - Invalid setting key or value
 - `401` - Unauthorized
@@ -234,67 +262,89 @@ All endpoints require authentication via NextAuth session. Include session in re
 ## Data Export
 
 ### Export User Data
+
 **Endpoint:** `GET /api/settings/export`
 
 **Authorization:** Authenticated users (role-based scope)
 
 **Response:**
+
 ```json
 {
   "exportDate": "2025-01-15T10:30:00Z",
   "userId": "user-uuid",
   "userEmail": "user@example.com",
   "userRole": "moderator",
-  "profile": { /* user profile data */ },
-  
+  "profile": {
+    /* user profile data */
+  },
+
   // For regular users:
-  "tasks": [ /* only assigned tasks */ ],
-  
+  "tasks": [
+    /* only assigned tasks */
+  ],
+
   // For moderators (+ all above):
-  "lines": [ /* all line details */ ],
-  "inventory": [ /* all inventory items */ ],
-  "invoices": [ /* all inventory invoices */ ],
-  
+  "lines": [
+    /* all line details */
+  ],
+  "inventory": [
+    /* all inventory items */
+  ],
+  "invoices": [
+    /* all inventory invoices */
+  ],
+
   // For admins (+ all above):
-  "users": [ /* all user profiles */ ],
-  "company": { /* company settings */ },
-  "workers": [ /* all workers */ ],
-  "workAssignments": [ /* all work assignments */ ]
+  "users": [
+    /* all user profiles */
+  ],
+  "company": {
+    /* company settings */
+  },
+  "workers": [
+    /* all workers */
+  ],
+  "workAssignments": [
+    /* all work assignments */
+  ]
 }
 ```
 
 **Export Scopes by Role:**
 
-| Data Type | Regular User | Moderator | Admin |
-|-----------|-------------|-----------|-------|
-| Profile | Own only | Own only | Own only |
-| Tasks | Assigned only | All | All |
-| Lines | ❌ | All | All |
-| Inventory | ❌ | All | All |
-| Invoices | ❌ | All | All |
-| Users | ❌ | ❌ | All |
-| Company | ❌ | ❌ | All |
-| Workers | ❌ | ❌ | All |
-| Work Assignments | ❌ | ❌ | All |
+| Data Type        | Regular User  | Moderator | Admin    |
+| ---------------- | ------------- | --------- | -------- |
+| Profile          | Own only      | Own only  | Own only |
+| Tasks            | Assigned only | All       | All      |
+| Lines            | ❌            | All       | All      |
+| Inventory        | ❌            | All       | All      |
+| Invoices         | ❌            | All       | All      |
+| Users            | ❌            | ❌        | All      |
+| Company          | ❌            | ❌        | All      |
+| Workers          | ❌            | ❌        | All      |
+| Work Assignments | ❌            | ❌        | All      |
 
 **Status Codes:**
+
 - `200` - Export successful
 - `401` - Unauthorized
 - `500` - Server error
 
 **Usage Example:**
+
 ```javascript
 // Fetch and download export
 const handleExport = async () => {
-  const response = await fetch('/api/settings/export');
+  const response = await fetch("/api/settings/export");
   const data = await response.json();
-  
+
   // Create download
   const blob = new Blob([JSON.stringify(data, null, 2)], {
-    type: 'application/json'
+    type: "application/json",
   });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
   a.download = `data-export-${new Date().toISOString()}.json`;
   a.click();
@@ -309,6 +359,7 @@ const handleExport = async () => {
 ### Common Error Responses
 
 **Unauthorized (401):**
+
 ```json
 {
   "error": "Unauthorized"
@@ -316,6 +367,7 @@ const handleExport = async () => {
 ```
 
 **Forbidden (403):**
+
 ```json
 {
   "error": "Forbidden. Only admins and moderators can update company settings."
@@ -323,6 +375,7 @@ const handleExport = async () => {
 ```
 
 **Bad Request (400):**
+
 ```json
 {
   "error": "Missing required fields"
@@ -334,6 +387,7 @@ const handleExport = async () => {
 ```
 
 **Server Error (500):**
+
 ```json
 {
   "error": "Internal server error"
@@ -345,6 +399,7 @@ const handleExport = async () => {
 ## Rate Limiting
 
 Currently no rate limiting is implemented. Consider adding rate limiting for:
+
 - Password change (5 attempts per hour)
 - Data export (10 exports per hour)
 - Settings updates (100 updates per hour)
@@ -366,45 +421,48 @@ Currently no rate limiting is implemented. Consider adding rate limiting for:
 ## Frontend Integration Examples
 
 ### Password Change
+
 ```typescript
 const changePassword = async (currentPassword: string, newPassword: string) => {
-  const response = await fetch('/api/auth/change-password', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ currentPassword, newPassword })
+  const response = await fetch("/api/auth/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
-  
+
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error);
   }
-  
+
   return response.json();
 };
 ```
 
 ### Update Notification Settings
+
 ```typescript
 const updateNotifications = async (settings: NotificationSettings) => {
-  const response = await fetch('/api/settings/notifications', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(settings)
+  const response = await fetch("/api/settings/notifications", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
   });
-  
+
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error);
   }
-  
+
   return response.json();
 };
 ```
 
 ### Check OAuth User
+
 ```typescript
 const checkOAuthUser = async () => {
-  const response = await fetch('/api/auth/check-oauth');
+  const response = await fetch("/api/auth/check-oauth");
   const data = await response.json();
   return data.isOAuthUser;
 };
@@ -415,6 +473,7 @@ const checkOAuthUser = async () => {
 ## Database Schema
 
 ### Profile Model (Preferences Field)
+
 ```prisma
 model Profile {
   // ... other fields
@@ -423,6 +482,7 @@ model Profile {
 ```
 
 ### Preferences Structure
+
 ```typescript
 type UserPreferences = {
   notifications?: {
@@ -450,6 +510,7 @@ type UserPreferences = {
 ### cURL Examples
 
 **Change Password:**
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/change-password \
   -H "Content-Type: application/json" \
@@ -461,6 +522,7 @@ curl -X POST http://localhost:3000/api/auth/change-password \
 ```
 
 **Update Company Settings (Admin):**
+
 ```bash
 curl -X PUT http://localhost:3000/api/settings/company \
   -H "Content-Type: application/json" \
@@ -472,6 +534,7 @@ curl -X PUT http://localhost:3000/api/settings/company \
 ```
 
 **Export Data:**
+
 ```bash
 curl -X GET http://localhost:3000/api/settings/export \
   -b "next-auth.session-token=YOUR_SESSION_TOKEN" \
@@ -483,6 +546,7 @@ curl -X GET http://localhost:3000/api/settings/export \
 ## Changelog
 
 ### Version 1.0.0 (January 2025)
+
 - Initial implementation of settings APIs
 - Password change functionality
 - Notification preferences API

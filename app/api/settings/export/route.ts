@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
       });
 
       const tasks = await prisma.task.findMany({
-        where: { 
-          assignedToId: userProfile?.id
+        where: {
+          assignedToId: userProfile?.id,
         },
         select: {
           id: true,
