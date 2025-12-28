@@ -19,8 +19,7 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search");
 
     // Build where clause
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
     if (types) {
       // Multiple types (comma-separated)

@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     const threshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const where: any = {
+    const where: Record<string, unknown> = {
       created_at: { lt: threshold },
     };
     if (onlyRead) where.is_read = true;

@@ -115,7 +115,7 @@ export async function PUT(
     const body = await req.json();
 
     // Whitelist allowed fields (accept snake_case or camelCase)
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (body.status !== undefined) updateData.status = body.status;
     if (body.completed_date !== undefined || body.completedDate !== undefined)
       updateData.completedDate = body.completed_date ?? body.completedDate;

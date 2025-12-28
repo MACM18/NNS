@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Transform to snake_case for frontend compatibility
-    const transformedLines = lines.map((line: any) => {
+    const transformedLines = lines.map((line) => {
       // Compute total_cable properly as f1 + g1
       const { totalCable } = computeCableMeasurements(
         Number(line.cableStart || 0),

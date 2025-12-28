@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
 
     // Search Lines
     if (filters.categories?.includes("line")) {
-      const lineWhere: any = {};
+      const lineWhere: Record<string, unknown> = {};
 
       if (filters.query?.trim()) {
         lineWhere.OR = [
@@ -200,28 +200,38 @@ export async function POST(req: NextRequest) {
 
       if (filters.lengthRange?.min) {
         lineWhere.totalCable = {
-          ...lineWhere.totalCable,
+          ...(typeof lineWhere.totalCable === "object" &&
+          lineWhere.totalCable !== null
+            ? lineWhere.totalCable
+            : {}),
           gte: filters.lengthRange.min,
         };
       }
 
       if (filters.lengthRange?.max) {
         lineWhere.totalCable = {
-          ...lineWhere.totalCable,
+          ...(typeof lineWhere.totalCable === "object" &&
+          lineWhere.totalCable !== null
+            ? lineWhere.totalCable
+            : {}),
           lte: filters.lengthRange.max,
         };
       }
 
       if (filters.dateRange?.from) {
         lineWhere.date = {
-          ...lineWhere.date,
+          ...(typeof lineWhere.date === "object" && lineWhere.date !== null
+            ? lineWhere.date
+            : {}),
           gte: new Date(filters.dateRange.from),
         };
       }
 
       if (filters.dateRange?.to) {
         lineWhere.date = {
-          ...lineWhere.date,
+          ...(typeof lineWhere.date === "object" && lineWhere.date !== null
+            ? lineWhere.date
+            : {}),
           lte: new Date(filters.dateRange.to),
         };
       }
@@ -266,7 +276,7 @@ export async function POST(req: NextRequest) {
 
     // Search Tasks
     if (filters.categories?.includes("task")) {
-      const taskWhere: any = {};
+      const taskWhere: Record<string, unknown> = {};
 
       if (filters.query?.trim()) {
         taskWhere.OR = [
@@ -288,14 +298,20 @@ export async function POST(req: NextRequest) {
 
       if (filters.dateRange?.from) {
         taskWhere.createdAt = {
-          ...taskWhere.createdAt,
+          ...(typeof taskWhere.createdAt === "object" &&
+          taskWhere.createdAt !== null
+            ? taskWhere.createdAt
+            : {}),
           gte: new Date(filters.dateRange.from),
         };
       }
 
       if (filters.dateRange?.to) {
         taskWhere.createdAt = {
-          ...taskWhere.createdAt,
+          ...(typeof taskWhere.createdAt === "object" &&
+          taskWhere.createdAt !== null
+            ? taskWhere.createdAt
+            : {}),
           lte: new Date(filters.dateRange.to),
         };
       }
@@ -350,7 +366,7 @@ export async function POST(req: NextRequest) {
 
     // Search Invoices
     if (filters.categories?.includes("invoice")) {
-      const invoiceWhere: any = {
+      const invoiceWhere: Record<string, unknown> = {
         invoiceType: { in: ["A", "B"] },
       };
 
@@ -367,28 +383,40 @@ export async function POST(req: NextRequest) {
 
       if (filters.amountRange?.min) {
         invoiceWhere.totalAmount = {
-          ...invoiceWhere.totalAmount,
+          ...(typeof invoiceWhere.totalAmount === "object" &&
+          invoiceWhere.totalAmount !== null
+            ? invoiceWhere.totalAmount
+            : {}),
           gte: filters.amountRange.min,
         };
       }
 
       if (filters.amountRange?.max) {
         invoiceWhere.totalAmount = {
-          ...invoiceWhere.totalAmount,
+          ...(typeof invoiceWhere.totalAmount === "object" &&
+          invoiceWhere.totalAmount !== null
+            ? invoiceWhere.totalAmount
+            : {}),
           lte: filters.amountRange.max,
         };
       }
 
       if (filters.dateRange?.from) {
         invoiceWhere.createdAt = {
-          ...invoiceWhere.createdAt,
+          ...(typeof invoiceWhere.createdAt === "object" &&
+          invoiceWhere.createdAt !== null
+            ? invoiceWhere.createdAt
+            : {}),
           gte: new Date(filters.dateRange.from),
         };
       }
 
       if (filters.dateRange?.to) {
         invoiceWhere.createdAt = {
-          ...invoiceWhere.createdAt,
+          ...(typeof invoiceWhere.createdAt === "object" &&
+          invoiceWhere.createdAt !== null
+            ? invoiceWhere.createdAt
+            : {}),
           lte: new Date(filters.dateRange.to),
         };
       }
@@ -426,7 +454,7 @@ export async function POST(req: NextRequest) {
 
     // Search Inventory
     if (filters.categories?.includes("inventory")) {
-      const inventoryWhere: any = {};
+      const inventoryWhere: Record<string, unknown> = {};
 
       if (filters.query?.trim()) {
         inventoryWhere.OR = [
@@ -438,14 +466,20 @@ export async function POST(req: NextRequest) {
 
       if (filters.dateRange?.from) {
         inventoryWhere.createdAt = {
-          ...inventoryWhere.createdAt,
+          ...(typeof inventoryWhere.createdAt === "object" &&
+          inventoryWhere.createdAt !== null
+            ? inventoryWhere.createdAt
+            : {}),
           gte: new Date(filters.dateRange.from),
         };
       }
 
       if (filters.dateRange?.to) {
         inventoryWhere.createdAt = {
-          ...inventoryWhere.createdAt,
+          ...(typeof inventoryWhere.createdAt === "object" &&
+          inventoryWhere.createdAt !== null
+            ? inventoryWhere.createdAt
+            : {}),
           lte: new Date(filters.dateRange.to),
         };
       }

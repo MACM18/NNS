@@ -41,7 +41,7 @@ export async function PUT(
     const body = await req.json();
 
     // Whitelist and map incoming update fields
-    const dataToUpdate: any = {};
+    const dataToUpdate: Record<string, unknown> = {};
     if (body.title !== undefined) dataToUpdate.title = body.title;
     if (body.content !== undefined) dataToUpdate.content = body.content;
     if (body.excerpt !== undefined) dataToUpdate.excerpt = body.excerpt;

@@ -20,6 +20,7 @@ import {
 import { FileSpreadsheet, ExternalLink, Calendar } from "lucide-react";
 import Link from "next/link";
 import ConnectionActions from "./components/ConnectionActions";
+import type { PageProps } from "@/types/common";
 
 interface SheetConnectionRow {
   id: string;
@@ -120,8 +121,10 @@ function getStatusBadge(status: string | null) {
   }
 }
 
-export default async function GoogleSheetsPage({ searchParams }: any) {
-  const currentPage = parseInt((searchParams?.page as string) || "1", 10) || 1;
+export default async function GoogleSheetsPage({ searchParams }: PageProps) {
+  const resolvedSearchParams = await searchParams;
+  const currentPage =
+    parseInt((resolvedSearchParams?.page as string) || "1", 10) || 1;
   const pageSize = 10;
 
   const { rows, total } = await fetchConnections(currentPage, pageSize);

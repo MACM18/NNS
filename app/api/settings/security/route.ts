@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
 
     // Validate security preferences
-    const security: any = {};
+    const security: Record<string, unknown> = {};
 
     if (
       "two_factor_enabled" in body &&

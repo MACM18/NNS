@@ -40,7 +40,7 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
-    const dataToUpdate: any = {};
+    const dataToUpdate: Record<string, unknown> = {};
     if (body.title !== undefined) dataToUpdate.title = body.title;
     if (body.content !== undefined) dataToUpdate.content = body.content;
     if (body.excerpt !== undefined) dataToUpdate.excerpt = body.excerpt;

@@ -21,8 +21,7 @@ export async function GET(req: NextRequest) {
     const sortDirection = searchParams.get("sortDirection") || "desc";
 
     // Build where clause
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
     // Support explicit startDate/endDate query params (YYYY-MM-DD)
     const startDateParam = searchParams.get("startDate");

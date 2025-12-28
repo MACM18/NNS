@@ -83,8 +83,7 @@ export async function PUT(
     const body = await req.json();
 
     // Map snake_case fields to camelCase for Prisma
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
 
     if (body.task_date !== undefined)
       updateData.taskDate = new Date(body.task_date);

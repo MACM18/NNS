@@ -133,7 +133,7 @@ export async function PATCH(
     const body = await request.json();
 
     // Map potential snake_case to camelCase
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (body.itemId ?? body.item_id)
       updateData.itemId = body.itemId ?? body.item_id;
     if (body.quantity != null) updateData.quantity = Number(body.quantity);

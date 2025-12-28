@@ -130,7 +130,7 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (full_name !== undefined) updateData.fullName = full_name;
     if (phone_number !== undefined) updateData.phoneNumber = phone_number;
     if (email !== undefined) updateData.email = email;

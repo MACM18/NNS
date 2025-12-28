@@ -18,8 +18,7 @@ export async function GET(req: NextRequest) {
     const includeUsage = searchParams.get("includeUsage") === "true";
 
     // Build where clause
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
     if (status) {
       where.status = status;

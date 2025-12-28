@@ -62,11 +62,11 @@ export async function PUT(req: NextRequest) {
     // Normalize incoming data
     const contactNumbers = Array.isArray(body.contact_numbers)
       ? body.contact_numbers
-          .map((n: any) => String(n).trim())
+          .map((n: string | number) => String(n).trim())
           .filter((n: string) => n !== "")
       : [];
 
-    const normalizeTiers = (tiers: any) => {
+    const normalizeTiers = (tiers: unknown) => {
       if (!tiers) return [];
       if (typeof tiers === "object" && !Array.isArray(tiers)) {
         return Object.entries(tiers).map(([range, rate]) => {

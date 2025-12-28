@@ -20,8 +20,7 @@ export async function GET(req: NextRequest) {
     const dateFilter = searchParams.get("dateFilter"); // 'today', 'week', 'month'
 
     // Build where clause
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {
+    const where: Record<string, unknown> = {
       taskDate: { not: null },
     };
 
@@ -61,13 +60,14 @@ export async function GET(req: NextRequest) {
       };
     } else if (start || end) {
       // Date range filter
-      where.createdAt = {};
+      const createdAtFilter: Record<string, Date> = {};
       if (start) {
-        where.createdAt.gte = new Date(start);
+        createdAtFilter.gte = new Date(start);
       }
       if (end) {
-        where.createdAt.lt = new Date(end);
+        createdAtFilter.lt = new Date(end);
       }
+      where.createdAt = createdAtFilter;
     }
 
     if (search) {

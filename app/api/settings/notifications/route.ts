@@ -68,7 +68,7 @@ export async function PUT(req: NextRequest) {
       "marketing_emails",
     ];
 
-    const notifications: any = {};
+    const notifications: Record<string, unknown> = {};
     for (const key of allowedKeys) {
       if (key in body && typeof body[key] === "boolean") {
         notifications[key] = body[key];
