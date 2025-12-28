@@ -48,6 +48,15 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Require admin or moderator role to update company settings
+    const role = (session.user.role || "user").toLowerCase();
+    if (!["admin", "moderator"].includes(role)) {
+      return NextResponse.json(
+        { error: "Forbidden: Admin or Moderator access required" },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
 
     // Normalize incoming data
