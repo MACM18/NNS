@@ -55,6 +55,15 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("profile");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isOAuthUser, setIsOAuthUser] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+
+  // Password change state
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   // Profile form data
   const [profileData, setProfileData] = useState({
@@ -125,7 +134,22 @@ export default function SettingsPage() {
     fetchCompanySettings();
     fetchNotificationSettings();
     fetchSecuritySettings();
-  }, []);
+    checkOAuthUser();
+  }, [user]);
+
+  const checkOAuthUser = async () => {
+    if (!user?.id) return;
+    try {
+      const response = await fetch(`/api/profile/${user.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        // Check if user has Google account and no password
+        setIsOAuthUser(data.isOAuthUser || false);
+      }
+    } catch (error) {
+      console.error("Error checking OAuth status:", error);
+    }
+  };
 
   const normalizeTiers = (tiers: any): typeof companyData.pricing_tiers => {
     if (!tiers) return companyData.pricing_tiers;
@@ -221,27 +245,29 @@ export default function SettingsPage() {
 
   const fetchNotificationSettings = async () => {
     try {
-      const saved = localStorage.getItem("notification_settings");
-      if (!saved) return;
-      const parsed = JSON.parse(saved);
-      if (parsed && typeof parsed === "object") {
-        setNotificationSettings((prev) => ({ ...prev, ...parsed }));
+      const response = await fetch("/api/settings/notifications");
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data) {
+          setNotificationSettings(result.data);
+        }
       }
     } catch (err) {
-      console.error("Failed to parse notification settings from storage", err);
+      console.error("Failed to fetch notification settings", err);
     }
   };
 
   const fetchSecuritySettings = async () => {
     try {
-      const saved = localStorage.getItem("security_settings");
-      if (!saved) return;
-      const parsed = JSON.parse(saved);
-      if (parsed && typeof parsed === "object") {
-        setSecuritySettings((prev) => ({ ...prev, ...parsed }));
+      const response = await fetch("/api/settings/security");
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data) {
+          setSecuritySettings(result.data);
+        }
       }
     } catch (err) {
-      console.error("Failed to parse security settings from storage", err);
+      console.error("Failed to fetch security settings", err);
     }
   };
 
@@ -356,27 +382,181 @@ export default function SettingsPage() {
     }
   };
 
-  const handleNotificationUpdate = () => {
-    localStorage.setItem(
-      "notification_settings",
-      JSON.stringify(notificationSettings)
-    );
-    addNotification({
-      title: "Preferences Updated",
-      message: "Notification preferences have been saved.",
-      type: "success",
-      category: "system",
-    });
+  const handleNotificationUpdate = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/settings/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(notificationSettings),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update notification preferences");
+      }
+
+      addNotification({
+        title: "Preferences Updated",
+        message: "Notification preferences have been saved to your profile.",
+        type: "success",
+        category: "system",
+      });
+    } catch (error: any) {
+      addNotification({
+        title: "Update Failed",
+        message: error.message,
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSecurityUpdate = () => {
-    localStorage.setItem("security_settings", JSON.stringify(securitySettings));
-    addNotification({
-      title: "Security Settings Updated",
-      message: "Security settings have been saved.",
-      type: "success",
-      category: "system",
-    });
+  const handleSecurityUpdate = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/settings/security", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(securitySettings),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update security settings");
+      }
+
+      addNotification({
+        title: "Security Settings Updated",
+        message: "Security settings have been saved to your profile.",
+        type: "success",
+        category: "system",
+      });
+    } catch (error: any) {
+      addNotification({
+        title: "Update Failed",
+        message: error.message,
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    // Validation
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      addNotification({
+        title: "Validation Error",
+        message: "Please fill in all password fields.",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      addNotification({
+        title: "Validation Error",
+        message: "New password and confirmation do not match.",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword.length < 8) {
+      addNotification({
+        title: "Validation Error",
+        message: "New password must be at least 8 characters long.",
+        type: "error",
+        category: "system",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to change password");
+      }
+
+      addNotification({
+        title: "Password Updated",
+        message: "Your password has been successfully changed.",
+        type: "success",
+        category: "system",
+      });
+
+      // Clear password fields
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (error: any) {
+      addNotification({
+        title: "Password Change Failed",
+        message: error.message,
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setExportLoading(true);
+    try {
+      const response = await fetch("/api/settings/export");
+      if (!response.ok) {
+        throw new Error("Failed to export data");
+      }
+
+      const result = await response.json();
+      
+      // Convert to JSON and download
+      const dataStr = JSON.stringify(result.data, null, 2);
+      const dataBlob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `nns-data-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      addNotification({
+        title: "Data Exported",
+        message: `Successfully exported ${Object.values(result.recordCounts).reduce((a: any, b: any) => a + b, 0)} records.`,
+        type: "success",
+        category: "system",
+      });
+    } catch (error: any) {
+      addNotification({
+        title: "Export Failed",
+        message: error.message,
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   const addContactNumber = () => {
@@ -436,12 +616,17 @@ export default function SettingsPage() {
         <div className='space-y-6'>
           <div className='flex flex-col sm:flex-row items-start sm:items-center gap-4'>
             <SettingsIcon className='h-8 w-8' />
-            <div>
+            <div className='flex-1'>
               <h1 className='text-3xl font-bold'>Settings</h1>
               <p className='text-muted-foreground'>
                 Manage your account and application preferences
               </p>
             </div>
+            {profile?.role && (
+              <Badge variant='secondary' className='text-sm capitalize'>
+                {profile.role}
+              </Badge>
+            )}
           </div>
 
           <Tabs
@@ -454,9 +639,16 @@ export default function SettingsPage() {
                 <User className='h-4 w-4' />
                 Profile
               </TabsTrigger>
-              <TabsTrigger value='company' className='flex items-center gap-2'>
+              <TabsTrigger 
+                value='company' 
+                className='flex items-center gap-2'
+                disabled={!['admin', 'moderator'].includes((profile?.role || '').toLowerCase())}
+              >
                 <Building className='h-4 w-4' />
                 Company
+                {['admin', 'moderator'].includes((profile?.role || '').toLowerCase()) && (
+                  <Badge variant='secondary' className='ml-1 text-xs'>Admin</Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger
                 value='notifications'
@@ -1041,53 +1233,84 @@ export default function SettingsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className='space-y-4'>
-                  <div className='space-y-4'>
-                    <div>
-                      <Label htmlFor='current_password'>Current Password</Label>
-                      <div className='relative'>
-                        <Input
-                          id='current_password'
-                          type={showPassword ? "text" : "password"}
-                          placeholder='Enter current password'
-                        />
-                        <Button
-                          type='button'
-                          variant='ghost'
-                          size='sm'
-                          className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? (
-                            <EyeOff className='h-4 w-4' />
-                          ) : (
-                            <Eye className='h-4 w-4' />
-                          )}
-                        </Button>
+                  {isOAuthUser ? (
+                    <div className='p-4 border rounded-lg bg-muted'>
+                      <p className='text-sm text-muted-foreground'>
+                        You signed in with Google. Password changes are not available for OAuth accounts.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className='space-y-4'>
+                      <div>
+                        <Label htmlFor='current_password'>Current Password</Label>
+                        <div className='relative'>
+                          <Input
+                            id='current_password'
+                            type={showPassword ? 'text' : 'password'}
+                            value={passwordData.currentPassword}
+                            onChange={(e) =>
+                              setPasswordData({
+                                ...passwordData,
+                                currentPassword: e.target.value,
+                              })
+                            }
+                            placeholder='Enter current password'
+                          />
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOff className='h-4 w-4' />
+                            ) : (
+                              <Eye className='h-4 w-4' />
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
 
-                    <div>
-                      <Label htmlFor='new_password'>New Password</Label>
-                      <Input
-                        id='new_password'
-                        type='password'
-                        placeholder='Enter new password'
-                      />
-                    </div>
+                      <div>
+                        <Label htmlFor='new_password'>New Password</Label>
+                        <Input
+                          id='new_password'
+                          type='password'
+                          value={passwordData.newPassword}
+                          onChange={(e) =>
+                            setPasswordData({
+                              ...passwordData,
+                              newPassword: e.target.value,
+                            })
+                          }
+                          placeholder='Enter new password (min 8 characters)'
+                        />
+                      </div>
 
-                    <div>
-                      <Label htmlFor='confirm_password'>
-                        Confirm New Password
-                      </Label>
-                      <Input
-                        id='confirm_password'
-                        type='password'
-                        placeholder='Confirm new password'
-                      />
-                    </div>
+                      <div>
+                        <Label htmlFor='confirm_password'>
+                          Confirm New Password
+                        </Label>
+                        <Input
+                          id='confirm_password'
+                          type='password'
+                          value={passwordData.confirmPassword}
+                          onChange={(e) =>
+                            setPasswordData({
+                              ...passwordData,
+                              confirmPassword: e.target.value,
+                            })
+                          }
+                          placeholder='Confirm new password'
+                        />
+                      </div>
 
-                    <Button>Update Password</Button>
-                  </div>
+                      <Button onClick={handlePasswordChange} disabled={isLoading}>
+                        {isLoading ? 'Updating...' : 'Update Password'}
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1282,15 +1505,31 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent className='space-y-4'>
                   <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                    <Button variant='outline' className='h-20 flex-col gap-2'>
+                    <Button 
+                      variant='outline' 
+                      className='h-20 flex-col gap-2'
+                      onClick={handleExportData}
+                      disabled={exportLoading}
+                    >
                       <Download className='h-6 w-6' />
-                      Export All Data
+                      {exportLoading ? 'Exporting...' : 'Export All Data'}
                     </Button>
-                    <Button variant='outline' className='h-20 flex-col gap-2'>
+                    <Button 
+                      variant='outline' 
+                      className='h-20 flex-col gap-2'
+                      disabled
+                    >
                       <Upload className='h-6 w-6' />
-                      Import Data
+                      Import Data (Coming Soon)
                     </Button>
                   </div>
+                  <p className='text-sm text-muted-foreground'>
+                    {(profile?.role || '').toLowerCase() === 'admin'
+                      ? 'As an admin, you can export all system data.'
+                      : (profile?.role || '').toLowerCase() === 'moderator'
+                      ? 'As a moderator, you can export operational data (lines, tasks, inventory).'
+                      : 'You can export your personal data including profile and assigned tasks.'}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -1310,8 +1549,8 @@ export default function SettingsPage() {
                           Clear application cache and temporary files
                         </p>
                       </div>
-                      <Button variant='outline' size='sm'>
-                        Clear Cache
+                      <Button variant='outline' size='sm' disabled>
+                        Coming Soon
                       </Button>
                     </div>
 
@@ -1322,8 +1561,14 @@ export default function SettingsPage() {
                           Archive data older than 2 years
                         </p>
                       </div>
-                      <Button variant='outline' size='sm'>
-                        Archive Data
+                      <Button 
+                        variant='outline' 
+                        size='sm'
+                        disabled={!['admin'].includes((profile?.role || '').toLowerCase())}
+                      >
+                        {['admin'].includes((profile?.role || '').toLowerCase())
+                          ? 'Coming Soon'
+                          : 'Admin Only'}
                       </Button>
                     </div>
 
@@ -1337,9 +1582,15 @@ export default function SettingsPage() {
                           be undone.
                         </p>
                       </div>
-                      <Button variant='destructive' size='sm'>
+                      <Button 
+                        variant='destructive' 
+                        size='sm'
+                        disabled={!['admin'].includes((profile?.role || '').toLowerCase())}
+                      >
                         <Trash2 className='h-4 w-4 mr-2' />
-                        Delete All
+                        {['admin'].includes((profile?.role || '').toLowerCase())
+                          ? 'Delete All'
+                          : 'Admin Only'}
                       </Button>
                     </div>
                   </div>
