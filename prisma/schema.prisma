@@ -246,6 +246,14 @@ model InventoryInvoice {
   ocrImageUrl       String?  @map("ocr_image_url")
   totalItems        Int      @default(0) @map("total_items")
   status            String   @default("draft")
+  
+  // Payment tracking fields (for inventory purchases that need payment)
+  paymentStatus     String   @default("not_applicable") @map("payment_status") // 'not_applicable', 'unpaid', 'partial', 'paid'
+  totalCost         Decimal? @map("total_cost")
+  paidAmount        Decimal  @default(0) @map("paid_amount")
+  currencyCode      String?  @map("currency_code")
+  dueDate           DateTime? @map("due_date") @db.Date
+  
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -517,6 +525,13 @@ model GeneratedInvoice {
   lineCount      Decimal? @map("line_count")
   status         String?
   lineDetailsIds Json?    @map("line_details_ids")
+  
+  // Payment tracking fields
+  paymentStatus  String   @default("unpaid") @map("payment_status") // 'unpaid', 'partial', 'paid'
+  paidAmount     Decimal  @default(0) @map("paid_amount")
+  currencyCode   String?  @map("currency_code") // ISO currency code
+  dueDate        DateTime? @map("due_date") @db.Date
+  
   createdAt      DateTime @default(now()) @map("created_at")
 
   @@map("generated_invoices")
@@ -668,6 +683,203 @@ model GoogleSheetConnection {
 
   @@index([year, month])
   @@map("google_sheet_connections")
+}
+
+// ==========================================
+// ACCOUNTING MODULE
+// ==========================================
+
+// Currency support for multi-currency accounting
+model Currency {
+  id           String   @id @default(uuid())
+  code         String   @unique // ISO 4217 code (USD, LKR, EUR, etc.)
+  name         String
+  symbol       String
+  exchangeRate Decimal  @default(1) @map("exchange_rate") // Rate to base currency
+  isBase       Boolean  @default(false) @map("is_base") // Is this the base/reporting currency
+  isActive     Boolean  @default(true) @map("is_active")
+  decimalPlaces Int     @default(2) @map("decimal_places")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  chartOfAccounts  ChartOfAccount[]
+  journalEntries   JournalEntry[]
+  invoicePayments  InvoicePayment[]
+
+  @@map("currencies")
+}
+
+// Chart of Accounts - the foundation of double-entry accounting
+model ChartOfAccount {
+  id              String   @id @default(uuid())
+  code            String   @unique // Account code (e.g., 1000, 1100, 2000)
+  name            String
+  description     String?
+  category        String   // Asset, Liability, Equity, Revenue, Expense
+  subCategory     String?  @map("sub_category") // e.g., Current Asset, Fixed Asset, Operating Revenue
+  parentId        String?  @map("parent_id")
+  currencyId      String?  @map("currency_id")
+  isActive        Boolean  @default(true) @map("is_active")
+  isSystemAccount Boolean  @default(false) @map("is_system_account") // Protected system accounts
+  normalBalance   String   @default("debit") @map("normal_balance") // 'debit' or 'credit'
+  openingBalance  Decimal  @default(0) @map("opening_balance")
+  currentBalance  Decimal  @default(0) @map("current_balance")
+  displayOrder    Int      @default(0) @map("display_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Self-relation for hierarchical accounts
+  parent   ChartOfAccount?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children ChartOfAccount[] @relation("AccountHierarchy")
+  currency Currency?        @relation(fields: [currencyId], references: [id])
+
+  // Journal entry lines
+  journalEntryLines JournalEntryLine[]
+
+  // Default account mappings
+  defaultForReceivables AccountingSettings[] @relation("DefaultReceivablesAccount")
+  defaultForPayables    AccountingSettings[] @relation("DefaultPayablesAccount")
+  defaultForCash        AccountingSettings[] @relation("DefaultCashAccount")
+  defaultForRevenue     AccountingSettings[] @relation("DefaultRevenueAccount")
+  defaultForExpense     AccountingSettings[] @relation("DefaultExpenseAccount")
+
+  @@index([category])
+  @@index([parentId])
+  @@map("chart_of_accounts")
+}
+
+// Accounting Periods for financial reporting
+model AccountingPeriod {
+  id          String   @id @default(uuid())
+  name        String   // e.g., "January 2026", "Q1 2026", "FY 2025-2026"
+  periodType  String   @map("period_type") // 'monthly', 'quarterly', 'yearly'
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
+  isClosed    Boolean  @default(false) @map("is_closed")
+  closedAt    DateTime? @map("closed_at")
+  closedById  String?  @map("closed_by")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  journalEntries JournalEntry[]
+
+  @@unique([periodType, startDate, endDate])
+  @@map("accounting_periods")
+}
+
+// Journal Entry Header
+model JournalEntry {
+  id              String   @id @default(uuid())
+  entryNumber     String   @unique @map("entry_number") // Auto-generated: JE-2026-0001
+  date            DateTime @db.Date
+  description     String
+  reference       String?  // External reference (invoice number, payment ref, etc.)
+  referenceType   String?  @map("reference_type") // 'invoice_payment', 'manual', 'reversal', etc.
+  referenceId     String?  @map("reference_id") // ID of related record
+  periodId        String?  @map("period_id")
+  currencyId      String?  @map("currency_id")
+  exchangeRate    Decimal  @default(1) @map("exchange_rate")
+  status          String   @default("draft") // 'draft', 'pending', 'approved', 'reversed'
+  totalDebit      Decimal  @default(0) @map("total_debit")
+  totalCredit     Decimal  @default(0) @map("total_credit")
+  isReversed      Boolean  @default(false) @map("is_reversed")
+  reversedEntryId String?  @map("reversed_entry_id") // Points to the reversal entry
+  originalEntryId String?  @map("original_entry_id") // If this is a reversal, points to original
+  createdById     String?  @map("created_by")
+  approvedById    String?  @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  period    AccountingPeriod? @relation(fields: [periodId], references: [id])
+  currency  Currency?         @relation(fields: [currencyId], references: [id])
+  lines     JournalEntryLine[]
+
+  @@index([date])
+  @@index([status])
+  @@index([referenceType, referenceId])
+  @@map("journal_entries")
+}
+
+// Journal Entry Line Items
+model JournalEntryLine {
+  id            String   @id @default(uuid())
+  journalEntryId String  @map("journal_entry_id")
+  accountId     String   @map("account_id")
+  description   String?
+  debitAmount   Decimal  @default(0) @map("debit_amount")
+  creditAmount  Decimal  @default(0) @map("credit_amount")
+  lineOrder     Int      @default(0) @map("line_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  journalEntry JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      ChartOfAccount @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
+  @@map("journal_entry_lines")
+}
+
+// Invoice Payment tracking
+model InvoicePayment {
+  id              String   @id @default(uuid())
+  paymentNumber   String   @unique @map("payment_number") // Auto: PAY-2026-0001
+  invoiceId       String   @map("invoice_id")
+  invoiceType     String   @map("invoice_type") // 'generated' or 'inventory'
+  paymentDate     DateTime @map("payment_date") @db.Date
+  amount          Decimal
+  currencyId      String?  @map("currency_id")
+  exchangeRate    Decimal  @default(1) @map("exchange_rate")
+  amountInBase    Decimal  @map("amount_in_base") // Amount in base currency
+  paymentMethod   String   @map("payment_method") // 'cash', 'bank_transfer', 'cheque', 'card'
+  reference       String?  // Check number, transaction ID, etc.
+  bankAccountId   String?  @map("bank_account_id") // Which bank account received payment
+  journalEntryId  String?  @map("journal_entry_id") // Auto-generated journal entry
+  status          String   @default("completed") // 'pending', 'completed', 'cancelled'
+  notes           String?
+  createdById     String?  @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  currency Currency? @relation(fields: [currencyId], references: [id])
+
+  @@index([invoiceId, invoiceType])
+  @@index([paymentDate])
+  @@map("invoice_payments")
+}
+
+// Accounting Settings for customization
+model AccountingSettings {
+  id                        String   @id @default(uuid())
+  fiscalYearStart           Int      @default(1) @map("fiscal_year_start") // Month (1-12)
+  baseCurrencyId            String?  @map("base_currency_id")
+  defaultReceivablesAccountId String? @map("default_receivables_account_id")
+  defaultPayablesAccountId  String?  @map("default_payables_account_id")
+  defaultCashAccountId      String?  @map("default_cash_account_id")
+  defaultRevenueAccountId   String?  @map("default_revenue_account_id")
+  defaultExpenseAccountId   String?  @map("default_expense_account_id")
+  autoGenerateJournalEntries Boolean @default(true) @map("auto_generate_journal_entries")
+  requireApproval           Boolean  @default(false) @map("require_approval")
+  allowBackdatedEntries     Boolean  @default(true) @map("allow_backdated_entries")
+  entryNumberPrefix         String   @default("JE") @map("entry_number_prefix")
+  paymentNumberPrefix       String   @default("PAY") @map("payment_number_prefix")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  defaultReceivablesAccount ChartOfAccount? @relation("DefaultReceivablesAccount", fields: [defaultReceivablesAccountId], references: [id])
+  defaultPayablesAccount    ChartOfAccount? @relation("DefaultPayablesAccount", fields: [defaultPayablesAccountId], references: [id])
+  defaultCashAccount        ChartOfAccount? @relation("DefaultCashAccount", fields: [defaultCashAccountId], references: [id])
+  defaultRevenueAccount     ChartOfAccount? @relation("DefaultRevenueAccount", fields: [defaultRevenueAccountId], references: [id])
+  defaultExpenseAccount     ChartOfAccount? @relation("DefaultExpenseAccount", fields: [defaultExpenseAccountId], references: [id])
+
+  @@map("accounting_settings")
 }
 
 // ==========================================

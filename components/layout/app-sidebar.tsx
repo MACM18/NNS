@@ -18,6 +18,12 @@ import {
   Building2,
   CalendarDays,
   Zap,
+  Calculator,
+  Wallet,
+  BookOpenCheck,
+  CreditCard,
+  BarChart3,
+  Cog,
 } from "lucide-react";
 
 import {
@@ -104,9 +110,46 @@ const navItems = [
   },
 ];
 
+// Accounting menu items - moderator and admin only
+const accountingItems = [
+  {
+    title: "Overview",
+    url: "/dashboard/accounting",
+    icon: Calculator,
+  },
+  {
+    title: "Chart of Accounts",
+    url: "/dashboard/accounting/accounts",
+    icon: Wallet,
+  },
+  {
+    title: "Journal Entries",
+    url: "/dashboard/accounting/journal",
+    icon: BookOpenCheck,
+  },
+  {
+    title: "Payments",
+    url: "/dashboard/accounting/payments",
+    icon: CreditCard,
+  },
+  {
+    title: "Reports",
+    url: "/dashboard/accounting/reports",
+    icon: BarChart3,
+  },
+  {
+    title: "Settings",
+    url: "/dashboard/accounting/settings",
+    icon: Cog,
+  },
+];
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const { signOut, role, loading } = useAuth();
+
+  // Check if user has accounting access (moderator, admin)
+  const hasAccountingAccess = !loading && role && ["admin", "moderator"].includes(role);
 
   return (
     <Sidebar {...props}>
@@ -145,6 +188,34 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        
+        {/* Accounting Section - Only visible to moderators and admins */}
+        {hasAccountingAccess && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupLabel>Accounting</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {accountingItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton 
+                        asChild 
+                        isActive={pathname === item.url || (item.url !== "/dashboard/accounting" && pathname.startsWith(item.url))}
+                      >
+                        <Link href={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
+        
         <SidebarSeparator />
         <SidebarGroup>
           <SidebarGroupLabel>Settings</SidebarGroupLabel>
