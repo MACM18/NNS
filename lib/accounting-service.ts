@@ -215,14 +215,26 @@ export async function initializeAccounting(): Promise<{
 // ==========================================
 
 export async function getCurrencies(activeOnly = true) {
-  return prisma.currency.findMany({
+  const currencies = await prisma.currency.findMany({
     where: activeOnly ? { isActive: true } : undefined,
     orderBy: [{ isBase: "desc" }, { code: "asc" }],
   });
+
+  // Convert Decimal to number for JSON serialization
+  return currencies.map((c) => ({
+    ...c,
+    exchangeRate: toNumber(c.exchangeRate),
+  }));
 }
 
 export async function getCurrency(id: string) {
-  return prisma.currency.findUnique({ where: { id } });
+  const currency = await prisma.currency.findUnique({ where: { id } });
+  if (!currency) return null;
+
+  return {
+    ...currency,
+    exchangeRate: toNumber(currency.exchangeRate),
+  };
 }
 
 export async function updateExchangeRate(id: string, rate: number) {

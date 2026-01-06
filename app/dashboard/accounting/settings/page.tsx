@@ -524,7 +524,7 @@ export default function AccountingSettingsPage() {
                         <TableCell>{currency.name}</TableCell>
                         <TableCell>{currency.symbol}</TableCell>
                         <TableCell className='font-mono'>
-                          {Number(currency.exchangeRate).toFixed(4)}
+                          {currency.exchangeRate.toFixed(4)}
                         </TableCell>
                         <TableCell>
                           {currency.isDefault ? (
