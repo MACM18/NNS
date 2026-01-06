@@ -41,8 +41,6 @@ async function main() {
       role: "admin",
     },
   });
-
-  console.log("Admin user ensured:", { id: user.id, email });
 }
 
 main()

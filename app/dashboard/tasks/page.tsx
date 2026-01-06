@@ -91,7 +91,6 @@ export default function TasksPage() {
   // Refresh data when page becomes visible again
   usePageVisibility(() => {
     if (user) {
-      console.log("Page became visible, refreshing tasks data");
       fetchTasksForPeriod(dateFilter);
       setRefreshTrigger((prev) => prev + 1);
     }

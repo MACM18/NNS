@@ -187,7 +187,6 @@ export default function InvoicesPage() {
   // Refresh data when page becomes visible again
   usePageVisibility(() => {
     if (user) {
-      console.log("Page became visible, refreshing invoices data");
       refreshData();
     }
   }, [user]);

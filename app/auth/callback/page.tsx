@@ -72,8 +72,6 @@ function AuthCallbackContent() {
 
         const result = await resp.json();
         // Debug: log exchange result (includes cookie names written by server if successful)
-        // eslint-disable-next-line no-console
-        console.log("[auth/callback] exchange result:", result);
 
         if (!resp.ok) {
           toast({
