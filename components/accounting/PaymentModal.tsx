@@ -180,7 +180,9 @@ export function PaymentModal({
 
       addNotification({
         title: "Success",
-        message: `Payment of ${formatCurrency(formData.amount)} recorded successfully`,
+        message: `Payment of ${formatCurrency(
+          formData.amount
+        )} recorded successfully`,
         type: "success",
         category: "accounting",
       });
@@ -216,10 +218,10 @@ export function PaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className='sm:max-w-[500px]'>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
+          <DialogTitle className='flex items-center gap-2'>
+            <CreditCard className='h-5 w-5' />
             Record Payment
           </DialogTitle>
           <DialogDescription>
@@ -229,40 +231,43 @@ export function PaymentModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className='space-y-4 py-4'>
           {/* Invoice Summary */}
-          <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Invoice Total:</span>
-              <span className="font-medium">{formatCurrency(invoiceAmount)}</span>
+          <div className='bg-muted/50 rounded-lg p-4 space-y-2'>
+            <div className='flex justify-between text-sm'>
+              <span className='text-muted-foreground'>Invoice Total:</span>
+              <span className='font-medium'>
+                {formatCurrency(invoiceAmount)}
+              </span>
             </div>
-            {remainingAmount !== undefined && remainingAmount !== invoiceAmount && (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Already Paid:</span>
-                  <span className="font-medium text-green-600">
-                    {formatCurrency(invoiceAmount - remainingAmount)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm border-t pt-2">
-                  <span className="text-muted-foreground">Remaining:</span>
-                  <span className="font-semibold">
-                    {formatCurrency(remainingAmount)}
-                  </span>
-                </div>
-              </>
-            )}
+            {remainingAmount !== undefined &&
+              remainingAmount !== invoiceAmount && (
+                <>
+                  <div className='flex justify-between text-sm'>
+                    <span className='text-muted-foreground'>Already Paid:</span>
+                    <span className='font-medium text-green-600'>
+                      {formatCurrency(invoiceAmount - remainingAmount)}
+                    </span>
+                  </div>
+                  <div className='flex justify-between text-sm border-t pt-2'>
+                    <span className='text-muted-foreground'>Remaining:</span>
+                    <span className='font-semibold'>
+                      {formatCurrency(remainingAmount)}
+                    </span>
+                  </div>
+                </>
+              )}
           </div>
 
           {/* Payment Amount */}
-          <div className="space-y-2">
-            <Label htmlFor="amount">Payment Amount *</Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className='space-y-2'>
+            <Label htmlFor='amount'>Payment Amount *</Label>
+            <div className='relative'>
+              <DollarSign className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
               <Input
-                id="amount"
-                type="number"
-                step="0.01"
+                id='amount'
+                type='number'
+                step='0.01'
                 value={formData.amount}
                 onChange={(e) =>
                   setFormData({
@@ -270,17 +275,17 @@ export function PaymentModal({
                     amount: parseFloat(e.target.value) || 0,
                   })
                 }
-                className="pl-10"
+                className='pl-10'
               />
             </div>
             {isPartialPayment && (
-              <p className="text-sm text-yellow-600">
+              <p className='text-sm text-yellow-600'>
                 This is a partial payment. Remaining after:{" "}
                 {formatCurrency(effectiveRemaining - formData.amount)}
               </p>
             )}
             {isOverpayment && (
-              <p className="text-sm text-red-600">
+              <p className='text-sm text-red-600'>
                 Amount exceeds remaining balance by{" "}
                 {formatCurrency(formData.amount - effectiveRemaining)}
               </p>
@@ -288,26 +293,26 @@ export function PaymentModal({
           </div>
 
           {/* Payment Date */}
-          <div className="space-y-2">
+          <div className='space-y-2'>
             <Label>Payment Date *</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
-                  variant="outline"
+                  variant='outline'
                   className={cn(
                     "w-full justify-start text-left font-normal",
                     !formData.paymentDate && "text-muted-foreground"
                   )}
                 >
-                  <Calendar className="mr-2 h-4 w-4" />
+                  <Calendar className='mr-2 h-4 w-4' />
                   {formData.paymentDate
                     ? format(formData.paymentDate, "PPP")
                     : "Select date"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
+              <PopoverContent className='w-auto p-0'>
                 <CalendarComponent
-                  mode="single"
+                  mode='single'
                   selected={formData.paymentDate}
                   onSelect={(date) =>
                     setFormData({
@@ -321,7 +326,7 @@ export function PaymentModal({
           </div>
 
           {/* Payment Method */}
-          <div className="space-y-2">
+          <div className='space-y-2'>
             <Label>Payment Method *</Label>
             <Select
               value={formData.paymentMethod}
@@ -330,7 +335,7 @@ export function PaymentModal({
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select method" />
+                <SelectValue placeholder='Select method' />
               </SelectTrigger>
               <SelectContent>
                 {PAYMENT_METHODS.map((method) => (
@@ -343,7 +348,7 @@ export function PaymentModal({
           </div>
 
           {/* Payment Account */}
-          <div className="space-y-2">
+          <div className='space-y-2'>
             <Label>Payment Account *</Label>
             <Select
               value={formData.paymentAccountId}
@@ -352,7 +357,7 @@ export function PaymentModal({
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select account" />
+                <SelectValue placeholder='Select account' />
               </SelectTrigger>
               <SelectContent>
                 {accounts.map((account) => (
@@ -362,38 +367,38 @@ export function PaymentModal({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className='text-xs text-muted-foreground'>
               This is the cash/bank account receiving the payment
             </p>
           </div>
 
           {/* Reference */}
-          <div className="space-y-2">
-            <Label htmlFor="reference">Reference Number</Label>
-            <div className="relative">
-              <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className='space-y-2'>
+            <Label htmlFor='reference'>Reference Number</Label>
+            <div className='relative'>
+              <FileText className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
               <Input
-                id="reference"
+                id='reference'
                 value={formData.reference}
                 onChange={(e) =>
                   setFormData({ ...formData, reference: e.target.value })
                 }
-                placeholder="Check #, Transaction ID, etc."
-                className="pl-10"
+                placeholder='Check #, Transaction ID, etc.'
+                className='pl-10'
               />
             </div>
           </div>
 
           {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
+          <div className='space-y-2'>
+            <Label htmlFor='notes'>Notes</Label>
             <Textarea
-              id="notes"
+              id='notes'
               value={formData.notes}
               onChange={(e) =>
                 setFormData({ ...formData, notes: e.target.value })
               }
-              placeholder="Additional notes (optional)"
+              placeholder='Additional notes (optional)'
               rows={2}
             />
           </div>
@@ -401,7 +406,7 @@ export function PaymentModal({
 
         <DialogFooter>
           <Button
-            variant="outline"
+            variant='outline'
             onClick={() => onOpenChange(false)}
             disabled={loading}
           >

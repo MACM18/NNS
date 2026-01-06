@@ -45,9 +45,9 @@ export async function generateSequentialNumber(
 ): Promise<string> {
   const year = new Date().getFullYear();
   const pattern = `${prefix}-${year}-%`;
-  
+
   let lastNumber: string | null = null;
-  
+
   if (table === "journal_entries") {
     const last = await prisma.journalEntry.findFirst({
       where: { entryNumber: { startsWith: `${prefix}-${year}-` } },
@@ -117,7 +117,9 @@ export async function initializeAccounting(): Promise<{
   }
 
   // Import default data
-  const { DEFAULT_ACCOUNTS, DEFAULT_CURRENCIES } = await import("@/types/accounting");
+  const { DEFAULT_ACCOUNTS, DEFAULT_CURRENCIES } = await import(
+    "@/types/accounting"
+  );
 
   // Create default currencies
   for (const currency of DEFAULT_CURRENCIES) {
@@ -234,9 +236,11 @@ export async function updateExchangeRate(id: string, rate: number) {
 // CHART OF ACCOUNTS OPERATIONS
 // ==========================================
 
-export async function getAccounts(filters?: AccountFilters): Promise<ChartOfAccount[]> {
+export async function getAccounts(
+  filters?: AccountFilters
+): Promise<ChartOfAccount[]> {
   const where: Record<string, unknown> = {};
-  
+
   if (filters?.category) {
     where.category = filters.category;
   }
@@ -273,9 +277,11 @@ export async function getAccounts(filters?: AccountFilters): Promise<ChartOfAcco
   })) as unknown as ChartOfAccount[];
 }
 
-export async function getAccountsHierarchy(): Promise<ChartOfAccountWithHierarchy[]> {
+export async function getAccountsHierarchy(): Promise<
+  ChartOfAccountWithHierarchy[]
+> {
   const accounts = await getAccounts({ isActive: true });
-  
+
   // Build hierarchy
   const accountMap = new Map<string, ChartOfAccountWithHierarchy>();
   const rootAccounts: ChartOfAccountWithHierarchy[] = [];
@@ -318,20 +324,18 @@ export async function getAccount(id: string): Promise<ChartOfAccount | null> {
   } as unknown as ChartOfAccount;
 }
 
-export async function createAccount(
-  data: {
-    code: string;
-    name: string;
-    description?: string;
-    category: string;
-    subCategory?: string;
-    parentId?: string;
-    currencyId?: string;
-    normalBalance?: string;
-    openingBalance?: number;
-    displayOrder?: number;
-  }
-): Promise<ChartOfAccount> {
+export async function createAccount(data: {
+  code: string;
+  name: string;
+  description?: string;
+  category: string;
+  subCategory?: string;
+  parentId?: string;
+  currencyId?: string;
+  normalBalance?: string;
+  openingBalance?: number;
+  displayOrder?: number;
+}): Promise<ChartOfAccount> {
   const account = await prisma.chartOfAccount.create({
     data: {
       code: data.code,
@@ -542,7 +546,9 @@ export async function getJournalEntries(
   };
 }
 
-export async function getJournalEntry(id: string): Promise<JournalEntry | null> {
+export async function getJournalEntry(
+  id: string
+): Promise<JournalEntry | null> {
   const entry = await prisma.journalEntry.findUnique({
     where: { id },
     include: {
@@ -580,13 +586,19 @@ export async function createJournalEntry(
   const totalCredit = data.lines.reduce((sum, l) => sum + l.creditAmount, 0);
 
   if (Math.abs(totalDebit - totalCredit) > 0.01) {
-    throw new Error(`Journal entry must be balanced. Debit: ${totalDebit}, Credit: ${totalCredit}`);
+    throw new Error(
+      `Journal entry must be balanced. Debit: ${totalDebit}, Credit: ${totalCredit}`
+    );
   }
 
   // Generate entry number
   const settings = await prisma.accountingSettings.findFirst();
   const prefix = settings?.entryNumberPrefix || "JE";
-  const entryNumber = await generateSequentialNumber(prefix, "journal_entries", "entryNumber");
+  const entryNumber = await generateSequentialNumber(
+    prefix,
+    "journal_entries",
+    "entryNumber"
+  );
 
   // Get current period if not specified
   let periodId = data.periodId;
@@ -597,7 +609,9 @@ export async function createJournalEntry(
 
   // Check if period is closed
   if (periodId) {
-    const period = await prisma.accountingPeriod.findUnique({ where: { id: periodId } });
+    const period = await prisma.accountingPeriod.findUnique({
+      where: { id: periodId },
+    });
     if (period?.isClosed) {
       throw new Error("Cannot create entries in a closed period");
     }
@@ -614,7 +628,11 @@ export async function createJournalEntry(
       periodId,
       currencyId: data.currencyId,
       exchangeRate: data.exchangeRate || 1,
-      status: autoApprove ? "approved" : (settings?.requireApproval ? "pending" : "approved"),
+      status: autoApprove
+        ? "approved"
+        : settings?.requireApproval
+        ? "pending"
+        : "approved",
       totalDebit,
       totalCredit,
       createdById,
@@ -730,7 +748,9 @@ export async function reverseJournalEntry(
   const reversalEntry = await createJournalEntry(
     {
       date: new Date(),
-      description: `Reversal of ${original.entryNumber}: ${reason || original.description}`,
+      description: `Reversal of ${original.entryNumber}: ${
+        reason || original.description
+      }`,
       reference: original.entryNumber,
       referenceType: "reversal",
       referenceId: original.id,
@@ -829,10 +849,14 @@ export async function recordPayment(
   createdById: string
 ): Promise<{ payment: unknown; journalEntry?: JournalEntry }> {
   const settings = await prisma.accountingSettings.findFirst();
-  
+
   // Generate payment number
   const prefix = settings?.paymentNumberPrefix || "PAY";
-  const paymentNumber = await generateSequentialNumber(prefix, "invoice_payments", "paymentNumber");
+  const paymentNumber = await generateSequentialNumber(
+    prefix,
+    "invoice_payments",
+    "paymentNumber"
+  );
 
   // Get exchange rate
   const exchangeRate = data.exchangeRate || 1;
@@ -864,12 +888,12 @@ export async function recordPayment(
     const invoice = await prisma.generatedInvoice.findUnique({
       where: { id: data.invoiceId },
     });
-    
+
     if (invoice) {
       const totalAmount = toNumber(invoice.totalAmount);
       const newPaidAmount = toNumber(invoice.paidAmount) + amountInBase;
       const newStatus = newPaidAmount >= totalAmount ? "paid" : "partial";
-      
+
       await prisma.generatedInvoice.update({
         where: { id: data.invoiceId },
         data: {
@@ -882,12 +906,12 @@ export async function recordPayment(
     const invoice = await prisma.inventoryInvoice.findUnique({
       where: { id: data.invoiceId },
     });
-    
+
     if (invoice && invoice.totalCost) {
       const totalCost = toNumber(invoice.totalCost);
       const newPaidAmount = toNumber(invoice.paidAmount) + amountInBase;
       const newStatus = newPaidAmount >= totalCost ? "paid" : "partial";
-      
+
       await prisma.inventoryInvoice.update({
         where: { id: data.invoiceId },
         data: {
@@ -902,9 +926,10 @@ export async function recordPayment(
   let journalEntry: JournalEntry | undefined;
   if (settings?.autoGenerateJournalEntries) {
     const cashAccountId = data.bankAccountId || settings.defaultCashAccountId;
-    const receivablesAccountId = data.invoiceType === "generated" 
-      ? settings.defaultReceivablesAccountId 
-      : settings.defaultPayablesAccountId;
+    const receivablesAccountId =
+      data.invoiceType === "generated"
+        ? settings.defaultReceivablesAccountId
+        : settings.defaultPayablesAccountId;
 
     if (cashAccountId && receivablesAccountId) {
       journalEntry = await createJournalEntry(
@@ -916,17 +941,38 @@ export async function recordPayment(
           referenceId: payment.id,
           currencyId: data.currencyId,
           exchangeRate,
-          lines: data.invoiceType === "generated"
-            ? [
-                // Debit Cash, Credit Accounts Receivable
-                { accountId: cashAccountId, description: "Cash received", debitAmount: amountInBase, creditAmount: 0 },
-                { accountId: receivablesAccountId, description: "Reduce receivables", debitAmount: 0, creditAmount: amountInBase },
-              ]
-            : [
-                // Debit Accounts Payable, Credit Cash
-                { accountId: receivablesAccountId, description: "Reduce payables", debitAmount: amountInBase, creditAmount: 0 },
-                { accountId: cashAccountId, description: "Cash paid", debitAmount: 0, creditAmount: amountInBase },
-              ],
+          lines:
+            data.invoiceType === "generated"
+              ? [
+                  // Debit Cash, Credit Accounts Receivable
+                  {
+                    accountId: cashAccountId,
+                    description: "Cash received",
+                    debitAmount: amountInBase,
+                    creditAmount: 0,
+                  },
+                  {
+                    accountId: receivablesAccountId,
+                    description: "Reduce receivables",
+                    debitAmount: 0,
+                    creditAmount: amountInBase,
+                  },
+                ]
+              : [
+                  // Debit Accounts Payable, Credit Cash
+                  {
+                    accountId: receivablesAccountId,
+                    description: "Reduce payables",
+                    debitAmount: amountInBase,
+                    creditAmount: 0,
+                  },
+                  {
+                    accountId: cashAccountId,
+                    description: "Cash paid",
+                    debitAmount: 0,
+                    creditAmount: amountInBase,
+                  },
+                ],
         },
         createdById,
         true // Auto-approve
@@ -973,10 +1019,20 @@ export async function getAccountLedger(
       date: {},
     };
     if (params.startDate) {
-      ((where.journalEntry as Record<string, unknown>).date as Record<string, unknown>).gte = params.startDate;
+      (
+        (where.journalEntry as Record<string, unknown>).date as Record<
+          string,
+          unknown
+        >
+      ).gte = params.startDate;
     }
     if (params.endDate) {
-      ((where.journalEntry as Record<string, unknown>).date as Record<string, unknown>).lte = params.endDate;
+      (
+        (where.journalEntry as Record<string, unknown>).date as Record<
+          string,
+          unknown
+        >
+      ).lte = params.endDate;
     }
   }
 
@@ -996,7 +1052,7 @@ export async function getAccountLedger(
   const entries: LedgerEntry[] = lines.map((line) => {
     const debit = toNumber(line.debitAmount);
     const credit = toNumber(line.creditAmount);
-    
+
     if (account.normalBalance === "debit") {
       runningBalance += debit - credit;
     } else {
@@ -1025,13 +1081,16 @@ export async function getAccountLedger(
     totalDebits,
     totalCredits,
     closingBalance: runningBalance,
-    period: params?.startDate && params?.endDate
-      ? { startDate: params.startDate, endDate: params.endDate }
-      : undefined,
+    period:
+      params?.startDate && params?.endDate
+        ? { startDate: params.startDate, endDate: params.endDate }
+        : undefined,
   };
 }
 
-export async function generateTrialBalance(asOfDate?: Date): Promise<TrialBalance> {
+export async function generateTrialBalance(
+  asOfDate?: Date
+): Promise<TrialBalance> {
   const date = asOfDate || new Date();
 
   const accounts = await prisma.chartOfAccount.findMany({
@@ -1114,8 +1173,20 @@ export async function generateIncomeStatement(
     orderBy: { code: "asc" },
   });
 
-  const revenueItems: { accountId: string; accountCode: string; accountName: string; subCategory?: string; amount: number }[] = [];
-  const expenseItems: { accountId: string; accountCode: string; accountName: string; subCategory?: string; amount: number }[] = [];
+  const revenueItems: {
+    accountId: string;
+    accountCode: string;
+    accountName: string;
+    subCategory?: string;
+    amount: number;
+  }[] = [];
+  const expenseItems: {
+    accountId: string;
+    accountCode: string;
+    accountName: string;
+    subCategory?: string;
+    amount: number;
+  }[] = [];
 
   // Calculate revenue
   for (const account of revenueAccounts) {
@@ -1133,7 +1204,8 @@ export async function generateIncomeStatement(
       },
     });
 
-    const amount = toNumber(result._sum.creditAmount) - toNumber(result._sum.debitAmount);
+    const amount =
+      toNumber(result._sum.creditAmount) - toNumber(result._sum.debitAmount);
     if (Math.abs(amount) > 0.01) {
       revenueItems.push({
         accountId: account.id,
@@ -1161,7 +1233,8 @@ export async function generateIncomeStatement(
       },
     });
 
-    const amount = toNumber(result._sum.debitAmount) - toNumber(result._sum.creditAmount);
+    const amount =
+      toNumber(result._sum.debitAmount) - toNumber(result._sum.creditAmount);
     if (Math.abs(amount) > 0.01) {
       expenseItems.push({
         accountId: account.id,
@@ -1191,12 +1264,19 @@ export async function generateIncomeStatement(
   };
 }
 
-export async function generateBalanceSheet(asOfDate?: Date): Promise<BalanceSheet> {
+export async function generateBalanceSheet(
+  asOfDate?: Date
+): Promise<BalanceSheet> {
   const date = asOfDate || new Date();
-  
+
   // Helper to get account balances
-  async function getAccountBalance(accountId: string, normalBalance: string): Promise<number> {
-    const account = await prisma.chartOfAccount.findUnique({ where: { id: accountId } });
+  async function getAccountBalance(
+    accountId: string,
+    normalBalance: string
+  ): Promise<number> {
+    const account = await prisma.chartOfAccount.findUnique({
+      where: { id: accountId },
+    });
     if (!account) return 0;
 
     const result = await prisma.journalEntryLine.aggregate({
@@ -1231,9 +1311,27 @@ export async function generateBalanceSheet(asOfDate?: Date): Promise<BalanceShee
   });
 
   const assets = {
-    current: [] as { accountId: string; accountCode: string; accountName: string; subCategory?: string; amount: number }[],
-    fixed: [] as { accountId: string; accountCode: string; accountName: string; subCategory?: string; amount: number }[],
-    other: [] as { accountId: string; accountCode: string; accountName: string; subCategory?: string; amount: number }[],
+    current: [] as {
+      accountId: string;
+      accountCode: string;
+      accountName: string;
+      subCategory?: string;
+      amount: number;
+    }[],
+    fixed: [] as {
+      accountId: string;
+      accountCode: string;
+      accountName: string;
+      subCategory?: string;
+      amount: number;
+    }[],
+    other: [] as {
+      accountId: string;
+      accountCode: string;
+      accountName: string;
+      subCategory?: string;
+      amount: number;
+    }[],
     totalCurrent: 0,
     totalFixed: 0,
     totalOther: 0,
@@ -1241,15 +1339,33 @@ export async function generateBalanceSheet(asOfDate?: Date): Promise<BalanceShee
   };
 
   const liabilities = {
-    current: [] as { accountId: string; accountCode: string; accountName: string; subCategory?: string; amount: number }[],
-    longTerm: [] as { accountId: string; accountCode: string; accountName: string; subCategory?: string; amount: number }[],
+    current: [] as {
+      accountId: string;
+      accountCode: string;
+      accountName: string;
+      subCategory?: string;
+      amount: number;
+    }[],
+    longTerm: [] as {
+      accountId: string;
+      accountCode: string;
+      accountName: string;
+      subCategory?: string;
+      amount: number;
+    }[],
     totalCurrent: 0,
     totalLongTerm: 0,
     total: 0,
   };
 
   const equity = {
-    items: [] as { accountId: string; accountCode: string; accountName: string; subCategory?: string; amount: number }[],
+    items: [] as {
+      accountId: string;
+      accountCode: string;
+      accountName: string;
+      subCategory?: string;
+      amount: number;
+    }[],
     retainedEarnings: 0,
     total: 0,
   };
@@ -1353,7 +1469,7 @@ export async function getAccountingSummary(): Promise<AccountingSummary> {
   // Get income statements
   const incomeThisMonth = await generateIncomeStatement(startOfMonth, now);
   const incomeThisYear = await generateIncomeStatement(startOfYear, now);
-  
+
   // Get balance sheet for totals
   const balanceSheet = await generateBalanceSheet(now);
 
@@ -1372,12 +1488,12 @@ export async function getAccountingSummary(): Promise<AccountingSummary> {
   const pendingPaymentsCount = await prisma.invoicePayment.count({
     where: { status: "pending" },
   });
-  
+
   // Get pending journal entries count
   const pendingEntriesCount = await prisma.journalEntry.count({
     where: { status: { in: ["draft", "pending"] } },
   });
-  
+
   // Get current accounting period
   const currentPeriod = await prisma.accountingPeriod.findFirst({
     where: {
@@ -1421,10 +1537,12 @@ export async function getAccountingSummary(): Promise<AccountingSummary> {
     pendingEntries: pendingEntriesCount,
     pendingPaymentsCount,
     // Current Period
-    currentPeriod: currentPeriod as unknown as AccountingSummary["currentPeriod"],
+    currentPeriod:
+      currentPeriod as unknown as AccountingSummary["currentPeriod"],
     // Recent Activity
     recentEntries,
-    recentPayments: recentPayments as unknown as AccountingSummary["recentPayments"],
+    recentPayments:
+      recentPayments as unknown as AccountingSummary["recentPayments"],
   };
 }
 
@@ -1460,24 +1578,22 @@ export async function getAccountingSettings() {
   return settings;
 }
 
-export async function updateAccountingSettings(
-  data: {
-    fiscalYearStart?: number;
-    baseCurrencyId?: string;
-    defaultReceivablesAccountId?: string;
-    defaultPayablesAccountId?: string;
-    defaultCashAccountId?: string;
-    defaultRevenueAccountId?: string;
-    defaultExpenseAccountId?: string;
-    autoGenerateJournalEntries?: boolean;
-    requireApproval?: boolean;
-    allowBackdatedEntries?: boolean;
-    entryNumberPrefix?: string;
-    paymentNumberPrefix?: string;
-  }
-) {
+export async function updateAccountingSettings(data: {
+  fiscalYearStart?: number;
+  baseCurrencyId?: string;
+  defaultReceivablesAccountId?: string;
+  defaultPayablesAccountId?: string;
+  defaultCashAccountId?: string;
+  defaultRevenueAccountId?: string;
+  defaultExpenseAccountId?: string;
+  autoGenerateJournalEntries?: boolean;
+  requireApproval?: boolean;
+  allowBackdatedEntries?: boolean;
+  entryNumberPrefix?: string;
+  paymentNumberPrefix?: string;
+}) {
   const existing = await prisma.accountingSettings.findFirst();
-  
+
   if (existing) {
     return prisma.accountingSettings.update({
       where: { id: existing.id },

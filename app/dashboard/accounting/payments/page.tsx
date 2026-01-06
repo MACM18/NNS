@@ -67,8 +67,12 @@ export default function PaymentsPage() {
         fetch("/api/inventory-invoices?limit=100"),
       ]);
 
-      const generated = generatedRes.ok ? await generatedRes.json() : { data: [] };
-      const inventory = inventoryRes.ok ? await inventoryRes.json() : { data: [] };
+      const generated = generatedRes.ok
+        ? await generatedRes.json()
+        : { data: [] };
+      const inventory = inventoryRes.ok
+        ? await inventoryRes.json()
+        : { data: [] };
 
       // Combine and normalize invoices
       const allInvoices: Invoice[] = [
@@ -115,7 +119,11 @@ export default function PaymentsPage() {
     inv.created_at || inv.createdAt || new Date().toISOString();
 
   const getName = (inv: Invoice) =>
-    inv.customer_name || inv.customerName || inv.vendor_name || inv.vendorName || "N/A";
+    inv.customer_name ||
+    inv.customerName ||
+    inv.vendor_name ||
+    inv.vendorName ||
+    "N/A";
 
   const getRemainingAmount = (inv: Invoice) =>
     getTotalAmount(inv) - getPaidAmount(inv);
@@ -132,23 +140,23 @@ export default function PaymentsPage() {
     switch (status) {
       case "paid":
         return (
-          <Badge className="bg-green-500">
-            <Check className="h-3 w-3 mr-1" />
+          <Badge className='bg-green-500'>
+            <Check className='h-3 w-3 mr-1' />
             Paid
           </Badge>
         );
       case "partial":
         return (
-          <Badge className="bg-yellow-500">
-            <Clock className="h-3 w-3 mr-1" />
+          <Badge className='bg-yellow-500'>
+            <Clock className='h-3 w-3 mr-1' />
             Partial
           </Badge>
         );
       case "unpaid":
       default:
         return (
-          <Badge variant="destructive">
-            <X className="h-3 w-3 mr-1" />
+          <Badge variant='destructive'>
+            <X className='h-3 w-3 mr-1' />
             Unpaid
           </Badge>
         );
@@ -164,7 +172,8 @@ export default function PaymentsPage() {
     const status = getPaymentStatus(inv);
     const matchesStatus =
       statusFilter === "all" ||
-      (statusFilter === "unpaid" && (status === "unpaid" || status === "partial")) ||
+      (statusFilter === "unpaid" &&
+        (status === "unpaid" || status === "partial")) ||
       status === statusFilter;
 
     const matchesType = typeFilter === "all" || inv.type === typeFilter;
@@ -189,60 +198,62 @@ export default function PaymentsPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <h2 className="text-3xl font-bold tracking-tight">Payments</h2>
+      <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+        <h2 className='text-3xl font-bold tracking-tight'>Payments</h2>
         <TableSkeleton rows={10} columns={7} />
       </div>
     );
   }
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
+    <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+      <div className='flex items-center justify-between space-y-2'>
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Payments</h2>
-          <p className="text-muted-foreground">
+          <h2 className='text-3xl font-bold tracking-tight'>Payments</h2>
+          <p className='text-muted-foreground'>
             Record and manage invoice payments
           </p>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className='grid gap-4 md:grid-cols-3'>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Unpaid</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Total Unpaid</CardTitle>
+            <CreditCard className='h-4 w-4 text-muted-foreground' />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
+            <div className='text-2xl font-bold text-red-600'>
               {formatCurrency(totalUnpaid)}
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
-            <Check className="h-4 w-4 text-green-600" />
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Total Paid</CardTitle>
+            <Check className='h-4 w-4 text-green-600' />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className='text-2xl font-bold text-green-600'>
               {formatCurrency(totalPaid)}
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>
               Pending Invoices
             </CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <FileText className='h-4 w-4 text-muted-foreground' />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {filteredInvoices.filter(
-                (inv) => getPaymentStatus(inv) !== "paid"
-              ).length}
+            <div className='text-2xl font-bold'>
+              {
+                filteredInvoices.filter(
+                  (inv) => getPaymentStatus(inv) !== "paid"
+                ).length
+              }
             </div>
           </CardContent>
         </Card>
@@ -250,36 +261,36 @@ export default function PaymentsPage() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+        <CardContent className='p-4'>
+          <div className='flex flex-col sm:flex-row gap-4'>
+            <div className='relative flex-1'>
+              <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4' />
               <Input
-                placeholder="Search invoices..."
+                placeholder='Search invoices...'
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className='pl-10'
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
+              <SelectTrigger className='w-[150px]'>
+                <SelectValue placeholder='Status' />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="unpaid">Unpaid</SelectItem>
-                <SelectItem value="partial">Partial</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value='all'>All Status</SelectItem>
+                <SelectItem value='unpaid'>Unpaid</SelectItem>
+                <SelectItem value='partial'>Partial</SelectItem>
+                <SelectItem value='paid'>Paid</SelectItem>
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Type" />
+              <SelectTrigger className='w-[150px]'>
+                <SelectValue placeholder='Type' />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="generated">Sales Invoices</SelectItem>
-                <SelectItem value="inventory">Purchase Invoices</SelectItem>
+                <SelectItem value='all'>All Types</SelectItem>
+                <SelectItem value='generated'>Sales Invoices</SelectItem>
+                <SelectItem value='inventory'>Purchase Invoices</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -288,7 +299,7 @@ export default function PaymentsPage() {
 
       {/* Invoices Table */}
       <Card>
-        <CardContent className="p-0">
+        <CardContent className='p-0'>
           <Table>
             <TableHeader>
               <TableRow>
@@ -296,9 +307,9 @@ export default function PaymentsPage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Customer/Vendor</TableHead>
                 <TableHead>Date</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Paid</TableHead>
-                <TableHead className="text-right">Remaining</TableHead>
+                <TableHead className='text-right'>Total</TableHead>
+                <TableHead className='text-right'>Paid</TableHead>
+                <TableHead className='text-right'>Remaining</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -308,7 +319,7 @@ export default function PaymentsPage() {
                 <TableRow>
                   <TableCell
                     colSpan={9}
-                    className="text-center text-muted-foreground py-8"
+                    className='text-center text-muted-foreground py-8'
                   >
                     No invoices found
                   </TableCell>
@@ -316,11 +327,11 @@ export default function PaymentsPage() {
               ) : (
                 filteredInvoices.map((invoice) => (
                   <TableRow key={`${invoice.type}-${invoice.id}`}>
-                    <TableCell className="font-mono">
+                    <TableCell className='font-mono'>
                       {getInvoiceNumber(invoice)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">
+                      <Badge variant='outline'>
                         {invoice.type === "generated" ? "Sales" : "Purchase"}
                       </Badge>
                     </TableCell>
@@ -328,15 +339,15 @@ export default function PaymentsPage() {
                     <TableCell>
                       {format(new Date(getCreatedAt(invoice)), "MMM d, yyyy")}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className='text-right font-mono'>
                       {formatCurrency(getTotalAmount(invoice))}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-green-600">
+                    <TableCell className='text-right font-mono text-green-600'>
                       {formatCurrency(getPaidAmount(invoice))}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className='text-right font-mono'>
                       {getRemainingAmount(invoice) > 0 ? (
-                        <span className="text-red-600">
+                        <span className='text-red-600'>
                           {formatCurrency(getRemainingAmount(invoice))}
                         </span>
                       ) : (
@@ -349,11 +360,11 @@ export default function PaymentsPage() {
                     <TableCell>
                       {getPaymentStatus(invoice) !== "paid" && (
                         <Button
-                          variant="outline"
-                          size="sm"
+                          variant='outline'
+                          size='sm'
                           onClick={() => handleRecordPayment(invoice)}
                         >
-                          <CreditCard className="h-4 w-4 mr-1" />
+                          <CreditCard className='h-4 w-4 mr-1' />
                           Pay
                         </Button>
                       )}

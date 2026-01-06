@@ -75,7 +75,15 @@ export async function PUT(
 
     const { id } = await params;
     const body = await req.json();
-    const { name, description, subCategory, parentId, currencyId, isActive, displayOrder } = body;
+    const {
+      name,
+      description,
+      subCategory,
+      parentId,
+      currencyId,
+      isActive,
+      displayOrder,
+    } = body;
 
     const account = await updateAccount(id, {
       name,
@@ -128,7 +136,10 @@ export async function DELETE(
 
     if (hasTransactions > 0) {
       return NextResponse.json(
-        { error: "Cannot delete account with existing transactions. Deactivate it instead." },
+        {
+          error:
+            "Cannot delete account with existing transactions. Deactivate it instead.",
+        },
         { status: 400 }
       );
     }

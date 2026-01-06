@@ -6,7 +6,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrency, hasAccountingAccess, updateExchangeRate } from "@/lib/accounting-service";
+import {
+  getCurrency,
+  hasAccountingAccess,
+  updateExchangeRate,
+} from "@/lib/accounting-service";
 
 export async function GET(
   req: NextRequest,
@@ -34,7 +38,10 @@ export async function GET(
     const currency = await getCurrency(id);
 
     if (!currency) {
-      return NextResponse.json({ error: "Currency not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Currency not found" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({ data: currency });
@@ -71,7 +78,8 @@ export async function PUT(
 
     const { id } = await params;
     const body = await req.json();
-    const { name, symbol, exchangeRate, isBase, isActive, decimalPlaces } = body;
+    const { name, symbol, exchangeRate, isBase, isActive, decimalPlaces } =
+      body;
 
     // If setting as base currency, unset other base currencies
     if (isBase) {
@@ -146,7 +154,10 @@ export async function DELETE(
 
     if (usedInJournals > 0 || usedInPayments > 0) {
       return NextResponse.json(
-        { error: "Cannot delete currency with existing transactions. Deactivate it instead." },
+        {
+          error:
+            "Cannot delete currency with existing transactions. Deactivate it instead.",
+        },
         { status: 400 }
       );
     }

@@ -6,7 +6,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { hasAccountingAccess, initializeAccounting } from "@/lib/accounting-service";
+import {
+  hasAccountingAccess,
+  initializeAccounting,
+} from "@/lib/accounting-service";
 
 export async function POST() {
   try {

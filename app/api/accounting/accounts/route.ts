@@ -84,7 +84,18 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { code, name, description, category, subCategory, parentId, currencyId, normalBalance, openingBalance, displayOrder } = body;
+    const {
+      code,
+      name,
+      description,
+      category,
+      subCategory,
+      parentId,
+      currencyId,
+      normalBalance,
+      openingBalance,
+      displayOrder,
+    } = body;
 
     if (!code || !name || !category) {
       return NextResponse.json(

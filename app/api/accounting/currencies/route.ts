@@ -62,7 +62,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { code, name, symbol, exchangeRate, isBase, isActive, decimalPlaces } = body;
+    const {
+      code,
+      name,
+      symbol,
+      exchangeRate,
+      isBase,
+      isActive,
+      decimalPlaces,
+    } = body;
 
     if (!code || !name || !symbol) {
       return NextResponse.json(

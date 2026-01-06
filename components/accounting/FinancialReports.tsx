@@ -63,9 +63,8 @@ export function FinancialReports({
 
   // Report data
   const [trialBalance, setTrialBalance] = useState<TrialBalance | null>(null);
-  const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(
-    null
-  );
+  const [incomeStatement, setIncomeStatement] =
+    useState<IncomeStatement | null>(null);
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null);
 
   const { addNotification } = useNotification();
@@ -155,19 +154,27 @@ export function FinancialReports({
         trialBalance.rows
           .map(
             (row) =>
-              `${row.accountCode},${row.accountName},${row.debitBalance.toFixed(2)},${row.creditBalance.toFixed(2)}`
+              `${row.accountCode},${row.accountName},${row.debitBalance.toFixed(
+                2
+              )},${row.creditBalance.toFixed(2)}`
           )
           .join("\n") +
-        `\nTotals,,${trialBalance.totalDebits.toFixed(2)},${trialBalance.totalCredits.toFixed(2)}`;
+        `\nTotals,,${trialBalance.totalDebits.toFixed(
+          2
+        )},${trialBalance.totalCredits.toFixed(2)}`;
     } else if (activeReport === "income-statement" && incomeStatement) {
       csvContent =
         "Section,Account,Amount\n" +
         incomeStatement.revenue.items
-          .map((item) => `Revenue,${item.accountName},${item.amount.toFixed(2)}`)
+          .map(
+            (item) => `Revenue,${item.accountName},${item.amount.toFixed(2)}`
+          )
           .join("\n") +
         `\nTotal Revenue,,${incomeStatement.revenue.total.toFixed(2)}\n` +
         incomeStatement.expenses.items
-          .map((item) => `Expenses,${item.accountName},${item.amount.toFixed(2)}`)
+          .map(
+            (item) => `Expenses,${item.accountName},${item.amount.toFixed(2)}`
+          )
           .join("\n") +
         `\nTotal Expenses,,${incomeStatement.expenses.total.toFixed(2)}\n` +
         `\nNet Income,,${incomeStatement.netIncome.toFixed(2)}`;
@@ -188,7 +195,10 @@ export function FinancialReports({
           .join("\n") +
         `\nTotal Assets,,${balanceSheet.assets.total.toFixed(2)}\n` +
         allLiabilities
-          .map((item) => `Liabilities,${item.accountName},${item.amount.toFixed(2)}`)
+          .map(
+            (item) =>
+              `Liabilities,${item.accountName},${item.amount.toFixed(2)}`
+          )
           .join("\n") +
         `\nTotal Liabilities,,${balanceSheet.liabilities.total.toFixed(2)}\n` +
         balanceSheet.equity.items
@@ -215,16 +225,16 @@ export function FinancialReports({
   };
 
   return (
-    <div className="space-y-6">
+    <div className='space-y-6'>
       {/* Controls */}
-      <Card className="print:hidden">
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex-1 space-y-2">
+      <Card className='print:hidden'>
+        <CardContent className='p-4'>
+          <div className='flex flex-col md:flex-row gap-4 items-end'>
+            <div className='flex-1 space-y-2'>
               <Label>Accounting Period</Label>
               <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select period" />
+                  <SelectValue placeholder='Select period' />
                 </SelectTrigger>
                 <SelectContent>
                   {periods.map((period) => (
@@ -235,50 +245,50 @@ export function FinancialReports({
                 </SelectContent>
               </Select>
             </div>
-            <div className="text-muted-foreground">or</div>
-            <div className="flex gap-2">
-              <div className="space-y-2">
+            <div className='text-muted-foreground'>or</div>
+            <div className='flex gap-2'>
+              <div className='space-y-2'>
                 <Label>From Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant='outline'
                       className={cn(
                         "w-[150px] justify-start text-left font-normal",
                         !dateFrom && "text-muted-foreground"
                       )}
                     >
-                      <Calendar className="mr-2 h-4 w-4" />
+                      <Calendar className='mr-2 h-4 w-4' />
                       {dateFrom ? format(dateFrom, "MMM d, yyyy") : "Select"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className='w-auto p-0'>
                     <CalendarComponent
-                      mode="single"
+                      mode='single'
                       selected={dateFrom}
                       onSelect={setDateFrom}
                     />
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <Label>To Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant='outline'
                       className={cn(
                         "w-[150px] justify-start text-left font-normal",
                         !dateTo && "text-muted-foreground"
                       )}
                     >
-                      <Calendar className="mr-2 h-4 w-4" />
+                      <Calendar className='mr-2 h-4 w-4' />
                       {dateTo ? format(dateTo, "MMM d, yyyy") : "Select"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className='w-auto p-0'>
                     <CalendarComponent
-                      mode="single"
+                      mode='single'
                       selected={dateTo}
                       onSelect={setDateTo}
                     />
@@ -286,12 +296,12 @@ export function FinancialReports({
                 </Popover>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="icon" onClick={handleExport}>
-                <Download className="h-4 w-4" />
+            <div className='flex gap-2'>
+              <Button variant='outline' size='icon' onClick={handleExport}>
+                <Download className='h-4 w-4' />
               </Button>
-              <Button variant="outline" size="icon" onClick={handlePrint}>
-                <Printer className="h-4 w-4" />
+              <Button variant='outline' size='icon' onClick={handlePrint}>
+                <Printer className='h-4 w-4' />
               </Button>
             </div>
           </div>
@@ -302,12 +312,12 @@ export function FinancialReports({
       <Tabs
         value={activeReport}
         onValueChange={(v) => setActiveReport(v as ReportType)}
-        className="print:hidden"
+        className='print:hidden'
       >
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="trial-balance">Trial Balance</TabsTrigger>
-          <TabsTrigger value="income-statement">Income Statement</TabsTrigger>
-          <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
+        <TabsList className='grid w-full grid-cols-3'>
+          <TabsTrigger value='trial-balance'>Trial Balance</TabsTrigger>
+          <TabsTrigger value='income-statement'>Income Statement</TabsTrigger>
+          <TabsTrigger value='balance-sheet'>Balance Sheet</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -319,9 +329,10 @@ export function FinancialReports({
           {activeReport === "trial-balance" && trialBalance && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-center">Trial Balance</CardTitle>
-                <p className="text-center text-sm text-muted-foreground">
-                  As of {format(new Date(trialBalance.asOfDate), "MMMM d, yyyy")}
+                <CardTitle className='text-center'>Trial Balance</CardTitle>
+                <p className='text-center text-sm text-muted-foreground'>
+                  As of{" "}
+                  {format(new Date(trialBalance.asOfDate), "MMMM d, yyyy")}
                 </p>
               </CardHeader>
               <CardContent>
@@ -330,47 +341,51 @@ export function FinancialReports({
                     <TableRow>
                       <TableHead>Account Code</TableHead>
                       <TableHead>Account Name</TableHead>
-                      <TableHead className="text-right">Debit</TableHead>
-                      <TableHead className="text-right">Credit</TableHead>
+                      <TableHead className='text-right'>Debit</TableHead>
+                      <TableHead className='text-right'>Credit</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {trialBalance.rows.map((row) => (
                       <TableRow key={row.accountId}>
-                        <TableCell className="font-mono">
+                        <TableCell className='font-mono'>
                           {row.accountCode}
                         </TableCell>
                         <TableCell>{row.accountName}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {row.debitBalance > 0 ? formatCurrency(row.debitBalance) : "-"}
+                        <TableCell className='text-right font-mono'>
+                          {row.debitBalance > 0
+                            ? formatCurrency(row.debitBalance)
+                            : "-"}
                         </TableCell>
-                        <TableCell className="text-right font-mono">
+                        <TableCell className='text-right font-mono'>
                           {row.creditBalance > 0
                             ? formatCurrency(row.creditBalance)
                             : "-"}
                         </TableCell>
                       </TableRow>
                     ))}
-                    <TableRow className="font-bold border-t-2">
+                    <TableRow className='font-bold border-t-2'>
                       <TableCell colSpan={2}>Totals</TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className='text-right font-mono'>
                         {formatCurrency(trialBalance.totalDebits)}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className='text-right font-mono'>
                         {formatCurrency(trialBalance.totalCredits)}
                       </TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
                 {trialBalance.isBalanced ? (
-                  <p className="text-center text-green-600 mt-4">
+                  <p className='text-center text-green-600 mt-4'>
                     ✓ Trial Balance is in balance
                   </p>
                 ) : (
-                  <p className="text-center text-red-600 mt-4">
+                  <p className='text-center text-red-600 mt-4'>
                     ✗ Trial Balance is out of balance by{" "}
                     {formatCurrency(
-                      Math.abs(trialBalance.totalDebits - trialBalance.totalCredits)
+                      Math.abs(
+                        trialBalance.totalDebits - trialBalance.totalCredits
+                      )
                     )}
                   </p>
                 )}
@@ -382,32 +397,34 @@ export function FinancialReports({
           {activeReport === "income-statement" && incomeStatement && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-center">Income Statement</CardTitle>
-                <p className="text-center text-sm text-muted-foreground">
+                <CardTitle className='text-center'>Income Statement</CardTitle>
+                <p className='text-center text-sm text-muted-foreground'>
                   For the period ending{" "}
                   {format(new Date(incomeStatement.periodEnd), "MMMM d, yyyy")}
                 </p>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className='space-y-6'>
                 {/* Revenue Section */}
                 <div>
-                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-2">
-                    <TrendingUp className="h-5 w-5 text-green-600" />
+                  <h3 className='font-semibold text-lg flex items-center gap-2 mb-2'>
+                    <TrendingUp className='h-5 w-5 text-green-600' />
                     Revenue
                   </h3>
                   <Table>
                     <TableBody>
                       {incomeStatement.revenue.items.map((item) => (
                         <TableRow key={item.accountId}>
-                          <TableCell className="pl-8">{item.accountName}</TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className='pl-8'>
+                            {item.accountName}
+                          </TableCell>
+                          <TableCell className='text-right font-mono'>
                             {formatCurrency(item.amount)}
                           </TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="font-semibold border-t">
-                        <TableCell className="pl-4">Total Revenue</TableCell>
-                        <TableCell className="text-right font-mono text-green-600">
+                      <TableRow className='font-semibold border-t'>
+                        <TableCell className='pl-4'>Total Revenue</TableCell>
+                        <TableCell className='text-right font-mono text-green-600'>
                           {formatCurrency(incomeStatement.revenue.total)}
                         </TableCell>
                       </TableRow>
@@ -417,23 +434,25 @@ export function FinancialReports({
 
                 {/* Expenses Section */}
                 <div>
-                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-2">
-                    <TrendingDown className="h-5 w-5 text-red-600" />
+                  <h3 className='font-semibold text-lg flex items-center gap-2 mb-2'>
+                    <TrendingDown className='h-5 w-5 text-red-600' />
                     Expenses
                   </h3>
                   <Table>
                     <TableBody>
                       {incomeStatement.expenses.items.map((item) => (
                         <TableRow key={item.accountId}>
-                          <TableCell className="pl-8">{item.accountName}</TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className='pl-8'>
+                            {item.accountName}
+                          </TableCell>
+                          <TableCell className='text-right font-mono'>
                             {formatCurrency(item.amount)}
                           </TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="font-semibold border-t">
-                        <TableCell className="pl-4">Total Expenses</TableCell>
-                        <TableCell className="text-right font-mono text-red-600">
+                      <TableRow className='font-semibold border-t'>
+                        <TableCell className='pl-4'>Total Expenses</TableCell>
+                        <TableCell className='text-right font-mono text-red-600'>
                           {formatCurrency(incomeStatement.expenses.total)}
                         </TableCell>
                       </TableRow>
@@ -442,10 +461,10 @@ export function FinancialReports({
                 </div>
 
                 {/* Net Income */}
-                <div className="border-t-2 pt-4">
-                  <div className="flex justify-between items-center text-xl font-bold">
-                    <span className="flex items-center gap-2">
-                      <DollarSign className="h-6 w-6" />
+                <div className='border-t-2 pt-4'>
+                  <div className='flex justify-between items-center text-xl font-bold'>
+                    <span className='flex items-center gap-2'>
+                      <DollarSign className='h-6 w-6' />
                       Net Income
                     </span>
                     <span
@@ -468,16 +487,17 @@ export function FinancialReports({
           {activeReport === "balance-sheet" && balanceSheet && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-center">Balance Sheet</CardTitle>
-                <p className="text-center text-sm text-muted-foreground">
-                  As of {format(new Date(balanceSheet.asOfDate), "MMMM d, yyyy")}
+                <CardTitle className='text-center'>Balance Sheet</CardTitle>
+                <p className='text-center text-sm text-muted-foreground'>
+                  As of{" "}
+                  {format(new Date(balanceSheet.asOfDate), "MMMM d, yyyy")}
                 </p>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 gap-8">
+                <div className='grid md:grid-cols-2 gap-8'>
                   {/* Assets */}
                   <div>
-                    <h3 className="font-semibold text-lg border-b pb-2 mb-2">
+                    <h3 className='font-semibold text-lg border-b pb-2 mb-2'>
                       Assets
                     </h3>
                     <Table>
@@ -486,14 +506,19 @@ export function FinancialReports({
                         {balanceSheet.assets.current.length > 0 && (
                           <>
                             <TableRow>
-                              <TableCell colSpan={2} className="font-medium text-muted-foreground">
+                              <TableCell
+                                colSpan={2}
+                                className='font-medium text-muted-foreground'
+                              >
                                 Current Assets
                               </TableCell>
                             </TableRow>
                             {balanceSheet.assets.current.map((item) => (
                               <TableRow key={item.accountId}>
-                                <TableCell className="pl-6">{item.accountName}</TableCell>
-                                <TableCell className="text-right font-mono">
+                                <TableCell className='pl-6'>
+                                  {item.accountName}
+                                </TableCell>
+                                <TableCell className='text-right font-mono'>
                                   {formatCurrency(item.amount)}
                                 </TableCell>
                               </TableRow>
@@ -504,14 +529,19 @@ export function FinancialReports({
                         {balanceSheet.assets.fixed.length > 0 && (
                           <>
                             <TableRow>
-                              <TableCell colSpan={2} className="font-medium text-muted-foreground">
+                              <TableCell
+                                colSpan={2}
+                                className='font-medium text-muted-foreground'
+                              >
                                 Fixed Assets
                               </TableCell>
                             </TableRow>
                             {balanceSheet.assets.fixed.map((item) => (
                               <TableRow key={item.accountId}>
-                                <TableCell className="pl-6">{item.accountName}</TableCell>
-                                <TableCell className="text-right font-mono">
+                                <TableCell className='pl-6'>
+                                  {item.accountName}
+                                </TableCell>
+                                <TableCell className='text-right font-mono'>
                                   {formatCurrency(item.amount)}
                                 </TableCell>
                               </TableRow>
@@ -522,23 +552,28 @@ export function FinancialReports({
                         {balanceSheet.assets.other.length > 0 && (
                           <>
                             <TableRow>
-                              <TableCell colSpan={2} className="font-medium text-muted-foreground">
+                              <TableCell
+                                colSpan={2}
+                                className='font-medium text-muted-foreground'
+                              >
                                 Other Assets
                               </TableCell>
                             </TableRow>
                             {balanceSheet.assets.other.map((item) => (
                               <TableRow key={item.accountId}>
-                                <TableCell className="pl-6">{item.accountName}</TableCell>
-                                <TableCell className="text-right font-mono">
+                                <TableCell className='pl-6'>
+                                  {item.accountName}
+                                </TableCell>
+                                <TableCell className='text-right font-mono'>
                                   {formatCurrency(item.amount)}
                                 </TableCell>
                               </TableRow>
                             ))}
                           </>
                         )}
-                        <TableRow className="font-bold border-t-2">
+                        <TableRow className='font-bold border-t-2'>
                           <TableCell>Total Assets</TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className='text-right font-mono'>
                             {formatCurrency(balanceSheet.assets.total)}
                           </TableCell>
                         </TableRow>
@@ -548,7 +583,7 @@ export function FinancialReports({
 
                   {/* Liabilities & Equity */}
                   <div>
-                    <h3 className="font-semibold text-lg border-b pb-2 mb-2">
+                    <h3 className='font-semibold text-lg border-b pb-2 mb-2'>
                       Liabilities
                     </h3>
                     <Table>
@@ -557,14 +592,19 @@ export function FinancialReports({
                         {balanceSheet.liabilities.current.length > 0 && (
                           <>
                             <TableRow>
-                              <TableCell colSpan={2} className="font-medium text-muted-foreground">
+                              <TableCell
+                                colSpan={2}
+                                className='font-medium text-muted-foreground'
+                              >
                                 Current Liabilities
                               </TableCell>
                             </TableRow>
                             {balanceSheet.liabilities.current.map((item) => (
                               <TableRow key={item.accountId}>
-                                <TableCell className="pl-6">{item.accountName}</TableCell>
-                                <TableCell className="text-right font-mono">
+                                <TableCell className='pl-6'>
+                                  {item.accountName}
+                                </TableCell>
+                                <TableCell className='text-right font-mono'>
                                   {formatCurrency(item.amount)}
                                 </TableCell>
                               </TableRow>
@@ -575,59 +615,70 @@ export function FinancialReports({
                         {balanceSheet.liabilities.longTerm.length > 0 && (
                           <>
                             <TableRow>
-                              <TableCell colSpan={2} className="font-medium text-muted-foreground">
+                              <TableCell
+                                colSpan={2}
+                                className='font-medium text-muted-foreground'
+                              >
                                 Long-term Liabilities
                               </TableCell>
                             </TableRow>
                             {balanceSheet.liabilities.longTerm.map((item) => (
                               <TableRow key={item.accountId}>
-                                <TableCell className="pl-6">{item.accountName}</TableCell>
-                                <TableCell className="text-right font-mono">
+                                <TableCell className='pl-6'>
+                                  {item.accountName}
+                                </TableCell>
+                                <TableCell className='text-right font-mono'>
                                   {formatCurrency(item.amount)}
                                 </TableCell>
                               </TableRow>
                             ))}
                           </>
                         )}
-                        <TableRow className="font-semibold border-t">
+                        <TableRow className='font-semibold border-t'>
                           <TableCell>Total Liabilities</TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className='text-right font-mono'>
                             {formatCurrency(balanceSheet.liabilities.total)}
                           </TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>
 
-                    <h3 className="font-semibold text-lg border-b pb-2 mb-2 mt-6">
+                    <h3 className='font-semibold text-lg border-b pb-2 mb-2 mt-6'>
                       Equity
                     </h3>
                     <Table>
                       <TableBody>
                         {balanceSheet.equity.items.map((item) => (
                           <TableRow key={item.accountId}>
-                            <TableCell className="pl-4">{item.accountName}</TableCell>
-                            <TableCell className="text-right font-mono">
+                            <TableCell className='pl-4'>
+                              {item.accountName}
+                            </TableCell>
+                            <TableCell className='text-right font-mono'>
                               {formatCurrency(item.amount)}
                             </TableCell>
                           </TableRow>
                         ))}
                         {balanceSheet.equity.retainedEarnings !== 0 && (
                           <TableRow>
-                            <TableCell className="pl-4">Retained Earnings</TableCell>
-                            <TableCell className="text-right font-mono">
-                              {formatCurrency(balanceSheet.equity.retainedEarnings)}
+                            <TableCell className='pl-4'>
+                              Retained Earnings
+                            </TableCell>
+                            <TableCell className='text-right font-mono'>
+                              {formatCurrency(
+                                balanceSheet.equity.retainedEarnings
+                              )}
                             </TableCell>
                           </TableRow>
                         )}
-                        <TableRow className="font-semibold border-t">
+                        <TableRow className='font-semibold border-t'>
                           <TableCell>Total Equity</TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className='text-right font-mono'>
                             {formatCurrency(balanceSheet.equity.total)}
                           </TableCell>
                         </TableRow>
-                        <TableRow className="font-bold border-t-2">
+                        <TableRow className='font-bold border-t-2'>
                           <TableCell>Total Liabilities & Equity</TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className='text-right font-mono'>
                             {formatCurrency(
                               balanceSheet.liabilities.total +
                                 balanceSheet.equity.total
@@ -640,13 +691,13 @@ export function FinancialReports({
                 </div>
 
                 {/* Balance Check */}
-                <div className="mt-6 text-center">
+                <div className='mt-6 text-center'>
                   {balanceSheet.isBalanced ? (
-                    <p className="text-green-600">
+                    <p className='text-green-600'>
                       ✓ Balance Sheet is in balance
                     </p>
                   ) : (
-                    <p className="text-red-600">
+                    <p className='text-red-600'>
                       ✗ Balance Sheet is out of balance by{" "}
                       {formatCurrency(
                         Math.abs(

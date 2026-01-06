@@ -6,7 +6,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getAccountingSummary, hasAccountingAccess } from "@/lib/accounting-service";
+import {
+  getAccountingSummary,
+  hasAccountingAccess,
+} from "@/lib/accounting-service";
 
 export async function GET() {
   try {

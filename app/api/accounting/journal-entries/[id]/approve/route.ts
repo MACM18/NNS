@@ -6,7 +6,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { approveJournalEntry, hasAccountingAccess } from "@/lib/accounting-service";
+import {
+  approveJournalEntry,
+  hasAccountingAccess,
+} from "@/lib/accounting-service";
 
 export async function POST(
   req: NextRequest,
@@ -45,7 +48,10 @@ export async function POST(
     return NextResponse.json({ data: entry });
   } catch (error) {
     console.error("Error approving journal entry:", error);
-    const message = error instanceof Error ? error.message : "Failed to approve journal entry";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to approve journal entry";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

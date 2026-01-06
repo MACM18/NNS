@@ -149,7 +149,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { signOut, role, loading } = useAuth();
 
   // Check if user has accounting access (moderator, admin)
-  const hasAccountingAccess = !loading && role && ["admin", "moderator"].includes(role);
+  const hasAccountingAccess =
+    !loading && role && ["admin", "moderator"].includes(role);
 
   return (
     <Sidebar {...props}>
@@ -188,7 +189,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        
+
         {/* Accounting Section - Only visible to moderators and admins */}
         {hasAccountingAccess && (
           <>
@@ -199,9 +200,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarMenu>
                   {accountingItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton 
-                        asChild 
-                        isActive={pathname === item.url || (item.url !== "/dashboard/accounting" && pathname.startsWith(item.url))}
+                      <SidebarMenuButton
+                        asChild
+                        isActive={
+                          pathname === item.url ||
+                          (item.url !== "/dashboard/accounting" &&
+                            pathname.startsWith(item.url))
+                        }
                       >
                         <Link href={item.url}>
                           <item.icon />
@@ -215,7 +220,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarGroup>
           </>
         )}
-        
+
         <SidebarSeparator />
         <SidebarGroup>
           <SidebarGroupLabel>Settings</SidebarGroupLabel>

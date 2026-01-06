@@ -57,7 +57,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNotification } from "@/contexts/notification-context";
 import { cn } from "@/lib/utils";
-import type { AccountingPeriod, Currency, AccountingSettings } from "@/types/accounting";
+import type {
+  AccountingPeriod,
+  Currency,
+  AccountingSettings,
+} from "@/types/accounting";
 
 export default function AccountingSettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -317,9 +321,9 @@ export default function AccountingSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+        <div className='flex items-center justify-center h-64'>
+          <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
         </div>
       </div>
     );
@@ -327,31 +331,31 @@ export default function AccountingSettingsPage() {
 
   if (!isInitialized) {
     return (
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <Card className="max-w-lg mx-auto">
-          <CardHeader className="text-center">
-            <Settings className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+      <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+        <Card className='max-w-lg mx-auto'>
+          <CardHeader className='text-center'>
+            <Settings className='h-12 w-12 mx-auto text-muted-foreground mb-4' />
             <CardTitle>Initialize Accounting</CardTitle>
             <CardDescription>
               Set up your chart of accounts, currencies, and accounting periods
               to get started with the accounting module.
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-center">
+          <CardContent className='text-center'>
             <Button onClick={handleInitialize} disabled={initializing}>
               {initializing ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className='h-4 w-4 mr-2 animate-spin' />
                   Initializing...
                 </>
               ) : (
                 <>
-                  <Check className="h-4 w-4 mr-2" />
+                  <Check className='h-4 w-4 mr-2' />
                   Initialize Accounting
                 </>
               )}
             </Button>
-            <p className="text-sm text-muted-foreground mt-4">
+            <p className='text-sm text-muted-foreground mt-4'>
               This will create default accounts, currencies (LKR), and the
               current accounting period.
             </p>
@@ -362,39 +366,39 @@ export default function AccountingSettingsPage() {
   }
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between">
+    <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+      <div className='flex items-center justify-between'>
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">
+          <h2 className='text-3xl font-bold tracking-tight'>
             Accounting Settings
           </h2>
-          <p className="text-muted-foreground">
+          <p className='text-muted-foreground'>
             Manage periods, currencies, and system settings
           </p>
         </div>
       </div>
 
-      <Tabs defaultValue="periods" className="space-y-4">
+      <Tabs defaultValue='periods' className='space-y-4'>
         <TabsList>
-          <TabsTrigger value="periods">
-            <Calendar className="h-4 w-4 mr-2" />
+          <TabsTrigger value='periods'>
+            <Calendar className='h-4 w-4 mr-2' />
             Periods
           </TabsTrigger>
-          <TabsTrigger value="currencies">
-            <Globe className="h-4 w-4 mr-2" />
+          <TabsTrigger value='currencies'>
+            <Globe className='h-4 w-4 mr-2' />
             Currencies
           </TabsTrigger>
-          <TabsTrigger value="general">
-            <Settings className="h-4 w-4 mr-2" />
+          <TabsTrigger value='general'>
+            <Settings className='h-4 w-4 mr-2' />
             General
           </TabsTrigger>
         </TabsList>
 
         {/* Periods Tab */}
-        <TabsContent value="periods" className="space-y-4">
+        <TabsContent value='periods' className='space-y-4'>
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
+              <div className='flex justify-between items-center'>
                 <div>
                   <CardTitle>Accounting Periods</CardTitle>
                   <CardDescription>
@@ -402,7 +406,7 @@ export default function AccountingSettingsPage() {
                   </CardDescription>
                 </div>
                 <Button onClick={() => setPeriodModalOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className='h-4 w-4 mr-2' />
                   Add Period
                 </Button>
               </div>
@@ -423,7 +427,7 @@ export default function AccountingSettingsPage() {
                     <TableRow>
                       <TableCell
                         colSpan={5}
-                        className="text-center text-muted-foreground"
+                        className='text-center text-muted-foreground'
                       >
                         No periods defined
                       </TableCell>
@@ -431,7 +435,7 @@ export default function AccountingSettingsPage() {
                   ) : (
                     periods.map((period) => (
                       <TableRow key={period.id}>
-                        <TableCell className="font-medium">
+                        <TableCell className='font-medium'>
                           {period.name}
                         </TableCell>
                         <TableCell>
@@ -442,13 +446,13 @@ export default function AccountingSettingsPage() {
                         </TableCell>
                         <TableCell>
                           {period.isClosed ? (
-                            <Badge variant="secondary">
-                              <Lock className="h-3 w-3 mr-1" />
+                            <Badge variant='secondary'>
+                              <Lock className='h-3 w-3 mr-1' />
                               Closed
                             </Badge>
                           ) : (
-                            <Badge className="bg-green-500">
-                              <Unlock className="h-3 w-3 mr-1" />
+                            <Badge className='bg-green-500'>
+                              <Unlock className='h-3 w-3 mr-1' />
                               Open
                             </Badge>
                           )}
@@ -456,8 +460,8 @@ export default function AccountingSettingsPage() {
                         <TableCell>
                           {!period.isClosed && (
                             <Button
-                              variant="outline"
-                              size="sm"
+                              variant='outline'
+                              size='sm'
                               onClick={() => setClosePeriodId(period.id)}
                             >
                               Close Period
@@ -474,10 +478,10 @@ export default function AccountingSettingsPage() {
         </TabsContent>
 
         {/* Currencies Tab */}
-        <TabsContent value="currencies" className="space-y-4">
+        <TabsContent value='currencies' className='space-y-4'>
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
+              <div className='flex justify-between items-center'>
                 <div>
                   <CardTitle>Currencies</CardTitle>
                   <CardDescription>
@@ -485,7 +489,7 @@ export default function AccountingSettingsPage() {
                   </CardDescription>
                 </div>
                 <Button onClick={() => setCurrencyModalOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className='h-4 w-4 mr-2' />
                   Add Currency
                 </Button>
               </div>
@@ -506,7 +510,7 @@ export default function AccountingSettingsPage() {
                     <TableRow>
                       <TableCell
                         colSpan={5}
-                        className="text-center text-muted-foreground"
+                        className='text-center text-muted-foreground'
                       >
                         No currencies defined
                       </TableCell>
@@ -514,21 +518,21 @@ export default function AccountingSettingsPage() {
                   ) : (
                     currencies.map((currency) => (
                       <TableRow key={currency.id}>
-                        <TableCell className="font-mono font-medium">
+                        <TableCell className='font-mono font-medium'>
                           {currency.code}
                         </TableCell>
                         <TableCell>{currency.name}</TableCell>
                         <TableCell>{currency.symbol}</TableCell>
-                        <TableCell className="font-mono">
-                          {currency.exchangeRate.toFixed(4)}
+                        <TableCell className='font-mono'>
+                          {Number(currency.exchangeRate).toFixed(4)}
                         </TableCell>
                         <TableCell>
                           {currency.isDefault ? (
-                            <Badge className="bg-blue-500">Default</Badge>
+                            <Badge className='bg-blue-500'>Default</Badge>
                           ) : currency.isActive ? (
-                            <Badge variant="outline">Active</Badge>
+                            <Badge variant='outline'>Active</Badge>
                           ) : (
-                            <Badge variant="secondary">Inactive</Badge>
+                            <Badge variant='secondary'>Inactive</Badge>
                           )}
                         </TableCell>
                       </TableRow>
@@ -541,7 +545,7 @@ export default function AccountingSettingsPage() {
         </TabsContent>
 
         {/* General Tab */}
-        <TabsContent value="general" className="space-y-4">
+        <TabsContent value='general' className='space-y-4'>
           <Card>
             <CardHeader>
               <CardTitle>General Settings</CardTitle>
@@ -549,11 +553,11 @@ export default function AccountingSettingsPage() {
                 Configure accounting system behavior
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
+            <CardContent className='space-y-6'>
+              <div className='flex items-center justify-between'>
+                <div className='space-y-0.5'>
                   <Label>Auto-approve Journal Entries</Label>
-                  <p className="text-sm text-muted-foreground">
+                  <p className='text-sm text-muted-foreground'>
                     Automatically approve journal entries when created
                   </p>
                 </div>
@@ -565,10 +569,10 @@ export default function AccountingSettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
+              <div className='flex items-center justify-between'>
+                <div className='space-y-0.5'>
                   <Label>Require Entry Approval</Label>
-                  <p className="text-sm text-muted-foreground">
+                  <p className='text-sm text-muted-foreground'>
                     Require approval before journal entries affect balances
                   </p>
                 </div>
@@ -580,7 +584,7 @@ export default function AccountingSettingsPage() {
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <Label>Default Currency</Label>
                 <Select
                   value={settings?.defaultCurrencyId || ""}
@@ -588,8 +592,8 @@ export default function AccountingSettingsPage() {
                     handleUpdateSettings({ defaultCurrencyId: value })
                   }
                 >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Select currency" />
+                  <SelectTrigger className='w-[200px]'>
+                    <SelectValue placeholder='Select currency' />
                   </SelectTrigger>
                   <SelectContent>
                     {currencies.map((currency) => (
@@ -601,7 +605,7 @@ export default function AccountingSettingsPage() {
                 </Select>
               </div>
 
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <Label>Fiscal Year Start</Label>
                 <Select
                   value={settings?.fiscalYearStart?.toString() || "1"}
@@ -609,8 +613,8 @@ export default function AccountingSettingsPage() {
                     handleUpdateSettings({ fiscalYearStart: parseInt(value) })
                   }
                 >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Select month" />
+                  <SelectTrigger className='w-[200px]'>
+                    <SelectValue placeholder='Select month' />
                   </SelectTrigger>
                   <SelectContent>
                     {[
@@ -639,19 +643,17 @@ export default function AccountingSettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-yellow-600" />
+              <CardTitle className='flex items-center gap-2'>
+                <AlertCircle className='h-5 w-5 text-yellow-600' />
                 Danger Zone
               </CardTitle>
-              <CardDescription>
-                These actions are irreversible
-              </CardDescription>
+              <CardDescription>These actions are irreversible</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="destructive" disabled>
+              <Button variant='destructive' disabled>
                 Reset Accounting Data
               </Button>
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className='text-sm text-muted-foreground mt-2'>
                 This feature is disabled for safety. Contact support if you need
                 to reset accounting data.
               </p>
@@ -669,38 +671,38 @@ export default function AccountingSettingsPage() {
               Add a new accounting period for financial reporting
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
+          <div className='space-y-4 py-4'>
+            <div className='space-y-2'>
               <Label>Period Name</Label>
               <Input
                 value={periodForm.name}
                 onChange={(e) =>
                   setPeriodForm({ ...periodForm, name: e.target.value })
                 }
-                placeholder="e.g., Q1 2024, January 2024"
+                placeholder='e.g., Q1 2024, January 2024'
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className='grid grid-cols-2 gap-4'>
+              <div className='space-y-2'>
                 <Label>Start Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant='outline'
                       className={cn(
                         "w-full justify-start text-left font-normal",
                         !periodForm.startDate && "text-muted-foreground"
                       )}
                     >
-                      <Calendar className="mr-2 h-4 w-4" />
+                      <Calendar className='mr-2 h-4 w-4' />
                       {periodForm.startDate
                         ? format(periodForm.startDate, "MMM d, yyyy")
                         : "Select date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className='w-auto p-0'>
                     <CalendarComponent
-                      mode="single"
+                      mode='single'
                       selected={periodForm.startDate}
                       onSelect={(date) =>
                         setPeriodForm({
@@ -712,26 +714,26 @@ export default function AccountingSettingsPage() {
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <Label>End Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant='outline'
                       className={cn(
                         "w-full justify-start text-left font-normal",
                         !periodForm.endDate && "text-muted-foreground"
                       )}
                     >
-                      <Calendar className="mr-2 h-4 w-4" />
+                      <Calendar className='mr-2 h-4 w-4' />
                       {periodForm.endDate
                         ? format(periodForm.endDate, "MMM d, yyyy")
                         : "Select date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className='w-auto p-0'>
                     <CalendarComponent
-                      mode="single"
+                      mode='single'
                       selected={periodForm.endDate}
                       onSelect={(date) =>
                         setPeriodForm({
@@ -746,13 +748,10 @@ export default function AccountingSettingsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPeriodModalOpen(false)}>
+            <Button variant='outline' onClick={() => setPeriodModalOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleCreatePeriod}
-              disabled={!periodForm.name}
-            >
+            <Button onClick={handleCreatePeriod} disabled={!periodForm.name}>
               Create Period
             </Button>
           </DialogFooter>
@@ -768,9 +767,9 @@ export default function AccountingSettingsPage() {
               Add a new currency for multi-currency accounting
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+          <div className='space-y-4 py-4'>
+            <div className='grid grid-cols-2 gap-4'>
+              <div className='space-y-2'>
                 <Label>Currency Code</Label>
                 <Input
                   value={currencyForm.code}
@@ -780,37 +779,37 @@ export default function AccountingSettingsPage() {
                       code: e.target.value.toUpperCase(),
                     })
                   }
-                  placeholder="USD"
+                  placeholder='USD'
                   maxLength={3}
                 />
               </div>
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <Label>Symbol</Label>
                 <Input
                   value={currencyForm.symbol}
                   onChange={(e) =>
                     setCurrencyForm({ ...currencyForm, symbol: e.target.value })
                   }
-                  placeholder="$"
+                  placeholder='$'
                   maxLength={5}
                 />
               </div>
             </div>
-            <div className="space-y-2">
+            <div className='space-y-2'>
               <Label>Currency Name</Label>
               <Input
                 value={currencyForm.name}
                 onChange={(e) =>
                   setCurrencyForm({ ...currencyForm, name: e.target.value })
                 }
-                placeholder="US Dollar"
+                placeholder='US Dollar'
               />
             </div>
-            <div className="space-y-2">
+            <div className='space-y-2'>
               <Label>Exchange Rate (to base currency)</Label>
               <Input
-                type="number"
-                step="0.0001"
+                type='number'
+                step='0.0001'
                 value={currencyForm.exchangeRate}
                 onChange={(e) =>
                   setCurrencyForm({
@@ -819,14 +818,14 @@ export default function AccountingSettingsPage() {
                   })
                 }
               />
-              <p className="text-xs text-muted-foreground">
+              <p className='text-xs text-muted-foreground'>
                 Rate relative to the default currency (LKR)
               </p>
             </div>
           </div>
           <DialogFooter>
             <Button
-              variant="outline"
+              variant='outline'
               onClick={() => setCurrencyModalOpen(false)}
             >
               Cancel
@@ -855,11 +854,11 @@ export default function AccountingSettingsPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setClosePeriodId(null)}>
+            <Button variant='outline' onClick={() => setClosePeriodId(null)}>
               Cancel
             </Button>
             <Button
-              variant="destructive"
+              variant='destructive'
               onClick={() => closePeriodId && handleClosePeriod(closePeriodId)}
             >
               Close Period

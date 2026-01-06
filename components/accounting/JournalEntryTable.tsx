@@ -47,7 +47,11 @@ import {
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useNotification } from "@/contexts/notification-context";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
-import type { JournalEntry, ChartOfAccount, JournalEntryStatusType } from "@/types/accounting";
+import type {
+  JournalEntry,
+  ChartOfAccount,
+  JournalEntryStatusType,
+} from "@/types/accounting";
 import { JournalEntryStatus } from "@/types/accounting";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -145,20 +149,27 @@ export function JournalEntryTable({
   useEffect(() => {
     fetchEntries();
     fetchAccounts();
-  }, [refreshTrigger, pagination.page, statusFilter, searchTerm, dateFrom, dateTo]);
+  }, [
+    refreshTrigger,
+    pagination.page,
+    statusFilter,
+    searchTerm,
+    dateFrom,
+    dateTo,
+  ]);
 
   const getStatusBadge = (status: JournalEntryStatusType) => {
     switch (status) {
       case "approved":
-        return <Badge className="bg-green-500">Approved</Badge>;
+        return <Badge className='bg-green-500'>Approved</Badge>;
       case "pending":
-        return <Badge className="bg-yellow-500">Pending</Badge>;
+        return <Badge className='bg-yellow-500'>Pending</Badge>;
       case "draft":
-        return <Badge variant="secondary">Draft</Badge>;
+        return <Badge variant='secondary'>Draft</Badge>;
       case "reversed":
-        return <Badge variant="destructive">Reversed</Badge>;
+        return <Badge variant='destructive'>Reversed</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant='outline'>{status}</Badge>;
     }
   };
 
@@ -196,8 +207,14 @@ export function JournalEntryTable({
     setFormData({ ...formData, lines: newLines });
   };
 
-  const totalDebit = formData.lines.reduce((sum, l) => sum + (l.debitAmount || 0), 0);
-  const totalCredit = formData.lines.reduce((sum, l) => sum + (l.creditAmount || 0), 0);
+  const totalDebit = formData.lines.reduce(
+    (sum, l) => sum + (l.debitAmount || 0),
+    0
+  );
+  const totalCredit = formData.lines.reduce(
+    (sum, l) => sum + (l.creditAmount || 0),
+    0
+  );
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
 
   const handleCreateEntry = async () => {
@@ -235,7 +252,8 @@ export function JournalEntryTable({
     } catch (error) {
       addNotification({
         title: "Error",
-        message: error instanceof Error ? error.message : "Failed to create entry",
+        message:
+          error instanceof Error ? error.message : "Failed to create entry",
         type: "error",
         category: "accounting",
       });
@@ -264,7 +282,8 @@ export function JournalEntryTable({
     } catch (error) {
       addNotification({
         title: "Error",
-        message: error instanceof Error ? error.message : "Failed to approve entry",
+        message:
+          error instanceof Error ? error.message : "Failed to approve entry",
         type: "error",
         category: "accounting",
       });
@@ -301,7 +320,8 @@ export function JournalEntryTable({
     } catch (error) {
       addNotification({
         title: "Error",
-        message: error instanceof Error ? error.message : "Failed to reverse entry",
+        message:
+          error instanceof Error ? error.message : "Failed to reverse entry",
         type: "error",
         category: "accounting",
       });
@@ -328,30 +348,30 @@ export function JournalEntryTable({
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
           <CardTitle>Journal Entries</CardTitle>
           <Button onClick={() => setAddModalOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className='mr-2 h-4 w-4' />
             New Entry
           </Button>
         </div>
-        <div className="flex flex-col sm:flex-row gap-4 mt-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+        <div className='flex flex-col sm:flex-row gap-4 mt-4'>
+          <div className='relative flex-1'>
+            <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4' />
             <Input
-              placeholder="Search entries..."
+              placeholder='Search entries...'
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className='pl-10'
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[150px]">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="Status" />
+            <SelectTrigger className='w-[150px]'>
+              <Filter className='mr-2 h-4 w-4' />
+              <SelectValue placeholder='Status' />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value='all'>All Status</SelectItem>
               {Object.entries(JournalEntryStatus).map(([key, value]) => (
                 <SelectItem key={key} value={value}>
                   {key.charAt(0) + key.slice(1).toLowerCase()}
@@ -361,14 +381,14 @@ export function JournalEntryTable({
           </Select>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-[150px]">
-                <Calendar className="mr-2 h-4 w-4" />
+              <Button variant='outline' className='w-[150px]'>
+                <Calendar className='mr-2 h-4 w-4' />
                 {dateFrom ? format(dateFrom, "MMM d") : "From"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
+            <PopoverContent className='w-auto p-0'>
               <CalendarComponent
-                mode="single"
+                mode='single'
                 selected={dateFrom}
                 onSelect={setDateFrom}
               />
@@ -376,14 +396,14 @@ export function JournalEntryTable({
           </Popover>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-[150px]">
-                <Calendar className="mr-2 h-4 w-4" />
+              <Button variant='outline' className='w-[150px]'>
+                <Calendar className='mr-2 h-4 w-4' />
                 {dateTo ? format(dateTo, "MMM d") : "To"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
+            <PopoverContent className='w-auto p-0'>
               <CalendarComponent
-                mode="single"
+                mode='single'
                 selected={dateTo}
                 onSelect={setDateTo}
               />
@@ -399,8 +419,8 @@ export function JournalEntryTable({
               <TableHead>Date</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Reference</TableHead>
-              <TableHead className="text-right">Debit</TableHead>
-              <TableHead className="text-right">Credit</TableHead>
+              <TableHead className='text-right'>Debit</TableHead>
+              <TableHead className='text-right'>Credit</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -408,69 +428,77 @@ export function JournalEntryTable({
           <TableBody>
             {entries.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell
+                  colSpan={8}
+                  className='text-center text-muted-foreground'
+                >
                   No journal entries found
                 </TableCell>
               </TableRow>
             ) : (
               entries.map((entry) => (
                 <TableRow key={entry.id}>
-                  <TableCell className="font-mono">{entry.entryNumber}</TableCell>
-                  <TableCell>{format(new Date(entry.date), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="max-w-[200px] truncate">
+                  <TableCell className='font-mono'>
+                    {entry.entryNumber}
+                  </TableCell>
+                  <TableCell>
+                    {format(new Date(entry.date), "MMM d, yyyy")}
+                  </TableCell>
+                  <TableCell className='max-w-[200px] truncate'>
                     {entry.description}
                   </TableCell>
                   <TableCell>{entry.reference || "-"}</TableCell>
-                  <TableCell className="text-right font-mono">
+                  <TableCell className='text-right font-mono'>
                     {formatCurrency(entry.totalDebit)}
                   </TableCell>
-                  <TableCell className="text-right font-mono">
+                  <TableCell className='text-right font-mono'>
                     {formatCurrency(entry.totalCredit)}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
+                    <div className='flex items-center gap-2'>
                       {getStatusBadge(entry.status)}
                       {entry.isReversed && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant='outline' className='text-xs'>
                           Reversed
                         </Badge>
                       )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
+                    <div className='flex gap-1'>
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant='ghost'
+                        size='icon'
                         onClick={() => {
                           setSelectedEntry(entry);
                           setViewModalOpen(true);
                         }}
-                        title="View Details"
+                        title='View Details'
                       >
-                        <Eye className="h-4 w-4" />
+                        <Eye className='h-4 w-4' />
                       </Button>
-                      {(entry.status === "pending" || entry.status === "draft") && (
+                      {(entry.status === "pending" ||
+                        entry.status === "draft") && (
                         <Button
-                          variant="ghost"
-                          size="icon"
+                          variant='ghost'
+                          size='icon'
                           onClick={() => handleApprove(entry)}
-                          title="Approve"
+                          title='Approve'
                         >
-                          <Check className="h-4 w-4 text-green-600" />
+                          <Check className='h-4 w-4 text-green-600' />
                         </Button>
                       )}
                       {entry.status === "approved" && !entry.isReversed && (
                         <Button
-                          variant="ghost"
-                          size="icon"
+                          variant='ghost'
+                          size='icon'
                           onClick={() => {
                             setSelectedEntry(entry);
                             setReverseModalOpen(true);
                           }}
-                          title="Reverse"
+                          title='Reverse'
                         >
-                          <RotateCcw className="h-4 w-4 text-orange-600" />
+                          <RotateCcw className='h-4 w-4 text-orange-600' />
                         </Button>
                       )}
                     </div>
@@ -483,16 +511,16 @@ export function JournalEntryTable({
 
         {/* Pagination */}
         {pagination.totalPages > 1 && (
-          <div className="flex justify-between items-center mt-4">
-            <span className="text-sm text-muted-foreground">
+          <div className='flex justify-between items-center mt-4'>
+            <span className='text-sm text-muted-foreground'>
               Showing {(pagination.page - 1) * pagination.limit + 1} to{" "}
-              {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
-              {pagination.total} entries
+              {Math.min(pagination.page * pagination.limit, pagination.total)}{" "}
+              of {pagination.total} entries
             </span>
-            <div className="flex gap-2">
+            <div className='flex gap-2'>
               <Button
-                variant="outline"
-                size="sm"
+                variant='outline'
+                size='sm'
                 disabled={pagination.page <= 1}
                 onClick={() =>
                   setPagination((p) => ({ ...p, page: p.page - 1 }))
@@ -501,8 +529,8 @@ export function JournalEntryTable({
                 Previous
               </Button>
               <Button
-                variant="outline"
-                size="sm"
+                variant='outline'
+                size='sm'
                 disabled={pagination.page >= pagination.totalPages}
                 onClick={() =>
                   setPagination((p) => ({ ...p, page: p.page + 1 }))
@@ -517,35 +545,35 @@ export function JournalEntryTable({
 
       {/* Add Entry Modal */}
       <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className='sm:max-w-[700px] max-h-[90vh] overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Create Journal Entry</DialogTitle>
             <DialogDescription>
               Create a new journal entry. Debits must equal credits.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className='space-y-4 py-4'>
+            <div className='grid grid-cols-2 gap-4'>
               <div>
                 <Label>Date *</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant='outline'
                       className={cn(
                         "w-full justify-start text-left font-normal",
                         !formData.date && "text-muted-foreground"
                       )}
                     >
-                      <Calendar className="mr-2 h-4 w-4" />
+                      <Calendar className='mr-2 h-4 w-4' />
                       {formData.date
                         ? format(formData.date, "PPP")
                         : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className='w-auto p-0'>
                     <CalendarComponent
-                      mode="single"
+                      mode='single'
                       selected={formData.date}
                       onSelect={(date) =>
                         setFormData({ ...formData, date: date || new Date() })
@@ -555,47 +583,52 @@ export function JournalEntryTable({
                 </Popover>
               </div>
               <div>
-                <Label htmlFor="reference">Reference</Label>
+                <Label htmlFor='reference'>Reference</Label>
                 <Input
-                  id="reference"
+                  id='reference'
                   value={formData.reference}
                   onChange={(e) =>
                     setFormData({ ...formData, reference: e.target.value })
                   }
-                  placeholder="Invoice #, etc."
+                  placeholder='Invoice #, etc.'
                 />
               </div>
             </div>
             <div>
-              <Label htmlFor="description">Description *</Label>
+              <Label htmlFor='description'>Description *</Label>
               <Input
-                id="description"
+                id='description'
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                placeholder="Entry description"
+                placeholder='Entry description'
               />
             </div>
 
             {/* Entry Lines */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
+            <div className='space-y-2'>
+              <div className='flex justify-between items-center'>
                 <Label>Entry Lines</Label>
-                <Button type="button" variant="outline" size="sm" onClick={handleAddLine}>
-                  <Plus className="h-4 w-4 mr-1" />
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={handleAddLine}
+                >
+                  <Plus className='h-4 w-4 mr-1' />
                   Add Line
                 </Button>
               </div>
-              <div className="border rounded-lg overflow-hidden">
+              <div className='border rounded-lg overflow-hidden'>
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Account</TableHead>
                       <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Debit</TableHead>
-                      <TableHead className="text-right">Credit</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
+                      <TableHead className='text-right'>Debit</TableHead>
+                      <TableHead className='text-right'>Credit</TableHead>
+                      <TableHead className='w-[50px]'></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -608,8 +641,8 @@ export function JournalEntryTable({
                               handleLineChange(index, "accountId", value)
                             }
                           >
-                            <SelectTrigger className="w-[200px]">
-                              <SelectValue placeholder="Select account" />
+                            <SelectTrigger className='w-[200px]'>
+                              <SelectValue placeholder='Select account' />
                             </SelectTrigger>
                             <SelectContent>
                               {accounts.map((account) => (
@@ -624,15 +657,19 @@ export function JournalEntryTable({
                           <Input
                             value={line.description}
                             onChange={(e) =>
-                              handleLineChange(index, "description", e.target.value)
+                              handleLineChange(
+                                index,
+                                "description",
+                                e.target.value
+                              )
                             }
-                            placeholder="Line description"
-                            className="w-[150px]"
+                            placeholder='Line description'
+                            className='w-[150px]'
                           />
                         </TableCell>
                         <TableCell>
                           <Input
-                            type="number"
+                            type='number'
                             value={line.debitAmount || ""}
                             onChange={(e) =>
                               handleLineChange(
@@ -641,12 +678,12 @@ export function JournalEntryTable({
                                 parseFloat(e.target.value) || 0
                               )
                             }
-                            className="w-[100px] text-right"
+                            className='w-[100px] text-right'
                           />
                         </TableCell>
                         <TableCell>
                           <Input
-                            type="number"
+                            type='number'
                             value={line.creditAmount || ""}
                             onChange={(e) =>
                               handleLineChange(
@@ -655,15 +692,15 @@ export function JournalEntryTable({
                                 parseFloat(e.target.value) || 0
                               )
                             }
-                            className="w-[100px] text-right"
+                            className='w-[100px] text-right'
                           />
                         </TableCell>
                         <TableCell>
                           {formData.lines.length > 2 && (
                             <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
+                              type='button'
+                              variant='ghost'
+                              size='icon'
                               onClick={() => handleRemoveLine(index)}
                             >
                               ×
@@ -672,14 +709,17 @@ export function JournalEntryTable({
                         </TableCell>
                       </TableRow>
                     ))}
-                    <TableRow className="bg-muted/50">
-                      <TableCell colSpan={2} className="font-semibold text-right">
+                    <TableRow className='bg-muted/50'>
+                      <TableCell
+                        colSpan={2}
+                        className='font-semibold text-right'
+                      >
                         Totals:
                       </TableCell>
-                      <TableCell className="text-right font-mono font-semibold">
+                      <TableCell className='text-right font-mono font-semibold'>
                         {formatCurrency(totalDebit)}
                       </TableCell>
-                      <TableCell className="text-right font-mono font-semibold">
+                      <TableCell className='text-right font-mono font-semibold'>
                         {formatCurrency(totalCredit)}
                       </TableCell>
                       <TableCell></TableCell>
@@ -688,7 +728,7 @@ export function JournalEntryTable({
                 </Table>
               </div>
               {!isBalanced && totalDebit > 0 && totalCredit > 0 && (
-                <p className="text-sm text-destructive">
+                <p className='text-sm text-destructive'>
                   Entry is not balanced. Difference:{" "}
                   {formatCurrency(Math.abs(totalDebit - totalCredit))}
                 </p>
@@ -696,24 +736,26 @@ export function JournalEntryTable({
             </div>
 
             <div>
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor='notes'>Notes</Label>
               <Textarea
-                id="notes"
+                id='notes'
                 value={formData.notes}
                 onChange={(e) =>
                   setFormData({ ...formData, notes: e.target.value })
                 }
-                placeholder="Additional notes (optional)"
+                placeholder='Additional notes (optional)'
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddModalOpen(false)}>
+            <Button variant='outline' onClick={() => setAddModalOpen(false)}>
               Cancel
             </Button>
             <Button
               onClick={handleCreateEntry}
-              disabled={!formData.description || !isBalanced || totalDebit === 0}
+              disabled={
+                !formData.description || !isBalanced || totalDebit === 0
+              }
             >
               Create Entry
             </Button>
@@ -723,7 +765,7 @@ export function JournalEntryTable({
 
       {/* View Entry Modal */}
       <Dialog open={viewModalOpen} onOpenChange={setViewModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className='sm:max-w-[600px]'>
           <DialogHeader>
             <DialogTitle>Journal Entry Details</DialogTitle>
             <DialogDescription>
@@ -731,35 +773,35 @@ export function JournalEntryTable({
             </DialogDescription>
           </DialogHeader>
           {selectedEntry && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className='space-y-4 py-4'>
+              <div className='grid grid-cols-2 gap-4'>
                 <div>
-                  <Label className="text-muted-foreground">Date</Label>
+                  <Label className='text-muted-foreground'>Date</Label>
                   <p>{format(new Date(selectedEntry.date), "PPP")}</p>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">Status</Label>
+                  <Label className='text-muted-foreground'>Status</Label>
                   <div>{getStatusBadge(selectedEntry.status)}</div>
                 </div>
               </div>
               <div>
-                <Label className="text-muted-foreground">Description</Label>
+                <Label className='text-muted-foreground'>Description</Label>
                 <p>{selectedEntry.description}</p>
               </div>
               {selectedEntry.reference && (
                 <div>
-                  <Label className="text-muted-foreground">Reference</Label>
+                  <Label className='text-muted-foreground'>Reference</Label>
                   <p>{selectedEntry.reference}</p>
                 </div>
               )}
               <div>
-                <Label className="text-muted-foreground">Entry Lines</Label>
+                <Label className='text-muted-foreground'>Entry Lines</Label>
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Account</TableHead>
-                      <TableHead className="text-right">Debit</TableHead>
-                      <TableHead className="text-right">Credit</TableHead>
+                      <TableHead className='text-right'>Debit</TableHead>
+                      <TableHead className='text-right'>Credit</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -768,24 +810,24 @@ export function JournalEntryTable({
                         <TableCell>
                           {line.account?.code} - {line.account?.name}
                         </TableCell>
-                        <TableCell className="text-right font-mono">
+                        <TableCell className='text-right font-mono'>
                           {line.debitAmount > 0
                             ? formatCurrency(line.debitAmount)
                             : "-"}
                         </TableCell>
-                        <TableCell className="text-right font-mono">
+                        <TableCell className='text-right font-mono'>
                           {line.creditAmount > 0
                             ? formatCurrency(line.creditAmount)
                             : "-"}
                         </TableCell>
                       </TableRow>
                     ))}
-                    <TableRow className="font-semibold">
+                    <TableRow className='font-semibold'>
                       <TableCell>Total</TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className='text-right font-mono'>
                         {formatCurrency(selectedEntry.totalDebit)}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className='text-right font-mono'>
                         {formatCurrency(selectedEntry.totalCredit)}
                       </TableCell>
                     </TableRow>
@@ -794,14 +836,14 @@ export function JournalEntryTable({
               </div>
               {selectedEntry.notes && (
                 <div>
-                  <Label className="text-muted-foreground">Notes</Label>
-                  <p className="text-sm">{selectedEntry.notes}</p>
+                  <Label className='text-muted-foreground'>Notes</Label>
+                  <p className='text-sm'>{selectedEntry.notes}</p>
                 </div>
               )}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewModalOpen(false)}>
+            <Button variant='outline' onClick={() => setViewModalOpen(false)}>
               Close
             </Button>
           </DialogFooter>
@@ -818,20 +860,23 @@ export function JournalEntryTable({
               {selectedEntry?.entryNumber}. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="reverseReason">Reason for Reversal</Label>
+          <div className='py-4'>
+            <Label htmlFor='reverseReason'>Reason for Reversal</Label>
             <Textarea
-              id="reverseReason"
+              id='reverseReason'
               value={reverseReason}
               onChange={(e) => setReverseReason(e.target.value)}
-              placeholder="Enter reason for reversal"
+              placeholder='Enter reason for reversal'
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReverseModalOpen(false)}>
+            <Button
+              variant='outline'
+              onClick={() => setReverseModalOpen(false)}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleReverse}>
+            <Button variant='destructive' onClick={handleReverse}>
               Reverse Entry
             </Button>
           </DialogFooter>

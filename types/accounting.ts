@@ -14,7 +14,8 @@ export const AccountCategory = {
   EXPENSE: "Expense",
 } as const;
 
-export type AccountCategoryType = (typeof AccountCategory)[keyof typeof AccountCategory];
+export type AccountCategoryType =
+  (typeof AccountCategory)[keyof typeof AccountCategory];
 
 export const AccountSubCategory = {
   // Assets
@@ -37,7 +38,8 @@ export const AccountSubCategory = {
   OTHER_EXPENSE: "Other Expense",
 } as const;
 
-export type AccountSubCategoryType = (typeof AccountSubCategory)[keyof typeof AccountSubCategory];
+export type AccountSubCategoryType =
+  (typeof AccountSubCategory)[keyof typeof AccountSubCategory];
 
 export const JournalEntryStatus = {
   DRAFT: "draft",
@@ -46,7 +48,8 @@ export const JournalEntryStatus = {
   REVERSED: "reversed",
 } as const;
 
-export type JournalEntryStatusType = (typeof JournalEntryStatus)[keyof typeof JournalEntryStatus];
+export type JournalEntryStatusType =
+  (typeof JournalEntryStatus)[keyof typeof JournalEntryStatus];
 
 export const PaymentStatus = {
   UNPAID: "unpaid",
@@ -55,7 +58,8 @@ export const PaymentStatus = {
   NOT_APPLICABLE: "not_applicable",
 } as const;
 
-export type PaymentStatusType = (typeof PaymentStatus)[keyof typeof PaymentStatus];
+export type PaymentStatusType =
+  (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
 export const PaymentMethod = {
   CASH: "cash",
@@ -65,7 +69,8 @@ export const PaymentMethod = {
   OTHER: "other",
 } as const;
 
-export type PaymentMethodType = (typeof PaymentMethod)[keyof typeof PaymentMethod];
+export type PaymentMethodType =
+  (typeof PaymentMethod)[keyof typeof PaymentMethod];
 
 export const PeriodType = {
   MONTHLY: "monthly",
@@ -562,49 +567,329 @@ export interface DefaultAccountSeed {
 
 export const DEFAULT_ACCOUNTS: DefaultAccountSeed[] = [
   // ASSETS
-  { code: "1000", name: "Cash", category: "Asset", subCategory: "Current Asset", normalBalance: "debit", isSystemAccount: true, description: "Cash on hand and in bank" },
-  { code: "1010", name: "Petty Cash", category: "Asset", subCategory: "Current Asset", normalBalance: "debit", isSystemAccount: false, description: "Petty cash fund" },
-  { code: "1100", name: "Accounts Receivable", category: "Asset", subCategory: "Current Asset", normalBalance: "debit", isSystemAccount: true, description: "Money owed by customers" },
-  { code: "1200", name: "Inventory", category: "Asset", subCategory: "Current Asset", normalBalance: "debit", isSystemAccount: true, description: "Stock of materials and supplies" },
-  { code: "1300", name: "Prepaid Expenses", category: "Asset", subCategory: "Current Asset", normalBalance: "debit", isSystemAccount: false, description: "Expenses paid in advance" },
-  { code: "1500", name: "Equipment", category: "Asset", subCategory: "Fixed Asset", normalBalance: "debit", isSystemAccount: false, description: "Tools and equipment" },
-  { code: "1510", name: "Accumulated Depreciation - Equipment", category: "Asset", subCategory: "Fixed Asset", normalBalance: "credit", isSystemAccount: false, description: "Accumulated depreciation on equipment" },
-  { code: "1600", name: "Vehicles", category: "Asset", subCategory: "Fixed Asset", normalBalance: "debit", isSystemAccount: false, description: "Company vehicles" },
-  { code: "1610", name: "Accumulated Depreciation - Vehicles", category: "Asset", subCategory: "Fixed Asset", normalBalance: "credit", isSystemAccount: false, description: "Accumulated depreciation on vehicles" },
+  {
+    code: "1000",
+    name: "Cash",
+    category: "Asset",
+    subCategory: "Current Asset",
+    normalBalance: "debit",
+    isSystemAccount: true,
+    description: "Cash on hand and in bank",
+  },
+  {
+    code: "1010",
+    name: "Petty Cash",
+    category: "Asset",
+    subCategory: "Current Asset",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Petty cash fund",
+  },
+  {
+    code: "1100",
+    name: "Accounts Receivable",
+    category: "Asset",
+    subCategory: "Current Asset",
+    normalBalance: "debit",
+    isSystemAccount: true,
+    description: "Money owed by customers",
+  },
+  {
+    code: "1200",
+    name: "Inventory",
+    category: "Asset",
+    subCategory: "Current Asset",
+    normalBalance: "debit",
+    isSystemAccount: true,
+    description: "Stock of materials and supplies",
+  },
+  {
+    code: "1300",
+    name: "Prepaid Expenses",
+    category: "Asset",
+    subCategory: "Current Asset",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Expenses paid in advance",
+  },
+  {
+    code: "1500",
+    name: "Equipment",
+    category: "Asset",
+    subCategory: "Fixed Asset",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Tools and equipment",
+  },
+  {
+    code: "1510",
+    name: "Accumulated Depreciation - Equipment",
+    category: "Asset",
+    subCategory: "Fixed Asset",
+    normalBalance: "credit",
+    isSystemAccount: false,
+    description: "Accumulated depreciation on equipment",
+  },
+  {
+    code: "1600",
+    name: "Vehicles",
+    category: "Asset",
+    subCategory: "Fixed Asset",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Company vehicles",
+  },
+  {
+    code: "1610",
+    name: "Accumulated Depreciation - Vehicles",
+    category: "Asset",
+    subCategory: "Fixed Asset",
+    normalBalance: "credit",
+    isSystemAccount: false,
+    description: "Accumulated depreciation on vehicles",
+  },
 
   // LIABILITIES
-  { code: "2000", name: "Accounts Payable", category: "Liability", subCategory: "Current Liability", normalBalance: "credit", isSystemAccount: true, description: "Money owed to suppliers" },
-  { code: "2100", name: "Accrued Expenses", category: "Liability", subCategory: "Current Liability", normalBalance: "credit", isSystemAccount: false, description: "Expenses incurred but not yet paid" },
-  { code: "2200", name: "Wages Payable", category: "Liability", subCategory: "Current Liability", normalBalance: "credit", isSystemAccount: false, description: "Wages owed to employees" },
-  { code: "2300", name: "Taxes Payable", category: "Liability", subCategory: "Current Liability", normalBalance: "credit", isSystemAccount: false, description: "Tax obligations" },
-  { code: "2500", name: "Long-term Loans", category: "Liability", subCategory: "Long-term Liability", normalBalance: "credit", isSystemAccount: false, description: "Long-term debt obligations" },
+  {
+    code: "2000",
+    name: "Accounts Payable",
+    category: "Liability",
+    subCategory: "Current Liability",
+    normalBalance: "credit",
+    isSystemAccount: true,
+    description: "Money owed to suppliers",
+  },
+  {
+    code: "2100",
+    name: "Accrued Expenses",
+    category: "Liability",
+    subCategory: "Current Liability",
+    normalBalance: "credit",
+    isSystemAccount: false,
+    description: "Expenses incurred but not yet paid",
+  },
+  {
+    code: "2200",
+    name: "Wages Payable",
+    category: "Liability",
+    subCategory: "Current Liability",
+    normalBalance: "credit",
+    isSystemAccount: false,
+    description: "Wages owed to employees",
+  },
+  {
+    code: "2300",
+    name: "Taxes Payable",
+    category: "Liability",
+    subCategory: "Current Liability",
+    normalBalance: "credit",
+    isSystemAccount: false,
+    description: "Tax obligations",
+  },
+  {
+    code: "2500",
+    name: "Long-term Loans",
+    category: "Liability",
+    subCategory: "Long-term Liability",
+    normalBalance: "credit",
+    isSystemAccount: false,
+    description: "Long-term debt obligations",
+  },
 
   // EQUITY
-  { code: "3000", name: "Owner's Capital", category: "Equity", subCategory: "Owner's Equity", normalBalance: "credit", isSystemAccount: true, description: "Owner's investment in the business" },
-  { code: "3100", name: "Retained Earnings", category: "Equity", subCategory: "Retained Earnings", normalBalance: "credit", isSystemAccount: true, description: "Accumulated profits" },
-  { code: "3200", name: "Drawings", category: "Equity", subCategory: "Owner's Equity", normalBalance: "debit", isSystemAccount: false, description: "Owner's withdrawals" },
+  {
+    code: "3000",
+    name: "Owner's Capital",
+    category: "Equity",
+    subCategory: "Owner's Equity",
+    normalBalance: "credit",
+    isSystemAccount: true,
+    description: "Owner's investment in the business",
+  },
+  {
+    code: "3100",
+    name: "Retained Earnings",
+    category: "Equity",
+    subCategory: "Retained Earnings",
+    normalBalance: "credit",
+    isSystemAccount: true,
+    description: "Accumulated profits",
+  },
+  {
+    code: "3200",
+    name: "Drawings",
+    category: "Equity",
+    subCategory: "Owner's Equity",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Owner's withdrawals",
+  },
 
   // REVENUE
-  { code: "4000", name: "Service Revenue", category: "Revenue", subCategory: "Operating Revenue", normalBalance: "credit", isSystemAccount: true, description: "Revenue from fiber installation services" },
-  { code: "4100", name: "Installation Revenue", category: "Revenue", subCategory: "Operating Revenue", normalBalance: "credit", isSystemAccount: false, description: "Revenue from new installations" },
-  { code: "4200", name: "Maintenance Revenue", category: "Revenue", subCategory: "Operating Revenue", normalBalance: "credit", isSystemAccount: false, description: "Revenue from maintenance services" },
-  { code: "4900", name: "Other Revenue", category: "Revenue", subCategory: "Other Revenue", normalBalance: "credit", isSystemAccount: false, description: "Other income sources" },
+  {
+    code: "4000",
+    name: "Service Revenue",
+    category: "Revenue",
+    subCategory: "Operating Revenue",
+    normalBalance: "credit",
+    isSystemAccount: true,
+    description: "Revenue from fiber installation services",
+  },
+  {
+    code: "4100",
+    name: "Installation Revenue",
+    category: "Revenue",
+    subCategory: "Operating Revenue",
+    normalBalance: "credit",
+    isSystemAccount: false,
+    description: "Revenue from new installations",
+  },
+  {
+    code: "4200",
+    name: "Maintenance Revenue",
+    category: "Revenue",
+    subCategory: "Operating Revenue",
+    normalBalance: "credit",
+    isSystemAccount: false,
+    description: "Revenue from maintenance services",
+  },
+  {
+    code: "4900",
+    name: "Other Revenue",
+    category: "Revenue",
+    subCategory: "Other Revenue",
+    normalBalance: "credit",
+    isSystemAccount: false,
+    description: "Other income sources",
+  },
 
   // EXPENSES
-  { code: "5000", name: "Cost of Materials", category: "Expense", subCategory: "Cost of Goods Sold", normalBalance: "debit", isSystemAccount: true, description: "Direct material costs" },
-  { code: "5100", name: "Cable & Fiber Costs", category: "Expense", subCategory: "Cost of Goods Sold", normalBalance: "debit", isSystemAccount: false, description: "Fiber optic cable costs" },
-  { code: "5200", name: "Hardware Costs", category: "Expense", subCategory: "Cost of Goods Sold", normalBalance: "debit", isSystemAccount: false, description: "Installation hardware costs" },
-  { code: "6000", name: "Labor Costs", category: "Expense", subCategory: "Operating Expense", normalBalance: "debit", isSystemAccount: false, description: "Technician labor costs" },
-  { code: "6100", name: "Wages & Salaries", category: "Expense", subCategory: "Operating Expense", normalBalance: "debit", isSystemAccount: false, description: "Employee wages and salaries" },
-  { code: "6200", name: "Vehicle Expenses", category: "Expense", subCategory: "Operating Expense", normalBalance: "debit", isSystemAccount: false, description: "Fuel, maintenance, insurance" },
-  { code: "6300", name: "Utilities", category: "Expense", subCategory: "Administrative Expense", normalBalance: "debit", isSystemAccount: false, description: "Electricity, water, internet" },
-  { code: "6400", name: "Rent Expense", category: "Expense", subCategory: "Administrative Expense", normalBalance: "debit", isSystemAccount: false, description: "Office or warehouse rent" },
-  { code: "6500", name: "Office Supplies", category: "Expense", subCategory: "Administrative Expense", normalBalance: "debit", isSystemAccount: false, description: "Stationery and supplies" },
-  { code: "6600", name: "Depreciation Expense", category: "Expense", subCategory: "Operating Expense", normalBalance: "debit", isSystemAccount: false, description: "Depreciation of assets" },
-  { code: "6700", name: "Insurance Expense", category: "Expense", subCategory: "Administrative Expense", normalBalance: "debit", isSystemAccount: false, description: "Business insurance" },
-  { code: "6800", name: "Professional Fees", category: "Expense", subCategory: "Administrative Expense", normalBalance: "debit", isSystemAccount: false, description: "Legal and accounting fees" },
-  { code: "6900", name: "Bank Charges", category: "Expense", subCategory: "Other Expense", normalBalance: "debit", isSystemAccount: false, description: "Bank fees and charges" },
-  { code: "7000", name: "Miscellaneous Expense", category: "Expense", subCategory: "Other Expense", normalBalance: "debit", isSystemAccount: false, description: "Other miscellaneous expenses" },
+  {
+    code: "5000",
+    name: "Cost of Materials",
+    category: "Expense",
+    subCategory: "Cost of Goods Sold",
+    normalBalance: "debit",
+    isSystemAccount: true,
+    description: "Direct material costs",
+  },
+  {
+    code: "5100",
+    name: "Cable & Fiber Costs",
+    category: "Expense",
+    subCategory: "Cost of Goods Sold",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Fiber optic cable costs",
+  },
+  {
+    code: "5200",
+    name: "Hardware Costs",
+    category: "Expense",
+    subCategory: "Cost of Goods Sold",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Installation hardware costs",
+  },
+  {
+    code: "6000",
+    name: "Labor Costs",
+    category: "Expense",
+    subCategory: "Operating Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Technician labor costs",
+  },
+  {
+    code: "6100",
+    name: "Wages & Salaries",
+    category: "Expense",
+    subCategory: "Operating Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Employee wages and salaries",
+  },
+  {
+    code: "6200",
+    name: "Vehicle Expenses",
+    category: "Expense",
+    subCategory: "Operating Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Fuel, maintenance, insurance",
+  },
+  {
+    code: "6300",
+    name: "Utilities",
+    category: "Expense",
+    subCategory: "Administrative Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Electricity, water, internet",
+  },
+  {
+    code: "6400",
+    name: "Rent Expense",
+    category: "Expense",
+    subCategory: "Administrative Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Office or warehouse rent",
+  },
+  {
+    code: "6500",
+    name: "Office Supplies",
+    category: "Expense",
+    subCategory: "Administrative Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Stationery and supplies",
+  },
+  {
+    code: "6600",
+    name: "Depreciation Expense",
+    category: "Expense",
+    subCategory: "Operating Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Depreciation of assets",
+  },
+  {
+    code: "6700",
+    name: "Insurance Expense",
+    category: "Expense",
+    subCategory: "Administrative Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Business insurance",
+  },
+  {
+    code: "6800",
+    name: "Professional Fees",
+    category: "Expense",
+    subCategory: "Administrative Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Legal and accounting fees",
+  },
+  {
+    code: "6900",
+    name: "Bank Charges",
+    category: "Expense",
+    subCategory: "Other Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Bank fees and charges",
+  },
+  {
+    code: "7000",
+    name: "Miscellaneous Expense",
+    category: "Expense",
+    subCategory: "Other Expense",
+    normalBalance: "debit",
+    isSystemAccount: false,
+    description: "Other miscellaneous expenses",
+  },
 ];
 
 // Default currencies
@@ -617,8 +902,26 @@ export interface DefaultCurrencySeed {
 }
 
 export const DEFAULT_CURRENCIES: DefaultCurrencySeed[] = [
-  { code: "LKR", name: "Sri Lankan Rupee", symbol: "Rs.", isBase: true, decimalPlaces: 2 },
-  { code: "USD", name: "US Dollar", symbol: "$", isBase: false, decimalPlaces: 2 },
+  {
+    code: "LKR",
+    name: "Sri Lankan Rupee",
+    symbol: "Rs.",
+    isBase: true,
+    decimalPlaces: 2,
+  },
+  {
+    code: "USD",
+    name: "US Dollar",
+    symbol: "$",
+    isBase: false,
+    decimalPlaces: 2,
+  },
   { code: "EUR", name: "Euro", symbol: "€", isBase: false, decimalPlaces: 2 },
-  { code: "GBP", name: "British Pound", symbol: "£", isBase: false, decimalPlaces: 2 },
+  {
+    code: "GBP",
+    name: "British Pound",
+    symbol: "£",
+    isBase: false,
+    decimalPlaces: 2,
+  },
 ];

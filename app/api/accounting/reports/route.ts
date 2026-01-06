@@ -40,7 +40,10 @@ export async function GET(req: NextRequest) {
 
     if (!reportType) {
       return NextResponse.json(
-        { error: "Report type is required (trial-balance, income-statement, balance-sheet)" },
+        {
+          error:
+            "Report type is required (trial-balance, income-statement, balance-sheet)",
+        },
         { status: 400 }
       );
     }
@@ -57,7 +60,10 @@ export async function GET(req: NextRequest) {
       case "income-statement":
         if (!startDate || !endDate) {
           return NextResponse.json(
-            { error: "Start date and end date are required for income statement" },
+            {
+              error:
+                "Start date and end date are required for income statement",
+            },
             { status: 400 }
           );
         }

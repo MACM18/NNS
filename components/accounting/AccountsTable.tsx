@@ -50,7 +50,10 @@ interface AccountsTableProps {
   refreshTrigger?: number;
 }
 
-export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTableProps) {
+export function AccountsTable({
+  onViewLedger,
+  refreshTrigger = 0,
+}: AccountsTableProps) {
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -61,7 +64,9 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<ChartOfAccount | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<ChartOfAccount | null>(
+    null
+  );
   const { addNotification } = useNotification();
 
   // Form state
@@ -169,7 +174,12 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
       case "Revenue":
         return ["Operating Revenue", "Other Revenue"];
       case "Expense":
-        return ["Cost of Goods Sold", "Operating Expense", "Administrative Expense", "Other Expense"];
+        return [
+          "Cost of Goods Sold",
+          "Operating Expense",
+          "Administrative Expense",
+          "Other Expense",
+        ];
       default:
         return [];
     }
@@ -200,7 +210,8 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
     } catch (error) {
       addNotification({
         title: "Error",
-        message: error instanceof Error ? error.message : "Failed to create account",
+        message:
+          error instanceof Error ? error.message : "Failed to create account",
         type: "error",
         category: "accounting",
       });
@@ -211,15 +222,18 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
     if (!selectedAccount) return;
 
     try {
-      const response = await fetch(`/api/accounting/accounts/${selectedAccount.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          description: formData.description,
-          subCategory: formData.subCategory,
-        }),
-      });
+      const response = await fetch(
+        `/api/accounting/accounts/${selectedAccount.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formData.name,
+            description: formData.description,
+            subCategory: formData.subCategory,
+          }),
+        }
+      );
 
       if (!response.ok) {
         const error = await response.json();
@@ -238,7 +252,8 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
     } catch (error) {
       addNotification({
         title: "Error",
-        message: error instanceof Error ? error.message : "Failed to update account",
+        message:
+          error instanceof Error ? error.message : "Failed to update account",
         type: "error",
         category: "accounting",
       });
@@ -249,9 +264,12 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
     if (!selectedAccount) return;
 
     try {
-      const response = await fetch(`/api/accounting/accounts/${selectedAccount.id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/accounting/accounts/${selectedAccount.id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       if (!response.ok) {
         const error = await response.json();
@@ -261,14 +279,17 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
       addNotification({
         title: "Success",
         message: "Account deleted successfully",
-        type: "success",        category: "accounting",      });
+        type: "success",
+        category: "accounting",
+      });
       setDeleteModalOpen(false);
       setSelectedAccount(null);
       fetchAccounts();
     } catch (error) {
       addNotification({
         title: "Error",
-        message: error instanceof Error ? error.message : "Failed to delete account",
+        message:
+          error instanceof Error ? error.message : "Failed to delete account",
         type: "error",
         category: "accounting",
       });
@@ -317,30 +338,30 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
           <CardTitle>Chart of Accounts</CardTitle>
           <Button onClick={() => setAddModalOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className='mr-2 h-4 w-4' />
             Add Account
           </Button>
         </div>
-        <div className="flex flex-col sm:flex-row gap-4 mt-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+        <div className='flex flex-col sm:flex-row gap-4 mt-4'>
+          <div className='relative flex-1'>
+            <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4' />
             <Input
-              placeholder="Search accounts..."
+              placeholder='Search accounts...'
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className='pl-10'
             />
           </div>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[180px]">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="All Categories" />
+            <SelectTrigger className='w-[180px]'>
+              <Filter className='mr-2 h-4 w-4' />
+              <SelectValue placeholder='All Categories' />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value='all'>All Categories</SelectItem>
               {Object.values(AccountCategory).map((cat) => (
                 <SelectItem key={cat} value={cat}>
                   {cat}
@@ -351,132 +372,144 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {Object.entries(groupedAccounts).map(([category, categoryAccounts]) => (
-            <div key={category} className="border rounded-lg overflow-hidden">
-              <button
-                onClick={() => toggleCategory(category)}
-                className={`w-full flex items-center justify-between p-3 ${getCategoryColor(category)} hover:opacity-90 transition-opacity`}
-              >
-                <div className="flex items-center gap-2">
-                  {expandedCategories.has(category) ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                  <span className="font-semibold">{category}</span>
-                  <Badge variant="secondary">{categoryAccounts.length}</Badge>
-                </div>
-                <span className="text-sm">
-                  Total:{" "}
-                  {formatCurrency(
-                    categoryAccounts.reduce((sum, a) => sum + a.currentBalance, 0)
-                  )}
-                </span>
-              </button>
-              {expandedCategories.has(category) && (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[100px]">Code</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Sub-Category</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                      <TableHead className="w-[120px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categoryAccounts.map((account) => (
-                      <TableRow key={account.id}>
-                        <TableCell className="font-mono">{account.code}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span>{account.name}</span>
-                            {account.isSystemAccount && (
-                              <Badge variant="outline" className="text-xs">
-                                System
-                              </Badge>
-                            )}
-                            {!account.isActive && (
-                              <Badge variant="destructive" className="text-xs">
-                                Inactive
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>{account.subCategory || "-"}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(account.currentBalance)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            {onViewLedger && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => onViewLedger(account)}
-                                title="View Ledger"
-                              >
-                                <BookOpen className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openEditModal(account)}
-                              title="Edit"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            {!account.isSystemAccount && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setSelectedAccount(account);
-                                  setDeleteModalOpen(true);
-                                }}
-                                title="Delete"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
+        <div className='space-y-4'>
+          {Object.entries(groupedAccounts).map(
+            ([category, categoryAccounts]) => (
+              <div key={category} className='border rounded-lg overflow-hidden'>
+                <button
+                  onClick={() => toggleCategory(category)}
+                  className={`w-full flex items-center justify-between p-3 ${getCategoryColor(
+                    category
+                  )} hover:opacity-90 transition-opacity`}
+                >
+                  <div className='flex items-center gap-2'>
+                    {expandedCategories.has(category) ? (
+                      <ChevronDown className='h-4 w-4' />
+                    ) : (
+                      <ChevronRight className='h-4 w-4' />
+                    )}
+                    <span className='font-semibold'>{category}</span>
+                    <Badge variant='secondary'>{categoryAccounts.length}</Badge>
+                  </div>
+                  <span className='text-sm'>
+                    Total:{" "}
+                    {formatCurrency(
+                      categoryAccounts.reduce(
+                        (sum, a) => sum + a.currentBalance,
+                        0
+                      )
+                    )}
+                  </span>
+                </button>
+                {expandedCategories.has(category) && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className='w-[100px]'>Code</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Sub-Category</TableHead>
+                        <TableHead className='text-right'>Balance</TableHead>
+                        <TableHead className='w-[120px]'>Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          ))}
+                    </TableHeader>
+                    <TableBody>
+                      {categoryAccounts.map((account) => (
+                        <TableRow key={account.id}>
+                          <TableCell className='font-mono'>
+                            {account.code}
+                          </TableCell>
+                          <TableCell>
+                            <div className='flex items-center gap-2'>
+                              <span>{account.name}</span>
+                              {account.isSystemAccount && (
+                                <Badge variant='outline' className='text-xs'>
+                                  System
+                                </Badge>
+                              )}
+                              {!account.isActive && (
+                                <Badge
+                                  variant='destructive'
+                                  className='text-xs'
+                                >
+                                  Inactive
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{account.subCategory || "-"}</TableCell>
+                          <TableCell className='text-right font-mono'>
+                            {formatCurrency(account.currentBalance)}
+                          </TableCell>
+                          <TableCell>
+                            <div className='flex gap-1'>
+                              {onViewLedger && (
+                                <Button
+                                  variant='ghost'
+                                  size='icon'
+                                  onClick={() => onViewLedger(account)}
+                                  title='View Ledger'
+                                >
+                                  <BookOpen className='h-4 w-4' />
+                                </Button>
+                              )}
+                              <Button
+                                variant='ghost'
+                                size='icon'
+                                onClick={() => openEditModal(account)}
+                                title='Edit'
+                              >
+                                <Edit className='h-4 w-4' />
+                              </Button>
+                              {!account.isSystemAccount && (
+                                <Button
+                                  variant='ghost'
+                                  size='icon'
+                                  onClick={() => {
+                                    setSelectedAccount(account);
+                                    setDeleteModalOpen(true);
+                                  }}
+                                  title='Delete'
+                                >
+                                  <Trash2 className='h-4 w-4 text-destructive' />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            )
+          )}
         </div>
       </CardContent>
 
       {/* Add Account Modal */}
       <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className='sm:max-w-[500px]'>
           <DialogHeader>
             <DialogTitle>Add New Account</DialogTitle>
             <DialogDescription>
               Create a new account in the chart of accounts.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className='space-y-4 py-4'>
+            <div className='grid grid-cols-2 gap-4'>
               <div>
-                <Label htmlFor="code">Account Code *</Label>
+                <Label htmlFor='code'>Account Code *</Label>
                 <Input
-                  id="code"
+                  id='code'
                   value={formData.code}
                   onChange={(e) =>
                     setFormData({ ...formData, code: e.target.value })
                   }
-                  placeholder="e.g., 1050"
+                  placeholder='e.g., 1050'
                 />
               </div>
               <div>
-                <Label htmlFor="category">Category *</Label>
+                <Label htmlFor='category'>Category *</Label>
                 <Select
                   value={formData.category}
                   onValueChange={(value: AccountCategoryType) => {
@@ -504,18 +537,18 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
               </div>
             </div>
             <div>
-              <Label htmlFor="name">Account Name *</Label>
+              <Label htmlFor='name'>Account Name *</Label>
               <Input
-                id="name"
+                id='name'
                 value={formData.name}
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
-                placeholder="e.g., Bank Account"
+                placeholder='e.g., Bank Account'
               />
             </div>
             <div>
-              <Label htmlFor="subCategory">Sub-Category</Label>
+              <Label htmlFor='subCategory'>Sub-Category</Label>
               <Select
                 value={formData.subCategory}
                 onValueChange={(value) =>
@@ -523,7 +556,7 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select sub-category" />
+                  <SelectValue placeholder='Select sub-category' />
                 </SelectTrigger>
                 <SelectContent>
                   {getSubCategories(formData.category).map((sub) => (
@@ -534,9 +567,9 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className='grid grid-cols-2 gap-4'>
               <div>
-                <Label htmlFor="normalBalance">Normal Balance</Label>
+                <Label htmlFor='normalBalance'>Normal Balance</Label>
                 <Select
                   value={formData.normalBalance}
                   onValueChange={(value: "debit" | "credit") =>
@@ -547,16 +580,16 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="debit">Debit</SelectItem>
-                    <SelectItem value="credit">Credit</SelectItem>
+                    <SelectItem value='debit'>Debit</SelectItem>
+                    <SelectItem value='credit'>Credit</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label htmlFor="openingBalance">Opening Balance</Label>
+                <Label htmlFor='openingBalance'>Opening Balance</Label>
                 <Input
-                  id="openingBalance"
-                  type="number"
+                  id='openingBalance'
+                  type='number'
                   value={formData.openingBalance}
                   onChange={(e) =>
                     setFormData({
@@ -568,19 +601,19 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
               </div>
             </div>
             <div>
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor='description'>Description</Label>
               <Textarea
-                id="description"
+                id='description'
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                placeholder="Account description (optional)"
+                placeholder='Account description (optional)'
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddModalOpen(false)}>
+            <Button variant='outline' onClick={() => setAddModalOpen(false)}>
               Cancel
             </Button>
             <Button
@@ -595,15 +628,15 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
 
       {/* Edit Account Modal */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className='sm:max-w-[500px]'>
           <DialogHeader>
             <DialogTitle>Edit Account</DialogTitle>
             <DialogDescription>
               Update account details. Code and category cannot be changed.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className='space-y-4 py-4'>
+            <div className='grid grid-cols-2 gap-4'>
               <div>
                 <Label>Account Code</Label>
                 <Input value={formData.code} disabled />
@@ -614,9 +647,9 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
               </div>
             </div>
             <div>
-              <Label htmlFor="editName">Account Name *</Label>
+              <Label htmlFor='editName'>Account Name *</Label>
               <Input
-                id="editName"
+                id='editName'
                 value={formData.name}
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
@@ -624,7 +657,7 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
               />
             </div>
             <div>
-              <Label htmlFor="editSubCategory">Sub-Category</Label>
+              <Label htmlFor='editSubCategory'>Sub-Category</Label>
               <Select
                 value={formData.subCategory}
                 onValueChange={(value) =>
@@ -632,7 +665,7 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select sub-category" />
+                  <SelectValue placeholder='Select sub-category' />
                 </SelectTrigger>
                 <SelectContent>
                   {getSubCategories(formData.category).map((sub) => (
@@ -644,9 +677,9 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
               </Select>
             </div>
             <div>
-              <Label htmlFor="editDescription">Description</Label>
+              <Label htmlFor='editDescription'>Description</Label>
               <Textarea
-                id="editDescription"
+                id='editDescription'
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
@@ -655,7 +688,7 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditModalOpen(false)}>
+            <Button variant='outline' onClick={() => setEditModalOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleEdit} disabled={!formData.name}>
@@ -671,15 +704,15 @@ export function AccountsTable({ onViewLedger, refreshTrigger = 0 }: AccountsTabl
           <DialogHeader>
             <DialogTitle>Delete Account</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the account &quot;{selectedAccount?.name}&quot;?
-              This action cannot be undone.
+              Are you sure you want to delete the account &quot;
+              {selectedAccount?.name}&quot;? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>
+            <Button variant='outline' onClick={() => setDeleteModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
+            <Button variant='destructive' onClick={handleDelete}>
               Delete
             </Button>
           </DialogFooter>

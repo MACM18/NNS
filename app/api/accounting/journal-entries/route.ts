@@ -106,7 +106,13 @@ export async function POST(req: NextRequest) {
       lines,
     } = body;
 
-    if (!date || !description || !lines || !Array.isArray(lines) || lines.length < 2) {
+    if (
+      !date ||
+      !description ||
+      !lines ||
+      !Array.isArray(lines) ||
+      lines.length < 2
+    ) {
       return NextResponse.json(
         { error: "Date, description, and at least 2 entry lines are required" },
         { status: 400 }
@@ -140,12 +146,19 @@ export async function POST(req: NextRequest) {
         currencyId,
         exchangeRate,
         notes,
-        lines: lines.map((l: { accountId: string; description?: string; debitAmount?: number; creditAmount?: number }) => ({
-          accountId: l.accountId,
-          description: l.description,
-          debitAmount: l.debitAmount || 0,
-          creditAmount: l.creditAmount || 0,
-        })),
+        lines: lines.map(
+          (l: {
+            accountId: string;
+            description?: string;
+            debitAmount?: number;
+            creditAmount?: number;
+          }) => ({
+            accountId: l.accountId,
+            description: l.description,
+            debitAmount: l.debitAmount || 0,
+            creditAmount: l.creditAmount || 0,
+          })
+        ),
       },
       profile!.id
     );
@@ -153,7 +166,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: entry }, { status: 201 });
   } catch (error) {
     console.error("Error creating journal entry:", error);
-    const message = error instanceof Error ? error.message : "Failed to create journal entry";
+    const message =
+      error instanceof Error ? error.message : "Failed to create journal entry";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

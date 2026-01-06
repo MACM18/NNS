@@ -35,8 +35,12 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
-    const invoiceType = searchParams.get("invoiceType") as InvoiceTypeValue | null;
-    const paymentMethod = searchParams.get("paymentMethod") as PaymentMethodType | null;
+    const invoiceType = searchParams.get(
+      "invoiceType"
+    ) as InvoiceTypeValue | null;
+    const paymentMethod = searchParams.get(
+      "paymentMethod"
+    ) as PaymentMethodType | null;
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
     const status = searchParams.get("status");
@@ -106,9 +110,18 @@ export async function POST(req: NextRequest) {
       notes,
     } = body;
 
-    if (!invoiceId || !invoiceType || !paymentDate || !amount || !paymentMethod) {
+    if (
+      !invoiceId ||
+      !invoiceType ||
+      !paymentDate ||
+      !amount ||
+      !paymentMethod
+    ) {
       return NextResponse.json(
-        { error: "Invoice ID, invoice type, payment date, amount, and payment method are required" },
+        {
+          error:
+            "Invoice ID, invoice type, payment date, amount, and payment method are required",
+        },
         { status: 400 }
       );
     }
@@ -139,7 +152,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (error) {
     console.error("Error recording payment:", error);
-    const message = error instanceof Error ? error.message : "Failed to record payment";
+    const message =
+      error instanceof Error ? error.message : "Failed to record payment";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
