@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { getSupabaseClient } from "./supabase";
 
 export interface DPSuggestion {
   dp: string;
@@ -23,25 +22,26 @@ export interface ErrorSuggestion {
 }
 
 export class AIService {
-  private supabase = getSupabaseClient();
-
   async getDPSuggestions(partialDP: string): Promise<DPSuggestion[]> {
     try {
       // Get existing DPs for pattern analysis
-      const { data: existingDPs } = await this.supabase
-        .from("line_details")
-        .select("dp")
-        .ilike("dp", `${partialDP}%`)
-        .limit(20);
+      const response = await fetch(
+        `/api/lines?dpPrefix=${encodeURIComponent(partialDP)}&limit=20`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch lines");
+      }
+      const result = await response.json();
+      const existingDPs = result.data || [];
 
-      if (!existingDPs) return [];
+      if (!existingDPs.length) return [];
 
       // Analyze patterns and generate suggestions
       const suggestions: DPSuggestion[] = [];
       const dpCounts: Record<string, number> = {};
 
       // Count frequency of DP patterns
-      existingDPs.forEach((item) => {
+      existingDPs.forEach((item: any) => {
         if (item.dp) {
           const parts = item.dp.split("-");
           if (parts.length >= 4) {
@@ -75,21 +75,25 @@ export class AIService {
 
   async getLineGroupingSuggestions(): Promise<LineGroupSuggestion[]> {
     try {
-      const { data: lines } = await this.supabase
-        .from("line_details")
-        .select("id, dp, address, total_cable, created_at")
-        .gte(
-          "created_at",
-          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-        );
+      const thirtyDaysAgo = new Date(
+        Date.now() - 30 * 24 * 60 * 60 * 1000
+      ).toISOString();
+      const response = await fetch(
+        `/api/lines?createdAfter=${encodeURIComponent(thirtyDaysAgo)}`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch lines");
+      }
+      const result = await response.json();
+      const lines = result.data || [];
 
-      if (!lines) return [];
+      if (!lines.length) return [];
 
       const suggestions: LineGroupSuggestion[] = [];
       const addressGroups: Record<string, any[]> = {};
 
       // Group by similar addresses
-      lines.forEach((line) => {
+      lines.forEach((line: any) => {
         const addressKey =
           line.address?.toLowerCase().split(" ").slice(0, 3).join(" ") ||
           "unknown";
@@ -126,21 +130,23 @@ export class AIService {
 
   async getErrorSuggestions(): Promise<ErrorSuggestion[]> {
     try {
-      const { data: lines } = await this.supabase
-        .from("line_details")
-        .select(
-          "id, dp, power_dp_new, power_inbox_new, total_cable, wastage_input, phone_number"
-        )
-        .gte(
-          "created_at",
-          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-        );
+      const sevenDaysAgo = new Date(
+        Date.now() - 7 * 24 * 60 * 60 * 1000
+      ).toISOString();
+      const response = await fetch(
+        `/api/lines?createdAfter=${encodeURIComponent(sevenDaysAgo)}`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch lines");
+      }
+      const result = await response.json();
+      const lines = result.data || [];
 
-      if (!lines) return [];
+      if (!lines.length) return [];
 
       const suggestions: ErrorSuggestion[] = [];
 
-      lines.forEach((line) => {
+      lines.forEach((line: any) => {
         // Check for high power values
         if (line.power_dp_new >= 20 || line.power_inbox_new >= 20) {
           suggestions.push({
@@ -182,7 +188,6 @@ export class AIService {
         }
 
         // Check for duplicate phone numbers
-        // This would require a more complex query, simplified for demo
         if (!line.phone_number || line.phone_number.length < 10) {
           suggestions.push({
             line_id: line.id,

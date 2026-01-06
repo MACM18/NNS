@@ -1,4 +1,5 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
+export const dynamic = "force-dynamic";
 import { PublicLayout } from "@/components/layout/public-layout";
 import {
   Card,
@@ -28,19 +29,38 @@ interface Blog {
 }
 
 async function fetchBlogs(): Promise<Blog[]> {
-  const supabase = supabaseServer;
-  const { data, error } = await supabase
-    .from("blogs")
-    .select(
-      "id, title, content, excerpt, category, tags, featured_image_url, slug, meta_description, status, author, created_at"
-    )
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching blogs:", error.message);
-    return [];
-  }
-  return data as Blog[];
+  const rows = await prisma.blog.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      excerpt: true,
+      category: true,
+      tags: true,
+      featuredImageUrl: true,
+      slug: true,
+      metaDescription: true,
+      status: true,
+      author: true,
+      createdAt: true,
+    },
+  });
+  // Map camelCase fields to existing component expectations
+  return rows.map((r: any) => ({
+    id: r.id,
+    title: r.title,
+    content: r.content,
+    excerpt: r.excerpt,
+    category: r.category,
+    tags: r.tags,
+    featured_image_url: r.featuredImageUrl,
+    slug: r.slug,
+    meta_description: r.metaDescription,
+    status: r.status,
+    author: r.author,
+    created_at: r.createdAt?.toISOString?.() || r.createdAt,
+  }));
 }
 
 export default async function InsightsPage() {

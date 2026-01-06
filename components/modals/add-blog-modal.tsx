@@ -22,7 +22,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 
 interface AddBlogModalProps {
   open: boolean;
@@ -104,20 +103,22 @@ export function AddBlogModal({
         published_at: formData.published_at
           ? new Date(formData.published_at).toISOString()
           : null,
-        updated_at: new Date().toISOString(),
       };
       if (editingBlog) {
-        const { error } = await supabase
-          .from("blogs")
-          .update(blogData)
-          .eq("id", editingBlog.id);
-        if (error) throw error;
+        const response = await fetch(`/api/blogs/${editingBlog.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(blogData),
+        });
+        if (!response.ok) throw new Error("Failed to update");
         toast({ title: "Success", description: "Blog updated successfully" });
       } else {
-        const { error } = await supabase
-          .from("blogs")
-          .insert([{ ...blogData, created_at: new Date().toISOString() }]);
-        if (error) throw error;
+        const response = await fetch("/api/blogs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(blogData),
+        });
+        if (!response.ok) throw new Error("Failed to create");
         toast({ title: "Success", description: "Blog created successfully" });
       }
       onSuccess();

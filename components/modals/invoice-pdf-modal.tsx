@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Download } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 
 interface GeneratedInvoice {
@@ -74,7 +73,6 @@ export function InvoicePDFModal({
     useState<CompanySettings | null>(null);
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   useEffect(() => {
@@ -88,30 +86,34 @@ export function InvoicePDFModal({
 
     setLoading(true);
     try {
-      // Fetch line details
-      const { data: lines, error: linesError } = await supabase
-        .from("line_details")
-        .select("id, name, phone_number, total_cable, date, address")
-        .in("id", invoice.line_details_ids);
+      // Fetch line details by IDs
+      const linesResponse = await fetch("/api/lines/by-ids", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: invoice.line_details_ids }),
+      });
 
-      if (linesError) throw linesError;
-
-      // Fetch company settings
-      const { data: settings, error: settingsError } = await supabase
-        .from("company_settings")
-        .select("*")
-        .single();
-
-      if (settingsError && settingsError.code !== "PGRST116") {
-        throw settingsError;
+      if (!linesResponse.ok) {
+        throw new Error("Failed to fetch line details");
       }
 
-      // Cast Supabase response to our LineDetail[] shape
-      setLineDetails((lines as unknown as LineDetail[]) || []);
+      const linesData = await linesResponse.json();
+      const lines = linesData.data || [];
+
+      // Fetch company settings
+      const settingsResponse = await fetch("/api/settings/company");
+      let settings = null;
+
+      if (settingsResponse.ok) {
+        const settingsData = await settingsResponse.json();
+        settings = settingsData.data;
+      }
+
+      setLineDetails(lines as LineDetail[]);
 
       if (settings) {
         // Work with a mutable copy and normalize pricing_tiers
-        const parsedSettings: any = { ...(settings as any) };
+        const parsedSettings: any = { ...settings };
         if (typeof parsedSettings.pricing_tiers === "string") {
           try {
             parsedSettings.pricing_tiers = JSON.parse(
@@ -121,10 +123,23 @@ export function InvoicePDFModal({
             parsedSettings.pricing_tiers = getDefaultPricingTiers();
           }
         }
-        setCompanySettings(parsedSettings as CompanySettings);
-        setPricingTiers(
+
+        // Ensure numeric fields in tiers
+        const normalizedTiers = (
           (parsedSettings.pricing_tiers as any[]) || getDefaultPricingTiers()
-        );
+        ).map((t: any) => ({
+          min_length: Number(t.min_length) || 0,
+          max_length:
+            t.max_length === 999999 ||
+            String(t.max_length) === "" ||
+            t.max_length == null
+              ? 999999
+              : Number(t.max_length) || 999999,
+          rate: Number(t.rate) || 0,
+        }));
+
+        setCompanySettings(parsedSettings as CompanySettings);
+        setPricingTiers(normalizedTiers);
       } else {
         setCompanySettings(getDefaultCompanySettings());
         setPricingTiers(getDefaultPricingTiers());
@@ -297,8 +312,10 @@ export function InvoicePDFModal({
                     <td></td>
                     <td></td>
                     <td>${data.count}</td>
-                    <td>${data.rate.toLocaleString()}.00</td>
-                    <td class="amount">${data.amount.toLocaleString()}.00</td>
+                    <td>${Number(data.rate || 0).toLocaleString()}.00</td>
+                    <td class="amount">${Number(
+                      data.amount || 0
+                    ).toLocaleString()}.00</td>
                 </tr>
             `
               )
@@ -323,14 +340,18 @@ export function InvoicePDFModal({
             </tr>
             <tr class="total-row">
                 <td colspan="6"><strong>Grand Total (Rs.)</strong></td>
-                <td class="amount"><strong>${totalAmount.toLocaleString()}.00</strong></td>
+                <td class="amount"><strong>${Number(
+                  totalAmount || 0
+                ).toLocaleString()}.00</strong></td>
             </tr>
             ${
               invoice.invoice_type === "A"
                 ? `
             <tr class="total-row">
                 <td colspan="6"><strong>90%</strong></td>
-                <td class="amount"><strong>${adjustedAmount.toLocaleString()}.00</strong></td>
+                <td class="amount"><strong>${Number(
+                  adjustedAmount || 0
+                ).toLocaleString()}.00</strong></td>
             </tr>
             `
                 : ""
@@ -467,10 +488,10 @@ export function InvoicePDFModal({
                               {data.count}
                             </td>
                             <td className='border border-gray-300 p-2'>
-                              {data.rate.toLocaleString()}.00
+                              {Number(data.rate || 0).toLocaleString()}.00
                             </td>
                             <td className='border border-gray-300 p-2 text-right'>
-                              {data.amount.toLocaleString()}.00
+                              {Number(data.amount || 0).toLocaleString()}.00
                             </td>
                           </tr>
                         )
@@ -480,7 +501,8 @@ export function InvoicePDFModal({
                           Grand Total (Rs.)
                         </td>
                         <td className='border border-gray-300 p-2 text-right'>
-                          {invoice.total_amount.toLocaleString()}.00
+                          {Number(invoice.total_amount || 0).toLocaleString()}
+                          .00
                         </td>
                       </tr>
                       {invoice.invoice_type === "A" && (
@@ -492,8 +514,10 @@ export function InvoicePDFModal({
                             90%
                           </td>
                           <td className='border border-gray-300 p-2 text-right'>
-                            {Math.round(
-                              invoice.total_amount * 0.9
+                            {Number(
+                              Math.round(
+                                Number(invoice.total_amount || 0) * 0.9
+                              )
                             ).toLocaleString()}
                             .00
                           </td>

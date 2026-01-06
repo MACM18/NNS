@@ -4,15 +4,6 @@ import { createConnection } from "@/app/dashboard/integrations/google-sheets/act
 
 export async function DELETE(req: NextRequest) {
   try {
-    const auth = req.headers.get("authorization") || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : undefined;
-    if (!token) {
-      return NextResponse.json(
-        { error: "Missing bearer token" },
-        { status: 401 }
-      );
-    }
-
     const body = await req.json().catch(() => null);
     const connectionId = body?.connectionId as string | undefined;
     if (!connectionId) {
@@ -22,7 +13,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const result = await deleteConnection(connectionId, token);
+    const result = await deleteConnection(connectionId);
     return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
     const message = error?.message || "Delete failed";
@@ -39,16 +30,6 @@ export async function POST(req: NextRequest) {
     const sheet_name = body?.sheet_name ?? null;
     const sheet_tab = body?.sheet_tab ?? null;
 
-    // Accept access token either in body.accessToken or Authorization bearer header
-    let accessToken = body?.accessToken;
-    if (!accessToken) {
-      const auth =
-        req.headers.get("authorization") || req.headers.get("Authorization");
-      if (auth && auth.toLowerCase().startsWith("bearer ")) {
-        accessToken = auth.slice(7).trim();
-      }
-    }
-
     if (!month || !year || !sheet_url) {
       return NextResponse.json(
         { ok: false, error: "month, year and sheet_url are required" },
@@ -56,16 +37,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await createConnection(
-      {
-        month: Number(month),
-        year: Number(year),
-        sheet_url: String(sheet_url),
-        sheet_name: sheet_name ? String(sheet_name) : null,
-        sheet_tab: sheet_tab ? String(sheet_tab) : null,
-      },
-      accessToken
-    );
+    const result = await createConnection({
+      month: Number(month),
+      year: Number(year),
+      sheet_url: String(sheet_url),
+      sheet_name: sheet_name ? String(sheet_name) : null,
+      sheet_tab: sheet_tab ? String(sheet_tab) : null,
+    });
 
     return NextResponse.json({ ok: true, id: result.id }, { status: 200 });
   } catch (error: any) {

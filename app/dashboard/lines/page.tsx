@@ -26,7 +26,6 @@ import { LineDetailsTable } from "@/components/tables/enhanced-line-details-tabl
 import { AssigneeManagementModal } from "@/components/modals/assignee-management-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useDataCache } from "@/contexts/data-cache-context";
 import { Button } from "@/components/ui/button";
@@ -56,7 +55,6 @@ export default function LineDetailsPage() {
     pending: 0,
   };
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   useEffect(() => {
@@ -68,30 +66,26 @@ export default function LineDetailsPage() {
   const fetchLineStats = async () => {
     setIsRefreshing(true);
     try {
-      // Get start and end dates for the selected month
-      const startDate = new Date(selectedYear, selectedMonth - 1, 1);
-      const endDate = new Date(selectedYear, selectedMonth, 0);
+      const response = await fetch(
+        `/api/lines?month=${selectedMonth}&year=${selectedYear}`
+      );
 
-      // Fetch all columns to avoid missing-column errors
-      const { data: lines, error } = await supabase
-        .from("line_details")
-        .select("*")
-        .gte("date", startDate.toISOString().split("T")[0])
-        .lte("date", endDate.toISOString().split("T")[0]);
+      if (!response.ok) {
+        throw new Error("Failed to fetch lines");
+      }
 
-      if (error) throw error;
+      const result = await response.json();
+      const lines = result.data || [];
 
       const stats = {
-        total: lines?.length || 0,
-        completed:
-          lines?.filter(
-            (l: any) => l.completed === true || l.status === "completed"
-          ).length || 0,
-        inProgress: 0, // no explicit tracking column
-        pending:
-          lines?.filter(
-            (l: any) => !(l.completed === true || l.status === "completed")
-          ).length || 0,
+        total: lines.length,
+        completed: lines.filter(
+          (l: any) => l.completed === true || l.status === "completed"
+        ).length,
+        inProgress: 0,
+        pending: lines.filter(
+          (l: any) => !(l.completed === true || l.status === "completed")
+        ).length,
       };
 
       updateCache("lines", {

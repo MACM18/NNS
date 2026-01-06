@@ -1,6 +1,6 @@
 import React from "react";
 import { notFound } from "next/navigation";
-import { getSupabaseClient } from "@/lib/supabase";
+import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -31,7 +31,6 @@ interface SearchDetailsPageProps {
 
 export default async function SearchDetailsPage({ params }: any) {
   const { type, id } = params;
-  const supabase = getSupabaseClient();
 
   let data: any = null;
   let title = "";
@@ -46,27 +45,19 @@ export default async function SearchDetailsPage({ params }: any) {
   try {
     switch (type) {
       case "line": {
-        const { data: line, error } = await supabase
-          .from("line_details")
-          .select("*")
-          .eq("id", id)
-          .single();
-        if (error || !line) notFound();
+        const line = await prisma.lineDetails.findUnique({ where: { id } });
+        if (!line) notFound();
         data = line;
-        const telephone = line.telephone_no
-          ? String(line.telephone_no)
+        const telephone = line.telephoneNo
+          ? String(line.telephoneNo)
           : "Unknown";
-        const customerName = line.customer_name
-          ? String(line.customer_name)
-          : line.name
-          ? String(line.name)
-          : "Unknown customer";
+        const customerName = line.name ? String(line.name) : "Unknown customer";
         const address = line.address ? String(line.address) : "N/A";
         const dp = line.dp ? String(line.dp) : "N/A";
-        const lengthValue = line.length != null ? Number(line.length) : null;
+        const lengthValue = null; // no direct length field on model
         const installedDate = line.date ? new Date(String(line.date)) : null;
-        const createdAt = line.created_at
-          ? new Date(String(line.created_at))
+        const createdAt = line.createdAt
+          ? new Date(String(line.createdAt))
           : null;
 
         title = `Line: ${telephone}`;
@@ -107,12 +98,14 @@ export default async function SearchDetailsPage({ params }: any) {
               <Badge
                 variant='secondary'
                 className={
-                  line.completed
+                  line.status === "completed"
                     ? "bg-green-100 text-green-800"
                     : "bg-red-100 text-red-800"
                 }
               >
-                {line.completed ? "Completed" : "Pending"}
+                {line.status === "completed"
+                  ? "Completed"
+                  : line.status || "Pending"}
               </Badge>
             ),
             icon: <Info className='h-4 w-4' />,
@@ -131,40 +124,36 @@ export default async function SearchDetailsPage({ params }: any) {
         break;
       }
       case "task": {
-        const { data: task, error } = await supabase
-          .from("tasks")
-          .select("*")
-          .eq("id", id)
-          .single();
-        if (error || !task) notFound();
+        const task = await prisma.task.findUnique({ where: { id } });
+        if (!task) notFound();
         data = task;
-        const customerName = task.customer_name
-          ? String(task.customer_name)
+        const customerName = task.customerName
+          ? String(task.customerName)
           : "Unknown customer";
-        const telephone = task.telephone_no ? String(task.telephone_no) : "N/A";
-        const contactNo = task.contact_no ? String(task.contact_no) : "N/A";
+        const telephone = task.telephoneNo ? String(task.telephoneNo) : "N/A";
+        const contactNo = task.contactNo ? String(task.contactNo) : "N/A";
         const address = task.address ? String(task.address) : "N/A";
         const dp = task.dp ? String(task.dp) : "N/A";
         const status = task.status ? String(task.status) : "pending";
-        const connectionType = task.connection_type_new
-          ? String(task.connection_type_new)
+        const connectionType = task.connectionTypeNew
+          ? String(task.connectionTypeNew)
           : "N/A";
         const connectionServices =
-          Array.isArray(task.connection_services) &&
-          task.connection_services.length > 0
-            ? task.connection_services.join(", ")
+          Array.isArray(task.connectionServices) &&
+          task.connectionServices.length > 0
+            ? task.connectionServices.join(", ")
             : "None";
-        const taskDateValue = task.task_date
-          ? new Date(String(task.task_date))
+        const taskDateValue = task.taskDate
+          ? new Date(String(task.taskDate))
           : null;
-        const createdAt = task.created_at
-          ? new Date(String(task.created_at))
+        const createdAt = task.createdAt
+          ? new Date(String(task.createdAt))
           : null;
         const notes = task.notes ? String(task.notes) : "No notes";
 
         title = `Task: ${customerName}`;
         subtitle =
-          [task.telephone_no ? telephone : null, task.address ? address : null]
+          [task.telephoneNo ? telephone : null, task.address ? address : null]
             .filter(Boolean)
             .join(" • ") || "No contact information";
         badgeColor = "bg-green-100 text-green-800";
@@ -224,29 +213,24 @@ export default async function SearchDetailsPage({ params }: any) {
         break;
       }
       case "invoice": {
-        const { data: invoice, error } = await supabase
-          .from("generated_invoices")
-          .select("*")
-          .eq("id", id)
-          .single();
-        if (error || !invoice) notFound();
+        const invoice = await prisma.generatedInvoice.findUnique({
+          where: { id },
+        });
+        if (!invoice) notFound();
         data = invoice;
-        const invoiceNumber = invoice.invoice_number
-          ? String(invoice.invoice_number)
+        const invoiceNumber = invoice.invoiceNumber
+          ? String(invoice.invoiceNumber)
           : id;
-        const customerName = invoice.customer_name
-          ? String(invoice.customer_name)
-          : "Unknown customer";
-        const telephone = invoice.telephone_no
-          ? String(invoice.telephone_no)
+        const customerName = "Invoice";
+        const telephone = "N/A";
+        const totalAmount = invoice.totalAmount
+          ? Number(invoice.totalAmount)
+          : null;
+        const invoiceType = invoice.invoiceType
+          ? String(invoice.invoiceType)
           : "N/A";
-        const totalAmount =
-          invoice.total_amount != null ? Number(invoice.total_amount) : null;
-        const invoiceType = invoice.invoice_type
-          ? String(invoice.invoice_type)
-          : "N/A";
-        const createdAt = invoice.created_at
-          ? new Date(String(invoice.created_at))
+        const createdAt = invoice.createdAt
+          ? new Date(String(invoice.createdAt))
           : null;
 
         title = `Invoice: ${invoiceNumber}`;
@@ -285,27 +269,19 @@ export default async function SearchDetailsPage({ params }: any) {
         break;
       }
       case "inventory": {
-        const { data: item, error } = await supabase
-          .from("inventory_items")
-          .select("*")
-          .eq("id", id)
-          .single();
-        if (error || !item) notFound();
+        const item = await prisma.inventoryItem.findUnique({ where: { id } });
+        if (!item) notFound();
         data = item;
         const itemName = item.name ? String(item.name) : `Inventory ${id}`;
-        const category = item.category
-          ? String(item.category)
-          : "Uncategorized";
-        const description = item.description
-          ? String(item.description)
-          : "No description";
+        const category = "Uncategorized";
+        const description = "No description";
         const currentStock =
-          item.current_stock != null ? Number(item.current_stock) : null;
+          item.currentStock != null ? Number(item.currentStock) : null;
         const reorderLevel =
-          item.reorder_level != null ? Number(item.reorder_level) : null;
+          item.reorderLevel != null ? Number(item.reorderLevel) : null;
         const unit = item.unit ? String(item.unit) : "";
-        const updatedAt = item.updated_at
-          ? new Date(String(item.updated_at))
+        const updatedAt = item.updatedAt
+          ? new Date(String(item.updatedAt))
           : null;
 
         title = `Inventory: ${itemName}`;

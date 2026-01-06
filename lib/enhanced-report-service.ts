@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { getSupabaseClient } from "./supabase";
 import {
   ReportTemplates,
   type DrumNumberReportData,
@@ -16,8 +15,6 @@ export interface ReportOptions {
 }
 
 export class EnhancedReportService {
-  private supabase = getSupabaseClient();
-
   async generateDrumNumberReport(options: ReportOptions) {
     try {
       const startDate = new Date(
@@ -31,15 +28,20 @@ export class EnhancedReportService {
         0
       );
 
-      const { data: lines } = await this.supabase
-        .from("line_details")
-        .select("*")
-        .gte("date", startDate.toISOString().split("T")[0])
-        .lte("date", endDate.toISOString().split("T")[0])
-        .not("drum_number", "is", null)
-        .order("created_at", { ascending: true });
+      const params = new URLSearchParams({
+        startDate: startDate.toISOString().split("T")[0],
+        endDate: endDate.toISOString().split("T")[0],
+        hasDrumNumber: "true",
+      });
 
-      if (!lines) return null;
+      const response = await fetch(`/api/lines?${params}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch lines");
+      }
+      const result = await response.json();
+      const lines = result.data || [];
+
+      if (!lines.length) return null;
 
       const reportData: DrumNumberReportData[] = lines.map((line, index) => ({
         no: index + 1,
@@ -112,21 +114,26 @@ export class EnhancedReportService {
       );
 
       // Fetch all inventory items with issued and wastage info
-      const { data: items } = await this.supabase.from("inventory_items")
-        .select(`
-        *,
-        inventory_invoice_items(quantity_issued),
-        waste_tracking(quantity)
-      `);
+      const itemsResponse = await fetch("/api/inventory?includeRelations=true");
+      if (!itemsResponse.ok) {
+        throw new Error("Failed to fetch inventory items");
+      }
+      const itemsResult = await itemsResponse.json();
+      const items = itemsResult.data || [];
 
-      if (!items) return null;
+      if (!items.length) return null;
 
       // Fetch all line_details for the month
-      const { data: lineDetails } = await this.supabase
-        .from("line_details")
-        .select("*")
-        .gte("date", startDate.toISOString().split("T")[0])
-        .lte("date", endDate.toISOString().split("T")[0]);
+      const linesParams = new URLSearchParams({
+        startDate: startDate.toISOString().split("T")[0],
+        endDate: endDate.toISOString().split("T")[0],
+      });
+      const linesResponse = await fetch(`/api/lines?${linesParams}`);
+      if (!linesResponse.ok) {
+        throw new Error("Failed to fetch lines");
+      }
+      const linesResult = await linesResponse.json();
+      const lineDetails = linesResult.data || [];
 
       // Helper: calculate material used from line_details for each item
       function getMaterialUsedForItem(item: any, lines: any[]): number {
@@ -311,26 +318,38 @@ export class EnhancedReportService {
       );
 
       // Get all inventory items
-      const { data: items } = await this.supabase
-        .from("inventory_items")
-        .select("*")
-        .order("name");
-      if (!items) return null;
+      const itemsResponse = await fetch("/api/inventory");
+      if (!itemsResponse.ok) {
+        throw new Error("Failed to fetch inventory items");
+      }
+      const itemsResult = await itemsResponse.json();
+      const items = itemsResult.data || [];
+      if (!items.length) return null;
 
       // Get daily usage data for the month
-      const { data: dailyUsage } = await this.supabase
-        .from("line_details")
-        .select("*")
-        .gte("date", startDate.toISOString().split("T")[0])
-        .lte("date", endDate.toISOString().split("T")[0])
-        .order("date");
+      const linesParams = new URLSearchParams({
+        startDate: startDate.toISOString().split("T")[0],
+        endDate: endDate.toISOString().split("T")[0],
+      });
+      const linesResponse = await fetch(`/api/lines?${linesParams}`);
+      if (!linesResponse.ok) {
+        throw new Error("Failed to fetch lines");
+      }
+      const linesResult = await linesResponse.json();
+      const dailyUsage = linesResult.data || [];
 
-      // Fetch all issued items for the month, joined with inventory_invoices for date
-      const { data: issuedItems } = await this.supabase
-        .from("inventory_invoice_items")
-        .select("*, inventory_invoices(date)")
-        .gte("inventory_invoices.date", startDate.toISOString().split("T")[0])
-        .lte("inventory_invoices.date", endDate.toISOString().split("T")[0]);
+      // Fetch all issued items for the month
+      const invoiceParams = new URLSearchParams({
+        startDate: startDate.toISOString().split("T")[0],
+        endDate: endDate.toISOString().split("T")[0],
+        includeItems: "true",
+      });
+      const invoiceResponse = await fetch(
+        `/api/inventory/invoice-items?${invoiceParams}`
+      );
+      const issuedItems = invoiceResponse.ok
+        ? (await invoiceResponse.json()).data || []
+        : [];
 
       // Type guard for InventoryItem
       function isInventoryItem(obj: any): obj is InventoryItem {
@@ -567,14 +586,19 @@ export class EnhancedReportService {
         0
       );
 
-      const { data: lines } = await this.supabase
-        .from("line_details")
-        .select("*")
-        .gte("date", startDate.toISOString().split("T")[0])
-        .lte("date", endDate.toISOString().split("T")[0])
-        .order("date");
+      const params = new URLSearchParams({
+        startDate: startDate.toISOString().split("T")[0],
+        endDate: endDate.toISOString().split("T")[0],
+      });
 
-      if (!lines) return null;
+      const response = await fetch(`/api/lines?${params}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch lines");
+      }
+      const result = await response.json();
+      const lines = result.data || [];
+
+      if (!lines.length) return null;
 
       const reportData: NewConnectionReportData[] = Array.isArray(lines)
         ? lines.map((line: any, index: number) => ({

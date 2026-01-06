@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 
 interface CreateUserModalProps {
@@ -47,25 +46,22 @@ export function CreateUserModal({
     e.preventDefault();
     setLoading(true);
     try {
-      const supabase = getSupabaseClient();
-      // Create user in auth
-      const { data, error } = await supabase.auth.admin.createUser({
-        email: form.email,
-        password: form.password,
-        email_confirm: true,
-        user_metadata: { full_name: form.full_name },
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+          name: form.full_name,
+          role: form.role,
+        }),
       });
-      if (error) throw error;
-      // Create profile
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        email: form.email,
-        full_name: form.full_name,
-        role: form.role,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-      if (profileError) throw profileError;
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create user");
+      }
+
       toast({
         title: "User Created",
         description: "User account created successfully.",

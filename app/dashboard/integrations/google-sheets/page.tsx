@@ -1,4 +1,5 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
+export const dynamic = "force-dynamic";
 import {
   Card,
   CardContent,
@@ -19,6 +20,7 @@ import {
 import { FileSpreadsheet, ExternalLink, Calendar } from "lucide-react";
 import Link from "next/link";
 import ConnectionActions from "./components/ConnectionActions";
+import type { PageProps } from "@/types/common";
 
 interface SheetConnectionRow {
   id: string;
@@ -49,26 +51,42 @@ const MONTHS = [
 ];
 
 async function fetchConnections(page = 1, pageSize = 10) {
-  const supabase = supabaseServer;
+  const skip = (page - 1) * pageSize;
 
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+  const [rows, total] = await Promise.all([
+    prisma.googleSheetConnection.findMany({
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: pageSize,
+      select: {
+        id: true,
+        month: true,
+        year: true,
+        sheetUrl: true,
+        sheetName: true,
+        sheetTab: true,
+        lastSynced: true,
+        status: true,
+        recordCount: true,
+        createdAt: true,
+      },
+    }),
+    prisma.googleSheetConnection.count(),
+  ]);
 
-  const { data, error, count } = await supabase
-    .from("google_sheet_connections")
-    .select(
-      `id, month, year, sheet_url, sheet_name, sheet_tab, last_synced, status, record_count, created_at`,
-      { count: "exact" }
-    )
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  if (error) {
-    console.error("Error fetching sheet connections:", error.message);
-    return { rows: [] as SheetConnectionRow[], total: 0 };
-  }
-
-  return { rows: (data as SheetConnectionRow[]) || [], total: count ?? 0 };
+  const mapped = (rows || []).map((r: any) => ({
+    id: r.id,
+    month: r.month,
+    year: r.year,
+    sheet_url: r.sheetUrl,
+    sheet_name: r.sheetName,
+    sheet_tab: r.sheetTab,
+    last_synced: r.lastSynced,
+    status: r.status,
+    record_count: r.recordCount,
+    created_at: (r.createdAt as Date)?.toISOString?.() || r.createdAt,
+  })) as SheetConnectionRow[];
+  return { rows: mapped, total };
 }
 
 function formatDate(dateString: string | null | undefined) {
@@ -103,8 +121,10 @@ function getStatusBadge(status: string | null) {
   }
 }
 
-export default async function GoogleSheetsPage({ searchParams }: any) {
-  const currentPage = parseInt((searchParams?.page as string) || "1", 10) || 1;
+export default async function GoogleSheetsPage({ searchParams }: PageProps) {
+  const resolvedSearchParams = await searchParams;
+  const currentPage =
+    parseInt((resolvedSearchParams?.page as string) || "1", 10) || 1;
   const pageSize = 10;
 
   const { rows, total } = await fetchConnections(currentPage, pageSize);
@@ -183,16 +203,18 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
           ) : (
             <>
               {/* Desktop Table */}
-              <div className='hidden md:block overflow-x-auto'>
+              <div className='hidden lg:block overflow-x-auto rounded-md border'>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Period</TableHead>
-                      <TableHead>Sheet Name</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Records</TableHead>
-                      <TableHead>Last Synced</TableHead>
-                      <TableHead className='text-right'>Actions</TableHead>
+                      <TableHead className='w-[180px]'>Period</TableHead>
+                      <TableHead className='min-w-[200px]'>Sheet</TableHead>
+                      <TableHead className='w-[120px]'>Status</TableHead>
+                      <TableHead className='w-[100px]'>Records</TableHead>
+                      <TableHead className='w-[180px]'>Last Synced</TableHead>
+                      <TableHead className='w-[120px] text-right'>
+                        Actions
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -206,7 +228,9 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
                           <TableCell className='font-medium'>
                             <div className='flex items-center gap-2'>
                               <Calendar className='h-4 w-4 text-muted-foreground' />
-                              {monthLabel} {connection.year}
+                              <span className='whitespace-nowrap'>
+                                {monthLabel} {connection.year}
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -216,16 +240,79 @@ export default async function GoogleSheetsPage({ searchParams }: any) {
                               rel='noopener noreferrer'
                               className='flex items-center gap-2 hover:underline text-blue-600'
                             >
-                              {connection.sheet_name ?? connection.sheet_url}
-                              <ExternalLink className='h-3 w-3' />
+                              <span className='truncate max-w-[250px]'>
+                                {"Link to Sheet"}
+                              </span>
+                              <ExternalLink className='h-3 w-3 flex-shrink-0' />
                             </a>
                           </TableCell>
                           <TableCell>
                             {getStatusBadge(connection.status)}
                           </TableCell>
-                          <TableCell>{connection.record_count ?? 0}</TableCell>
+                          <TableCell className='text-center'>
+                            {connection.record_count ?? 0}
+                          </TableCell>
                           <TableCell className='text-muted-foreground text-sm'>
                             {formatDate(connection.last_synced)}
+                          </TableCell>
+                          <TableCell className='text-right'>
+                            <ConnectionActions connectionId={connection.id} />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Tablet Table */}
+              <div className='hidden md:block lg:hidden overflow-x-auto rounded-md border'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Period</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Records</TableHead>
+                      <TableHead className='text-right'>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((connection) => {
+                      const monthLabel =
+                        typeof connection.month === "number"
+                          ? MONTHS[connection.month - 1]
+                          : String(connection.month);
+                      return (
+                        <TableRow key={connection.id}>
+                          <TableCell>
+                            <div className='space-y-1'>
+                              <div className='flex items-center gap-2 font-medium'>
+                                <Calendar className='h-4 w-4 text-muted-foreground' />
+                                {monthLabel} {connection.year}
+                              </div>
+                              <a
+                                href={connection.sheet_url}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                                className='flex items-center gap-1 hover:underline text-blue-600 text-xs'
+                              >
+                                View Sheet
+                                <ExternalLink className='h-3 w-3' />
+                              </a>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {getStatusBadge(connection.status)}
+                          </TableCell>
+                          <TableCell className='text-center'>
+                            <div className='space-y-1'>
+                              <div className='font-medium'>
+                                {connection.record_count ?? 0}
+                              </div>
+                              <div className='text-xs text-muted-foreground'>
+                                {formatDate(connection.last_synced)}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell className='text-right'>
                             <ConnectionActions connectionId={connection.id} />

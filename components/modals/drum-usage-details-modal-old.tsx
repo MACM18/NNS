@@ -29,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import {
   Cable,
@@ -113,7 +112,6 @@ export function DrumUsageDetailsModal({
   const [validationError, setValidationError] = useState<string>("");
   const [showSettings, setShowSettings] = useState(false);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   useEffect(() => {
@@ -127,35 +125,14 @@ export function DrumUsageDetailsModal({
 
     setLoading(true);
     try {
-      // Fetch drum usage records
-      const { data: usage, error: usageError } = await supabase
-        .from("drum_usage")
-        .select(
-          `
-          id,
-          quantity_used,
-          usage_date,
-          cable_start_point,
-          cable_end_point,
-          wastage_calculated,
-          line_details(telephone_no, name, dp)
-        `
-        )
-        .eq("drum_id", drumId)
-        .order("usage_date", { ascending: true });
+      const res = await fetch(`/api/drums/${drumId}/usage`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to fetch drum usage");
 
-      if (usageError) throw usageError;
-
-      // Fetch drum info including manual wastage settings
-      const { data: drum, error: drumError } = await supabase
-        .from("drum_tracking")
-        .select(
-          "initial_quantity, current_quantity, manual_wastage_override, wastage_calculation_method"
-        )
-        .eq("id", drumId)
-        .single();
-
-      if (drumError) throw drumError;
+      const { drum, usageRecords: usage } = json.data || {};
 
       setUsageRecords(usage || []);
       setDrumInfo(drum);
@@ -277,12 +254,13 @@ export function DrumUsageDetailsModal({
         updateData.manual_wastage_override = null;
       }
 
-      const { error } = await supabase
-        .from("drum_tracking")
-        .update(updateData)
-        .eq("id", drumId);
-
-      if (error) throw error;
+      const res = await fetch(`/api/drums/${drumId}/usage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to save settings");
 
       addNotification({
         title: "Settings Saved",

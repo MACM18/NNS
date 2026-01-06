@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
-import { supabase } from "@/lib/supabase";
 import { useDataCache } from "@/contexts/data-cache-context";
 import { DashboardSkeleton } from "@/components/skeletons/dashboard-skeleton";
 
@@ -111,150 +110,28 @@ export default function Dashboard() {
     try {
       const currentMonth = selectedDate.getMonth() + 1;
       const currentYear = selectedDate.getFullYear();
-      const previousMonth = currentMonth === 1 ? 12 : currentMonth - 1;
-      const previousYear = currentMonth === 1 ? currentYear - 1 : currentYear;
 
-      const currentMonthStartDate = `${currentYear}-${currentMonth
-        .toString()
-        .padStart(2, "0")}-01`;
-      const currentMonthLastDay = new Date(
-        currentYear,
-        currentMonth,
-        0
-      ).getDate();
-      const currentMonthEndDate = `${currentYear}-${currentMonth
-        .toString()
-        .padStart(2, "0")}-${currentMonthLastDay.toString().padStart(2, "0")}`;
+      const response = await fetch(
+        `/api/dashboard/stats?month=${currentMonth}&year=${currentYear}`
+      );
 
-      const previousMonthStartDate = `${previousYear}-${previousMonth
-        .toString()
-        .padStart(2, "0")}-01`;
-      const previousMonthLastDay = new Date(
-        previousYear,
-        previousMonth,
-        0
-      ).getDate();
-      const previousMonthEndDate = `${previousYear}-${previousMonth
-        .toString()
-        .padStart(2, "0")}-${previousMonthLastDay.toString().padStart(2, "0")}`;
+      if (!response.ok) {
+        throw new Error("Failed to fetch dashboard data");
+      }
 
-      // Lines: count by installation 'date' (monthly lines)
-      const { data: currentLines } = await supabase
-        .from("line_details")
-        .select("*")
-        .gte("date", currentMonthStartDate)
-        .lte("date", currentMonthEndDate);
+      const result = await response.json();
+      const { stats, activities } = result.data;
 
-      const { data: previousLines } = await supabase
-        .from("line_details")
-        .select("*")
-        .gte("date", previousMonthStartDate)
-        .lte("date", previousMonthEndDate);
-
-      // Active tasks
-      const { data: currentTasks } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("status", "in_progress")
-        .gte("created_at", currentMonthStartDate)
-        .lte("created_at", currentMonthEndDate);
-
-      const { data: previousTasks } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("status", "in_progress")
-        .gte("created_at", previousMonthStartDate)
-        .lte("created_at", previousMonthEndDate);
-
-      // Pending reviews
-      const { data: currentReviews } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("status", "pending")
-        .gte("created_at", currentMonthStartDate)
-        .lte("created_at", currentMonthEndDate);
-
-      const { data: previousReviews } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("status", "pending")
-        .gte("created_at", previousMonthStartDate)
-        .lte("created_at", previousMonthEndDate);
-
-      // Invoices (A & B)
-      const { data: currentInvoices } = await supabase
-        .from("generated_invoices")
-        .select("total_amount")
-        .in("invoice_type", ["A", "B"]) // Only A and B
-        .gte("job_month", currentMonthStartDate)
-        .lte("job_month", currentMonthEndDate);
-
-      const { data: previousInvoices } = await supabase
-        .from("generated_invoices")
-        .select("total_amount")
-        .in("invoice_type", ["A", "B"]) // Only A and B
-        .gte("job_month", previousMonthStartDate)
-        .lte("job_month", previousMonthEndDate);
-
-      // Recent activities
-      const { data: activities } = await supabase
-        .from("tasks")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(5);
-
-      const formattedActivities: RecentActivity[] =
-        activities?.map((task: any) => ({
-          id: task.id,
-          action: `Task: ${task.telephone_no}`,
-          location: task.address || "Unknown Location",
-          time: formatTimeAgo(task.created_at),
-          status: task.status,
-          created_at: task.created_at,
-        })) || [];
-
-      const totalLines = currentLines?.length || 0;
-      const activeTasks = currentTasks?.length || 0;
-      const pendingReviews = currentReviews?.length || 0;
-      const monthlyRevenue =
-        currentInvoices?.reduce(
-          (sum, inv) => sum + (inv.total_amount || 0),
-          0
-        ) || 0;
-
-      const prevLines = previousLines?.length || 0;
-      const prevTasks = previousTasks?.length || 0;
-      const prevReviews = previousReviews?.length || 0;
-      const prevRevenue =
-        previousInvoices?.reduce(
-          (sum, inv) => sum + (inv.total_amount || 0),
-          0
-        ) || 0;
-
-      const lineChange =
-        prevLines > 0 ? ((totalLines - prevLines) / prevLines) * 100 : 0;
-      const taskChange =
-        prevTasks > 0 ? ((activeTasks - prevTasks) / prevTasks) * 100 : 0;
-      const reviewChange =
-        prevReviews > 0
-          ? ((pendingReviews - prevReviews) / prevReviews) * 100
-          : 0;
-      const revenueChange =
-        prevRevenue > 0
-          ? ((monthlyRevenue - prevRevenue) / prevRevenue) * 100
-          : 0;
+      // Format activities with time ago
+      const formattedActivities: RecentActivity[] = activities.map(
+        (activity: any) => ({
+          ...activity,
+          time: formatTimeAgo(activity.created_at),
+        })
+      );
 
       updateCache("dashboard", {
-        stats: {
-          totalLines,
-          activeTasks,
-          pendingReviews,
-          monthlyRevenue,
-          lineChange,
-          taskChange,
-          reviewChange,
-          revenueChange,
-        },
+        stats,
         activities: formattedActivities,
         lastUpdated: new Date(),
       });

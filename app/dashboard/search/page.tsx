@@ -21,7 +21,6 @@ import {
   AdvancedSearchFilters,
   type SearchFilters,
 } from "@/components/search/advanced-search-filters";
-import { getSupabaseClient } from "@/lib/supabase";
 import Link from "next/link";
 
 interface SearchResult {
@@ -36,6 +35,8 @@ interface SearchResult {
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
+  const router = require("next/navigation").useRouter();
+
   const [filters, setFilters] = useState<SearchFilters>({
     query: searchParams.get("q") || "",
     categories: ["line", "task", "invoice", "inventory"],
@@ -44,19 +45,29 @@ export default function SearchPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchTime, setSearchTime] = useState<number | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
-
-  const supabase = getSupabaseClient();
+  const [page, setPage] = useState<number>(1);
+  const [limit] = useState<number>(20);
+  const [total, setTotal] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const query = searchParams.get("q");
     if (query) {
       setFilters((prev) => ({ ...prev, query }));
-      performSearch({ ...filters, query });
+      performSearch({ ...filters, query, page: 1 }, false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const performSearch = async (searchFilters = filters) => {
-    if (!searchFilters.query.trim() && searchFilters.categories.length === 0) {
+  const performSearch = async (
+    searchFilters: any = filters,
+    append: boolean = false,
+    pageOverride?: number
+  ) => {
+    setError(null);
+
+    const effectiveQuery = (searchFilters.query || "").trim();
+    if (!effectiveQuery && searchFilters.categories.length === 0) {
       setResults([]);
       setHasSearched(false);
       setSearchTime(null);
@@ -69,339 +80,65 @@ export default function SearchPage() {
     const startTime = Date.now();
 
     try {
-      const searchResults: SearchResult[] = [];
+      const apiFilters = {
+        query: effectiveQuery,
+        categories: searchFilters.categories,
+        lineStatus: searchFilters.lineStatus,
+        taskStatus: searchFilters.taskStatus,
+        invoiceType: searchFilters.invoiceType,
+        inventoryLowStock: searchFilters.inventoryLowStock,
+        lengthRange: searchFilters.lengthRange,
+        amountRange: searchFilters.amountRange,
+        dateRange: searchFilters.dateRange
+          ? {
+              from: searchFilters.dateRange.from?.toISOString(),
+              to: searchFilters.dateRange.to?.toISOString(),
+            }
+          : undefined,
+        page: pageOverride ?? page,
+        limit,
+      };
 
-      // Search Lines
-      if (searchFilters.categories.includes("line")) {
-        let lineQuery = supabase.from("line_details").select("*");
+      // Update URL with query and page
+      const params = new URLSearchParams();
+      if (apiFilters.query) params.set("q", apiFilters.query);
+      if (apiFilters.page && Number(apiFilters.page) > 1)
+        params.set("page", String(apiFilters.page));
+      router.push(`/dashboard/search?${params.toString()}`, { shallow: true });
 
-        if (searchFilters.query.trim()) {
-          lineQuery = lineQuery.or(
-            `telephone_no.ilike.%${searchFilters.query}%,name.ilike.%${searchFilters.query}%,address.ilike.%${searchFilters.query}%`
-          );
-        }
+      const response = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(apiFilters),
+      });
 
-        if (searchFilters.lineStatus && searchFilters.lineStatus !== "all") {
-          lineQuery = lineQuery.eq(
-            "completed",
-            searchFilters.lineStatus === "completed"
-          );
-        }
-
-        if (searchFilters.lengthRange?.min) {
-          lineQuery = lineQuery.gte("length", searchFilters.lengthRange.min);
-        }
-
-        if (searchFilters.lengthRange?.max) {
-          lineQuery = lineQuery.lte("length", searchFilters.lengthRange.max);
-        }
-
-        if (searchFilters.dateRange?.from) {
-          lineQuery = lineQuery.gte(
-            "date",
-            searchFilters.dateRange.from.toISOString()
-          );
-        }
-
-        if (searchFilters.dateRange?.to) {
-          lineQuery = lineQuery.lte(
-            "date",
-            searchFilters.dateRange.to.toISOString()
-          );
-        }
-
-        const { data: lines } = await lineQuery;
-
-        (lines as any[] | null)?.forEach((line) => {
-          const l = line as any;
-          const telephone = String(l.telephone_no ?? "");
-          const customerName = String(l.customer_name ?? l.name ?? "");
-          const addr = String(l.address ?? "");
-          const lengthValue = l.length != null ? Number(l.length) : undefined;
-          const relevanceScore = calculateRelevance(searchFilters.query, [
-            telephone,
-            customerName,
-            addr,
-          ]);
-
-          searchResults.push({
-            id: String(l.id ?? ""),
-            type: "line",
-            title: telephone || customerName || "Line",
-            subtitle:
-              [telephone, customerName].filter(Boolean).join(" • ") || "Line",
-            description:
-              [
-                addr ? `Address: ${addr}` : null,
-                lengthValue != null && Number.isFinite(lengthValue)
-                  ? `Length: ${lengthValue}m`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(" • ") || "No additional details",
-            relevanceScore,
-            metadata: l,
-          });
-        });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Search failed");
       }
 
-      // Search Tasks
-      if (searchFilters.categories.includes("task")) {
-        let taskQuery = supabase.from("tasks").select("*");
+      const result = await response.json();
+      const data = result.data || [];
+      const meta = result.meta || {
+        total: null,
+        page: pageOverride ?? page,
+        limit,
+      };
 
-        if (searchFilters.query.trim()) {
-          taskQuery = taskQuery.or(
-            `customer_name.ilike.%${searchFilters.query}%,telephone_no.ilike.%${searchFilters.query}%,address.ilike.%${searchFilters.query}%,dp.ilike.%${searchFilters.query}%,notes.ilike.%${searchFilters.query}%`
-          );
-        }
+      setTotal(meta.total ?? null);
+      setPage(meta.page ?? page);
 
-        if (searchFilters.taskStatus && searchFilters.taskStatus !== "all") {
-          taskQuery = taskQuery.eq("status", searchFilters.taskStatus);
-        }
+      if (append) setResults((prev) => [...prev, ...data]);
+      else setResults(data);
 
-        if (searchFilters.dateRange?.from) {
-          taskQuery = taskQuery.gte(
-            "created_at",
-            searchFilters.dateRange.from.toISOString()
-          );
-        }
-
-        if (searchFilters.dateRange?.to) {
-          taskQuery = taskQuery.lte(
-            "created_at",
-            searchFilters.dateRange.to.toISOString()
-          );
-        }
-
-        const { data: tasks } = await taskQuery;
-
-        (tasks as any[] | null)?.forEach((task) => {
-          const t = task as any;
-          const customer = String(t.customer_name ?? "");
-          const tel = String(t.telephone_no ?? "");
-          const address = String(t.address ?? "");
-          const status = String(t.status ?? "");
-          const dp = String(t.dp ?? "");
-          const notes = String(t.notes ?? "");
-          const taskDate = String(t.task_date ?? "");
-          const connectionType = String(t.connection_type_new ?? "");
-          const title = customer || tel || dp || `Task ${String(t.id ?? "")}`;
-          const descriptionParts = [
-            address ? `Address: ${address}` : null,
-            dp ? `DP: ${dp}` : null,
-            status ? `Status: ${status}` : null,
-            connectionType ? `Connection: ${connectionType}` : null,
-            notes ? `Notes: ${notes}` : null,
-          ].filter(Boolean);
-          const relevanceScore = calculateRelevance(searchFilters.query, [
-            customer,
-            tel,
-            address,
-            status,
-            dp,
-            notes,
-          ]);
-
-          searchResults.push({
-            id: String(t.id ?? ""),
-            type: "task",
-            title,
-            subtitle:
-              [tel, address, taskDate ? `Task Date: ${taskDate}` : null]
-                .filter(Boolean)
-                .join(" • ") || "Task",
-            description:
-              descriptionParts.join(" • ") || "No additional details",
-            relevanceScore,
-            metadata: t,
-          });
-        });
-      }
-
-      // Search Invoices
-      if (searchFilters.categories.includes("invoice")) {
-        let invoiceQuery = supabase
-          .from("generated_invoices")
-          .select("*")
-          .in("invoice_type", ["A", "B"]); // Only fetch A and B type invoices
-
-        if (searchFilters.query.trim()) {
-          invoiceQuery = invoiceQuery.or(
-            `invoice_number.ilike.%${searchFilters.query}%,customer_name.ilike.%${searchFilters.query}%,telephone_no.ilike.%${searchFilters.query}%`
-          );
-        }
-
-        if (searchFilters.invoiceType && searchFilters.invoiceType !== "all") {
-          invoiceQuery = invoiceQuery.eq(
-            "invoice_type",
-            searchFilters.invoiceType
-          );
-        }
-
-        if (searchFilters.amountRange?.min) {
-          invoiceQuery = invoiceQuery.gte(
-            "total_amount",
-            searchFilters.amountRange.min
-          );
-        }
-
-        if (searchFilters.amountRange?.max) {
-          invoiceQuery = invoiceQuery.lte(
-            "total_amount",
-            searchFilters.amountRange.max
-          );
-        }
-
-        if (searchFilters.dateRange?.from) {
-          invoiceQuery = invoiceQuery.gte(
-            "created_at",
-            searchFilters.dateRange.from.toISOString()
-          );
-        }
-
-        if (searchFilters.dateRange?.to) {
-          invoiceQuery = invoiceQuery.lte(
-            "created_at",
-            searchFilters.dateRange.to.toISOString()
-          );
-        }
-
-        const { data: invoices } = await invoiceQuery;
-
-        (invoices as any[] | null)?.forEach((invoice) => {
-          const inv = invoice as any;
-          const invNo = String(inv.invoice_number ?? "");
-          const cust = String(inv.customer_name ?? "");
-          const tel = String(inv.telephone_no ?? "");
-          const total = Number(inv.total_amount ?? 0);
-          const type = String(inv.invoice_type ?? "");
-          const relevanceScore = calculateRelevance(searchFilters.query, [
-            invNo,
-            cust,
-            tel,
-          ]);
-
-          searchResults.push({
-            id: String(inv.id ?? ""),
-            type: "invoice",
-            title: invNo,
-            subtitle: cust,
-            description: `LKR ${total.toLocaleString()}${
-              type ? ` • ${type}` : ""
-            }`,
-            relevanceScore,
-            metadata: inv,
-          });
-        });
-      }
-
-      // Search Inventory
-      if (searchFilters.categories.includes("inventory")) {
-        let inventoryQuery = supabase.from("inventory_items").select("*");
-
-        if (searchFilters.query.trim()) {
-          inventoryQuery = inventoryQuery.or(
-            `name.ilike.%${searchFilters.query}%,description.ilike.%${searchFilters.query}%,category.ilike.%${searchFilters.query}%`
-          );
-        }
-
-        // Note: Supabase client cannot compare a column to another column directly in filters.
-        // We'll filter low-stock items client-side after fetching.
-
-        if (searchFilters.dateRange?.from) {
-          inventoryQuery = inventoryQuery.gte(
-            "created_at",
-            searchFilters.dateRange.from.toISOString()
-          );
-        }
-
-        if (searchFilters.dateRange?.to) {
-          inventoryQuery = inventoryQuery.lte(
-            "created_at",
-            searchFilters.dateRange.to.toISOString()
-          );
-        }
-
-        const { data: inventory } = await inventoryQuery;
-
-        let items = (inventory as any[] | null) ?? [];
-        if (searchFilters.inventoryLowStock) {
-          items = items.filter((it) => {
-            const i = it as any;
-            return Number(i.current_stock ?? 0) < Number(i.reorder_level ?? 0);
-          });
-        }
-
-        items.forEach((item) => {
-          const i = item as any;
-          const name = String(i.name ?? "");
-          const desc = String(i.description ?? "");
-          const cat = String(i.category ?? "");
-          const stock = Number(i.current_stock ?? 0);
-          const relevanceScore = calculateRelevance(searchFilters.query, [
-            name,
-            desc,
-            cat,
-          ]);
-
-          searchResults.push({
-            id: String(i.id ?? ""),
-            type: "inventory",
-            title: name,
-            subtitle: cat,
-            description: `Stock: ${stock}${desc ? ` • ${desc}` : ""}`,
-            relevanceScore,
-            metadata: i,
-          });
-        });
-      }
-
-      // Sort by relevance score
-      searchResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
-      setResults(searchResults);
       setSearchTime(Date.now() - startTime);
-    } catch (error) {
-      console.error("Advanced search error:", error);
+    } catch (err: any) {
+      console.error("Advanced search error:", err);
+      setError(String(err?.message ?? "Search failed"));
+      if (!append) setResults([]);
     } finally {
       setIsSearching(false);
     }
-  };
-
-  const calculateRelevance = (
-    query: string,
-    fields: (string | null)[]
-  ): number => {
-    if (!query.trim()) return 0;
-
-    const queryLower = query.toLowerCase();
-    let score = 0;
-
-    fields.forEach((field) => {
-      if (!field) return;
-
-      const fieldLower = field.toLowerCase();
-
-      // Exact match gets highest score
-      if (fieldLower === queryLower) {
-        score += 100;
-      }
-      // Starts with query gets high score
-      else if (fieldLower.startsWith(queryLower)) {
-        score += 80;
-      }
-      // Contains query gets medium score
-      else if (fieldLower.includes(queryLower)) {
-        score += 50;
-      }
-      // Partial word match gets low score
-      else if (
-        queryLower.split(" ").some((word) => fieldLower.includes(word))
-      ) {
-        score += 20;
-      }
-    });
-
-    return score;
   };
 
   const getResultIcon = (type: string) => {
@@ -455,7 +192,10 @@ export default function SearchPage() {
           <AdvancedSearchFilters
             filters={filters}
             onFiltersChange={setFilters}
-            onSearch={() => performSearch()}
+            onSearch={() => {
+              setPage(1);
+              performSearch({ ...filters }, false, 1);
+            }}
             onClear={() => {
               setFilters({
                 query: "",
@@ -484,8 +224,11 @@ export default function SearchPage() {
               </CardTitle>
               {hasSearched && (
                 <p className='text-sm text-muted-foreground'>
-                  Found {results.length} result
-                  {results.length !== 1 ? "s" : ""}
+                  Found {typeof total === "number" ? total : results.length}{" "}
+                  result
+                  {(typeof total === "number" ? total : results.length) !== 1
+                    ? "s"
+                    : ""}
                   {filters.query && ` for "${filters.query}"`}
                 </p>
               )}
@@ -503,10 +246,17 @@ export default function SearchPage() {
                 </div>
               ) : results.length > 0 ? (
                 <div className='space-y-4'>
+                  {error && (
+                    <div className='bg-red-50 border border-red-100 text-red-800 p-3 rounded'>
+                      <strong className='font-semibold'>Error: </strong>
+                      <span>{error}</span>
+                    </div>
+                  )}
+
                   {results.map((result) => (
                     <Link
                       key={`${result.type}-${result.id}`}
-                      href={`/search/details/${result.type}/${result.id}`}
+                      href={`/dashboard/search/details/${result.type}/${result.id}`}
                       className='block'
                     >
                       <Card className='hover:shadow-md transition-shadow cursor-pointer'>
@@ -551,6 +301,33 @@ export default function SearchPage() {
                       </Card>
                     </Link>
                   ))}
+
+                  {/* Pagination Controls */}
+                  <div className='flex items-center justify-between mt-4'>
+                    <div className='text-sm text-muted-foreground'>
+                      {typeof total === "number" ? (
+                        <span>
+                          Showing {results.length} of {total} result
+                          {total !== 1 ? "s" : ""}
+                        </span>
+                      ) : (
+                        <span>
+                          Showing {results.length} result
+                          {results.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                    {typeof total === "number" && results.length < total && (
+                      <div>
+                        <Button
+                          onClick={() => performSearch(filters, true, page + 1)}
+                          disabled={isSearching}
+                        >
+                          {isSearching ? "Loading..." : "Load more"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : hasSearched ? (
                 <div className='text-center py-8'>

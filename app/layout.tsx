@@ -2,6 +2,7 @@ import type React from "react";
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AuthSessionProvider } from "@/components/auth/session-provider";
 import { AuthProvider } from "@/contexts/auth-context";
 import { NotificationProvider } from "@/contexts/notification-context";
 import { DataCacheProvider } from "@/contexts/data-cache-context";
@@ -17,22 +18,42 @@ export const metadata: Metadata = {
   description:
     "AI-powered telecom management platform for fiber optic operations.",
   applicationName: "NNS Telecom Dashboard",
-  generator: "v0.dev",
+  generator: "Next.js",
   manifest: "/manifest.webmanifest",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-  },
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  keywords: [
+    "telecom",
+    "fiber optic",
+    "inventory management",
+    "task management",
+    "NNS",
+    "telecommunications",
   ],
+  authors: [{ name: "NNS Telecom" }],
+  creator: "NNS Telecom",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
+    title: "NNS Telecom",
+    startupImage: [
+      {
+        url: "/placeholder-logo.png",
+        media: "(device-width: 768px) and (device-height: 1024px)",
+      },
+    ],
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  openGraph: {
+    type: "website",
+    siteName: "NNS Telecom Dashboard",
     title: "NNS Telecom Dashboard",
+    description: "AI-powered telecom management platform",
+  },
+  twitter: {
+    card: "summary",
+    title: "NNS Telecom Dashboard",
+    description: "AI-powered telecom management platform",
   },
   icons: {
     icon: [
@@ -43,6 +64,17 @@ export const metadata: Metadata = {
       { url: "/placeholder-logo.png", type: "image/png", sizes: "192x192" },
     ],
   },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  ],
 };
 
 export default function RootLayout({
@@ -60,15 +92,17 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AuthProvider>
-            <NotificationProvider>
-              <DataCacheProvider>
-                {children}
-                <Toaster />
-                <PWAInitializer />
-              </DataCacheProvider>
-            </NotificationProvider>
-          </AuthProvider>
+          <AuthSessionProvider>
+            <AuthProvider>
+              <NotificationProvider>
+                <DataCacheProvider>
+                  {children}
+                  <Toaster />
+                  <PWAInitializer />
+                </DataCacheProvider>
+              </NotificationProvider>
+            </AuthProvider>
+          </AuthSessionProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -29,7 +29,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FileText, Download, Eye, Calendar } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 
 interface GenerateMonthlyInvoicesModalProps {
@@ -70,7 +69,6 @@ export function GenerateMonthlyInvoicesModal({
   const [invoicePreviews, setInvoicePreviews] = useState<InvoicePreview[]>([]);
   const [companySettings, setCompanySettings] = useState<any>(null);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   const months = [
@@ -110,22 +108,57 @@ export function GenerateMonthlyInvoicesModal({
 
   const fetchCompanySettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from("company_settings")
-        .select("*")
-        .single();
+      const response = await fetch("/api/settings/company");
 
-      if (error && error.code !== "PGRST116") {
-        throw error;
+      if (!response.ok) {
+        throw new Error("Failed to fetch company settings");
       }
+
+      const { data } = await response.json();
+
       let parsedData = data;
-      if (parsedData && typeof parsedData.pricing_tiers === "string") {
-        try {
-          parsedData.pricing_tiers = JSON.parse(parsedData.pricing_tiers);
-        } catch {
-          parsedData.pricing_tiers = [];
+      if (!parsedData) parsedData = {};
+
+      // Normalize pricing_tiers into array with numeric fields
+      const normalizeTiers = (tiers: any) => {
+        if (!tiers) return [];
+        if (typeof tiers === "string") {
+          try {
+            tiers = JSON.parse(tiers);
+          } catch {
+            return [];
+          }
         }
-      }
+        if (typeof tiers === "object" && !Array.isArray(tiers)) {
+          return Object.entries(tiers).map(([range, rate]) => {
+            if (range === "500+")
+              return {
+                min_length: 501,
+                max_length: 999999,
+                rate: Number(rate) || 0,
+              };
+            const [min, max] = range.split("-").map(Number);
+            return {
+              min_length: Number(min) || 0,
+              max_length: Number(max) || 999999,
+              rate: Number(rate) || 0,
+            };
+          });
+        }
+        if (Array.isArray(tiers)) {
+          return tiers.map((t: any) => ({
+            min_length: Number(t.min_length) || 0,
+            max_length:
+              t.max_length === 999999 || String(t.max_length) === ""
+                ? 999999
+                : Number(t.max_length) || 999999,
+            rate: Number(t.rate) || 0,
+          }));
+        }
+        return [];
+      };
+
+      parsedData.pricing_tiers = normalizeTiers(parsedData.pricing_tiers);
       setCompanySettings(parsedData);
     } catch (error) {
       console.error("Error fetching company settings:", error);
@@ -135,27 +168,15 @@ export function GenerateMonthlyInvoicesModal({
   const fetchLineDetails = async () => {
     setLoading(true);
     try {
-      const startDate = `${selectedYear}-${selectedMonth}-01`;
-      const lastDay = new Date(
-        Number(selectedYear),
-        Number(selectedMonth),
-        0
-      ).getDate();
-      const endDate = `${selectedYear}-${selectedMonth}-${lastDay
-        .toString()
-        .padStart(2, "0")}`;
+      const response = await fetch(
+        `/api/lines/for-invoice?month=${selectedMonth}&year=${selectedYear}`
+      );
 
-      const { data, error } = await supabase
-        .from("line_details")
-        .select("id, name, phone_number, total_cable, date, address")
-        .gte("date", startDate)
-        .lte("date", endDate)
-        .not("telephone_no", "is", null)
-        .not("total_cable", "is", null)
-        .gt("total_cable", -1)
-        .order("date");
+      if (!response.ok) {
+        throw new Error("Failed to fetch line details");
+      }
 
-      if (error) throw error;
+      const { data } = await response.json();
 
       setLineDetails((data as unknown as LineDetail[]) || []);
       generateInvoicePreviews((data as unknown as LineDetail[]) || []);
@@ -258,34 +279,32 @@ export function GenerateMonthlyInvoicesModal({
         months.find((m) => m.value === selectedMonth)?.label
       } ${selectedYear}`;
 
-      // Delete any existing invoices for this month/year/type before inserting new ones
-      for (const preview of invoicePreviews) {
-        // Remove existing invoice if present
-        await supabase
-          .from("generated_invoices")
-          .delete()
-          .eq("invoice_number", preview.invoiceNumber)
-          .eq("month", Number.parseInt(selectedMonth))
-          .eq("year", Number.parseInt(selectedYear));
+      // Prepare invoice data for batch generation
+      const invoicesData = invoicePreviews.map((preview) => ({
+        invoice_number: preview.invoiceNumber,
+        invoice_type: preview.type,
+        job_month: jobMonth,
+        invoice_date: invoiceDate,
+        total_amount: preview.totalAmount,
+        line_count: preview.lines.length,
+        line_details_ids: preview.lines.map((line) => line.id),
+        status: "generated",
+      }));
 
-        // Create generated invoice record
-        const invoiceData = {
-          invoice_number: preview.invoiceNumber,
-          invoice_type: preview.type,
-          month: Number.parseInt(selectedMonth),
-          year: Number.parseInt(selectedYear),
-          job_month: jobMonth,
-          invoice_date: invoiceDate,
-          total_amount: preview.totalAmount,
-          line_count: preview.lines.length,
-          line_details_ids: preview.lines.map((line) => line.id),
-          status: "generated",
-        };
+      // Generate all invoices via API
+      const response = await fetch("/api/invoices/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoices: invoicesData,
+          month: selectedMonth,
+          year: selectedYear,
+        }),
+      });
 
-        const { error } = await supabase
-          .from("generated_invoices")
-          .insert([invoiceData]);
-        if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate invoices");
       }
 
       addNotification({
@@ -460,7 +479,8 @@ export function GenerateMonthlyInvoicesModal({
                         </Badge>
                         <span className='text-sm text-muted-foreground'>
                           {preview.percentage}% • {preview.lines.length} lines •
-                          LKR {preview.totalAmount.toLocaleString()}
+                          LKR{" "}
+                          {Number(preview.totalAmount || 0).toLocaleString()}
                         </span>
                       </div>
                       <div className='flex gap-2'>
@@ -502,18 +522,18 @@ export function GenerateMonthlyInvoicesModal({
                               <TableCell>{line.name}</TableCell>
                               <TableCell>{line.phone_number}</TableCell>
                               <TableCell>
-                                {line.total_cable.toFixed(2)}m
+                                {Number(line.total_cable || 0).toFixed(2)}m
                               </TableCell>
                               <TableCell>
                                 LKR{" "}
-                                {calculateRate(
-                                  line.total_cable
+                                {Number(
+                                  calculateRate(line.total_cable) || 0
                                 ).toLocaleString()}
                               </TableCell>
                               <TableCell>
                                 LKR{" "}
-                                {calculateRate(
-                                  line.total_cable
+                                {Number(
+                                  calculateRate(line.total_cable) || 0
                                 ).toLocaleString()}
                               </TableCell>
                             </TableRow>

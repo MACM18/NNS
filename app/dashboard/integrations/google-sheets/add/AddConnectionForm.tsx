@@ -11,7 +11,6 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { useNotification } from "@/contexts/notification-context";
 import {
@@ -55,23 +54,9 @@ export default function AddConnectionForm(_: Props) {
   const [validationMessage, setValidationMessage] = useState("");
   const [pending, setPending] = useState(false);
 
-  // Fetch a short-lived access token so server actions can authenticate without cookies
+  // NextAuth session is in cookies; no token fetch required
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!cancelled) {
-          setAccessToken(data.session?.access_token ?? "");
-        }
-      } catch {
-        if (!cancelled) setAccessToken("");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setAccessToken("");
   }, []);
 
   // Client-side pre-submit validation and API submit (token-only flow)
@@ -114,7 +99,6 @@ export default function AddConnectionForm(_: Props) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: accessToken ? `Bearer ${accessToken}` : "",
         },
         body: JSON.stringify(payload),
       });

@@ -1,5 +1,3 @@
-import { getSupabaseClient } from "./supabase";
-
 export interface ExportOptions {
   format: "pdf" | "csv" | "excel";
   reportType: string;
@@ -19,38 +17,31 @@ export interface CompanyInfo {
 }
 
 export class ExportService {
-  private supabase = getSupabaseClient();
-
   async getCompanyInfo(): Promise<CompanyInfo> {
     try {
-      const { data } = await this.supabase
-        .from("company_settings")
-        .select(
-          "company_name,address,contact_numbers,website,registered_number"
-        )
-        .single();
-
-      const settings = (data ?? {}) as Partial<CompanyInfo> & {
-        contact_numbers?: unknown;
-      };
+      const response = await fetch("/api/settings/company");
+      if (!response.ok) {
+        throw new Error("Failed to fetch company info");
+      }
+      const result = await response.json();
+      const data = result.data ?? {};
 
       return {
         company_name:
-          typeof settings.company_name === "string" &&
-          settings.company_name.trim() !== ""
-            ? settings.company_name
+          typeof data.company_name === "string" &&
+          data.company_name.trim() !== ""
+            ? data.company_name
             : "NNS Enterprise",
-        address: typeof settings.address === "string" ? settings.address : "",
-        contact_numbers: Array.isArray(settings.contact_numbers)
-          ? ((settings.contact_numbers as unknown[])
+        address: typeof data.address === "string" ? data.address : "",
+        contact_numbers: Array.isArray(data.contact_numbers)
+          ? ((data.contact_numbers as unknown[])
               .filter((n) => typeof n === "string")
               .map((n) => String(n)) as string[])
           : [],
-        website:
-          typeof settings.website === "string" ? settings.website : "nns.lk",
+        website: typeof data.website === "string" ? data.website : "nns.lk",
         registered_number:
-          typeof settings.registered_number === "string"
-            ? settings.registered_number
+          typeof data.registered_number === "string"
+            ? data.registered_number
             : "",
       };
     } catch (error) {
@@ -67,22 +58,23 @@ export class ExportService {
 
   async generateMaterialUsageReport(options: ExportOptions) {
     try {
-      // Get line details excluding rejected tasks
-      const { data: lines } = await this.supabase
-        .from("line_details")
-        .select(
-          `
-          *,
-          tasks!inner(status)
-        `
-        )
-        .gte("date", options.dateRange.start)
-        .lte("date", options.dateRange.end)
-        .neq("tasks.status", "rejected");
+      // Get line details from API
+      const params = new URLSearchParams({
+        startDate: options.dateRange.start,
+        endDate: options.dateRange.end,
+        excludeRejected: "true",
+      });
 
-      if (!lines) return null;
+      const response = await fetch(`/api/lines?${params}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch lines");
+      }
+      const result = await response.json();
+      const lines = result.data || [];
 
-      const reportData = lines.map((line) => ({
+      if (!lines.length) return null;
+
+      const reportData = lines.map((line: any) => ({
         phone_number: line.phone_number,
         customer_name: line.name,
         dp: line.dp,
@@ -106,28 +98,25 @@ export class ExportService {
 
   async generateDailyMaterialBalanceReport(options: ExportOptions) {
     try {
-      // This would require more complex queries to track daily balances
-      // For now, we'll create a simplified version
-      const { data: drumUsage } = await this.supabase
-        .from("drum_usage")
-        .select(
-          `
-          *,
-          drum_tracking(drum_number, initial_quantity, current_quantity),
-          line_details(phone_number, name)
-        `
-        )
-        .gte("usage_date", options.dateRange.start)
-        .lte("usage_date", options.dateRange.end)
-        .order("usage_date");
+      const params = new URLSearchParams({
+        startDate: options.dateRange.start,
+        endDate: options.dateRange.end,
+      });
 
-      if (!drumUsage) return null;
+      const response = await fetch(`/api/drum-usage?${params}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch drum usage");
+      }
+      const result = await response.json();
+      const drumUsage = result.data || [];
+
+      if (!drumUsage.length) return null;
 
       const reportData = drumUsage.map((usage: any) => ({
         date: usage.usage_date,
         drum_number: usage.drum_tracking?.drum_number,
         previous_balance: usage.drum_tracking?.initial_quantity,
-        issued: 0, // Would need to track from inventory_invoices
+        issued: 0,
         usage: usage.quantity_used,
         balance_return: usage.drum_tracking?.current_quantity,
         customer: usage.line_details?.name,
@@ -147,19 +136,22 @@ export class ExportService {
 
   async generateDrumNumberReport(options: ExportOptions) {
     try {
-      const { data: lines } = await this.supabase
-        .from("line_details")
-        .select(
-          "phone_number, cable_start_new, cable_middle_new, cable_end_new, drum_number_new, name, dp"
-        )
-        .gte("date", options.dateRange.start)
-        .lte("date", options.dateRange.end)
-        .not("drum_number_new", "is", null)
-        .order("drum_number_new");
+      const params = new URLSearchParams({
+        startDate: options.dateRange.start,
+        endDate: options.dateRange.end,
+        hasDrumNumber: "true",
+      });
 
-      if (!lines) return null;
+      const response = await fetch(`/api/lines?${params}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch lines");
+      }
+      const result = await response.json();
+      const lines = result.data || [];
 
-      const reportData = lines.map((line) => ({
+      if (!lines.length) return null;
+
+      const reportData = lines.map((line: any) => ({
         phone_number: line.phone_number,
         customer_name: line.name,
         dp: line.dp,
@@ -178,14 +170,14 @@ export class ExportService {
 
   async generateMaterialBalanceReport(options: ExportOptions) {
     try {
-      const { data: items } = await this.supabase.from("inventory_items")
-        .select(`
-          *,
-          inventory_invoice_items(quantity, unit_price),
-          waste_tracking(quantity)
-        `);
+      const response = await fetch("/api/inventory");
+      if (!response.ok) {
+        throw new Error("Failed to fetch inventory");
+      }
+      const result = await response.json();
+      const items = result.data || [];
 
-      if (!items) return null;
+      if (!items.length) return null;
 
       const reportData = items.map((item: any) => {
         const totalIssued =
@@ -201,11 +193,11 @@ export class ExportService {
 
         return {
           item_name: item.name,
-          opening_balance: item.current_stock + totalIssued - totalWastage, // Calculated backwards
+          opening_balance: item.current_stock + totalIssued - totalWastage,
           stock_issue: totalIssued,
           wastage: totalWastage,
           in_hand: item.current_stock,
-          material_used_invoice: totalIssued - totalWastage, // Simplified calculation
+          material_used_invoice: totalIssued - totalWastage,
           wip_material: Math.max(
             0,
             totalIssued - totalWastage - item.current_stock

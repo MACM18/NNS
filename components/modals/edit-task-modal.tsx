@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getSupabaseClient } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 
 interface EditTaskModalProps {
@@ -51,11 +50,17 @@ export function EditTaskModal({
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await getSupabaseClient()
-        .from("tasks")
-        .update(formData)
-        .eq("id", task.id);
-      if (error) throw error;
+      const response = await fetch(`/api/tasks/${task.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update task");
+      }
+
       toast({
         title: "Task Updated",
         description: "The task was updated successfully.",

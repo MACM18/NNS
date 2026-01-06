@@ -16,7 +16,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search, UserPlus, UserMinus } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 
 interface Profile {
@@ -45,7 +44,6 @@ export function AssigneeManagementModal({
   const [currentAssignees, setCurrentAssignees] = useState<Profile[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   useEffect(() => {
@@ -57,14 +55,20 @@ export function AssigneeManagementModal({
 
   const fetchUsers = async () => {
     try {
-      const { data: profiles, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, role, email")
-        .order("full_name");
+      const response = await fetch("/api/users");
+      if (!response.ok) throw new Error("Failed to fetch users");
+      const result = await response.json();
 
-      if (error) throw error;
-
-      setAllUsers((profiles as unknown as Profile[]) || []);
+      // Extract profiles from the response
+      const profiles = result.data?.profiles || [];
+      setAllUsers(
+        profiles.map((p: any) => ({
+          id: p.userId || p.id,
+          full_name: p.full_name,
+          role: p.role,
+          email: p.email,
+        }))
+      );
     } catch (error: any) {
       addNotification({
         title: "Error",
@@ -79,23 +83,11 @@ export function AssigneeManagementModal({
     if (!lineId) return;
 
     try {
-      const { data: assignees, error } = await supabase
-        .from("line_assignees")
-        .select(
-          `
-          profiles!inner(
-            id,
-            full_name,
-            role,
-            email
-          )
-        `
-        )
-        .eq("line_id", lineId);
+      const response = await fetch(`/api/lines/${lineId}/assignees`);
+      if (!response.ok) throw new Error("Failed to fetch assignees");
+      const result = await response.json();
 
-      if (error) throw error;
-
-      const assigneeProfiles = assignees?.map((a: any) => a.profiles) || [];
+      const assigneeProfiles = result.data || [];
       setCurrentAssignees(assigneeProfiles);
       setSelectedUsers(new Set(assigneeProfiles.map((p: Profile) => p.id)));
     } catch (error: any) {
@@ -123,40 +115,15 @@ export function AssigneeManagementModal({
 
     setLoading(true);
     try {
-      // Get current assignee IDs
-      const currentIds = new Set(currentAssignees.map((a) => a.id));
-      const selectedIds = selectedUsers;
+      const response = await fetch(`/api/lines/${lineId}/assignees`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: Array.from(selectedUsers) }),
+      });
 
-      // Find users to add and remove
-      const toAdd = Array.from(selectedIds).filter((id) => !currentIds.has(id));
-      const toRemove = Array.from(currentIds).filter(
-        (id) => !selectedIds.has(id)
-      );
-
-      // Remove assignees
-      if (toRemove.length > 0) {
-        const { error: removeError } = await supabase
-          .from("line_assignees")
-          .delete()
-          .eq("line_id", lineId)
-          .in("user_id", toRemove);
-
-        if (removeError) throw removeError;
-      }
-
-      // Add new assignees
-      if (toAdd.length > 0) {
-        const { error: addError } = await supabase
-          .from("line_assignees")
-          .insert(
-            toAdd.map((userId) => ({
-              line_id: lineId,
-              user_id: userId,
-              assigned_at: new Date().toISOString(),
-            }))
-          );
-
-        if (addError) throw addError;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update assignees");
       }
 
       addNotification({

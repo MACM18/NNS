@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 
 interface TelephoneLine {
   id: string;
@@ -39,20 +38,18 @@ interface TelephoneLine {
 interface Drum {
   id: string;
   drum_number: string;
-  cable_type: string;
-  total_length: number;
-  used_length: number;
-  available_length: number;
-  status: "active" | "empty" | "damaged";
+  current_quantity: number;
+  status: "active" | "inactive" | "empty" | "damaged";
+  item_name?: string;
 }
 
 interface DrumUsage {
   id: string;
   drum_id: string;
-  telephone_line_id: string;
-  cable_used: number;
+  line_id: string;
+  quantity_used: number;
   usage_date: string;
-  wastage: number;
+  wastage_calculated: number;
 }
 
 interface EditTelephoneLineModalProps {
@@ -125,18 +122,22 @@ export function EditTelephoneLineModal({
 
   const fetchOriginalDrumUsage = async (lineId: string) => {
     try {
-      const { data, error } = await supabase
-        .from("drum_usage")
-        .select("*")
-        .eq("telephone_line_id", lineId)
-        .single();
-
-      if (error && error.code !== "PGRST116") {
-        console.error("Error fetching original drum usage:", error);
+      const res = await fetch(`/api/lines/${lineId}/usage`);
+      if (!res.ok) throw new Error("Failed to fetch original usage");
+      const json = await res.json();
+      const u = json.data;
+      if (!u) {
+        setOriginalDrumUsage(null);
         return;
       }
-
-      setOriginalDrumUsage(data || null);
+      setOriginalDrumUsage({
+        id: u.id,
+        drum_id: u.drum_id,
+        line_id: u.line_id,
+        quantity_used: u.quantity_used,
+        usage_date: u.usage_date,
+        wastage_calculated: u.wastage_calculated,
+      });
     } catch (error) {
       console.error("Error fetching original drum usage:", error);
     }
@@ -144,14 +145,17 @@ export function EditTelephoneLineModal({
 
   const fetchDrums = async () => {
     try {
-      const { data, error } = await supabase
-        .from("drum_tracking")
-        .select("*")
-        .eq("status", "active")
-        .order("drum_number");
-
-      if (error) throw error;
-      setDrums(data || []);
+      const res = await fetch(`/api/drums?status=active&all=true`);
+      if (!res.ok) throw new Error("Failed to fetch drums");
+      const json = await res.json();
+      const mapped = (json.data || []).map((d: any) => ({
+        id: d.id,
+        drum_number: d.drum_number,
+        current_quantity: d.current_quantity,
+        status: d.status,
+        item_name: d.item_name,
+      }));
+      setDrums(mapped);
     } catch (error) {
       console.error("Error fetching drums:", error);
       toast({
@@ -169,142 +173,18 @@ export function EditTelephoneLineModal({
     setIsLoading(true);
 
     try {
-      // Update the telephone line
-      const { error: lineError } = await supabase
-        .from("telephone_lines")
-        .update({
-          line_number: formData.line_number,
-          customer_name: formData.customer_name,
-          customer_address: formData.customer_address,
-          installation_date: formData.installation_date,
-          status: formData.status,
-          monthly_fee: formData.monthly_fee,
-          notes: formData.notes,
+      // Delegate all reconciliation to server API
+      const res = await fetch(`/api/lines/${line.id}/update-with-usage`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           drum_id: formData.drum_id || null,
-          cable_used: formData.cable_used || null,
-        })
-        .eq("id", line.id);
-
-      if (lineError) throw lineError;
-
-      // Handle drum usage changes
-      const newDrumId = formData.drum_id;
-      const newTotalCable = formData.cable_used;
-      const originalDrumId = originalDrumUsage?.drum_id;
-
-      // Case 1: Restore original drum usage if it exists and drum is being changed or removed
-      if (originalDrumUsage && originalDrumId !== newDrumId) {
-        // Restore the original drum's available quantity
-        const { error: restoreError } = await supabase
-          .from("drum_tracking")
-          .update({
-            used_length: (supabase as any)
-              .sql`used_length - ${originalDrumUsage.cable_used}`,
-            available_length: (supabase as any)
-              .sql`available_length + ${originalDrumUsage.cable_used}`,
-          })
-          .eq("id", originalDrumId);
-
-        if (restoreError) {
-          console.error("Error restoring original drum:", restoreError);
-          throw new Error("Failed to restore original drum usage");
-        }
-
-        // Update inventory - add back the cable
-        const { error: inventoryRestoreError } = await supabase
-          .from("inventory_items")
-          .update({
-            current_stock: (supabase as any)
-              .sql`current_stock + ${originalDrumUsage.cable_used}`,
-          })
-          .eq("name", "Drop Wire Cable");
-
-        if (inventoryRestoreError) {
-          console.error("Error restoring inventory:", inventoryRestoreError);
-          throw new Error("Failed to restore inventory");
-        }
-
-        // Delete the original drum usage record
-        const { error: deleteError } = await supabase
-          .from("drum_usage")
-          .delete()
-          .eq("id", originalDrumUsage.id);
-
-        if (deleteError) {
-          console.error("Error deleting original drum usage:", deleteError);
-          throw new Error("Failed to delete original drum usage");
-        }
-      }
-
-      // Case 2: Apply new drum usage if a drum is selected
-      if (newDrumId && newTotalCable > 0) {
-        // Get the selected drum's current state
-        const { data: selectedDrum, error: drumError } = await supabase
-          .from("drum_tracking")
-          .select("*")
-          .eq("id", newDrumId)
-          .single();
-
-        if (drumError) {
-          console.error("Error fetching selected drum:", drumError);
-          throw new Error("Failed to fetch selected drum");
-        }
-
-        if (!selectedDrum) {
-          throw new Error("Selected drum not found");
-        }
-
-        // Check if there's enough cable available
-        if (selectedDrum.available_length < newTotalCable) {
-          throw new Error(
-            `Not enough cable available. Available: ${selectedDrum.available_length}m, Required: ${newTotalCable}m`
-          );
-        }
-
-        // Calculate wastage (5% of cable used)
-        const wastage = Math.round(newTotalCable * 0.05);
-
-        // Update drum tracking
-        const { error: drumUpdateError } = await supabase
-          .from("drum_tracking")
-          .update({
-            used_length: selectedDrum.used_length + newTotalCable,
-            available_length: selectedDrum.available_length - newTotalCable,
-          })
-          .eq("id", newDrumId);
-
-        if (drumUpdateError) {
-          console.error("Error updating drum tracking:", drumUpdateError);
-          throw new Error("Failed to update drum tracking");
-        }
-
-        // Update inventory
-        const { error: inventoryError } = await supabase
-          .from("inventory_items")
-          .update({
-            current_stock: (supabase as any)
-              .sql`current_stock - ${newTotalCable}`,
-          })
-          .eq("name", "Drop Wire Cable");
-
-        if (inventoryError) {
-          console.error("Error updating inventory:", inventoryError);
-          throw new Error("Failed to update inventory");
-        }
-
-        // Create new drum usage record
-        const { error: usageError } = await supabase.from("drum_usage").insert({
-          drum_id: newDrumId,
-          telephone_line_id: line.id,
-          cable_used: newTotalCable,
-          usage_date: new Date().toISOString(),
-          wastage: wastage,
-        });
-
-        if (usageError) {
-          console.error("Error creating drum usage:", usageError);
-          throw new Error("Failed to create drum usage record");
-        }
+          cable_used: formData.cable_used || 0,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Failed to update line");
       }
 
       toast({
@@ -335,10 +215,12 @@ export function EditTelephoneLineModal({
 
     // If this is the same drum as originally used, include the original usage in available calculation
     if (originalDrumUsage && originalDrumUsage.drum_id === drumId) {
-      return drum.available_length + originalDrumUsage.cable_used;
+      return (
+        (drum.current_quantity || 0) + (originalDrumUsage.quantity_used || 0)
+      );
     }
 
-    return drum.available_length;
+    return drum.current_quantity || 0;
   };
 
   const selectedDrum = drums.find((d) => d.id === formData.drum_id);
@@ -459,7 +341,7 @@ export function EditTelephoneLineModal({
                   <SelectItem value=''>No drum selected</SelectItem>
                   {drums.map((drum) => (
                     <SelectItem key={drum.id} value={drum.id}>
-                      {drum.drum_number} - {drum.cable_type} (Available:{" "}
+                      {drum.drum_number} (Available:{" "}
                       {getAvailableCable(drum.id)}m)
                     </SelectItem>
                   ))}
@@ -496,9 +378,10 @@ export function EditTelephoneLineModal({
             <div className='p-3 bg-muted rounded-lg'>
               <p className='text-sm font-medium'>Current Usage Info:</p>
               <p className='text-sm text-muted-foreground'>
-                Currently using {originalDrumUsage.cable_used}m from drum{" "}
+                Currently using {(originalDrumUsage as any).cableUsed}m from
+                drum{" "}
                 {
-                  drums.find((d) => d.id === originalDrumUsage.drum_id)
+                  drums.find((d) => d.id === (originalDrumUsage as any).drumId)
                     ?.drum_number
                 }
               </p>

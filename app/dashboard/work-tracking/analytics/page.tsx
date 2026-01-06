@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
-import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { WorkTrackingHeader } from "@/components/work-tracking/work-tracking-header";
 
@@ -120,49 +119,6 @@ export default function WorkTrackingAnalyticsPage() {
     return null;
   }
 
-  const getAuthToken = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token || null;
-  };
-
-  const fetchWithAuth = async (
-    input: RequestInfo | URL,
-    init?: RequestInit
-  ) => {
-    let token = await getAuthToken();
-    let response = await fetch(input, {
-      ...init,
-      credentials: "include",
-      headers: (() => {
-        const headers = new Headers(init?.headers || {});
-        if (token) {
-          headers.set("Authorization", `Bearer ${token}`);
-        }
-        return headers;
-      })(),
-    });
-
-    if (response.status === 401) {
-      await supabase.auth.refreshSession();
-      token = await getAuthToken();
-      response = await fetch(input, {
-        ...init,
-        credentials: "include",
-        headers: (() => {
-          const headers = new Headers(init?.headers || {});
-          if (token) {
-            headers.set("Authorization", `Bearer ${token}`);
-          }
-          return headers;
-        })(),
-      });
-    }
-
-    return response;
-  };
-
   const handleUnauthorized = (status: number, message?: string) => {
     const description =
       message ||
@@ -194,7 +150,7 @@ export default function WorkTrackingAnalyticsPage() {
   const fetchAnalytics = async (month: number, year: number) => {
     setLoading(true);
     try {
-      const res = await fetchWithAuth(
+      const res = await fetch(
         `/api/work-assignments?month=${month}&year=${year}`
       );
       const json = await res.json().catch(() => ({}));

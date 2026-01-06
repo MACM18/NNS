@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -84,7 +83,6 @@ export function AddTaskModal({
     notes: "",
   });
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
   const { user } = useAuth();
 
@@ -144,16 +142,21 @@ export function AddTaskModal({
         notes: formData.notes || null,
       };
 
-      const { data: insertedTask, error } = await supabase
-        .from("tasks")
-        .insert([insertData])
-        .select()
-        .single();
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(insertData),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create task");
+      }
+
+      const { data: insertedTask } = await response.json();
 
       if (!insertedTask) {
-        throw new Error("Task created but no data returned from Supabase.");
+        throw new Error("Task created but no data returned.");
       }
 
       addNotification({
@@ -221,27 +224,16 @@ export function AddTaskModal({
   }, [formData.dp]);
   const fetchDPSuggestions = async () => {
     try {
-      const { data, error } = await supabase
-        .from("line_details")
-        .select("dp")
-        .ilike("dp", `${formData.dp}%`)
-        .limit(10);
-
-      if (error) throw error;
-
-      const suggestions = (data as { dp: string }[]).reduce(
-        (acc: Record<string, number>, item) => {
-          if (item.dp) {
-            acc[item.dp] = (acc[item.dp] || 0) + 1;
-          }
-          return acc;
-        },
-        {} as Record<string, number>
+      const response = await fetch(
+        `/api/lines/dp-suggestions?q=${encodeURIComponent(formData.dp)}`
       );
 
-      setDpSuggestions(
-        Object.entries(suggestions).map(([dp, count]) => ({ dp, count }))
-      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch DP suggestions");
+      }
+
+      const { data } = await response.json();
+      setDpSuggestions(data || []);
     } catch (error) {
       console.error("Error fetching DP suggestions:", error);
     }
@@ -264,18 +256,18 @@ export function AddTaskModal({
     const parts = dp.split("-");
     if (parts.length !== 5) return false;
 
-    const baseDP = parts.slice(0, 4).join("-");
-    const lastValue = parts[4];
-
     try {
-      const { data, error } = await supabase
-        .from("line_details")
-        .select("dp")
-        .ilike("dp", `${baseDP}-${lastValue}`);
+      const response = await fetch(
+        `/api/lines/validate-dp?dp=${encodeURIComponent(dp)}`
+      );
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error("Failed to validate DP");
+      }
 
-      if (data && data.length > 0) {
+      const { exists } = await response.json();
+
+      if (exists) {
         setDpValidationError(
           `DP ${dp} already exists. Please use a different last value (01-08).`
         );

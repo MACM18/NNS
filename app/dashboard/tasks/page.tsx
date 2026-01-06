@@ -29,7 +29,6 @@ import { TaskManagementTable } from "@/components/tables/task-management-table";
 import { AddTaskModal } from "@/components/modals/add-task-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useDataCache } from "@/contexts/data-cache-context";
 import type { TaskRecord } from "@/types/tasks";
 import { TasksSkeleton } from "@/components/skeletons/tasks-skeleton";
@@ -41,8 +40,6 @@ export default function TasksPage() {
   const [dateFilter, setDateFilter] = useState<"today" | "week" | "month">(
     "month"
   );
-  const supabase = getSupabaseClient();
-
   const { cache, updateCache } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -73,13 +70,12 @@ export default function TasksPage() {
     setIsRefreshing(true);
     try {
       const [start, end] = getDateRange(filter);
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*")
-        .gte("created_at", start.toISOString())
-        .lt("created_at", end.toISOString());
-      if (error) throw error;
-      updateCache("tasks", { data: data || [] });
+      const response = await fetch(
+        `/api/tasks?start=${start.toISOString()}&end=${end.toISOString()}`
+      );
+      if (!response.ok) throw new Error("Failed to fetch tasks");
+      const result = await response.json();
+      updateCache("tasks", { data: result.data || [] });
     } catch (error) {
       console.error("Error fetching tasks:", error);
     } finally {

@@ -23,7 +23,6 @@ interface EditInventoryInvoiceModalProps {
   invoiceItems: any[];
   onClose: () => void;
   onSuccess: () => void;
-  supabase: any;
   addNotification: (n: any) => void;
 }
 
@@ -35,7 +34,6 @@ export const EditInventoryInvoiceModal: React.FC<
   invoiceItems = [],
   onClose,
   onSuccess,
-  supabase,
   addNotification,
 }) => {
   const [items, setItems] = React.useState<any[]>(invoiceItems);
@@ -77,33 +75,39 @@ export const EditInventoryInvoiceModal: React.FC<
               drawn_by: formData.get("drawn_by") as string,
               status: formData.get("status") as string,
             };
-            const { error: invoiceError } = await supabase
-              .from("inventory_invoices")
-              .update(updatedInvoice)
-              .eq("id", invoice.id);
-            let itemError = null;
-            for (const item of items) {
-              const { error } = await supabase
-                .from("inventory_invoice_items")
-                .update({
-                  description: item.description,
-                  unit: item.unit,
-                  quantity_requested: Number(item.quantity_requested),
-                  quantity_issued: Number(item.quantity_issued),
-                })
-                .eq("id", item.id);
-              if (error) itemError = error;
-            }
-            if (invoiceError || itemError) {
-              addNotification({
-                title: "Error",
-                message: `Failed to update invoice: ${
-                  invoiceError?.message || itemError?.message
-                }`,
-                type: "error",
-                category: "system",
-              });
-            } else {
+
+            try {
+              // Update invoice
+              const invoiceResponse = await fetch(
+                `/api/inventory/invoices/${invoice.id}`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(updatedInvoice),
+                }
+              );
+              if (!invoiceResponse.ok)
+                throw new Error("Failed to update invoice");
+
+              // Update items
+              for (const item of items) {
+                const itemResponse = await fetch(
+                  `/api/inventory/invoices/${invoice.id}/items/${item.id}`,
+                  {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      description: item.description,
+                      unit: item.unit,
+                      quantity_requested: Number(item.quantity_requested),
+                      quantity_issued: Number(item.quantity_issued),
+                    }),
+                  }
+                );
+                if (!itemResponse.ok)
+                  throw new Error("Failed to update invoice item");
+              }
+
               addNotification({
                 title: "Invoice Updated",
                 message: `Invoice updated successfully`,
@@ -112,6 +116,15 @@ export const EditInventoryInvoiceModal: React.FC<
               });
               onSuccess();
               onClose();
+            } catch (error: any) {
+              addNotification({
+                title: "Error",
+                message: `Failed to update invoice: ${
+                  error?.message || "Unknown error"
+                }`,
+                type: "error",
+                category: "system",
+              });
             }
           }}
         >

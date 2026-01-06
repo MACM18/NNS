@@ -4,7 +4,6 @@ import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 
 import {
@@ -60,7 +59,6 @@ export function EditInventoryItemModal({
   item,
   onSuccess,
 }: EditInventoryItemModalProps) {
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
   const [stockEditable, setStockEditable] = React.useState(false);
   const form = useForm<z.infer<typeof formSchema>>({
@@ -93,11 +91,15 @@ export function EditInventoryItemModal({
       if (stockEditable) {
         updateData.current_stock = values.current_stock;
       }
-      const { error } = await supabase
-        .from("inventory_items")
-        .update(updateData)
-        .eq("id", item.id);
-      if (error) throw error;
+
+      const response = await fetch(`/api/inventory/${item.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+
+      if (!response.ok) throw new Error("Failed to update item");
+
       addNotification({
         title: "Success",
         message: "Inventory item updated successfully.",

@@ -56,7 +56,6 @@ import { EditDrumModal } from "@/components/modals/edit-drum-modal";
 import { DrumUsageDetailsModal } from "@/components/modals/drum-usage-details-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { recalculateAllDrumQuantities } from "@/app/dashboard/integrations/google-sheets/actions";
 import {
@@ -290,7 +289,6 @@ export default function InventoryPage() {
     useState<DrumTracking | null>(null);
   const [showInactiveDrums, setShowInactiveDrums] = useState(false);
 
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
 
   useEffect(() => {
@@ -324,59 +322,10 @@ export default function InventoryPage() {
 
   const fetchStats = async () => {
     try {
-      const { count: totalItems } = await supabase
-        .from("inventory_items")
-        .select("*", { count: "exact", head: true });
-
-      const { data: lowStockData, error: lowStockError } = await supabase.rpc(
-        "low_stock_alert_count"
-      );
-      const lowStockAlerts = lowStockData ?? 0;
-
-      const { count: activeDrums } = await supabase
-        .from("drum_tracking")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "active");
-
-      const now = new Date();
-      const currentMonth = now.toISOString().slice(0, 7);
-      const year = now.getFullYear();
-      const month = now.getMonth() + 1;
-
-      const lastDay = new Date(year, month, 0).getDate();
-      const endDate = `${currentMonth}-${lastDay.toString().padStart(2, "0")}`;
-
-      const { data: wasteData } = await supabase
-        .from("waste_tracking")
-        .select("quantity")
-        .gte("waste_date", `${currentMonth}-01`)
-        .lte("waste_date", endDate);
-
-      const { data: totalStock } = await supabase
-        .from("inventory_items")
-        .select("current_stock");
-
-      const totalWaste =
-        wasteData?.reduce(
-          (sum, item) => sum + ((item as { quantity: number }).quantity || 0),
-          0
-        ) || 0;
-      const totalStockValue =
-        totalStock?.reduce(
-          (sum, item) =>
-            sum +
-            (typeof item.current_stock === "number" ? item.current_stock : 0),
-          0
-        ) || 1;
-      const wastePercentage =
-        totalStockValue > 0 ? (totalWaste / totalStockValue) * 100 : 0;
-
-      setStats({
-        totalItems: typeof totalItems === "number" ? totalItems : 0,
-        lowStockAlerts: typeof lowStockAlerts === "number" ? lowStockAlerts : 0,
-        activeDrums: typeof activeDrums === "number" ? activeDrums : 0,
-        monthlyWastePercentage: Number(wastePercentage.toFixed(1)),
-      });
+      const response = await fetch("/api/inventory/stats");
+      if (!response.ok) throw new Error("Failed to fetch stats");
+      const result = await response.json();
+      setStats(result.data);
     } catch (error) {
       console.error("Error fetching stats:", error);
     }
@@ -384,45 +333,10 @@ export default function InventoryPage() {
 
   const fetchInvoices = async () => {
     try {
-      const { data, error } = await supabase
-        .from("inventory_invoices")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setInvoices(
-        Array.isArray(data)
-          ? data
-              .filter(
-                (d) =>
-                  d &&
-                  typeof d.id === "string" &&
-                  typeof d.invoice_number === "string" &&
-                  typeof d.warehouse === "string" &&
-                  typeof d.date === "string" &&
-                  typeof d.issued_by === "string" &&
-                  typeof d.drawn_by === "string" &&
-                  typeof d.total_items === "number" &&
-                  typeof d.status === "string" &&
-                  typeof d.created_at === "string"
-              )
-              .map(
-                (d) =>
-                  ({
-                    id: d.id,
-                    invoice_number: d.invoice_number,
-                    warehouse: d.warehouse,
-                    date: d.date,
-                    issued_by: d.issued_by,
-                    drawn_by: d.drawn_by,
-                    total_items: d.total_items,
-                    status: d.status,
-                    created_at: d.created_at,
-                  } as InventoryInvoice)
-              )
-          : []
-      );
+      const response = await fetch("/api/inventory/invoices?limit=10");
+      if (!response.ok) throw new Error("Failed to fetch invoices");
+      const result = await response.json();
+      setInvoices(result.data || []);
     } catch (error) {
       console.error("Error fetching invoices:", error);
     }
@@ -430,37 +344,18 @@ export default function InventoryPage() {
 
   const fetchInventoryItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from("inventory_items")
-        .select("*")
-        .order("name");
-
-      if (error) throw error;
+      const response = await fetch("/api/inventory?all=true");
+      if (!response.ok) throw new Error("Failed to fetch inventory items");
+      const result = await response.json();
       setInventoryItems(
-        Array.isArray(data)
-          ? data
-              .filter(
-                (d) =>
-                  d &&
-                  typeof d.id === "string" &&
-                  typeof d.name === "string" &&
-                  typeof d.unit === "string" &&
-                  typeof d.current_stock === "number" &&
-                  typeof d.reorder_level === "number" &&
-                  typeof d.updated_at === "string"
-              )
-              .map(
-                (d) =>
-                  ({
-                    id: d.id,
-                    name: d.name,
-                    unit: d.unit,
-                    current_stock: d.current_stock,
-                    reorder_level: d.reorder_level,
-                    last_updated: d.updated_at,
-                  } as InventoryItem)
-              )
-          : []
+        (result.data || []).map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          unit: d.unit,
+          current_stock: d.current_stock,
+          reorder_level: d.reorder_level,
+          last_updated: d.updated_at,
+        }))
       );
     } catch (error) {
       console.error("Error fetching inventory items:", error);
@@ -469,32 +364,19 @@ export default function InventoryPage() {
 
   const fetchDrums = async () => {
     try {
-      const { data, error } = await supabase
-        .from("drum_tracking")
-        .select(
-          `id, drum_number, item_id, initial_quantity, current_quantity, received_date, status, 
-           wastage_calculation_method, manual_wastage_override, inventory_items(name)`
-        )
-        .order("received_date", { ascending: false });
-      if (error) throw error;
+      const response = await fetch("/api/drums?all=true&includeUsage=true");
+      if (!response.ok) throw new Error("Failed to fetch drums");
+      const result = await response.json();
 
-      // Fetch drum usage data for all drums
-      const { data: usageData, error: usageError } = await supabase
-        .from("drum_usage")
-        .select(
-          "drum_id, quantity_used, usage_date, wastage_calculated, cable_start_point, cable_end_point, line_details(telephone_no, name)"
-        )
-        .order("usage_date", { ascending: false });
-
-      if (usageError) throw usageError;
+      const drumsData = result.data || [];
+      const usageData = result.usageData || [];
 
       // Calculate metrics using the enhanced logic
-      const drumsWithUsage = (data || []).map((drum: any) => {
-        const metrics = calculateDrumMetrics(drum, usageData || []);
+      const drumsWithUsage = drumsData.map((drum: any) => {
+        const metrics = calculateDrumMetrics(drum, usageData);
 
         return {
           ...drum,
-          item_name: drum.inventory_items?.name || "",
           calculated_current_quantity: metrics.calculatedCurrentQuantity,
           calculated_status: metrics.calculatedStatus,
           total_used: metrics.totalUsed,
@@ -516,20 +398,10 @@ export default function InventoryPage() {
 
   const fetchWasteReports = async () => {
     try {
-      const { data, error } = await supabase
-        .from("waste_tracking")
-        .select(
-          `id, item_id, quantity, waste_reason, waste_date, profiles(full_name), created_at, inventory_items(name)`
-        )
-        .order("waste_date", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      const wasteWithName = (data || []).map((w: any) => ({
-        ...w,
-        item_name: w.inventory_items?.name || "",
-        full_name: w.profiles?.full_name || "",
-      }));
-      setWasteReports(wasteWithName as WasteReport[]);
+      const response = await fetch("/api/inventory/waste?limit=20");
+      if (!response.ok) throw new Error("Failed to fetch waste reports");
+      const result = await response.json();
+      setWasteReports(result.data || []);
     } catch (error) {
       console.error("Error fetching waste reports:", error);
     }
@@ -538,16 +410,14 @@ export default function InventoryPage() {
   const fetchInvoiceItems = async (invoiceId: string) => {
     if (invoiceItems[invoiceId]) return;
     try {
-      const { data, error } = await supabase
-        .from("inventory_invoice_items")
-        .select(
-          "id, invoice_id, item_id, description, unit, quantity_requested, quantity_issued"
-        )
-        .eq("invoice_id", invoiceId);
-      if (error) throw error;
+      const response = await fetch(
+        `/api/inventory/invoices/${invoiceId}/items`
+      );
+      if (!response.ok) throw new Error("Failed to fetch invoice items");
+      const result = await response.json();
       setInvoiceItems((prev) => ({
         ...prev,
-        [invoiceId]: (data || []) as InventoryInvoiceItem[],
+        [invoiceId]: result.data || [],
       }));
     } catch (error) {
       addNotification({
@@ -624,15 +494,16 @@ export default function InventoryPage() {
     drumNumber: string
   ) => {
     try {
-      const { error } = await supabase
-        .from("drum_tracking")
-        .update({
+      const response = await fetch(`/api/drums/${drumId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           status: newStatus,
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", drumId);
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error("Failed to update drum status");
 
       addNotification({
         title: "Status Updated",
@@ -658,16 +529,17 @@ export default function InventoryPage() {
         drum.calculated_current_quantity ?? drum.current_quantity;
       const calculatedStatus = drum.calculated_status ?? drum.status;
 
-      const { error } = await supabase
-        .from("drum_tracking")
-        .update({
+      const response = await fetch(`/api/drums/${drum.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           current_quantity: calculatedQuantity,
           status: calculatedStatus,
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", drum.id);
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error("Failed to sync drum quantity");
 
       addNotification({
         title: "Success",
@@ -1154,18 +1026,8 @@ export default function InventoryPage() {
                     size='sm'
                     onClick={async () => {
                       try {
-                        // Retrieve the Supabase access token to authorize the server action
-                        const { data: sessionData } =
-                          await supabase.auth.getSession();
-                        const accessToken = sessionData?.session?.access_token;
-
-                        if (!accessToken) {
-                          throw new Error(
-                            "Missing access token. Please sign in again and try."
-                          );
-                        }
-
-                        await recalculateAllDrumQuantities(accessToken);
+                        // The server action handles its own authentication via NextAuth
+                        await recalculateAllDrumQuantities();
                         addNotification({
                           title: "Success",
                           message:
@@ -1616,7 +1478,6 @@ export default function InventoryPage() {
         }
         onClose={() => setEditInvoiceModalOpen(false)}
         onSuccess={handleSuccess}
-        supabase={supabase}
         addNotification={addNotification}
       />
       <AddWasteModal
@@ -1637,7 +1498,6 @@ export default function InventoryPage() {
           setSelectedDrum(null);
         }}
         onSuccess={handleSuccess}
-        supabase={supabase}
         addNotification={addNotification}
       />
       <EditInventoryItemModal
@@ -1673,18 +1533,12 @@ export default function InventoryPage() {
               onClick={async () => {
                 if (invoiceToDelete) {
                   try {
-                    // Delete dependent invoice items first to avoid FK violations
-                    const { error: itemsError } = await supabase
-                      .from("inventory_invoice_items")
-                      .delete()
-                      .eq("invoice_id", invoiceToDelete.id);
-                    if (itemsError) throw itemsError;
-
-                    const { error } = await supabase
-                      .from("inventory_invoices")
-                      .delete()
-                      .eq("id", invoiceToDelete.id);
-                    if (error) throw error;
+                    const response = await fetch(
+                      `/api/inventory/invoices/${invoiceToDelete.id}`,
+                      { method: "DELETE" }
+                    );
+                    if (!response.ok)
+                      throw new Error("Failed to delete invoice");
                     addNotification({
                       title: "Invoice Deleted",
                       message: `Invoice #${invoiceToDelete.invoice_number} deleted successfully`,
@@ -1732,18 +1586,13 @@ export default function InventoryPage() {
               onClick={async () => {
                 if (drumToDelete) {
                   try {
-                    // Delete dependent drum_usage rows first to avoid FK violations
-                    const { error: usageError } = await supabase
-                      .from("drum_usage")
-                      .delete()
-                      .eq("drum_id", drumToDelete.id);
-                    if (usageError) throw usageError;
-
-                    const { error } = await supabase
-                      .from("drum_tracking")
-                      .delete()
-                      .eq("id", drumToDelete.id);
-                    if (error) throw error;
+                    const response = await fetch(
+                      `/api/drums/${drumToDelete.id}`,
+                      {
+                        method: "DELETE",
+                      }
+                    );
+                    if (!response.ok) throw new Error("Failed to delete drum");
                     addNotification({
                       title: "Drum Deleted",
                       message: `Drum #${drumToDelete.drum_number} deleted successfully`,
@@ -1791,27 +1640,12 @@ export default function InventoryPage() {
               onClick={async () => {
                 if (wasteToDelete) {
                   try {
-                    const { error: deleteError } = await supabase
-                      .from("waste_tracking")
-                      .delete()
-                      .eq("id", wasteToDelete.id);
-                    if (deleteError) throw deleteError;
-                    const { data: itemData, error: fetchError } = await supabase
-                      .from("inventory_items")
-                      .select("current_stock")
-                      .eq("id", wasteToDelete.item_id)
-                      .single();
-                    if (fetchError) throw fetchError;
-                    const currentStock =
-                      typeof itemData?.current_stock === "number"
-                        ? itemData.current_stock
-                        : 0;
-                    const newStock = currentStock + wasteToDelete.quantity;
-                    const { error: updateError } = await supabase
-                      .from("inventory_items")
-                      .update({ current_stock: newStock })
-                      .eq("id", wasteToDelete.item_id);
-                    if (updateError) throw updateError;
+                    const response = await fetch(
+                      `/api/inventory/waste/${wasteToDelete.id}`,
+                      { method: "DELETE" }
+                    );
+                    if (!response.ok)
+                      throw new Error("Failed to delete waste record");
                     addNotification({
                       title: "Waste Record Deleted",
                       message: `Waste record deleted and stock restored for ${

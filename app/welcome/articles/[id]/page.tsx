@@ -1,4 +1,4 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 import { PublicLayout } from "@/components/layout/public-layout";
 import {
   Card,
@@ -22,18 +22,27 @@ interface Post {
 }
 
 async function fetchPost(id: string): Promise<Post | null> {
-  const supabase = supabaseServer;
-  const { data, error } = await supabase
-    .from("posts")
-    .select("id, title, content, author, category, created_at")
-    .eq("id", id)
-    .single();
-
-  if (error) {
-    console.error("Error fetching post:", error.message);
-    return null;
-  }
-  return data as Post;
+  const row = await prisma.post.findUnique({
+    where: { id: Number(id) },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      author: true,
+      category: true,
+      createdAt: true,
+    },
+  });
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    title: row.title,
+    content: row.content,
+    author: row.author,
+    category: row.category,
+    created_at:
+      (row.createdAt as Date).toISOString?.() || (row as any).createdAt,
+  } as Post;
 }
 
 export default async function ArticleDetailsPage({ params }: any) {
@@ -52,7 +61,7 @@ export default async function ArticleDetailsPage({ params }: any) {
               removed.
             </p>
             <Button asChild className='mt-8'>
-              <Link href='/articles'>Back to Articles</Link>
+              <Link href='/welcome/articles'>Back to Articles</Link>
             </Button>
           </div>
         </section>
@@ -82,7 +91,7 @@ export default async function ArticleDetailsPage({ params }: any) {
                 <p>{post.content}</p>
               </div>
               <Button asChild className='w-full'>
-                <Link href='/articles'>Back to Articles</Link>
+                <Link href='/welcome/articles'>Back to Articles</Link>
               </Button>
             </CardContent>
           </Card>

@@ -44,7 +44,6 @@ import {
 import { useNotification } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
 import { useDataCache } from "@/contexts/data-cache-context";
-import { getSupabaseClient } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { TaskRecord } from "@/types/tasks";
 import { AddTaskModal } from "../modals/add-task-modal";
@@ -70,7 +69,6 @@ export function Header() {
   const { user } = useAuth();
   const { cache, updateCache } = useDataCache();
   const router = useRouter();
-  const supabase = getSupabaseClient();
 
   const [openAddTaskModal, setOpenAddTaskModal] = useState(false);
   const [openAddTelephoneLineModal, setOpenAddTelephoneLineModal] =
@@ -112,139 +110,16 @@ export function Header() {
       setShowSearchResults(true);
 
       try {
-        const results: SearchResult[] = [];
+        const response = await fetch(
+          `/api/search?q=${encodeURIComponent(query)}`
+        );
 
-        const { data: lines } = await supabase
-          .from("line_details")
-          .select("id, telephone_no, name, address")
-          .or(
-            `telephone_no.ilike.%${query}%,name.ilike.%${query}%,address.ilike.%${query}%`
-          )
-          .limit(3);
-
-        if (lines) {
-          (lines as Array<Record<string, unknown>>).forEach((line) => {
-            const telephone = line.telephone_no
-              ? String(line.telephone_no)
-              : "";
-            const name = line.name ? String(line.name) : "";
-            const address = line.address ? String(line.address) : "";
-
-            results.push({
-              id: String(line.id),
-              type: "line",
-              title: telephone || name || "Line",
-              subtitle:
-                [telephone, name, address].filter(Boolean).join(" • ") ||
-                "No details",
-              data: line,
-            });
-          });
+        if (!response.ok) {
+          throw new Error("Search failed");
         }
 
-        const { data: tasks } = await supabase
-          .from("tasks")
-          .select("id, customer_name, telephone_no, address, status, dp, notes")
-          .or(
-            `customer_name.ilike.%${query}%,telephone_no.ilike.%${query}%,address.ilike.%${query}%,dp.ilike.%${query}%,notes.ilike.%${query}%`
-          )
-          .limit(3);
-
-        if (tasks) {
-          (tasks as Array<Record<string, unknown>>).forEach((task) => {
-            const customer = task.customer_name
-              ? String(task.customer_name)
-              : "";
-            const telephone = task.telephone_no
-              ? String(task.telephone_no)
-              : "";
-            const address = task.address ? String(task.address) : "";
-            const status = task.status ? String(task.status) : "";
-
-            results.push({
-              id: String(task.id),
-              type: "task",
-              title: customer || telephone || "Task",
-              subtitle:
-                [telephone, address, status ? `Status: ${status}` : null]
-                  .filter(Boolean)
-                  .join(" • ") || "No details",
-              data: task,
-            });
-          });
-        }
-
-        const { data: invoices } = await supabase
-          .from("generated_invoices")
-          .select("id, invoice_number, customer_name, total_amount")
-          .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
-          .ilike("invoice_number", `%${query}%`)
-          .limit(3);
-
-        if (invoices) {
-          (invoices as Array<Record<string, unknown>>).forEach((invoice) => {
-            const invoiceNumber = invoice.invoice_number
-              ? String(invoice.invoice_number)
-              : "";
-            const customer = invoice.customer_name
-              ? String(invoice.customer_name)
-              : "";
-            const rawAmount = invoice.total_amount as
-              | number
-              | string
-              | null
-              | undefined;
-            const amount = rawAmount != null ? Number(rawAmount) : null;
-
-            results.push({
-              id: String(invoice.id),
-              type: "invoice",
-              title: invoiceNumber || "Invoice",
-              subtitle: customer
-                ? `${customer}${
-                    amount != null && Number.isFinite(amount)
-                      ? ` • LKR ${amount.toLocaleString()}`
-                      : ""
-                  }`
-                : amount != null && Number.isFinite(amount)
-                ? `LKR ${amount.toLocaleString()}`
-                : "",
-              data: invoice,
-            });
-          });
-        }
-
-        const { data: inventory } = await supabase
-          .from("inventory_items")
-          .select("id, name, current_stock, unit")
-          .ilike("name", `%${query}%`)
-          .limit(3);
-
-        if (inventory) {
-          (inventory as Array<Record<string, unknown>>).forEach((item) => {
-            const name = item.name ? String(item.name) : "";
-            const rawStock = item.current_stock as
-              | number
-              | string
-              | null
-              | undefined;
-            const stock = rawStock != null ? Number(rawStock) : null;
-            const unit = item.unit ? String(item.unit) : "";
-
-            results.push({
-              id: String(item.id),
-              type: "inventory",
-              title: name || "Inventory Item",
-              subtitle:
-                stock != null && Number.isFinite(stock)
-                  ? `Stock: ${stock}${unit ? ` ${unit}` : ""}`
-                  : "",
-              data: item,
-            });
-          });
-        }
-
-        setSearchResults(results);
+        const data = await response.json();
+        setSearchResults(data.results || []);
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error("Quick search error:", error);
@@ -253,7 +128,7 @@ export function Header() {
         setIsSearching(false);
       }
     },
-    [supabase, user]
+    [user]
   );
 
   useEffect(() => {
@@ -308,7 +183,7 @@ export function Header() {
       setIsMobileSearchOpen(false);
     }
 
-    router.push(`/search/details/${result.type}/${result.id}`);
+    router.push(`/dashboard/search/details/${result.type}/${result.id}`);
   };
 
   const clearSearch = (closeMobileSheet = false) => {
@@ -322,7 +197,7 @@ export function Header() {
   };
 
   const openAdvancedSearch = (closeMobileSheet = false) => {
-    router.push("/search");
+    router.push("/dashboard/search");
     setShowSearchResults(false);
 
     if (closeMobileSheet) {

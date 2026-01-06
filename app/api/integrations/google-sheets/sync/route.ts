@@ -12,15 +12,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const connectionId = String(body.connectionId || "");
-    // Accept access token either in body.accessToken or Authorization bearer header
-    let accessToken = body.accessToken;
-    if (!accessToken) {
-      const authHeader =
-        req.headers.get("authorization") || req.headers.get("Authorization");
-      if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
-        accessToken = authHeader.slice(7).trim();
-      }
-    }
     if (!connectionId) {
       return NextResponse.json(
         { ok: false, error: "connectionId required" },
@@ -37,7 +28,7 @@ export async function POST(req: NextRequest) {
     (async () => {
       try {
         setJobInProgress(jobId, "Running sync");
-        const result = await syncConnection(connectionId, accessToken, (msg) =>
+        const result = await syncConnection(connectionId, (msg) =>
           setJobInProgress(jobId, msg)
         );
         setJobDone(jobId, result);

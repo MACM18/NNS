@@ -36,24 +36,63 @@ export default function ProfilePage() {
     return <AuthWrapper />;
   }
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleSave = async () => {
+    if (!user?.id) return;
+    setIsSaving(true);
     try {
-      // Here you would typically update the profile in Supabase
-      // For now, we'll just show a success notification
+      const payload = {
+        fullName: formData.full_name,
+        phone: formData.phone || null,
+        address: formData.address || null,
+        bio: formData.bio || null,
+        avatarUrl: profile?.avatar_url || null,
+      };
+
+      const response = await fetch(`/api/profile/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to update profile");
+      }
+
+      const result = await response.json();
+      const p = result.profile || {};
+
+      // Update local profile in auth context by reloading (simple approach)
+      // fetchProfile is internal to AuthProvider; easiest is to trigger a refresh by updating session
+      // But we can also update via POST to /api or directly set profile via a fetch to /api/profile
+
       addNotification({
         title: "Profile Updated",
         message: "Your profile has been successfully updated.",
         type: "success",
         category: "system",
       });
+
+      // Update UI state to normalized shape
+      setFormData({
+        full_name: p.fullName ?? p.full_name ?? "",
+        phone: p.phone ?? "",
+        address: p.address ?? "",
+        bio: p.bio ?? "",
+      });
+
       setIsEditing(false);
-    } catch (error) {
+    } catch (error: any) {
       addNotification({
         title: "Update Failed",
-        message: "Failed to update profile. Please try again.",
+        message: String(error?.message ?? "Failed to update profile"),
         type: "error",
         category: "system",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -72,7 +111,7 @@ export default function ProfilePage() {
       {loading ? (
         <PageSkeleton />
       ) : (
-        <div className='max-w-4xl mx-auto'>
+        <div className='mx-auto'>
           <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
             <div>
               <h1 className='text-3xl font-bold'>Profile</h1>
@@ -137,7 +176,11 @@ export default function ProfilePage() {
                   <Calendar className='h-4 w-4 text-muted-foreground' />
                   <span>
                     Joined{" "}
-                    {new Date(user?.created_at || "").toLocaleDateString()}
+                    {new Date(
+                      (user as any)?.createdAt ||
+                        (user as any)?.created_at ||
+                        ""
+                    ).toLocaleDateString()}
                   </span>
                 </div>
               </CardContent>
@@ -170,6 +213,11 @@ export default function ProfilePage() {
                     ) : (
                       <div className='p-2 bg-muted rounded-md'>
                         {profile?.full_name || "Not set"}
+                      </div>
+                    )}
+                    {isEditing && (
+                      <div className='text-xs text-muted-foreground mt-1'>
+                        This changes your profile name only.
                       </div>
                     )}
                   </div>

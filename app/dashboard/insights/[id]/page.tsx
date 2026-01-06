@@ -1,4 +1,5 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
+export const dynamic = "force-dynamic";
 import { PublicLayout } from "@/components/layout/public-layout";
 import {
   Card,
@@ -13,7 +14,7 @@ import { CalendarDays, User, Tag } from "lucide-react";
 import { format } from "date-fns";
 
 interface Blog {
-  id: string;
+  id: number;
   title: string;
   content: string;
   excerpt: string;
@@ -28,20 +29,39 @@ interface Blog {
 }
 
 async function fetchBlog(slug: string): Promise<Blog | null> {
-  const supabase = supabaseServer;
-  const { data, error } = await supabase
-    .from("blogs")
-    .select(
-      "id, title, content, excerpt, category, tags, featured_image_url, slug, meta_description, status, author, created_at"
-    )
-    .eq("slug", slug)
-    .single();
-
-  if (error) {
-    console.error("Error fetching blog:", error.message);
-    return null;
-  }
-  return data as Blog;
+  const row = await prisma.blog.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      excerpt: true,
+      category: true,
+      tags: true,
+      featuredImageUrl: true,
+      slug: true,
+      metaDescription: true,
+      status: true,
+      author: true,
+      createdAt: true,
+    },
+  });
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content,
+    excerpt: row.excerpt,
+    category: row.category,
+    tags: row.tags as any,
+    featured_image_url: (row as any).featuredImageUrl,
+    slug: row.slug,
+    meta_description: (row as any).metaDescription,
+    status: row.status,
+    author: row.author,
+    created_at:
+      (row.createdAt as Date).toISOString?.() || (row as any).createdAt,
+  } as Blog;
 }
 
 export default async function InsightDetailsPage({ params }: any) {

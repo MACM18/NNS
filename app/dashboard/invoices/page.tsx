@@ -34,7 +34,6 @@ import { CompanySettingsModal } from "@/components/modals/company-settings-modal
 import { InvoicePDFModal } from "@/components/modals/invoice-pdf-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useNotification } from "@/contexts/notification-context";
 import { useDataCache } from "@/contexts/data-cache-context";
 import { min } from "date-fns";
@@ -69,7 +68,6 @@ export default function InvoicesPage() {
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] =
     useState<GeneratedInvoice | null>(null);
-  const supabase = getSupabaseClient();
   const { addNotification } = useNotification();
   const { cache, updateCache } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -123,14 +121,13 @@ export default function InvoicesPage() {
   const fetchInvoices = async () => {
     setIsRefreshing(true);
     try {
-      const { data, error } = await supabase
-        .from("generated_invoices")
-        .select("*")
-        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
-        .order("created_at", { ascending: false })
-        .limit(50);
+      const response = await fetch("/api/invoices?types=A,B&limit=50");
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error("Failed to fetch invoices");
+      }
+
+      const { data } = await response.json();
 
       updateCache("invoices", {
         data: data || [],
@@ -153,53 +150,24 @@ export default function InvoicesPage() {
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
 
-      // Get this month's invoices
-      const { data: monthlyInvoices, error: monthlyError } = await supabase
-        .from("generated_invoices")
-        .select("*")
-        .in("invoice_type", ["A", "B"]) // Only fetch A and B type invoices
-        .eq("month", currentMonth)
-        .eq("year", currentYear);
+      // Get invoice stats
+      const statsResponse = await fetch(
+        `/api/invoices/stats?month=${currentMonth}&year=${currentYear}`
+      );
 
-      if (monthlyError) throw monthlyError;
-
-      // Calculate stats
-      const thisMonth = monthlyInvoices?.length || 0;
-      const totalAmount =
-        monthlyInvoices?.reduce(
-          (sum, inv) => sum + Number(inv.total_amount ?? 0),
-          0
-        ) ?? 0;
-      const linesBilled =
-        monthlyInvoices?.reduce(
-          (sum, inv) => sum + Number(inv.line_count ?? 0),
-          0
-        ) ?? 0;
-      const averageLinesBilled = thisMonth > 0 ? linesBilled / thisMonth : 0;
-      const avgRate =
-        averageLinesBilled > 0
-          ? Math.round(totalAmount / averageLinesBilled)
-          : 0;
-
-      updateCache("invoices", {
-        stats: {
-          thisMonth,
-          totalAmount,
-          linesBilled: averageLinesBilled,
-          avgRate,
-        },
-      });
-
-      // Get pricing tiers
-      const { data: tiers, error: tiersError } = await supabase
-        .from("company_settings")
-        .select("pricing_tiers")
-        .single();
-      if (tiersError) {
-        console.error("Error fetching pricing tiers:", tiersError);
+      if (statsResponse.ok) {
+        const { data: stats } = await statsResponse.json();
+        updateCache("invoices", { stats });
       }
-      if (tiers && Array.isArray(tiers.pricing_tiers)) {
-        setPricingTiers(tiers.pricing_tiers);
+
+      // Get pricing tiers from company settings
+      const settingsResponse = await fetch("/api/settings/company");
+
+      if (settingsResponse.ok) {
+        const { data: settings } = await settingsResponse.json();
+        if (settings?.pricing_tiers && Array.isArray(settings.pricing_tiers)) {
+          setPricingTiers(settings.pricing_tiers);
+        }
       }
     } catch (error: any) {
       console.error("Error fetching stats:", error);
@@ -365,7 +333,7 @@ export default function InvoicesPage() {
           </CardHeader>
           <CardContent>
             <div className='text-2xl font-bold'>
-              LKR {stats.totalAmount.toLocaleString()}
+              LKR {Number(stats.totalAmount || 0).toLocaleString()}
             </div>
             <p className='text-xs text-muted-foreground'>
               {new Date().toLocaleDateString("en-US", {
@@ -394,7 +362,7 @@ export default function InvoicesPage() {
           </CardHeader>
           <CardContent>
             <div className='text-2xl font-bold'>
-              LKR {stats.avgRate.toLocaleString()}
+              LKR {Number(stats.avgRate || 0).toLocaleString()}
             </div>
             <p className='text-xs text-muted-foreground'>Per installation</p>
           </CardContent>
@@ -453,7 +421,8 @@ export default function InvoicesPage() {
                         <TableCell>{invoice.job_month}</TableCell>
                         <TableCell>{invoice.line_count}</TableCell>
                         <TableCell>
-                          LKR {invoice.total_amount.toLocaleString()}
+                          LKR{" "}
+                          {Number(invoice.total_amount || 0).toLocaleString()}
                         </TableCell>
                         <TableCell>{getStatusBadge(invoice.status)}</TableCell>
                         <TableCell>
@@ -500,7 +469,7 @@ export default function InvoicesPage() {
                         {tier.min_length}-{tier.max_length}m
                       </div>
                       <div className='text-2xl font-bold'>
-                        LKR {tier.rate.toLocaleString()}
+                        LKR {Number(tier.rate || 0).toLocaleString()}
                       </div>
                     </div>
                   ))}

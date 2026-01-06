@@ -49,7 +49,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { AddJobVacancyModal } from "@/components/modals/add-job-vacancy-modal";
-import { supabase } from "@/lib/supabase";
 import type { JobVacancy } from "@/types/content";
 
 export default function CareersPage() {
@@ -71,13 +70,12 @@ export default function CareersPage() {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("job_vacancies")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setJobVacancies(data || []);
+      const response = await fetch("/api/job-vacancies");
+      if (!response.ok) {
+        throw new Error("Failed to fetch job vacancies");
+      }
+      const result = await response.json();
+      setJobVacancies(result.data || []);
     } catch (error) {
       console.error("Error fetching job vacancies:", error);
       toast({
@@ -94,12 +92,15 @@ export default function CareersPage() {
     try {
       const newStatus = currentStatus === "active" ? "disabled" : "active";
 
-      const { error } = await supabase
-        .from("job_vacancies")
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq("id", id);
+      const response = await fetch(`/api/job-vacancies/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error("Failed to update status");
+      }
 
       setJobVacancies(
         jobVacancies.map((job) =>
@@ -127,12 +128,13 @@ export default function CareersPage() {
     if (!deleteJobId) return;
 
     try {
-      const { error } = await supabase
-        .from("job_vacancies")
-        .delete()
-        .eq("id", deleteJobId);
+      const response = await fetch(`/api/job-vacancies/${deleteJobId}`, {
+        method: "DELETE",
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error("Failed to delete job vacancy");
+      }
 
       setJobVacancies(jobVacancies.filter((job) => job.id !== deleteJobId));
 

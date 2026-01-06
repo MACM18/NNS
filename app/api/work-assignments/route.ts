@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-
-import { supabaseServer } from "@/lib/supabase-server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -16,10 +14,7 @@ function escapeHtml(text: string): string {
     .replace(/\//g, "&#x2F;");
 }
 
-type AuthorizedContext = {
-  userId: string;
-  role: string;
-};
+type AuthorizedContext = { userId: string; role: string };
 
 type LineDetail = {
   id: string;
@@ -41,65 +36,35 @@ type AssignmentRow = {
  * Worker data structure representing a field technician or installer.
  * Workers are tracked separately from user accounts for flexibility.
  */
-type Worker = {
+interface Worker {
   /** Unique identifier for the worker */
   id: string;
   /** Worker's full name */
-  full_name: string | null;
+  fullName: string | null;
   /** Worker's role/position (e.g., technician, installer) */
   role: string | null;
   /** Worker's current status (active or inactive) */
   status: string | null;
-};
+}
 
-async function authorize(
-  req?: NextRequest
-): Promise<AuthorizedContext | Response> {
-  const cookieStore = await cookies();
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set(name, value, options);
-        },
-        remove(name: string, options: any) {
-          cookieStore.set(name, "", { ...(options || {}), maxAge: 0 });
-        },
-      },
-    }
-  );
+interface WorkerResponse {
+  id: string;
+  full_name: string | null;
+  role: string | null;
+}
 
-  const authHeader = req?.headers.get("authorization");
-  const bearer = authHeader?.startsWith("Bearer ")
-    ? authHeader.split(" ")[1]
-    : undefined;
-
-  const { data: userRes } = bearer
-    ? await authClient.auth.getUser(bearer)
-    : await authClient.auth.getUser();
-  const user = userRes?.user;
-  if (!user) {
+async function authorize(): Promise<AuthorizedContext | Response> {
+  const session = await auth();
+  if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
     });
   }
 
-  const { data: profile, error: profileErr } = await supabaseServer
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profileErr) {
-    return new Response(JSON.stringify({ error: "Profile lookup failed" }), {
-      status: 403,
-    });
-  }
+  const profile = await prisma.profile.findUnique({
+    where: { userId: session.user.id },
+    select: { role: true },
+  });
 
   const role = (profile?.role || "").toLowerCase();
   if (!ALLOWED_ROLES.includes(role)) {
@@ -108,7 +73,7 @@ async function authorize(
     });
   }
 
-  return { userId: user.id, role };
+  return { userId: session.user.id, role };
 }
 
 function monthStartEnd(month: number, year: number) {
@@ -121,7 +86,7 @@ function monthStartEnd(month: number, year: number) {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await authorize(req);
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   const searchParams = req.nextUrl.searchParams;
@@ -137,44 +102,43 @@ export async function GET(req: NextRequest) {
   const { start, end } = monthStartEnd(month, year);
 
   try {
-    const { data: lines, error: lineErr } = await supabaseServer
-      .from("line_details")
-      .select("id, date, telephone_no, name, address, dp")
-      .gte("date", start)
-      .lte("date", end);
+    const lines = await prisma.lineDetails.findMany({
+      where: { date: { gte: new Date(start), lte: new Date(end) } },
+      select: {
+        id: true,
+        date: true,
+        telephoneNo: true,
+        name: true,
+        address: true,
+        dp: true,
+      },
+      orderBy: { date: "asc" },
+    });
 
-    if (lineErr) throw lineErr;
-
-    const { data: assignments, error: assignmentErr } = await supabaseServer
-      .from("work_assignments")
-      .select("id, line_id, assigned_date, worker_id")
-      .gte("assigned_date", start)
-      .lte("assigned_date", end);
-
-    if (assignmentErr) throw assignmentErr;
+    const assignments = await prisma.workAssignment.findMany({
+      where: { assignedDate: { gte: new Date(start), lte: new Date(end) } },
+      select: { id: true, lineId: true, assignedDate: true, workerId: true },
+      orderBy: { assignedDate: "asc" },
+    });
 
     const workerIds = Array.from(
-      new Set((assignments || []).map((row: AssignmentRow) => row.worker_id))
+      new Set((assignments as any[]).map((a: any) => a.workerId))
     );
 
     let workerDetails: Worker[] = [];
     if (workerIds.length) {
-      const { data: workers, error: workerErr } = await supabaseServer
-        .from("workers")
-        .select("id, full_name, role, status")
-        .in("id", workerIds);
-
-      if (workerErr) throw workerErr;
-      workerDetails = workers || [];
+      const workers = await prisma.worker.findMany({
+        where: { id: { in: workerIds } },
+        select: { id: true, fullName: true, role: true, status: true },
+      });
+      workerDetails = workers as Worker[];
     }
 
-    const { data: workerOptions, error: optionsErr } = await supabaseServer
-      .from("workers")
-      .select("id, full_name, role, status")
-      .eq("status", "active")
-      .order("full_name", { ascending: true });
-
-    if (optionsErr) throw optionsErr;
+    const workerOptions = await prisma.worker.findMany({
+      where: { status: "active" },
+      select: { id: true, fullName: true, role: true, status: true },
+      orderBy: { fullName: "asc" },
+    });
 
     const workerLookup = new Map<string, Worker>();
     workerDetails.forEach((worker) => workerLookup.set(worker.id, worker));
@@ -182,12 +146,12 @@ export async function GET(req: NextRequest) {
     const lineMap = new Map<string, any>();
     const dayMap = new Map<string, { date: string; lines: any[] }>();
 
-    (lines || []).forEach((line: LineDetail) => {
-      const dateKey = line.date;
+    (lines || []).forEach((line: any) => {
+      const dateKey = (line.date as Date).toISOString().slice(0, 10);
       const lineEntry = {
         id: line.id,
-        date: line.date,
-        telephone_no: line.telephone_no,
+        date: dateKey,
+        telephone_no: line.telephoneNo,
         customer_name: line.name,
         address: line.address,
         dp: line.dp,
@@ -201,17 +165,20 @@ export async function GET(req: NextRequest) {
       dayMap.get(dateKey)!.lines.push(lineEntry);
     });
 
-    (assignments || []).forEach((assignment: AssignmentRow) => {
-      const key = `${assignment.line_id}_${assignment.assigned_date}`;
+    (assignments || []).forEach((assignment: any) => {
+      const dateKey = (assignment.assignedDate as Date)
+        .toISOString()
+        .slice(0, 10);
+      const key = `${assignment.lineId}_${dateKey}`;
       const lineEntry = lineMap.get(key);
       if (!lineEntry) return;
-      const worker = workerLookup.get(assignment.worker_id);
+      const worker = workerLookup.get(assignment.workerId);
       lineEntry.assignments.push({
         id: assignment.id,
-        worker_id: assignment.worker_id,
-        worker_name: worker?.full_name || "Unnamed",
+        worker_id: assignment.workerId,
+        worker_name: worker?.fullName || "Unnamed",
         worker_role: worker?.role || null,
-        assigned_date: assignment.assigned_date,
+        assigned_date: dateKey,
       });
     });
 
@@ -224,11 +191,13 @@ export async function GET(req: NextRequest) {
         month,
         year,
         days,
-        workers: (workerOptions || []).map((worker: Worker) => ({
-          id: worker.id,
-          full_name: worker.full_name,
-          role: worker.role,
-        })),
+        workers: (workerOptions || []).map(
+          (worker: Worker): WorkerResponse => ({
+            id: worker.id,
+            full_name: worker.fullName,
+            role: worker.role,
+          })
+        ),
       }),
       { status: 200 }
     );
@@ -243,7 +212,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await authorize(req);
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
@@ -257,19 +226,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { data, error } = await supabaseServer
-      .from("work_assignments")
-      .insert({
-        line_id: lineId,
-        worker_id: workerId,
-        assigned_date: date,
-        created_by: auth.userId,
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      if (error.code === "23505") {
+    try {
+      const created = await prisma.workAssignment.create({
+        data: {
+          lineId,
+          workerId,
+          assignedDate: new Date(date),
+          createdById: auth.userId,
+        },
+        select: { id: true },
+      });
+      return new Response(JSON.stringify({ id: created.id }), { status: 201 });
+    } catch (e: any) {
+      if (e?.code === "P2002") {
         return new Response(
           JSON.stringify({
             error: "Worker already assigned for this line and date",
@@ -277,10 +246,8 @@ export async function POST(req: NextRequest) {
           { status: 409 }
         );
       }
-      throw error;
+      throw e;
     }
-
-    return new Response(JSON.stringify({ id: data?.id }), { status: 201 });
   } catch (error: any) {
     return new Response(
       JSON.stringify({
@@ -292,7 +259,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await authorize(req);
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
@@ -306,13 +273,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const { error } = await supabaseServer
-      .from("work_assignments")
-      .delete()
-      .eq("id", assignmentId);
-
-    if (error) throw error;
-
+    await prisma.workAssignment.delete({ where: { id: assignmentId } });
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   } catch (error: any) {
     return new Response(

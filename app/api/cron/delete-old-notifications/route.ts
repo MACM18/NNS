@@ -1,57 +1,55 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-// This API route is intended to be invoked by Vercel Cron Jobs (server-side).
-// It triggers the Supabase Edge Function `delete-old-notifications` using the
-// SUPABASE_SERVICE_ROLE_KEY stored in environment variables.
+// Server-side cron endpoint to purge old notifications using Prisma.
+// Protect with a shared secret header: `x-cron-secret` or `x-vercel-cron-secret`.
+// Query params:
+// - days: number of days to retain (default 90)
+// - onlyRead: if 'true', only delete notifications already marked as read (default true)
 
-export async function GET(request: Request) {
+export async function GET(req: NextRequest) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const expectedSecret =
       process.env.VERCEL_CRON_SECRET || process.env.CRON_SECRET;
 
-    // Validate configuration
-    if (!supabaseUrl || !serviceKey) {
-      return NextResponse.json(
-        { error: "Missing SUPABASE environment variables" },
-        { status: 500 }
-      );
-    }
-
-    // Validate secret header
     if (expectedSecret) {
       const provided =
-        request.headers.get("x-cron-secret") ||
-        request.headers.get("x-vercel-cron-secret");
+        req.headers.get("x-cron-secret") ||
+        req.headers.get("x-vercel-cron-secret");
       if (!provided || provided !== expectedSecret) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }
 
-    const fnUrl = `${supabaseUrl.replace(
-      /\/$/,
-      ""
-    )}/functions/v1/delete-old-notifications`;
+    const { searchParams } = new URL(req.url);
+    const daysParam = searchParams.get("days");
+    const onlyReadParam = searchParams.get("onlyRead");
 
-    const resp = await fetch(fnUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({}),
+    const days = Math.max(1, Number(daysParam || 90));
+    const onlyRead =
+      (onlyReadParam ?? "true").toString().toLowerCase() === "true";
+
+    const threshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const where: Record<string, unknown> = {
+      created_at: { lt: threshold },
+    };
+    if (onlyRead) where.is_read = true;
+
+    const result = await prisma.notification.deleteMany({ where });
+
+    return NextResponse.json({
+      ok: true,
+      deletedCount: result.count,
+      days,
+      onlyRead,
+      threshold,
     });
-
-    const text = await resp.text();
-
-    return NextResponse.json(
-      { ok: resp.ok, status: resp.status, body: text },
-      { status: resp.ok ? 200 : 500 }
-    );
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    console.error("[cron/delete-old-notifications] Error:", error);
+    return NextResponse.json({ error: "Cleanup failed" }, { status: 500 });
   }
 }
 
-export const runtime = "edge";
+// Prisma requires Node.js runtime; avoid Edge here
+export const runtime = "nodejs";

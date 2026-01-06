@@ -14,8 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
-import { FcGoogle } from "react-icons/fc";
-import { getSupabaseClient } from "@/lib/supabase";
+import { signIn } from "next-auth/react";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 
@@ -28,7 +27,6 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
-  const supabase = getSupabaseClient();
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -36,12 +34,19 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const result = await signIn("credentials", {
         email,
         password,
+        redirect: false,
       });
 
-      if (error) throw error;
+      if (result?.error) {
+        throw new Error(
+          result.error === "CredentialsSignin"
+            ? "Invalid email or password"
+            : result.error
+        );
+      }
 
       toast({
         title: "Success",
@@ -50,7 +55,8 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
         duration: 3000,
       });
       // Redirect or perform any additional actions after successful login
-      router.push("/");
+      router.push("/dashboard");
+      router.refresh();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -66,17 +72,9 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
   const handleGoogleSignIn = async () => {
     setOauthLoading(true);
     try {
-      const redirectTo =
-        typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback`
-          : undefined;
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: redirectTo ? { redirectTo } : undefined,
+      await signIn("google", {
+        callbackUrl: "/dashboard",
       });
-
-      if (error) throw error;
     } catch (error: any) {
       toast({
         title: "Google Sign-In failed",
@@ -84,7 +82,6 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
         variant: "destructive",
         duration: 4000,
       });
-    } finally {
       setOauthLoading(false);
     }
   };

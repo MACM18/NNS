@@ -32,20 +32,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
-
-interface Worker {
-  id: string;
-  full_name: string;
-  phone_number: string | null;
-  email: string | null;
-  role: string | null;
-  status: string;
-  notes: string | null;
-  profile_id: string | null;
-  created_at: string;
-}
+import type { Worker, WorkerFormData } from "@/types/workers";
 
 interface ManageWorkersModalProps {
   open: boolean;
@@ -72,33 +60,10 @@ export function ManageWorkersModal({
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const getAuthToken = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token || null;
-  };
-
-  const fetchWithAuth = async (
-    input: RequestInfo | URL,
-    init?: RequestInit
-  ) => {
-    const token = await getAuthToken();
-    const response = await fetch(input, {
-      ...init,
-      credentials: "include",
-      headers: {
-        ...init?.headers,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    return response;
-  };
-
   const fetchWorkers = async () => {
     setLoading(true);
     try {
-      const res = await fetchWithAuth("/api/workers");
+      const res = await fetch("/api/workers");
       const json = await res.json();
       if (!res.ok) {
         throw new Error(json.error || "Failed to fetch workers");
@@ -164,7 +129,7 @@ export function ManageWorkersModal({
         ? { id: editingWorker.id, ...formData }
         : formData;
 
-      const res = await fetchWithAuth("/api/workers", {
+      const res = await fetch("/api/workers", {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -172,12 +137,17 @@ export function ManageWorkersModal({
 
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error || `Failed to ${editingWorker ? "update" : "create"} worker`);
+        throw new Error(
+          json.error ||
+            `Failed to ${editingWorker ? "update" : "create"} worker`
+        );
       }
 
       toast({
         title: editingWorker ? "Worker updated" : "Worker created",
-        description: `${formData.full_name} has been ${editingWorker ? "updated" : "added"} successfully.`,
+        description: `${formData.full_name} has been ${
+          editingWorker ? "updated" : "added"
+        } successfully.`,
       });
 
       resetForm();
@@ -196,7 +166,7 @@ export function ManageWorkersModal({
 
   const handleDelete = async (workerId: string) => {
     try {
-      const res = await fetchWithAuth("/api/workers", {
+      const res = await fetch("/api/workers", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: workerId }),
@@ -229,7 +199,8 @@ export function ManageWorkersModal({
         <DialogHeader>
           <DialogTitle>Manage Workers</DialogTitle>
           <DialogDescription>
-            Add, edit, or remove workers who can be assigned to line installations.
+            Add, edit, or remove workers who can be assigned to line
+            installations.
           </DialogDescription>
         </DialogHeader>
 
@@ -255,7 +226,9 @@ export function ManageWorkersModal({
                     <div className='flex items-center gap-2'>
                       <h4 className='font-medium'>{worker.full_name}</h4>
                       <Badge
-                        variant={worker.status === "active" ? "default" : "secondary"}
+                        variant={
+                          worker.status === "active" ? "default" : "secondary"
+                        }
                         className='text-xs'
                       >
                         {worker.status}
@@ -300,8 +273,8 @@ export function ManageWorkersModal({
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete worker?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will permanently delete {worker.full_name} from the
-                            system. This action cannot be undone.
+                            This will permanently delete {worker.full_name} from
+                            the system. This action cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -432,11 +405,7 @@ export function ManageWorkersModal({
                   )}
                 </Button>
                 {editingWorker && (
-                  <Button
-                    type='button'
-                    variant='outline'
-                    onClick={resetForm}
-                  >
+                  <Button type='button' variant='outline' onClick={resetForm}>
                     Cancel
                   </Button>
                 )}

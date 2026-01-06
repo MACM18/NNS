@@ -21,7 +21,6 @@ interface EditDrumModalProps {
   } | null;
   onClose: () => void;
   onSuccess: () => void;
-  supabase: any;
   addNotification: (
     notification: Omit<
       Notification,
@@ -35,7 +34,6 @@ export function EditDrumModal({
   drum,
   onClose,
   onSuccess,
-  supabase,
   addNotification,
 }: EditDrumModalProps) {
   if (!drum) return null;
@@ -73,17 +71,21 @@ export function EditDrumModal({
               const status = (
                 form.elements.namedItem("status") as HTMLSelectElement
               ).value;
-              const { error } = await supabase
-                .from("drum_tracking")
-                .update({
+
+              const response = await fetch(`/api/drums/${drum.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
                   drum_number,
                   initial_quantity,
                   current_quantity,
                   received_date,
                   status,
-                })
-                .eq("id", drum.id);
-              if (error) throw error;
+                }),
+              });
+
+              if (!response.ok) throw new Error("Failed to update drum");
+
               addNotification({
                 title: "Drum Updated",
                 message: `Drum #${drum_number} updated successfully`,

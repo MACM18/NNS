@@ -1,10 +1,22 @@
 import { NextRequest } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-
-import { supabaseServer } from "@/lib/supabase-server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 const ALLOWED_ROLES = ["admin"];
+
+interface WorkerResponse {
+  id: string;
+  full_name: string;
+  phone_number: string | null;
+  email: string | null;
+  role: string;
+  status: string;
+  notes: string | null;
+  profile_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 function escapeHtml(text: string): string {
   return text
@@ -18,82 +30,67 @@ function escapeHtml(text: string): string {
 
 type AuthorizedContext = {
   userId: string;
+  profileId: string;
   role: string;
 };
 
-async function authorize(
-  req?: NextRequest
-): Promise<AuthorizedContext | Response> {
-  const cookieStore = await cookies();
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set(name, value, options);
-        },
-        remove(name: string, options: any) {
-          cookieStore.set(name, "", { ...(options || {}), maxAge: 0 });
-        },
-      },
-    }
-  );
-
-  const authHeader = req?.headers.get("authorization");
-  const bearer = authHeader?.startsWith("Bearer ")
-    ? authHeader.split(" ")[1]
-    : undefined;
-
-  const { data: userRes } = bearer
-    ? await authClient.auth.getUser(bearer)
-    : await authClient.auth.getUser();
-  const user = userRes?.user;
-  if (!user) {
+async function authorize(): Promise<AuthorizedContext | Response> {
+  const session = await auth();
+  if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
     });
   }
 
-  const { data: profile, error: profileErr } = await supabaseServer
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  // Look up role from profiles via Prisma
+  const profile = await prisma.profile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, role: true },
+  });
 
-  if (profileErr) {
-    return new Response(JSON.stringify({ error: "Profile lookup failed" }), {
-      status: 403,
+  if (!profile) {
+    return new Response(JSON.stringify({ error: "Profile not found" }), {
+      status: 404,
     });
   }
 
-  const role = (profile?.role || "").toLowerCase();
+  const role = (profile.role || "").toLowerCase();
   if (!ALLOWED_ROLES.includes(role)) {
-    return new Response(JSON.stringify({ error: "Forbidden - Admin access required" }), {
-      status: 403,
-    });
+    return new Response(
+      JSON.stringify({ error: "Forbidden - Admin access required" }),
+      { status: 403 }
+    );
   }
 
-  return { userId: user.id, role };
+  return { userId: session.user.id, profileId: profile.id, role };
 }
 
 // GET /api/workers - List all workers
-export async function GET(req: NextRequest) {
-  const auth = await authorize(req);
+export async function GET() {
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
-    const { data: workers, error } = await supabaseServer
-      .from("workers")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const workers = await prisma.worker.findMany({
+      orderBy: { createdAt: "desc" },
+    });
 
-    if (error) throw error;
+    // Normalize to snake_case for consistent API response
+    const normalized: WorkerResponse[] = (workers || []).map((w) => ({
+      id: w.id,
+      full_name: w.fullName,
+      phone_number: w.phoneNumber,
+      email: w.email,
+      role: w.role,
+      status: w.status,
+      notes: w.notes,
+      profile_id: w.profileId,
+      created_by: w.createdById,
+      created_at: w.createdAt.toISOString(),
+      updated_at: w.updatedAt.toISOString(),
+    }));
 
-    return new Response(JSON.stringify({ workers: workers || [] }), {
+    return new Response(JSON.stringify({ workers: normalized }), {
       status: 200,
     });
   } catch (error: any) {
@@ -108,7 +105,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/workers - Create a new worker
 export async function POST(req: NextRequest) {
-  const auth = await authorize(req);
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
@@ -116,30 +113,89 @@ export async function POST(req: NextRequest) {
     const { full_name, phone_number, email, role, notes, profile_id } =
       body || {};
 
-    if (!full_name) {
+    // Validation
+    if (!full_name || full_name.trim().length === 0) {
+      return new Response(JSON.stringify({ error: "Full name is required" }), {
+        status: 400,
+      });
+    }
+
+    if (full_name.trim().length < 2) {
       return new Response(
-        JSON.stringify({ error: "Full name is required" }),
+        JSON.stringify({ error: "Full name must be at least 2 characters" }),
         { status: 400 }
       );
     }
 
-    const { data, error } = await supabaseServer
-      .from("workers")
-      .insert({
-        full_name,
-        phone_number,
-        email,
+    if (full_name.trim().length > 100) {
+      return new Response(
+        JSON.stringify({
+          error: "Full name must not exceed 100 characters",
+        }),
+        { status: 400 }
+      );
+    }
+
+    // Email validation
+    if (email && email.trim().length > 0) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return new Response(JSON.stringify({ error: "Invalid email format" }), {
+          status: 400,
+        });
+      }
+    }
+
+    // Phone validation
+    if (phone_number && phone_number.trim().length > 0) {
+      const cleaned = phone_number.replace(/[\s\-()]/g, "");
+      if (!/^\+?\d{9,15}$/.test(cleaned)) {
+        return new Response(
+          JSON.stringify({
+            error: "Phone number must be 9-15 digits",
+          }),
+          { status: 400 }
+        );
+      }
+    }
+
+    // Notes validation
+    if (notes && notes.length > 500) {
+      return new Response(
+        JSON.stringify({ error: "Notes must not exceed 500 characters" }),
+        { status: 400 }
+      );
+    }
+
+    const data = await prisma.worker.create({
+      data: {
+        fullName: full_name.trim(),
+        phoneNumber: phone_number?.trim() || null,
+        email: email?.trim() || null,
         role: role || "technician",
-        notes,
-        profile_id: profile_id || null,
-        created_by: auth.userId,
-      })
-      .select()
-      .single();
+        notes: notes?.trim() || null,
+        profileId: profile_id || null,
+        createdById: auth.profileId,
+      },
+    });
 
-    if (error) throw error;
+    const normalized: WorkerResponse = {
+      id: data.id,
+      full_name: data.fullName,
+      phone_number: data.phoneNumber,
+      email: data.email,
+      role: data.role,
+      status: data.status,
+      notes: data.notes,
+      profile_id: data.profileId,
+      created_by: data.createdById,
+      created_at: data.createdAt.toISOString(),
+      updated_at: data.updatedAt.toISOString(),
+    };
 
-    return new Response(JSON.stringify({ worker: data }), { status: 201 });
+    return new Response(JSON.stringify({ worker: normalized }), {
+      status: 201,
+    });
   } catch (error: any) {
     return new Response(
       JSON.stringify({
@@ -152,13 +208,21 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/workers - Update a worker
 export async function PATCH(req: NextRequest) {
-  const auth = await authorize(req);
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
     const body = await req.json();
-    const { id, full_name, phone_number, email, role, status, notes, profile_id } =
-      body || {};
+    const {
+      id,
+      full_name,
+      phone_number,
+      email,
+      role,
+      status,
+      notes,
+      profile_id,
+    } = body || {};
 
     if (!id) {
       return new Response(JSON.stringify({ error: "Worker ID is required" }), {
@@ -166,25 +230,107 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    const updateData: any = { updated_at: new Date().toISOString() };
-    if (full_name !== undefined) updateData.full_name = full_name;
-    if (phone_number !== undefined) updateData.phone_number = phone_number;
-    if (email !== undefined) updateData.email = email;
+    // Validate full_name if provided
+    if (full_name !== undefined) {
+      if (!full_name || full_name.trim().length === 0) {
+        return new Response(
+          JSON.stringify({ error: "Full name cannot be empty" }),
+          { status: 400 }
+        );
+      }
+      if (full_name.trim().length < 2) {
+        return new Response(
+          JSON.stringify({
+            error: "Full name must be at least 2 characters",
+          }),
+          { status: 400 }
+        );
+      }
+      if (full_name.trim().length > 100) {
+        return new Response(
+          JSON.stringify({
+            error: "Full name must not exceed 100 characters",
+          }),
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate email if provided
+    if (email !== undefined && email && email.trim().length > 0) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return new Response(JSON.stringify({ error: "Invalid email format" }), {
+          status: 400,
+        });
+      }
+    }
+
+    // Validate phone if provided
+    if (
+      phone_number !== undefined &&
+      phone_number &&
+      phone_number.trim().length > 0
+    ) {
+      const cleaned = phone_number.replace(/[\s\-()]/g, "");
+      if (!/^\+?\d{9,15}$/.test(cleaned)) {
+        return new Response(
+          JSON.stringify({
+            error: "Phone number must be 9-15 digits",
+          }),
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate notes if provided
+    if (notes !== undefined && notes && notes.length > 500) {
+      return new Response(
+        JSON.stringify({ error: "Notes must not exceed 500 characters" }),
+        { status: 400 }
+      );
+    }
+
+    // Validate status if provided
+    if (status !== undefined && !["active", "inactive"].includes(status)) {
+      return new Response(
+        JSON.stringify({ error: "Status must be 'active' or 'inactive'" }),
+        { status: 400 }
+      );
+    }
+
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    if (full_name !== undefined) updateData.fullName = full_name.trim();
+    if (phone_number !== undefined)
+      updateData.phoneNumber = phone_number?.trim() || null;
+    if (email !== undefined) updateData.email = email?.trim() || null;
     if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
-    if (notes !== undefined) updateData.notes = notes;
-    if (profile_id !== undefined) updateData.profile_id = profile_id;
+    if (notes !== undefined) updateData.notes = notes?.trim() || null;
+    if (profile_id !== undefined) updateData.profileId = profile_id;
 
-    const { data, error } = await supabaseServer
-      .from("workers")
-      .update(updateData)
-      .eq("id", id)
-      .select()
-      .single();
+    const data = await prisma.worker.update({
+      where: { id },
+      data: updateData,
+    });
 
-    if (error) throw error;
+    const normalized: WorkerResponse = {
+      id: data.id,
+      full_name: data.fullName,
+      phone_number: data.phoneNumber,
+      email: data.email,
+      role: data.role,
+      status: data.status,
+      notes: data.notes,
+      profile_id: data.profileId,
+      created_by: data.createdById,
+      created_at: data.createdAt.toISOString(),
+      updated_at: data.updatedAt.toISOString(),
+    };
 
-    return new Response(JSON.stringify({ worker: data }), { status: 200 });
+    return new Response(JSON.stringify({ worker: normalized }), {
+      status: 200,
+    });
   } catch (error: any) {
     return new Response(
       JSON.stringify({
@@ -197,7 +343,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/workers - Delete a worker
 export async function DELETE(req: NextRequest) {
-  const auth = await authorize(req);
+  const auth = await authorize();
   if (auth instanceof Response) return auth;
 
   try {
@@ -210,12 +356,7 @@ export async function DELETE(req: NextRequest) {
       });
     }
 
-    const { error } = await supabaseServer
-      .from("workers")
-      .delete()
-      .eq("id", id);
-
-    if (error) throw error;
+    await prisma.worker.delete({ where: { id } });
 
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   } catch (error: any) {

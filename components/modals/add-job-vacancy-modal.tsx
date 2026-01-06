@@ -22,7 +22,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 
 interface AddJobVacancyModalProps {
   open: boolean;
@@ -112,23 +111,25 @@ export function AddJobVacancyModal({
         benefits: formData.benefits
           ? formData.benefits.split(",").map((b) => b.trim())
           : [],
-        updated_at: new Date().toISOString(),
       };
       if (editingJob) {
-        const { error } = await supabase
-          .from("job_vacancies")
-          .update(jobData)
-          .eq("id", editingJob.id);
-        if (error) throw error;
+        const response = await fetch(`/api/job-vacancies/${editingJob.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(jobData),
+        });
+        if (!response.ok) throw new Error("Failed to update");
         toast({
           title: "Success",
           description: "Job vacancy updated successfully",
         });
       } else {
-        const { error } = await supabase
-          .from("job_vacancies")
-          .insert([{ ...jobData, created_at: new Date().toISOString() }]);
-        if (error) throw error;
+        const response = await fetch("/api/job-vacancies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(jobData),
+        });
+        if (!response.ok) throw new Error("Failed to create");
         toast({
           title: "Success",
           description: "Job vacancy created successfully",
