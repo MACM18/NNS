@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Calendar, CreditCard, DollarSign, FileText } from "lucide-react";
+import { CreditCard, DollarSign, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,14 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useNotification } from "@/contexts/notification-context";
-import { cn } from "@/lib/utils";
 
 interface PaymentModalProps {
   open: boolean;
@@ -295,34 +288,20 @@ export function PaymentModal({
           {/* Payment Date */}
           <div className='space-y-2'>
             <Label>Payment Date *</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant='outline'
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !formData.paymentDate && "text-muted-foreground"
-                  )}
-                >
-                  <Calendar className='mr-2 h-4 w-4' />
-                  {formData.paymentDate
-                    ? format(formData.paymentDate, "PPP")
-                    : "Select date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className='w-auto p-0'>
-                <CalendarComponent
-                  mode='single'
-                  selected={formData.paymentDate}
-                  onSelect={(date) =>
-                    setFormData({
-                      ...formData,
-                      paymentDate: date || new Date(),
-                    })
-                  }
-                />
-              </PopoverContent>
-            </Popover>
+            <Input
+              type='date'
+              value={
+                formData.paymentDate
+                  ? format(formData.paymentDate, "yyyy-MM-dd")
+                  : ""
+              }
+              onChange={(e) => {
+                const date = e.target.value
+                  ? new Date(e.target.value + "T00:00:00")
+                  : new Date();
+                setFormData({ ...formData, paymentDate: date });
+              }}
+            />
           </div>
 
           {/* Payment Method */}

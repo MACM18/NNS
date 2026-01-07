@@ -5,12 +5,12 @@ import { format } from "date-fns";
 import {
   Download,
   Printer,
-  Calendar,
   TrendingUp,
   TrendingDown,
   DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -29,12 +29,6 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useNotification } from "@/contexts/notification-context";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import type {
@@ -249,51 +243,31 @@ export function FinancialReports({
             <div className='flex gap-2'>
               <div className='space-y-2'>
                 <Label>From Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant='outline'
-                      className={cn(
-                        "w-[150px] justify-start text-left font-normal",
-                        !dateFrom && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className='mr-2 h-4 w-4' />
-                      {dateFrom ? format(dateFrom, "MMM d, yyyy") : "Select"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className='w-auto p-0'>
-                    <CalendarComponent
-                      mode='single'
-                      selected={dateFrom}
-                      onSelect={setDateFrom}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Input
+                  type='date'
+                  className='w-[150px]'
+                  value={dateFrom ? format(dateFrom, "yyyy-MM-dd") : ""}
+                  onChange={(e) => {
+                    const date = e.target.value
+                      ? new Date(e.target.value + "T00:00:00")
+                      : undefined;
+                    setDateFrom(date);
+                  }}
+                />
               </div>
               <div className='space-y-2'>
                 <Label>To Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant='outline'
-                      className={cn(
-                        "w-[150px] justify-start text-left font-normal",
-                        !dateTo && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className='mr-2 h-4 w-4' />
-                      {dateTo ? format(dateTo, "MMM d, yyyy") : "Select"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className='w-auto p-0'>
-                    <CalendarComponent
-                      mode='single'
-                      selected={dateTo}
-                      onSelect={setDateTo}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Input
+                  type='date'
+                  className='w-[150px]'
+                  value={dateTo ? format(dateTo, "yyyy-MM-dd") : ""}
+                  onChange={(e) => {
+                    const date = e.target.value
+                      ? new Date(e.target.value + "T00:00:00")
+                      : undefined;
+                    setDateTo(date);
+                  }}
+                />
               </div>
             </div>
             <div className='flex gap-2'>
