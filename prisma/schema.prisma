@@ -118,6 +118,11 @@ model Profile {
   // Worker relationship (if this profile is linked to a worker)
   linkedWorker              Worker?                  @relation("WorkerProfile")
 
+  // Payroll relations
+  payrollPeriodsCreated     PayrollPeriod[]          @relation("PayrollPeriodCreatedBy")
+  workerPaymentsCreated     WorkerPayment[]          @relation("WorkerPaymentCreatedBy")
+  payrollAdjustmentsCreated PayrollAdjustment[]      @relation("AdjustmentCreatedBy")
+
   @@map("profiles")
 }
 
@@ -471,10 +476,20 @@ model Worker {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  // Payroll fields
+  paymentType     String   @default("per_line") @map("payment_type") // per_line, fixed_monthly
+  perLineRate     Decimal? @map("per_line_rate") @db.Decimal(10, 2) // Rate per completed line
+  monthlyRate     Decimal? @map("monthly_rate") @db.Decimal(10, 2) // Fixed monthly salary
+  bankName        String?  @map("bank_name")
+  bankBranch      String?  @map("bank_branch")
+  accountNumber   String?  @map("account_number")
+  accountName     String?  @map("account_name")
+
   // Relations
   profile         Profile?         @relation("WorkerProfile", fields: [profileId], references: [id])
   createdBy       Profile?         @relation("WorkerCreatedBy", fields: [createdById], references: [id])
   workAssignments WorkAssignment[]
+  payments        WorkerPayment[]
 
   @@map("workers")
 }
@@ -909,3 +924,82 @@ model LineEntry {
 
   @@map("line_entries")
 }
+
+// ==========================================
+// PAYROLL SYSTEM
+// ==========================================
+model PayrollPeriod {
+  id          String    @id @default(uuid())
+  name        String    // e.g., "January 2026 Payroll"
+  month       Int       // 1-12
+  year        Int
+  startDate   DateTime  @map("start_date") @db.Date
+  endDate     DateTime  @map("end_date") @db.Date
+  status      String    @default("draft") // draft, processing, approved, paid
+  totalAmount Decimal   @default(0) @map("total_amount") @db.Decimal(12, 2)
+  paidDate    DateTime? @map("paid_date")
+  createdById String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  createdBy Profile         @relation("PayrollPeriodCreatedBy", fields: [createdById], references: [id])
+  payments  WorkerPayment[]
+
+  @@unique([month, year])
+  @@map("payroll_periods")
+}
+
+model WorkerPayment {
+  id              String   @id @default(uuid())
+  payrollPeriodId String   @map("payroll_period_id")
+  workerId        String   @map("worker_id")
+  
+  // Payment details
+  paymentType     String   @map("payment_type") // per_line, fixed_monthly
+  linesCompleted  Int      @default(0) @map("lines_completed")
+  perLineRate     Decimal? @map("per_line_rate") @db.Decimal(10, 2)
+  baseAmount      Decimal  @map("base_amount") @db.Decimal(10, 2) // Calculated base (lines * rate or monthly)
+  bonusAmount     Decimal  @default(0) @map("bonus_amount") @db.Decimal(10, 2)
+  deductionAmount Decimal  @default(0) @map("deduction_amount") @db.Decimal(10, 2)
+  netAmount       Decimal  @map("net_amount") @db.Decimal(10, 2) // base + bonus - deductions
+  
+  // Status tracking
+  status          String   @default("calculated") // calculated, approved, paid
+  paidAt          DateTime? @map("paid_at")
+  paymentMethod   String?  @map("payment_method") // bank_transfer, cash, cheque
+  paymentRef      String?  @map("payment_ref")
+  notes           String?
+  
+  // Metadata
+  createdById     String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  payrollPeriod PayrollPeriod        @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  worker        Worker               @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdBy     Profile              @relation("WorkerPaymentCreatedBy", fields: [createdById], references: [id])
+  adjustments   PayrollAdjustment[]
+
+  @@unique([payrollPeriodId, workerId])
+  @@map("worker_payments")
+}
+
+model PayrollAdjustment {
+  id              String   @id @default(uuid())
+  workerPaymentId String   @map("worker_payment_id")
+  type            String   // bonus, deduction
+  category        String   // performance_bonus, attendance_bonus, overtime, tax, advance, fine, other
+  description     String
+  amount          Decimal  @db.Decimal(10, 2)
+  createdById     String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  workerPayment WorkerPayment @relation(fields: [workerPaymentId], references: [id], onDelete: Cascade)
+  createdBy     Profile       @relation("AdjustmentCreatedBy", fields: [createdById], references: [id])
+
+  @@map("payroll_adjustments")
+}
+

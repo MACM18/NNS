@@ -24,6 +24,7 @@ import {
   CreditCard,
   BarChart3,
   Cog,
+  Banknote,
 } from "lucide-react";
 
 import {
@@ -136,6 +137,11 @@ const accountingItems = [
     title: "Reports",
     url: "/dashboard/accounting/reports",
     icon: BarChart3,
+  },
+  {
+    title: "Payroll",
+    url: "/dashboard/payroll",
+    icon: Banknote,
   },
   {
     title: "Settings",
