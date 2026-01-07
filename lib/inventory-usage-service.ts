@@ -45,13 +45,13 @@ export interface InventoryUsageResult {
  * Calculate the total hardware usage from sheet rows
  */
 export function aggregateHardwareUsage(
-  sheetRows: Record<string, any>[]
+  sheetRows: Record<string, unknown>[]
 ): Record<string, number> {
   const hardwareTotals: Record<string, number> = {};
 
   for (const row of sheetRows) {
     for (const [field, itemName] of Object.entries(HARDWARE_MAPPING)) {
-      const qty = Number(row[field] || 0);
+      const qty = Number(row[field] ?? 0);
       if (qty > 0) {
         hardwareTotals[itemName] = (hardwareTotals[itemName] || 0) + qty;
       }
@@ -208,7 +208,7 @@ async function updateInventoryWithUsage(
  * 2. Only deducting the difference between new and previous usage totals
  */
 export async function updateInventoryFromSheetSync(
-  sheetRows: Record<string, any>[],
+  sheetRows: Record<string, unknown>[],
   month: number,
   year: number,
   connectionId?: string

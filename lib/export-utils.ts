@@ -5,8 +5,46 @@ export interface ExportOptions {
     start: string;
     end: string;
   };
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
 }
+
+type ReportRow = Record<string, unknown>;
+
+type MaterialUsageLine = {
+  phone_number?: string;
+  name?: string;
+  dp?: string;
+  date?: string;
+  total_cable?: number;
+  retainers?: number;
+  l_hook_new?: number;
+  c_hook_new?: number;
+  fiber_rosette_new?: number;
+  fac_new?: number;
+  internal_wire_new?: number;
+  wastage_input?: number;
+};
+
+type DrumUsageRow = {
+  usage_date?: string;
+  quantity_used?: number;
+  drum_tracking?: {
+    drum_number?: string;
+    initial_quantity?: number;
+    current_quantity?: number;
+  };
+  line_details?: {
+    name?: string;
+    phone_number?: string;
+  };
+};
+
+type InventoryRow = {
+  name?: string;
+  current_stock?: number;
+  inventory_invoice_items?: Array<{ quantity?: number }>;
+  waste_tracking?: Array<{ quantity?: number }>;
+};
 
 export interface CompanyInfo {
   company_name: string;
@@ -70,11 +108,12 @@ export class ExportService {
         throw new Error("Failed to fetch lines");
       }
       const result = await response.json();
-      const lines = result.data || [];
+      const lines: MaterialUsageLine[] = (result.data ||
+        []) as MaterialUsageLine[];
 
       if (!lines.length) return null;
 
-      const reportData = lines.map((line: any) => ({
+      const reportData: ReportRow[] = lines.map((line) => ({
         phone_number: line.phone_number,
         customer_name: line.name,
         dp: line.dp,
@@ -108,11 +147,11 @@ export class ExportService {
         throw new Error("Failed to fetch drum usage");
       }
       const result = await response.json();
-      const drumUsage = result.data || [];
+      const drumUsage: DrumUsageRow[] = (result.data || []) as DrumUsageRow[];
 
       if (!drumUsage.length) return null;
 
-      const reportData = drumUsage.map((usage: any) => ({
+      const reportData: ReportRow[] = drumUsage.map((usage) => ({
         date: usage.usage_date,
         drum_number: usage.drum_tracking?.drum_number,
         previous_balance: usage.drum_tracking?.initial_quantity,
@@ -147,11 +186,25 @@ export class ExportService {
         throw new Error("Failed to fetch lines");
       }
       const result = await response.json();
-      const lines = result.data || [];
+      const lines: Array<
+        MaterialUsageLine & {
+          cable_start_new?: number;
+          cable_middle_new?: number;
+          cable_end_new?: number;
+          drum_number_new?: string;
+        }
+      > = (result.data || []) as Array<
+        MaterialUsageLine & {
+          cable_start_new?: number;
+          cable_middle_new?: number;
+          cable_end_new?: number;
+          drum_number_new?: string;
+        }
+      >;
 
       if (!lines.length) return null;
 
-      const reportData = lines.map((line: any) => ({
+      const reportData: ReportRow[] = lines.map((line) => ({
         phone_number: line.phone_number,
         customer_name: line.name,
         dp: line.dp,
@@ -175,32 +228,33 @@ export class ExportService {
         throw new Error("Failed to fetch inventory");
       }
       const result = await response.json();
-      const items = result.data || [];
+      const items: InventoryRow[] = (result.data || []) as InventoryRow[];
 
       if (!items.length) return null;
 
-      const reportData = items.map((item: any) => {
+      const reportData: ReportRow[] = items.map((item) => {
         const totalIssued =
           item.inventory_invoice_items?.reduce(
-            (sum: number, invoice: any) => sum + (invoice.quantity || 0),
+            (sum: number, invoice) => sum + (invoice.quantity || 0),
             0
           ) || 0;
         const totalWastage =
           item.waste_tracking?.reduce(
-            (sum: number, waste: any) => sum + (waste.quantity || 0),
+            (sum: number, waste) => sum + (waste.quantity || 0),
             0
           ) || 0;
 
         return {
           item_name: item.name,
-          opening_balance: item.current_stock + totalIssued - totalWastage,
+          opening_balance:
+            (item.current_stock || 0) + totalIssued - totalWastage,
           stock_issue: totalIssued,
           wastage: totalWastage,
-          in_hand: item.current_stock,
+          in_hand: item.current_stock || 0,
           material_used_invoice: totalIssued - totalWastage,
           wip_material: Math.max(
             0,
-            totalIssued - totalWastage - item.current_stock
+            totalIssued - totalWastage - (item.current_stock || 0)
           ),
         };
       });
@@ -213,7 +267,7 @@ export class ExportService {
   }
 
   private async formatExport(
-    data: any[],
+    data: ReportRow[],
     options: ExportOptions,
     reportTitle: string
   ) {
@@ -232,7 +286,7 @@ export class ExportService {
   }
 
   private generateCSV(
-    data: any[],
+    data: ReportRow[],
     reportTitle: string,
     companyInfo: CompanyInfo
   ) {
@@ -248,7 +302,7 @@ export class ExportService {
       "",
       headers.join(","),
       ...data.map((row) =>
-        headers.map((header) => `"${row[header] || ""}"`).join(",")
+        headers.map((header) => `"${String(row[header] ?? "")}"`).join(",")
       ),
     ].join("\n");
 
@@ -256,7 +310,7 @@ export class ExportService {
   }
 
   private generateExcel(
-    data: any[],
+    data: ReportRow[],
     reportTitle: string,
     companyInfo: CompanyInfo
   ) {
@@ -266,7 +320,7 @@ export class ExportService {
   }
 
   private generatePDF(
-    data: any[],
+    data: ReportRow[],
     reportTitle: string,
     companyInfo: CompanyInfo
   ) {
@@ -275,7 +329,7 @@ export class ExportService {
     return {
       title: reportTitle,
       company: companyInfo,
-      data: data,
+      data,
       generatedAt: new Date().toISOString(),
     };
   }

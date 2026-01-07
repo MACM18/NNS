@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { Icons } from "@/components/icons";
 import { toast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error-utils";
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -85,10 +86,13 @@ function AuthCallbackContent() {
 
         // Exchange succeeded server-side and cookies were set; redirect home
         router.replace("/");
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast({
           title: "Google Sign-In failed",
-          description: error?.message ?? "Unexpected error during sign-in.",
+          description: getErrorMessage(
+            error,
+            "Unexpected error during sign-in."
+          ),
           variant: "destructive",
         });
         router.replace("/login");

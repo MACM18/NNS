@@ -38,6 +38,7 @@ import { useNotification } from "@/contexts/notification-context";
 import { useDataCache } from "@/contexts/data-cache-context";
 import { min } from "date-fns";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface GeneratedInvoice {
   id: string;
@@ -132,11 +133,11 @@ export default function InvoicesPage() {
       updateCache("invoices", {
         data: data || [],
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching invoices:", error);
       addNotification({
         title: "Error",
-        message: "Failed to fetch invoices",
+        message: getErrorMessage(error, "Failed to fetch invoices"),
         type: "error",
         category: "system",
       });
@@ -169,7 +170,7 @@ export default function InvoicesPage() {
           setPricingTiers(settings.pricing_tiers);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching stats:", error);
     }
   };
@@ -212,10 +213,10 @@ export default function InvoicesPage() {
 
       // Here you would implement the actual PDF generation and download
       // For now, we'll just show a notification
-    } catch (error: any) {
+    } catch (error: unknown) {
       addNotification({
         title: "Error",
-        message: "Failed to download invoice",
+        message: getErrorMessage(error, "Failed to download invoice"),
         type: "error",
         category: "system",
       });

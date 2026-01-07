@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   try {
@@ -76,77 +77,79 @@ export async function POST(req: NextRequest) {
     const { items, ...invoiceData } = body;
 
     // Create invoice with items in a transaction
-    const result = await prisma.$transaction(async (tx: any) => {
-      // Create the invoice
-      const invoice = await tx.inventoryInvoice.create({
-        data: {
-          ...invoiceData,
-          createdById: session.user?.id,
-          totalItems: items?.length || 0,
-        },
-      });
+    const result = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        // Create the invoice
+        const invoice = await tx.inventoryInvoice.create({
+          data: {
+            ...invoiceData,
+            createdById: session.user?.id,
+            totalItems: items?.length || 0,
+          },
+        });
 
-      // Process items if provided
-      if (items && items.length > 0) {
-        for (const item of items) {
-          // Create invoice item
-          await tx.inventoryInvoiceItem.create({
-            data: {
-              invoiceId: invoice.id,
-              itemId: item.item_id ?? item.itemId,
-              description: item.description,
-              unit: item.unit,
-              quantityRequested: Number(
-                item.quantity_requested ?? item.quantityRequested
-              ),
-              quantityIssued: Number(
-                item.quantity_issued ?? item.quantityIssued
-              ),
-            },
-          });
-
-          // Update inventory stock
-          const inventoryItem = await tx.inventoryItem.findUnique({
-            where: { id: item.item_id ?? item.itemId },
-          });
-
-          if (inventoryItem) {
-            const currentStock = Number(inventoryItem.currentStock || 0);
-            await tx.inventoryItem.update({
-              where: { id: item.item_id ?? item.itemId },
+        // Process items if provided
+        if (items && items.length > 0) {
+          for (const item of items) {
+            // Create invoice item
+            await tx.inventoryInvoiceItem.create({
               data: {
-                currentStock:
-                  currentStock +
-                  Number(item.quantity_issued ?? item.quantityIssued),
+                invoiceId: invoice.id,
+                itemId: item.item_id ?? item.itemId,
+                description: item.description,
+                unit: item.unit,
+                quantityRequested: Number(
+                  item.quantity_requested ?? item.quantityRequested
+                ),
+                quantityIssued: Number(
+                  item.quantity_issued ?? item.quantityIssued
+                ),
               },
             });
 
-            // Create drum tracking for cable items
-            if (
-              inventoryItem.name?.toLowerCase().includes("drop wire cable") &&
-              item.drum_number
-            ) {
-              await tx.drumTracking.create({
+            // Update inventory stock
+            const inventoryItem = await tx.inventoryItem.findUnique({
+              where: { id: item.item_id ?? item.itemId },
+            });
+
+            if (inventoryItem) {
+              const currentStock = Number(inventoryItem.currentStock || 0);
+              await tx.inventoryItem.update({
+                where: { id: item.item_id ?? item.itemId },
                 data: {
-                  drumNumber: item.drum_number ?? item.drumNumber,
-                  itemId: item.item_id ?? item.itemId,
-                  initialQuantity: Number(
-                    item.quantity_issued ?? item.quantityIssued
-                  ),
-                  currentQuantity: Number(
-                    item.quantity_issued ?? item.quantityIssued
-                  ),
-                  receivedDate: new Date(invoiceData.date),
-                  status: "active",
+                  currentStock:
+                    currentStock +
+                    Number(item.quantity_issued ?? item.quantityIssued),
                 },
               });
+
+              // Create drum tracking for cable items
+              if (
+                inventoryItem.name?.toLowerCase().includes("drop wire cable") &&
+                item.drum_number
+              ) {
+                await tx.drumTracking.create({
+                  data: {
+                    drumNumber: item.drum_number ?? item.drumNumber,
+                    itemId: item.item_id ?? item.itemId,
+                    initialQuantity: Number(
+                      item.quantity_issued ?? item.quantityIssued
+                    ),
+                    currentQuantity: Number(
+                      item.quantity_issued ?? item.quantityIssued
+                    ),
+                    receivedDate: new Date(invoiceData.date),
+                    status: "active",
+                  },
+                });
+              }
             }
           }
         }
-      }
 
-      return invoice;
-    });
+        return invoice;
+      }
+    );
 
     const created = result;
     const formatted = {

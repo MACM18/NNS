@@ -1,58 +1,78 @@
 export interface DrumNumberReportData {
-  no: number
-  tpNumber: string
-  pdw: number
-  dw: number
-  dwCus: number
-  drumNumber: string
+  no: number;
+  tpNumber: string;
+  pdw: number;
+  dw: number;
+  dwCus: number;
+  drumNumber: string;
 }
 
 export interface MaterialBalanceReportData {
-  no: number
-  item: string
-  openingBalance: number
-  stockIssued: number
-  wastage: number
-  inHand: number
-  materialUsed: number
-  wipMaterial: number
+  no: number;
+  item: string;
+  openingBalance: number;
+  stockIssued: number;
+  wastage: number;
+  inHand: number;
+  materialUsed: number;
+  wipMaterial: number;
 }
 
 export interface DailyMaterialBalanceReportData {
-  itemName: string
-  unit: string
+  itemName: string;
+  unit: string;
   dailyBalances: {
-    date: string
-    previousBalance: number
-    issued: number
-    usage: number
-    balanceReturn: number
-  }[]
+    date: string;
+    previousBalance: number;
+    issued: number;
+    usage: number;
+    balanceReturn: number;
+  }[];
 }
 
 export interface NewConnectionReportData {
-  no: number
-  tpNumber: string
-  configs: string
-  rtom: string
-  completeDate: string
-  f1: number
-  g1: number
-  dwLh: number
-  dwCh: number
-  dwRt: number
-  iwN: number
-  cat5: number
-  fac: number
-  fiberRossette: number
-  topBolt: number
-  conduit: number
-  casing: number
-  poleDetails: string
+  no: number;
+  tpNumber: string;
+  configs: string;
+  rtom: string;
+  completeDate: string;
+  f1: number;
+  g1: number;
+  dwLh: number;
+  dwCh: number;
+  dwRt: number;
+  iwN: number;
+  cat5: number;
+  fac: number;
+  fiberRossette: number;
+  topBolt: number;
+  conduit: number;
+  casing: number;
+  poleDetails: string;
 }
 
+export interface NewConnectionMaterialTotals {
+  f1: number;
+  g1: number;
+  dwLh: number;
+  dwCh: number;
+  dwRt: number;
+  iwN: number;
+  cat5: number;
+  fac: number;
+  fiberRossette: number;
+  topBolt: number;
+  conduit: number;
+  casing: number;
+}
+
+type CsvRow = Record<string, unknown>;
+
 export class ReportTemplates {
-  static generateDrumNumberHTML(data: DrumNumberReportData[], month: string): string {
+  static generateDrumNumberHTML(
+    data: DrumNumberReportData[],
+    month: string
+  ): string {
     return `
       <!DOCTYPE html>
       <html>
@@ -133,7 +153,7 @@ export class ReportTemplates {
                   <td>${row.dwCus}</td>
                   <td>${row.drumNumber}</td>
                 </tr>
-              `,
+              `
                 )
                 .join("")}
             </tbody>
@@ -151,7 +171,7 @@ export class ReportTemplates {
           </div>
         </body>
       </html>
-    `
+    `;
   }
 
   static generateMaterialBalanceHTML(
@@ -159,7 +179,7 @@ export class ReportTemplates {
     contractorName: string,
     area: string,
     month: string,
-    year: number,
+    year: number
   ): string {
     return `
       <!DOCTYPE html>
@@ -243,19 +263,23 @@ export class ReportTemplates {
                   <td>${row.materialUsed}</td>
                   <td>${row.wipMaterial}</td>
                 </tr>
-              `,
+              `
                 )
                 .join("")}
             </tbody>
           </table>
         </body>
       </html>
-    `
+    `;
   }
 
-  static generateDailyMaterialBalanceHTML(data: DailyMaterialBalanceReportData[], month: string): string {
+  static generateDailyMaterialBalanceHTML(
+    data: DailyMaterialBalanceReportData[],
+    month: string
+  ): string {
     // Get all unique dates from the data
-    const allDates = data.length > 0 ? data[0].dailyBalances.map((d) => d.date) : []
+    const allDates =
+      data.length > 0 ? data[0].dailyBalances.map((d) => d.date) : [];
 
     return `
       <!DOCTYPE html>
@@ -320,7 +344,9 @@ export class ReportTemplates {
               <tr>
                 <th rowspan="2" class="item-name">Item Name</th>
                 <th rowspan="2">Unit</th>
-                ${allDates.map((date) => `<th colspan="4">Date: ${date}</th>`).join("")}
+                ${allDates
+                  .map((date) => `<th colspan="4">Date: ${date}</th>`)
+                  .join("")}
               </tr>
               <tr>
                 ${allDates
@@ -330,7 +356,7 @@ export class ReportTemplates {
                   <th>Issued</th>
                   <th>Usage</th>
                   <th>Balance Return</th>
-                `,
+                `
                   )
                   .join("")}
               </tr>
@@ -349,25 +375,25 @@ export class ReportTemplates {
                     <td>${day.issued}</td>
                     <td>${day.usage}</td>
                     <td>${day.balanceReturn}</td>
-                  `,
+                  `
                     )
                     .join("")}
                 </tr>
-              `,
+              `
                 )
                 .join("")}
             </tbody>
           </table>
         </body>
       </html>
-    `
+    `;
   }
 
   static generateNewConnectionHTML(
     data: NewConnectionReportData[],
     contractorName: string,
     invoiceNo: string,
-    totals: any,
+    totals: NewConnectionMaterialTotals
   ): string {
     return `
       <!DOCTYPE html>
@@ -477,7 +503,7 @@ export class ReportTemplates {
                   <td>${row.casing}</td>
                   <td>${row.poleDetails}</td>
                 </tr>
-              `,
+              `
                 )
                 .join("")}
               <tr class="total-row">
@@ -510,10 +536,10 @@ export class ReportTemplates {
           </div>
         </body>
       </html>
-    `
+    `;
   }
 
-  static generateCSV(data: any[], headers: string[], title: string): string {
+  static generateCSV(data: CsvRow[], headers: string[], title: string): string {
     const csvRows = [
       `# ${title}`,
       `# Generated on: ${new Date().toLocaleDateString()}`,
@@ -522,21 +548,22 @@ export class ReportTemplates {
       ...data.map((row) =>
         headers
           .map((header) => {
-            const value = row[header] || ""
-            return typeof value === "string" && value.includes(",") ? `"${value}"` : value
+            const value = row[header] ?? "";
+            const str = String(value);
+            return str.includes(",") ? `"${str}"` : str;
           })
-          .join(","),
+          .join(",")
       ),
-    ]
-    return csvRows.join("\n")
+    ];
+    return csvRows.join("\n");
   }
 
-  static generateExcelData(data: any[], headers: string[], title: string) {
+  static generateExcelData(data: CsvRow[], headers: string[], title: string) {
     return {
       title,
       headers,
       data,
       generatedAt: new Date().toISOString(),
-    }
+    };
   }
 }

@@ -11,6 +11,8 @@
  * import type { Profile, LineDetails, Task, etc. } from "@prisma/client"
  */
 
+import type { Prisma } from "@prisma/client";
+
 import prisma from "./prisma";
 
 // Re-export prisma for direct access when needed
@@ -57,14 +59,17 @@ export const profiles = {
   findByEmail: (email: string) =>
     prisma.profile.findFirst({ where: { email } }),
   findAll: () => prisma.profile.findMany(),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.profile.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.profile.update({ where: { id }, data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updateByUserId: (userId: string, data: any) =>
-    prisma.profile.update({ where: { userId }, data }),
+  create: (
+    data: Prisma.ProfileCreateInput | Prisma.ProfileUncheckedCreateInput
+  ) => prisma.profile.create({ data }),
+  update: (
+    id: string,
+    data: Prisma.ProfileUpdateInput | Prisma.ProfileUncheckedUpdateInput
+  ) => prisma.profile.update({ where: { id }, data }),
+  updateByUserId: (
+    userId: string,
+    data: Prisma.ProfileUpdateInput | Prisma.ProfileUncheckedUpdateInput
+  ) => prisma.profile.update({ where: { userId }, data }),
   delete: (id: string) => prisma.profile.delete({ where: { id } }),
 };
 
@@ -82,12 +87,12 @@ export const users = {
       where: { email },
       include: { profile: true },
     }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) =>
+  create: (data: Prisma.UserCreateInput | Prisma.UserUncheckedCreateInput) =>
     prisma.user.create({ data, include: { profile: true } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.user.update({ where: { id }, data, include: { profile: true } }),
+  update: (
+    id: string,
+    data: Prisma.UserUpdateInput | Prisma.UserUncheckedUpdateInput
+  ) => prisma.user.update({ where: { id }, data, include: { profile: true } }),
   delete: (id: string) => prisma.user.delete({ where: { id } }),
 };
 
@@ -98,23 +103,28 @@ export const lineDetails = {
   findById: (id: string) => prisma.lineDetails.findUnique({ where: { id } }),
   findByTelephoneNo: (telephoneNo: string) =>
     prisma.lineDetails.findFirst({ where: { telephoneNo } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.lineDetails.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.lineDetails.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.lineDetails.update({ where: { id }, data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  upsert: (telephoneNo: string, date: Date, data: any) =>
+  findMany: (options?: Prisma.LineDetailsFindManyArgs) =>
+    prisma.lineDetails.findMany(options),
+  create: (
+    data: Prisma.LineDetailsCreateInput | Prisma.LineDetailsUncheckedCreateInput
+  ) => prisma.lineDetails.create({ data }),
+  update: (
+    id: string,
+    data: Prisma.LineDetailsUpdateInput | Prisma.LineDetailsUncheckedUpdateInput
+  ) => prisma.lineDetails.update({ where: { id }, data }),
+  upsert: (
+    telephoneNo: string,
+    date: Date,
+    data: Prisma.LineDetailsCreateInput | Prisma.LineDetailsUncheckedCreateInput
+  ) =>
     prisma.lineDetails.upsert({
       where: { telephoneNo_date: { telephoneNo, date } },
       create: data,
       update: data,
     }),
   delete: (id: string) => prisma.lineDetails.delete({ where: { id } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  count: (where?: any) => prisma.lineDetails.count({ where }),
+  count: (where?: Prisma.LineDetailsWhereInput) =>
+    prisma.lineDetails.count({ where }),
 };
 
 /**
@@ -127,16 +137,16 @@ export const tasks = {
       where: { telephoneNo },
       orderBy: { createdAt: "desc" },
     }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.task.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.task.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.task.update({ where: { id }, data }),
+  findMany: (options?: Prisma.TaskFindManyArgs) =>
+    prisma.task.findMany(options),
+  create: (data: Prisma.TaskCreateInput | Prisma.TaskUncheckedCreateInput) =>
+    prisma.task.create({ data }),
+  update: (
+    id: string,
+    data: Prisma.TaskUpdateInput | Prisma.TaskUncheckedUpdateInput
+  ) => prisma.task.update({ where: { id }, data }),
   delete: (id: string) => prisma.task.delete({ where: { id } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  count: (where?: any) => prisma.task.count({ where }),
+  count: (where?: Prisma.TaskWhereInput) => prisma.task.count({ where }),
 };
 
 /**
@@ -146,13 +156,19 @@ export const inventoryItems = {
   findById: (id: string) => prisma.inventoryItem.findUnique({ where: { id } }),
   findByName: (name: string) =>
     prisma.inventoryItem.findUnique({ where: { name } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.inventoryItem.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.inventoryItem.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.inventoryItem.update({ where: { id }, data }),
+  findMany: (options?: Prisma.InventoryItemFindManyArgs) =>
+    prisma.inventoryItem.findMany(options),
+  create: (
+    data:
+      | Prisma.InventoryItemCreateInput
+      | Prisma.InventoryItemUncheckedCreateInput
+  ) => prisma.inventoryItem.create({ data }),
+  update: (
+    id: string,
+    data:
+      | Prisma.InventoryItemUpdateInput
+      | Prisma.InventoryItemUncheckedUpdateInput
+  ) => prisma.inventoryItem.update({ where: { id }, data }),
   delete: (id: string) => prisma.inventoryItem.delete({ where: { id } }),
 };
 
@@ -163,13 +179,19 @@ export const drumTracking = {
   findById: (id: string) => prisma.drumTracking.findUnique({ where: { id } }),
   findByDrumNumber: (drumNumber: string) =>
     prisma.drumTracking.findFirst({ where: { drumNumber } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.drumTracking.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.drumTracking.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.drumTracking.update({ where: { id }, data }),
+  findMany: (options?: Prisma.DrumTrackingFindManyArgs) =>
+    prisma.drumTracking.findMany(options),
+  create: (
+    data:
+      | Prisma.DrumTrackingCreateInput
+      | Prisma.DrumTrackingUncheckedCreateInput
+  ) => prisma.drumTracking.create({ data }),
+  update: (
+    id: string,
+    data:
+      | Prisma.DrumTrackingUpdateInput
+      | Prisma.DrumTrackingUncheckedUpdateInput
+  ) => prisma.drumTracking.update({ where: { id }, data }),
   delete: (id: string) => prisma.drumTracking.delete({ where: { id } }),
 };
 
@@ -178,13 +200,15 @@ export const drumTracking = {
  */
 export const drumUsage = {
   findById: (id: string) => prisma.drumUsage.findUnique({ where: { id } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.drumUsage.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.drumUsage.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.drumUsage.update({ where: { id }, data }),
+  findMany: (options?: Prisma.DrumUsageFindManyArgs) =>
+    prisma.drumUsage.findMany(options),
+  create: (
+    data: Prisma.DrumUsageCreateInput | Prisma.DrumUsageUncheckedCreateInput
+  ) => prisma.drumUsage.create({ data }),
+  update: (
+    id: string,
+    data: Prisma.DrumUsageUpdateInput | Prisma.DrumUsageUncheckedUpdateInput
+  ) => prisma.drumUsage.update({ where: { id }, data }),
   delete: (id: string) => prisma.drumUsage.delete({ where: { id } }),
 };
 
@@ -199,13 +223,19 @@ export const inventoryInvoices = {
     }),
   findByInvoiceNumber: (invoiceNumber: string) =>
     prisma.inventoryInvoice.findUnique({ where: { invoiceNumber } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.inventoryInvoice.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.inventoryInvoice.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.inventoryInvoice.update({ where: { id }, data }),
+  findMany: (options?: Prisma.InventoryInvoiceFindManyArgs) =>
+    prisma.inventoryInvoice.findMany(options),
+  create: (
+    data:
+      | Prisma.InventoryInvoiceCreateInput
+      | Prisma.InventoryInvoiceUncheckedCreateInput
+  ) => prisma.inventoryInvoice.create({ data }),
+  update: (
+    id: string,
+    data:
+      | Prisma.InventoryInvoiceUpdateInput
+      | Prisma.InventoryInvoiceUncheckedUpdateInput
+  ) => prisma.inventoryInvoice.update({ where: { id }, data }),
   delete: (id: string) => prisma.inventoryInvoice.delete({ where: { id } }),
 };
 
@@ -215,16 +245,22 @@ export const inventoryInvoices = {
 export const generatedInvoices = {
   findById: (id: string) =>
     prisma.generatedInvoice.findUnique({ where: { id } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.generatedInvoice.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.generatedInvoice.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.generatedInvoice.update({ where: { id }, data }),
+  findMany: (options?: Prisma.GeneratedInvoiceFindManyArgs) =>
+    prisma.generatedInvoice.findMany(options),
+  create: (
+    data:
+      | Prisma.GeneratedInvoiceCreateInput
+      | Prisma.GeneratedInvoiceUncheckedCreateInput
+  ) => prisma.generatedInvoice.create({ data }),
+  update: (
+    id: string,
+    data:
+      | Prisma.GeneratedInvoiceUpdateInput
+      | Prisma.GeneratedInvoiceUncheckedUpdateInput
+  ) => prisma.generatedInvoice.update({ where: { id }, data }),
   delete: (id: string) => prisma.generatedInvoice.delete({ where: { id } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  count: (where?: any) => prisma.generatedInvoice.count({ where }),
+  count: (where?: Prisma.GeneratedInvoiceWhereInput) =>
+    prisma.generatedInvoice.count({ where }),
 };
 
 /**
@@ -232,13 +268,15 @@ export const generatedInvoices = {
  */
 export const workers = {
   findById: (id: string) => prisma.worker.findUnique({ where: { id } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.worker.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.worker.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.worker.update({ where: { id }, data }),
+  findMany: (options?: Prisma.WorkerFindManyArgs) =>
+    prisma.worker.findMany(options),
+  create: (
+    data: Prisma.WorkerCreateInput | Prisma.WorkerUncheckedCreateInput
+  ) => prisma.worker.create({ data }),
+  update: (
+    id: string,
+    data: Prisma.WorkerUpdateInput | Prisma.WorkerUncheckedUpdateInput
+  ) => prisma.worker.update({ where: { id }, data }),
   delete: (id: string) => prisma.worker.delete({ where: { id } }),
 };
 
@@ -247,13 +285,19 @@ export const workers = {
  */
 export const workAssignments = {
   findById: (id: string) => prisma.workAssignment.findUnique({ where: { id } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.workAssignment.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.workAssignment.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.workAssignment.update({ where: { id }, data }),
+  findMany: (options?: Prisma.WorkAssignmentFindManyArgs) =>
+    prisma.workAssignment.findMany(options),
+  create: (
+    data:
+      | Prisma.WorkAssignmentCreateInput
+      | Prisma.WorkAssignmentUncheckedCreateInput
+  ) => prisma.workAssignment.create({ data }),
+  update: (
+    id: string,
+    data:
+      | Prisma.WorkAssignmentUpdateInput
+      | Prisma.WorkAssignmentUncheckedUpdateInput
+  ) => prisma.workAssignment.update({ where: { id }, data }),
   delete: (id: string) => prisma.workAssignment.delete({ where: { id } }),
 };
 
@@ -267,11 +311,17 @@ export const notifications = {
       where: { userId },
       orderBy: { createdAt: "desc" },
     }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.notification.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.notification.update({ where: { id }, data }),
+  create: (
+    data:
+      | Prisma.NotificationCreateInput
+      | Prisma.NotificationUncheckedCreateInput
+  ) => prisma.notification.create({ data }),
+  update: (
+    id: string,
+    data:
+      | Prisma.NotificationUpdateInput
+      | Prisma.NotificationUncheckedUpdateInput
+  ) => prisma.notification.update({ where: { id }, data }),
   markAsRead: (id: string) =>
     prisma.notification.update({ where: { id }, data: { isRead: true } }),
   markAllAsRead: (userId: string) =>
@@ -290,13 +340,19 @@ export const googleSheetConnections = {
     prisma.googleSheetConnection.findUnique({ where: { id } }),
   findByMonthYear: (month: number, year: number) =>
     prisma.googleSheetConnection.findFirst({ where: { month, year } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.googleSheetConnection.findMany(options),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.googleSheetConnection.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.googleSheetConnection.update({ where: { id }, data }),
+  findMany: (options?: Prisma.GoogleSheetConnectionFindManyArgs) =>
+    prisma.googleSheetConnection.findMany(options),
+  create: (
+    data:
+      | Prisma.GoogleSheetConnectionCreateInput
+      | Prisma.GoogleSheetConnectionUncheckedCreateInput
+  ) => prisma.googleSheetConnection.create({ data }),
+  update: (
+    id: string,
+    data:
+      | Prisma.GoogleSheetConnectionUpdateInput
+      | Prisma.GoogleSheetConnectionUncheckedUpdateInput
+  ) => prisma.googleSheetConnection.update({ where: { id }, data }),
   delete: (id: string) =>
     prisma.googleSheetConnection.delete({ where: { id } }),
 };
@@ -307,18 +363,19 @@ export const googleSheetConnections = {
 export const blogs = {
   findById: (id: number) => prisma.blog.findUnique({ where: { id } }),
   findBySlug: (slug: string) => prisma.blog.findUnique({ where: { slug } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.blog.findMany(options),
+  findMany: (options?: Prisma.BlogFindManyArgs) =>
+    prisma.blog.findMany(options),
   findActive: () =>
     prisma.blog.findMany({
       where: { status: "active" },
       orderBy: { createdAt: "desc" },
     }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.blog.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: number, data: any) =>
-    prisma.blog.update({ where: { id }, data }),
+  create: (data: Prisma.BlogCreateInput | Prisma.BlogUncheckedCreateInput) =>
+    prisma.blog.create({ data }),
+  update: (
+    id: number,
+    data: Prisma.BlogUpdateInput | Prisma.BlogUncheckedUpdateInput
+  ) => prisma.blog.update({ where: { id }, data }),
   delete: (id: number) => prisma.blog.delete({ where: { id } }),
 };
 
@@ -327,18 +384,19 @@ export const blogs = {
  */
 export const posts = {
   findById: (id: number) => prisma.post.findUnique({ where: { id } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.post.findMany(options),
+  findMany: (options?: Prisma.PostFindManyArgs) =>
+    prisma.post.findMany(options),
   findActive: () =>
     prisma.post.findMany({
       where: { status: "active" },
       orderBy: { createdAt: "desc" },
     }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.post.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: number, data: any) =>
-    prisma.post.update({ where: { id }, data }),
+  create: (data: Prisma.PostCreateInput | Prisma.PostUncheckedCreateInput) =>
+    prisma.post.create({ data }),
+  update: (
+    id: number,
+    data: Prisma.PostUpdateInput | Prisma.PostUncheckedUpdateInput
+  ) => prisma.post.update({ where: { id }, data }),
   delete: (id: number) => prisma.post.delete({ where: { id } }),
 };
 
@@ -347,18 +405,20 @@ export const posts = {
  */
 export const jobVacancies = {
   findById: (id: number) => prisma.jobVacancy.findUnique({ where: { id } }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  findMany: (options?: any) => prisma.jobVacancy.findMany(options),
+  findMany: (options?: Prisma.JobVacancyFindManyArgs) =>
+    prisma.jobVacancy.findMany(options),
   findActive: () =>
     prisma.jobVacancy.findMany({
       where: { status: "active" },
       orderBy: { createdAt: "desc" },
     }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  create: (data: any) => prisma.jobVacancy.create({ data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: number, data: any) =>
-    prisma.jobVacancy.update({ where: { id }, data }),
+  create: (
+    data: Prisma.JobVacancyCreateInput | Prisma.JobVacancyUncheckedCreateInput
+  ) => prisma.jobVacancy.create({ data }),
+  update: (
+    id: number,
+    data: Prisma.JobVacancyUpdateInput | Prisma.JobVacancyUncheckedUpdateInput
+  ) => prisma.jobVacancy.update({ where: { id }, data }),
   delete: (id: number) => prisma.jobVacancy.delete({ where: { id } }),
 };
 
@@ -367,13 +427,19 @@ export const jobVacancies = {
  */
 export const companySettings = {
   get: () => prisma.companySettings.findFirst(),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update: (id: string, data: any) =>
-    prisma.companySettings.update({ where: { id }, data }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  upsert: (data: any) =>
+  update: (
+    id: string,
+    data:
+      | Prisma.CompanySettingsUpdateInput
+      | Prisma.CompanySettingsUncheckedUpdateInput
+  ) => prisma.companySettings.update({ where: { id }, data }),
+  upsert: (
+    data:
+      | Prisma.CompanySettingsCreateInput
+      | Prisma.CompanySettingsUncheckedCreateInput
+  ) =>
     prisma.companySettings.upsert({
-      where: { id: data.id || "default" },
+      where: { id: (data as { id?: string }).id || "default" },
       create: data,
       update: data,
     }),
@@ -406,8 +472,9 @@ export async function generateInvoiceNumber(): Promise<string> {
  * Transaction helper
  * Usage: await db.transaction(async (tx) => { ... })
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
+export function transaction<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
   return prisma.$transaction(fn);
 }
 

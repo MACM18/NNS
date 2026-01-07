@@ -99,8 +99,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Transform to match the expected snake_case format
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transformedTasks = tasks.map((task: any) => ({
+    const transformedTasks = tasks.map((task) => ({
       id: task.id,
       task_date: task.taskDate?.toISOString().split("T")[0],
       telephone_no: task.telephoneNo,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(
   req: NextRequest,
@@ -166,8 +167,7 @@ export async function DELETE(
     const { id } = await params;
 
     // Use a transaction to safely delete task and handle related records
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await prisma.$transaction(async (tx: any) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Find the task first
       const task = await tx.task.findUnique({
         where: { id },

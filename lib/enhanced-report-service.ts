@@ -11,7 +11,7 @@ import { format as formatDate } from "date-fns";
 export interface ReportOptions {
   format: "pdf" | "csv" | "xlsx";
   month: Date;
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
 }
 
 export class EnhancedReportService {
@@ -136,77 +136,198 @@ export class EnhancedReportService {
       const lineDetails = linesResult.data || [];
 
       // Helper: calculate material used from line_details for each item
-      function getMaterialUsedForItem(item: any, lines: any[]): number {
-        const name = String(item.name).toLowerCase();
+      function getMaterialUsedForItem(item: unknown, lines: unknown[]): number {
+        const name = String(
+          (item as { name?: unknown })?.name ?? ""
+        ).toLowerCase();
         switch (name) {
           case "c-hook":
-            return lines.reduce((sum, line) => sum + (line.c_hook || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { c_hook?: unknown })?.c_hook as number) || 0),
+              0
+            );
           case "l-hook":
-            return lines.reduce((sum, line) => sum + (line.l_hook || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { l_hook?: unknown })?.l_hook as number) || 0),
+              0
+            );
           case "retainers":
-            return lines.reduce((sum, line) => sum + (line.retainers || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { retainers?: unknown })?.retainers as number) || 0),
+              0
+            );
           case "drop wire cable":
             return lines.reduce(
-              (sum, line) => sum + (line.total_cable || 0),
+              (sum, line) =>
+                sum +
+                (((line as { total_cable?: unknown })?.total_cable as number) ||
+                  0),
               0
             );
           case "fiber rossette":
             return lines.reduce(
-              (sum, line) => sum + (line.fiber_rosette || 0),
+              (sum, line) =>
+                sum +
+                (((line as { fiber_rosette?: unknown })
+                  ?.fiber_rosette as number) || 0),
               0
             );
           case "fac connector":
-            return lines.reduce((sum, line) => sum + (line.fac || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { fac?: unknown })?.fac as number) || 0),
+              0
+            );
           case "internal wire":
             return lines.reduce(
-              (sum, line) => sum + (line.internal_wire || 0),
+              (sum, line) =>
+                sum +
+                (((line as { internal_wire?: unknown })
+                  ?.internal_wire as number) || 0),
               0
             );
           case "cat 5 cable":
-            return lines.reduce((sum, line) => sum + (line.cat5 || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { cat5?: unknown })?.cat5 as number) || 0),
+              0
+            );
           case "top bolt":
-            return lines.reduce((sum, line) => sum + (line.top_bolt || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { top_bolt?: unknown })?.top_bolt as number) || 0),
+              0
+            );
           case "conduit":
-            return lines.reduce((sum, line) => sum + (line.conduit || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { conduit?: unknown })?.conduit as number) || 0),
+              0
+            );
           case "casing":
-            return lines.reduce((sum, line) => sum + (line.casing || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { casing?: unknown })?.casing as number) || 0),
+              0
+            );
           case "rj-45":
-            return lines.reduce((sum, line) => sum + (line.rj45 || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { rj45?: unknown })?.rj45 as number) || 0),
+              0
+            );
           case "rj-11":
-            return lines.reduce((sum, line) => sum + (line.rj11 || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { rj11?: unknown })?.rj11 as number) || 0),
+              0
+            );
           case "rj-12":
-            return lines.reduce((sum, line) => sum + (line.rj12 || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { rj12?: unknown })?.rj12 as number) || 0),
+              0
+            );
           case "nut & bolt":
-            return lines.reduce((sum, line) => sum + (line.nut_bolt || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { nut_bolt?: unknown })?.nut_bolt as number) || 0),
+              0
+            );
           case "s-rosette":
-            return lines.reduce((sum, line) => sum + (line.s_rosette || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { s_rosette?: unknown })?.s_rosette as number) || 0),
+              0
+            );
           case "c-clip":
-            return lines.reduce((sum, line) => sum + (line.c_clip || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { c_clip?: unknown })?.c_clip as number) || 0),
+              0
+            );
           case "socket":
-            return lines.reduce((sum, line) => sum + (line.socket || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { socket?: unknown })?.socket as number) || 0),
+              0
+            );
           case "pole":
-            return lines.reduce((sum, line) => sum + (line.pole || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { pole?: unknown })?.pole as number) || 0),
+              0
+            );
           case "roll plug":
-            return lines.reduce((sum, line) => sum + (line.roll_plug || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { roll_plug?: unknown })?.roll_plug as number) || 0),
+              0
+            );
           case "u-clip":
-            return lines.reduce((sum, line) => sum + (line.u_clip || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { u_clip?: unknown })?.u_clip as number) || 0),
+              0
+            );
           case "screw nail":
-            return lines.reduce((sum, line) => sum + (line.screw_nail || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { screw_nail?: unknown })?.screw_nail as number) ||
+                  0),
+              0
+            );
           case "flexible":
-            return lines.reduce((sum, line) => sum + (line.flexible || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { flexible?: unknown })?.flexible as number) || 0),
+              0
+            );
           case "pole 6.7m":
-            return lines.reduce((sum, line) => sum + (line.pole_67 || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { pole_67?: unknown })?.pole_67 as number) || 0),
+              0
+            );
           case "concrete nail":
             return lines.reduce(
-              (sum, line) => sum + (line.concrete_nail || 0),
+              (sum, line) =>
+                sum +
+                (((line as { concrete_nail?: unknown })
+                  ?.concrete_nail as number) || 0),
               0
             );
           case "tag tie":
-            return lines.reduce((sum, line) => sum + (line.tag_tie || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum +
+                (((line as { tag_tie?: unknown })?.tag_tie as number) || 0),
+              0
+            );
           case "c-tie":
-            return lines.reduce((sum, line) => sum + (line.c_tie || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { c_tie?: unknown })?.c_tie as number) || 0),
+              0
+            );
           case "bend":
-            return lines.reduce((sum, line) => sum + (line.bend || 0), 0);
+            return lines.reduce(
+              (sum, line) =>
+                sum + (((line as { bend?: unknown })?.bend as number) || 0),
+              0
+            );
           default:
             return 0;
         }
@@ -299,7 +420,7 @@ export class EnhancedReportService {
           return null;
       }
     } catch (error) {
-      console.error("Error generating material balance report:", error);
+      console.error("Error generating material balance sheet report:", error);
       return null;
     }
   }
@@ -352,7 +473,7 @@ export class EnhancedReportService {
         : [];
 
       // Type guard for InventoryItem
-      function isInventoryItem(obj: any): obj is InventoryItem {
+      function isInventoryItem(obj: unknown): obj is InventoryItem {
         return (
           obj &&
           typeof obj.id === "string" &&
@@ -361,7 +482,9 @@ export class EnhancedReportService {
         );
       }
       // Type guard for InventoryInvoiceItem
-      function isInventoryInvoiceItem(obj: any): obj is InventoryInvoiceItem {
+      function isInventoryInvoiceItem(
+        obj: unknown
+      ): obj is InventoryInvoiceItem {
         return (
           obj &&
           typeof obj.id === "string" &&
@@ -372,7 +495,7 @@ export class EnhancedReportService {
         );
       }
       // Type guard for LineDetail
-      function isLineDetail(obj: any): obj is LineDetail {
+      function isLineDetail(obj: unknown): obj is LineDetail {
         return obj && typeof obj.date === "string";
       }
 
@@ -601,7 +724,7 @@ export class EnhancedReportService {
       if (!lines.length) return null;
 
       const reportData: NewConnectionReportData[] = Array.isArray(lines)
-        ? lines.map((line: any, index: number) => ({
+        ? (lines as LineDetail[]).map((line: LineDetail, index: number) => ({
             no: index + 1,
             tpNumber: String(line.telephone_no ?? ""),
             configs: String(line.configs ?? ""),
@@ -625,7 +748,9 @@ export class EnhancedReportService {
           }))
         : [];
 
-      const totals = this.calculateMaterialTotals(lines);
+      const totals = this.calculateMaterialTotals(
+        Array.isArray(lines) ? (lines as LineDetail[]) : []
+      );
       const invoiceNo = `NNS/WPS/HR/NC/24/${formatDate(
         options.month,
         "MMMM"
@@ -712,7 +837,11 @@ export class EnhancedReportService {
     }
   }
 
-  private calculateDailyUsage(item: any, dayUsage: any[], issued: number = 0) {
+  private calculateDailyUsage(
+    item: InventoryItem,
+    dayUsage: LineDetail[],
+    issued: number = 0
+  ) {
     const name = String(item.name).toLowerCase();
     let usage = 0;
     switch (name) {
@@ -823,7 +952,7 @@ export class EnhancedReportService {
     };
   }
 
-  private calculateMaterialTotals(lines: any[]) {
+  private calculateMaterialTotals(lines: LineDetail[]) {
     return lines.reduce(
       (totals, line) => ({
         f1: totals.f1 + (line.fiber_rosette || 0),
@@ -868,7 +997,49 @@ interface InventoryItem {
 }
 interface LineDetail {
   date: string;
-  [key: string]: any;
+  c_hook?: number;
+  l_hook?: number;
+  retainers?: number;
+  total_cable?: number;
+  fiber_rosette?: number;
+  fac?: number;
+  internal_wire?: number;
+  cat5?: number;
+  top_bolt?: number;
+  conduit?: number;
+  casing?: number;
+  rj45?: number;
+  rj11?: number;
+  rj12?: number;
+  nut_bolt?: number;
+  s_rosette?: number;
+  c_clip?: number;
+  socket?: number;
+  pole?: number;
+  roll_plug?: number;
+  u_clip?: number;
+  screw_nail?: number;
+  flexible?: number;
+  pole_67?: number;
+  concrete_nail?: number;
+  tag_tie?: number;
+  c_tie?: number;
+  bend?: number;
+  dp?: string;
+  phone_no?: string;
+  name?: string;
+  address?: string;
+  port?: string;
+  ont_no?: string;
+  onu_no?: string;
+  serial_no?: string;
+  box?: string;
+  f1?: number;
+  g1?: number;
+  wastage?: number;
+  dp_power?: number;
+  inbox_power?: number;
+  [key: string]: unknown;
 }
 interface InventoryInvoiceItem {
   id: string;

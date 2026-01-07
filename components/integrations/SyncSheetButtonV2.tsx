@@ -23,13 +23,45 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getErrorMessage, isRecord } from "@/lib/error-utils";
 
 interface SyncProgress {
   step: string;
   status: "pending" | "running" | "success" | "error";
   message: string;
   timestamp: Date;
-  details?: any;
+  details?: unknown;
+}
+
+interface SyncFinalResult {
+  upserted?: number;
+  appended?: number;
+  hardwareUpdated?: number;
+  hardwareCreated?: number;
+  drumProcessed?: number;
+  drumUsageInserted?: number;
+}
+
+function toOptionalNumber(value: unknown): number | undefined {
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function normalizeFinalResult(result: unknown): SyncFinalResult | null {
+  if (!isRecord(result)) return null;
+  return {
+    upserted: toOptionalNumber(result.upserted),
+    appended: toOptionalNumber(result.appended),
+    hardwareUpdated: toOptionalNumber(result.hardwareUpdated),
+    hardwareCreated: toOptionalNumber(result.hardwareCreated),
+    drumProcessed: toOptionalNumber(result.drumProcessed),
+    drumUsageInserted: toOptionalNumber(result.drumUsageInserted),
+  };
 }
 
 const getStepIcon = (step: string) => {
@@ -52,7 +84,7 @@ export default function SyncSheetButton({
   const [jobId, setJobId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [progress, setProgress] = useState<SyncProgress[]>([]);
-  const [finalResult, setFinalResult] = useState<any>(null);
+  const [finalResult, setFinalResult] = useState<SyncFinalResult | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new progress is added
@@ -121,7 +153,7 @@ export default function SyncSheetButton({
             if (json.job.status === "done") {
               setLoading(false);
               setJobId(null);
-              setFinalResult(json.job.result || {});
+              setFinalResult(normalizeFinalResult(json.job.result));
 
               // Mark all steps as success
               setProgress((prev) =>
@@ -147,6 +179,7 @@ export default function SyncSheetButton({
             if (json.job.status === "error") {
               setLoading(false);
               setJobId(null);
+              setFinalResult(null);
 
               setProgress((prev) => {
                 const updated = [...prev];
@@ -236,20 +269,21 @@ export default function SyncSheetButton({
           variant: "destructive",
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Unable to connect to server");
       setProgress((prev) => [
         ...prev,
         {
           step: "Request failed",
           status: "error",
-          message: e?.message || "Unable to connect to server",
+          message,
           timestamp: new Date(),
         },
       ]);
       setLoading(false);
       toast({
         title: "❌ Request Failed",
-        description: e?.message || "Unable to start sync",
+        description: message,
         variant: "destructive",
       });
     }
