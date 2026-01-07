@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Fetch latest exchange rates
+    // Fetch latest exchange rates (baseCurrency will be validated in the service)
     const rates = await fetchExchangeRates(baseCurrency);
 
     return NextResponse.json({
