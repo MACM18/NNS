@@ -759,7 +759,7 @@ export default function AccountingSettingsPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent mode="single" selected={periodForm.startDate} onSelect={(date) => setPeriodForm({ ...periodForm, startDate: date || new Date() })} initialFocus />
+                    <CalendarComponent mode="single" selected={periodForm.startDate} onSelect={(date) => setPeriodForm({ ...periodForm, startDate: date || new Date() })} />
                   </PopoverContent>
                 </Popover>
               </div>
@@ -773,7 +773,7 @@ export default function AccountingSettingsPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent mode="single" selected={periodForm.endDate} onSelect={(date) => setPeriodForm({ ...periodForm, endDate: date || new Date() })} initialFocus />
+                    <CalendarComponent mode="single" selected={periodForm.endDate} onSelect={(date) => setPeriodForm({ ...periodForm, endDate: date || new Date() })} />
                   </PopoverContent>
                 </Popover>
               </div>
