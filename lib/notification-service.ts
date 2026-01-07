@@ -103,7 +103,7 @@ export class NotificationService {
     type: "success" | "info" | "warning" | "error";
     category: string;
     action_url?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }) {
     try {
       const response = await fetch("/api/notifications", {

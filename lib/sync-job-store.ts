@@ -6,7 +6,7 @@ interface JobRecord {
   message?: string;
   startedAt: string;
   finishedAt?: string;
-  result?: any;
+  result?: unknown;
 }
 
 const store = new Map<string, JobRecord>();
@@ -31,7 +31,7 @@ export function setJobInProgress(id: string, message?: string) {
   return rec;
 }
 
-export function setJobDone(id: string, result?: any) {
+export function setJobDone(id: string, result?: unknown) {
   const rec = store.get(id);
   if (!rec) return null;
   rec.status = "done";

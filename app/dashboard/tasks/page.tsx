@@ -33,20 +33,24 @@ import { useDataCache } from "@/contexts/data-cache-context";
 import type { TaskRecord } from "@/types/tasks";
 import { TasksSkeleton } from "@/components/skeletons/tasks-skeleton";
 
+type DateFilter = "today" | "week" | "month";
+
+function isDateFilter(value: string): value is DateFilter {
+  return value === "today" || value === "week" || value === "month";
+}
+
 export default function TasksPage() {
   const { user, loading } = useAuth();
   const [addTaskModalOpen, setAddTaskModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [dateFilter, setDateFilter] = useState<"today" | "week" | "month">(
-    "month"
-  );
+  const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const { cache, updateCache } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const tasks = cache.tasks.data || [];
 
   // Helper to get date range based on filter
-  const getDateRange = (filter: "today" | "week" | "month") => {
+  const getDateRange = (filter: DateFilter) => {
     const now = new Date();
     let start: Date, end: Date;
     if (filter === "today") {
@@ -66,7 +70,7 @@ export default function TasksPage() {
   };
 
   // Fetch tasks for the selected period
-  const fetchTasksForPeriod = async (filter: "today" | "week" | "month") => {
+  const fetchTasksForPeriod = async (filter: DateFilter) => {
     setIsRefreshing(true);
     try {
       const [start, end] = getDateRange(filter);
@@ -91,7 +95,6 @@ export default function TasksPage() {
   // Refresh data when page becomes visible again
   usePageVisibility(() => {
     if (user) {
-      console.log("Page became visible, refreshing tasks data");
       fetchTasksForPeriod(dateFilter);
       setRefreshTrigger((prev) => prev + 1);
     }
@@ -148,7 +151,9 @@ export default function TasksPage() {
               </Button>
               <Select
                 value={dateFilter}
-                onValueChange={(value: any) => setDateFilter(value)}
+                onValueChange={(value) => {
+                  if (isDateFilter(value)) setDateFilter(value);
+                }}
               >
                 <SelectTrigger className='w-full sm:w-[180px]'>
                   <SelectValue placeholder='Select period' />

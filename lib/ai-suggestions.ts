@@ -1,5 +1,22 @@
 // @ts-nocheck
 
+type DPLineLike = { dp?: string | null };
+type GroupLineLike = {
+  id: string;
+  address?: string | null;
+  total_cable?: number | null;
+};
+
+type ErrorLineLike = {
+  id: string;
+  dp?: string | null;
+  phone_number?: string | null;
+  power_dp_new?: number | null;
+  power_inbox_new?: number | null;
+  wastage_input?: number | null;
+  total_cable?: number | null;
+};
+
 export interface DPSuggestion {
   dp: string;
   confidence: number;
@@ -41,8 +58,8 @@ export class AIService {
       const dpCounts: Record<string, number> = {};
 
       // Count frequency of DP patterns
-      existingDPs.forEach((item: any) => {
-        if (item.dp) {
+      existingDPs.forEach((item: DPLineLike) => {
+        if (item?.dp) {
           const parts = item.dp.split("-");
           if (parts.length >= 4) {
             const basePattern = parts.slice(0, 4).join("-");
@@ -90,10 +107,10 @@ export class AIService {
       if (!lines.length) return [];
 
       const suggestions: LineGroupSuggestion[] = [];
-      const addressGroups: Record<string, any[]> = {};
+      const addressGroups: Record<string, GroupLineLike[]> = {};
 
       // Group by similar addresses
-      lines.forEach((line: any) => {
+      lines.forEach((line: GroupLineLike) => {
         const addressKey =
           line.address?.toLowerCase().split(" ").slice(0, 3).join(" ") ||
           "unknown";
@@ -146,7 +163,7 @@ export class AIService {
 
       const suggestions: ErrorSuggestion[] = [];
 
-      lines.forEach((line: any) => {
+      lines.forEach((line: ErrorLineLike) => {
         // Check for high power values
         if (line.power_dp_new >= 20 || line.power_inbox_new >= 20) {
           suggestions.push({

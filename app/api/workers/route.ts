@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getErrorMessage } from "@/lib/error-utils";
 
 const ALLOWED_ROLES = ["admin"];
 
@@ -96,7 +97,7 @@ export async function GET() {
   } catch (error: any) {
     return new Response(
       JSON.stringify({
-        error: escapeHtml(error.message) || "Failed to fetch workers",
+        error: escapeHtml(getErrorMessage(error, "Failed to fetch workers")),
       }),
       { status: 500 }
     );
@@ -196,10 +197,10 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ worker: normalized }), {
       status: 201,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return new Response(
       JSON.stringify({
-        error: escapeHtml(error.message) || "Failed to create worker",
+        error: escapeHtml(getErrorMessage(error, "Failed to create worker")),
       }),
       { status: 500 }
     );
@@ -331,10 +332,10 @@ export async function PATCH(req: NextRequest) {
     return new Response(JSON.stringify({ worker: normalized }), {
       status: 200,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return new Response(
       JSON.stringify({
-        error: escapeHtml(error.message) || "Failed to update worker",
+        error: escapeHtml(getErrorMessage(error, "Failed to update worker")),
       }),
       { status: 500 }
     );
@@ -359,10 +360,10 @@ export async function DELETE(req: NextRequest) {
     await prisma.worker.delete({ where: { id } });
 
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return new Response(
       JSON.stringify({
-        error: escapeHtml(error.message) || "Failed to delete worker",
+        error: escapeHtml(getErrorMessage(error, "Failed to delete worker")),
       }),
       { status: 500 }
     );

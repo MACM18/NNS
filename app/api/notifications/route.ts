@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Transform to frontend format
-    const transformedNotifications = notifications.map((n: any) => ({
+    const transformedNotifications = notifications.map((n) => ({
       id: n.id,
       user_id: n.userId,
       title: n.title,
