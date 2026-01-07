@@ -6,9 +6,15 @@ export function getErrorMessage(
   error: unknown,
   fallback: string = "An unknown error occurred"
 ): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  if (isRecord(error) && typeof (error as Record<string, unknown>).message === "string")
-    return (error as Record<string, unknown>).message as string;
-  return fallback;
+  // Log the detailed error server-side for debugging purposes.
+  // Do not expose raw error messages or stack traces to the client.
+  try {
+    console.error("Internal error:", error);
+  } catch {
+    // Swallow logging errors to avoid affecting response handling.
+  }
+
+  // Always return the provided fallback message (or a safe default),
+  // ensuring no sensitive details from `error` are leaked to the user.
+  return fallback || "An unknown error occurred";
 }
