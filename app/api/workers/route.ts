@@ -19,6 +19,64 @@ interface WorkerResponse {
   updated_at: string;
 }
 
+function isValidEmailAddress(input: string): boolean {
+  const email = input.trim();
+  if (email.length === 0) return false;
+  // Practical max length per common standards (RFC 5321/5322 guidance)
+  if (email.length > 254) return false;
+  // Fast reject whitespace
+  for (let i = 0; i < email.length; i++) {
+    const code = email.charCodeAt(i);
+    // space, tab, CR, LF
+    if (code === 32 || code === 9 || code === 10 || code === 13) return false;
+  }
+
+  const at = email.indexOf("@");
+  if (at <= 0) return false;
+  if (at !== email.lastIndexOf("@")) return false;
+  if (at >= email.length - 1) return false;
+
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (local.length > 64) return false;
+  if (domain.length > 253) return false;
+
+  // Local-part: allow common "atext" characters plus dots, but disallow
+  // leading/trailing dot and consecutive dots.
+  if (local.startsWith(".") || local.endsWith(".")) return false;
+  if (local.includes("..")) return false;
+  for (let i = 0; i < local.length; i++) {
+    const c = local[i];
+    const isAlphaNum =
+      (c >= "a" && c <= "z") ||
+      (c >= "A" && c <= "Z") ||
+      (c >= "0" && c <= "9");
+    const isAllowedSymbol = "!#$%&'*+/=?^_`{|}~.-".includes(c);
+    if (!isAlphaNum && !isAllowedSymbol) return false;
+  }
+
+  // Domain: basic hostname-style validation with at least one dot.
+  if (domain.startsWith(".") || domain.endsWith(".")) return false;
+  if (domain.includes("..")) return false;
+  const labels = domain.split(".");
+  if (labels.length < 2) return false;
+
+  for (const label of labels) {
+    if (label.length === 0 || label.length > 63) return false;
+    if (label.startsWith("-") || label.endsWith("-")) return false;
+    for (let i = 0; i < label.length; i++) {
+      const c = label[i];
+      const isAlphaNum =
+        (c >= "a" && c <= "z") ||
+        (c >= "A" && c <= "Z") ||
+        (c >= "0" && c <= "9");
+      if (!isAlphaNum && c !== "-") return false;
+    }
+  }
+
+  return true;
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -139,8 +197,7 @@ export async function POST(req: NextRequest) {
 
     // Email validation
     if (email && email.trim().length > 0) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
+      if (!isValidEmailAddress(email)) {
         return new Response(JSON.stringify({ error: "Invalid email format" }), {
           status: 400,
         });
@@ -259,8 +316,7 @@ export async function PATCH(req: NextRequest) {
 
     // Validate email if provided
     if (email !== undefined && email && email.trim().length > 0) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
+      if (!isValidEmailAddress(email)) {
         return new Response(JSON.stringify({ error: "Invalid email format" }), {
           status: 400,
         });
