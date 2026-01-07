@@ -8,7 +8,7 @@ export function getErrorMessage(
 ): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
-  if (isRecord(error) && typeof error.message === "string")
-    return error.message;
+  if (isRecord(error) && typeof (error as Record<string, unknown>).message === "string")
+    return (error as Record<string, unknown>).message as string;
   return fallback;
 }
