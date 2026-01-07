@@ -8,6 +8,14 @@ import { prisma } from "@/lib/prisma";
 // Cache exchange rates for 1 hour
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
+// Allowed base currencies for external API requests
+const SUPPORTED_BASE_CURRENCIES = new Set<string>([
+  "LKR",
+  "USD",
+  "EUR",
+  "GBP",
+]);
+
 interface ExchangeRateCache {
   rates: Record<string, number>;
   lastUpdated: Date;
@@ -20,6 +28,18 @@ let rateCache: ExchangeRateCache | null = null;
 const EXCHANGE_RATE_API_URL = "https://open.er-api.com/v6/latest";
 
 /**
+ * Normalize and validate a base currency value coming from untrusted input.
+ * Falls back to "LKR" if the value is not in the supported allow-list.
+ */
+function sanitizeBaseCurrency(baseCurrency: string | null | undefined): string {
+  const normalized = (baseCurrency || "LKR").trim().toUpperCase();
+  if (SUPPORTED_BASE_CURRENCIES.has(normalized)) {
+    return normalized;
+  }
+  return "LKR";
+}
+
+/**
  * Fetch latest exchange rates from external API
  * Base currency is LKR (Sri Lankan Rupee)
  */
@@ -27,18 +47,23 @@ export async function fetchExchangeRates(
   baseCurrency: string = "LKR"
 ): Promise<Record<string, number>> {
   try {
+    const safeBaseCurrency = sanitizeBaseCurrency(baseCurrency);
+
     // Check cache first
     if (
       rateCache &&
-      rateCache.baseCurrency === baseCurrency &&
+      rateCache.baseCurrency === safeBaseCurrency &&
       Date.now() - rateCache.lastUpdated.getTime() < CACHE_DURATION_MS
     ) {
       return rateCache.rates;
     }
 
-    const response = await fetch(`${EXCHANGE_RATE_API_URL}/${baseCurrency}`, {
-      next: { revalidate: 3600 }, // Cache for 1 hour in Next.js
-    });
+    const response = await fetch(
+      `${EXCHANGE_RATE_API_URL}/${safeBaseCurrency}`,
+      {
+        next: { revalidate: 3600 }, // Cache for 1 hour in Next.js
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`Exchange rate API error: ${response.status}`);
@@ -56,7 +81,7 @@ export async function fetchExchangeRates(
     rateCache = {
       rates,
       lastUpdated: new Date(),
-      baseCurrency,
+      baseCurrency: safeBaseCurrency,
     };
 
     return rates;
