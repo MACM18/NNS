@@ -35,7 +35,8 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const baseCurrency = searchParams.get("base") || "LKR";
+    const rawBaseCurrency = searchParams.get("base") || "LKR";
+    const baseCurrency = rawBaseCurrency.trim().toUpperCase();
     const action = searchParams.get("action");
 
     if (action === "supported") {
