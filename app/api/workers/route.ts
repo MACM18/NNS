@@ -95,9 +95,10 @@ export async function GET() {
       status: 200,
     });
   } catch (error: any) {
+    console.error("Failed to fetch workers", error);
     return new Response(
       JSON.stringify({
-        error: escapeHtml(getErrorMessage(error, "Failed to fetch workers")),
+        error: "Failed to fetch workers",
       }),
       { status: 500 }
     );
