@@ -36,7 +36,12 @@ export async function GET(
   } catch (error) {
     console.error("Error fetching worker payment:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch worker payment" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch worker payment",
+      },
       { status: 500 }
     );
   }
@@ -70,7 +75,12 @@ export async function PUT(
   } catch (error) {
     console.error("Error updating worker payment:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to update worker payment" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update worker payment",
+      },
       { status: 500 }
     );
   }

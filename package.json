@@ -57,6 +57,7 @@
     "googleapis": "^131.0.0",
     "http": "latest",
     "input-otp": "latest",
+    "jspdf": "^4.0.0",
     "lucide-react": "^0.454.0",
     "next": "^15.5.9",
     "next-auth": "5.0.0-beta.30",

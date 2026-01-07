@@ -60,7 +60,12 @@ export async function PUT(
   } catch (error) {
     console.error("Error updating payroll period:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to update payroll period" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update payroll period",
+      },
       { status: 500 }
     );
   }
@@ -88,7 +93,12 @@ export async function DELETE(
   } catch (error) {
     console.error("Error deleting payroll period:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to delete payroll period" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete payroll period",
+      },
       { status: 500 }
     );
   }
@@ -145,7 +155,10 @@ export async function POST(
   } catch (error) {
     console.error("Error processing payroll action:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to process action" },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to process action",
+      },
       { status: 500 }
     );
   }

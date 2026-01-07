@@ -8,11 +8,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasAccountingAccess } from "@/lib/accounting-service";
-import { 
-  fetchExchangeRates, 
+import {
+  fetchExchangeRates,
   updateDatabaseExchangeRates,
   getSupportedCurrencies,
-  CURRENCY_INFO 
+  CURRENCY_INFO,
 } from "@/lib/exchange-rate-service";
 
 export async function GET(req: NextRequest) {
@@ -41,20 +41,20 @@ export async function GET(req: NextRequest) {
     if (action === "supported") {
       // Return list of supported currencies
       const supported = await getSupportedCurrencies();
-      return NextResponse.json({ 
+      return NextResponse.json({
         data: supported,
-        currencyInfo: CURRENCY_INFO
+        currencyInfo: CURRENCY_INFO,
       });
     }
 
     // Fetch latest exchange rates
     const rates = await fetchExchangeRates(baseCurrency);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       data: rates,
       baseCurrency,
       lastUpdated: new Date().toISOString(),
-      currencyInfo: CURRENCY_INFO
+      currencyInfo: CURRENCY_INFO,
     });
   } catch (error) {
     console.error("Error fetching exchange rates:", error);
@@ -87,10 +87,10 @@ export async function POST(req: NextRequest) {
     // Update all currency exchange rates in database
     const result = await updateDatabaseExchangeRates();
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       message: `Updated ${result.updated} currency rates`,
-      data: result
+      data: result,
     });
   } catch (error) {
     console.error("Error updating exchange rates:", error);

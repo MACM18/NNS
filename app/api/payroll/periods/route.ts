@@ -86,7 +86,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating payroll period:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create payroll period" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to create payroll period",
+      },
       { status: 500 }
     );
   }

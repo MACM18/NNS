@@ -170,23 +170,23 @@ export interface SalarySlipData {
   companyPhone?: string;
   companyEmail?: string;
   companyLogo?: string;
-  
+
   // Period info
   periodName: string;
   month: number;
   year: number;
   generatedDate: string;
-  
+
   // Worker info
   worker: WorkerPayrollInfo;
-  
+
   // Payment breakdown
   payment: WorkerPayment;
-  
+
   // Adjustments grouped by type
   bonuses: PayrollAdjustment[];
   deductions: PayrollAdjustment[];
-  
+
   // Bank details for payment
   bankDetails?: {
     bankName?: string;
@@ -194,7 +194,7 @@ export interface SalarySlipData {
     accountNumber?: string;
     accountName?: string;
   };
-  
+
   // Reference
   slipNumber: string;
 }

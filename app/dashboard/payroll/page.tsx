@@ -58,8 +58,18 @@ import type { PayrollPeriod, PayrollSummary } from "@/types/payroll";
 import Link from "next/link";
 
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 export default function PayrollPage() {
@@ -121,7 +131,9 @@ export default function PayrollPage() {
 
   const handleCreatePeriod = async () => {
     try {
-      const startDate = startOfMonth(new Date(periodForm.year, periodForm.month - 1));
+      const startDate = startOfMonth(
+        new Date(periodForm.year, periodForm.month - 1)
+      );
       const endDate = endOfMonth(startDate);
 
       const response = await fetch("/api/payroll/periods", {
@@ -153,7 +165,8 @@ export default function PayrollPage() {
     } catch (error) {
       addNotification({
         title: "Error",
-        message: error instanceof Error ? error.message : "Failed to create period",
+        message:
+          error instanceof Error ? error.message : "Failed to create period",
         type: "error",
         category: "system",
       });
@@ -163,7 +176,7 @@ export default function PayrollPage() {
   const handleAction = async (periodId: string, action: string) => {
     try {
       setProcessingPeriod(periodId);
-      
+
       const response = await fetch(`/api/payroll/periods/${periodId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -202,11 +215,26 @@ export default function PayrollPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { className: string; icon: React.ReactNode }> = {
-      draft: { className: "bg-gray-500", icon: <FileText className="h-3 w-3 mr-1" /> },
-      processing: { className: "bg-yellow-500", icon: <Clock className="h-3 w-3 mr-1" /> },
-      approved: { className: "bg-blue-500", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
-      paid: { className: "bg-green-500", icon: <CreditCard className="h-3 w-3 mr-1" /> },
+    const variants: Record<
+      string,
+      { className: string; icon: React.ReactNode }
+    > = {
+      draft: {
+        className: "bg-gray-500",
+        icon: <FileText className='h-3 w-3 mr-1' />,
+      },
+      processing: {
+        className: "bg-yellow-500",
+        icon: <Clock className='h-3 w-3 mr-1' />,
+      },
+      approved: {
+        className: "bg-blue-500",
+        icon: <CheckCircle className='h-3 w-3 mr-1' />,
+      },
+      paid: {
+        className: "bg-green-500",
+        icon: <CreditCard className='h-3 w-3 mr-1' />,
+      },
     };
     const variant = variants[status] || variants.draft;
     return (
@@ -227,86 +255,95 @@ export default function PayrollPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+        <div className='flex items-center justify-center h-64'>
+          <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+      <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Payroll</h2>
-          <p className="text-muted-foreground">
+          <h2 className='text-3xl font-bold tracking-tight'>Payroll</h2>
+          <p className='text-muted-foreground'>
             Manage worker payments and salary processing
           </p>
         </div>
         {canManage && (
           <Button onClick={() => setCreateModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className='h-4 w-4 mr-2' />
             New Payroll Period
           </Button>
         )}
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Periods</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Total Periods</CardTitle>
+            <Calendar className='h-4 w-4 text-muted-foreground' />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summary?.totalPeriods || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {summary?.draftPeriods || 0} drafts, {summary?.approvedPeriods || 0} pending
+            <div className='text-2xl font-bold'>
+              {summary?.totalPeriods || 0}
+            </div>
+            <p className='text-xs text-muted-foreground'>
+              {summary?.draftPeriods || 0} drafts,{" "}
+              {summary?.approvedPeriods || 0} pending
             </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>Total Paid</CardTitle>
+            <DollarSign className='h-4 w-4 text-muted-foreground' />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className='text-2xl font-bold'>
               {formatCurrency(summary?.totalPaidAmount || 0)}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className='text-xs text-muted-foreground'>
               Across {summary?.paidPeriods || 0} periods
             </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Current Period</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>
+              Current Period
+            </CardTitle>
+            <TrendingUp className='h-4 w-4 text-muted-foreground' />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {summary?.currentPeriod ? formatCurrency(summary.currentPeriod.totalAmount) : "N/A"}
+            <div className='text-2xl font-bold'>
+              {summary?.currentPeriod
+                ? formatCurrency(summary.currentPeriod.totalAmount)
+                : "N/A"}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className='text-xs text-muted-foreground'>
               {summary?.currentPeriod?.name || "No active period"}
             </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>
+              Pending Approval
+            </CardTitle>
+            <AlertCircle className='h-4 w-4 text-muted-foreground' />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className='text-2xl font-bold'>
               {periods.filter((p) => p.status === "processing").length}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className='text-xs text-muted-foreground'>
               Periods awaiting approval
             </p>
           </CardContent>
@@ -322,57 +359,65 @@ export default function PayrollPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className='overflow-x-auto'>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[180px]">Period</TableHead>
-                  <TableHead className="min-w-[120px]">Date Range</TableHead>
-                  <TableHead className="min-w-[100px]">Status</TableHead>
-                  <TableHead className="min-w-[100px]">Workers</TableHead>
-                  <TableHead className="min-w-[120px]">Total Amount</TableHead>
-                  <TableHead className="min-w-[200px]">Actions</TableHead>
+                  <TableHead className='min-w-[180px]'>Period</TableHead>
+                  <TableHead className='min-w-[120px]'>Date Range</TableHead>
+                  <TableHead className='min-w-[100px]'>Status</TableHead>
+                  <TableHead className='min-w-[100px]'>Workers</TableHead>
+                  <TableHead className='min-w-[120px]'>Total Amount</TableHead>
+                  <TableHead className='min-w-[200px]'>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {periods.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No payroll periods yet. Create your first period to get started.
+                    <TableCell
+                      colSpan={6}
+                      className='text-center text-muted-foreground py-8'
+                    >
+                      No payroll periods yet. Create your first period to get
+                      started.
                     </TableCell>
                   </TableRow>
                 ) : (
                   periods.map((period) => (
                     <TableRow key={period.id}>
-                      <TableCell className="font-medium">{period.name}</TableCell>
+                      <TableCell className='font-medium'>
+                        {period.name}
+                      </TableCell>
                       <TableCell>
                         {format(new Date(period.startDate), "MMM d")} -{" "}
                         {format(new Date(period.endDate), "MMM d, yyyy")}
                       </TableCell>
                       <TableCell>{getStatusBadge(period.status)}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Users className="h-4 w-4 text-muted-foreground" />
+                        <div className='flex items-center gap-1'>
+                          <Users className='h-4 w-4 text-muted-foreground' />
                           {period._count?.payments || 0}
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono">
+                      <TableCell className='font-mono'>
                         {formatCurrency(period.totalAmount)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className='flex items-center gap-2'>
                           {canManage && period.status === "draft" && (
                             <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleAction(period.id, "calculate")}
+                              size='sm'
+                              variant='outline'
+                              onClick={() =>
+                                handleAction(period.id, "calculate")
+                              }
                               disabled={processingPeriod === period.id}
                             >
                               {processingPeriod === period.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className='h-4 w-4 animate-spin' />
                               ) : (
                                 <>
-                                  <Calculator className="h-4 w-4 mr-1" />
+                                  <Calculator className='h-4 w-4 mr-1' />
                                   Calculate
                                 </>
                               )}
@@ -380,16 +425,16 @@ export default function PayrollPage() {
                           )}
                           {canManage && period.status === "processing" && (
                             <Button
-                              size="sm"
-                              variant="outline"
+                              size='sm'
+                              variant='outline'
                               onClick={() => handleAction(period.id, "approve")}
                               disabled={processingPeriod === period.id}
                             >
                               {processingPeriod === period.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className='h-4 w-4 animate-spin' />
                               ) : (
                                 <>
-                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  <CheckCircle className='h-4 w-4 mr-1' />
                                   Approve
                                 </>
                               )}
@@ -397,25 +442,25 @@ export default function PayrollPage() {
                           )}
                           {canManage && period.status === "approved" && (
                             <Button
-                              size="sm"
-                              variant="default"
+                              size='sm'
+                              variant='default'
                               onClick={() => handleAction(period.id, "pay")}
                               disabled={processingPeriod === period.id}
                             >
                               {processingPeriod === period.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className='h-4 w-4 animate-spin' />
                               ) : (
                                 <>
-                                  <CreditCard className="h-4 w-4 mr-1" />
+                                  <CreditCard className='h-4 w-4 mr-1' />
                                   Mark Paid
                                 </>
                               )}
                             </Button>
                           )}
-                          <Button size="sm" variant="ghost" asChild>
+                          <Button size='sm' variant='ghost' asChild>
                             <Link href={`/dashboard/payroll/${period.id}`}>
                               View
-                              <ChevronRight className="h-4 w-4 ml-1" />
+                              <ChevronRight className='h-4 w-4 ml-1' />
                             </Link>
                           </Button>
                         </div>
@@ -431,16 +476,16 @@ export default function PayrollPage() {
 
       {/* Create Period Modal */}
       <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className='sm:max-w-[425px]'>
           <DialogHeader>
             <DialogTitle>Create Payroll Period</DialogTitle>
             <DialogDescription>
               Create a new payroll period for processing worker payments
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+          <div className='space-y-4 py-4'>
+            <div className='grid grid-cols-2 gap-4'>
+              <div className='space-y-2'>
                 <Label>Month</Label>
                 <Select
                   value={periodForm.month.toString()}
@@ -460,7 +505,7 @@ export default function PayrollPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <Label>Year</Label>
                 <Select
                   value={periodForm.year.toString()}
@@ -485,19 +530,19 @@ export default function PayrollPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className='space-y-2'>
               <Label>Period Name</Label>
               <Input
                 value={periodForm.name}
                 onChange={(e) =>
                   setPeriodForm({ ...periodForm, name: e.target.value })
                 }
-                placeholder="January 2026 Payroll"
+                placeholder='January 2026 Payroll'
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
+            <Button variant='outline' onClick={() => setCreateModalOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleCreatePeriod} disabled={!periodForm.name}>

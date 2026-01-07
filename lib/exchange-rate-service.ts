@@ -23,12 +23,16 @@ const EXCHANGE_RATE_API_URL = "https://open.er-api.com/v6/latest";
  * Fetch latest exchange rates from external API
  * Base currency is LKR (Sri Lankan Rupee)
  */
-export async function fetchExchangeRates(baseCurrency: string = "LKR"): Promise<Record<string, number>> {
+export async function fetchExchangeRates(
+  baseCurrency: string = "LKR"
+): Promise<Record<string, number>> {
   try {
     // Check cache first
-    if (rateCache && 
-        rateCache.baseCurrency === baseCurrency &&
-        Date.now() - rateCache.lastUpdated.getTime() < CACHE_DURATION_MS) {
+    if (
+      rateCache &&
+      rateCache.baseCurrency === baseCurrency &&
+      Date.now() - rateCache.lastUpdated.getTime() < CACHE_DURATION_MS
+    ) {
       return rateCache.rates;
     }
 
@@ -41,13 +45,13 @@ export async function fetchExchangeRates(baseCurrency: string = "LKR"): Promise<
     }
 
     const data = await response.json();
-    
+
     if (data.result !== "success") {
       throw new Error(data.error || "Failed to fetch exchange rates");
     }
 
     const rates = data.rates as Record<string, number>;
-    
+
     // Update cache
     rateCache = {
       rates,
@@ -58,12 +62,12 @@ export async function fetchExchangeRates(baseCurrency: string = "LKR"): Promise<
     return rates;
   } catch (error) {
     console.error("Error fetching exchange rates:", error);
-    
+
     // Return cached rates if available, even if expired
     if (rateCache) {
       return rateCache.rates;
     }
-    
+
     // Return default rates if no cache available
     return {
       LKR: 1,
@@ -95,7 +99,7 @@ export async function updateDatabaseExchangeRates(): Promise<{
   // Get base currency from settings
   const settings = await prisma.accountingSettings.findFirst();
   const baseCurrencyId = settings?.baseCurrencyId;
-  
+
   let baseCurrencyCode = "LKR";
   if (baseCurrencyId) {
     const baseCurrency = await prisma.currency.findUnique({
@@ -129,7 +133,7 @@ export async function updateDatabaseExchangeRates(): Promise<{
       // API returns rate FROM base TO target
       // We need rate FROM target TO base (how much base per 1 unit of target)
       const rate = 1 / rates[currency.code];
-      
+
       await prisma.currency.update({
         where: { id: currency.id },
         data: { exchangeRate: rate },
@@ -151,9 +155,30 @@ export async function getSupportedCurrencies(): Promise<string[]> {
   } catch {
     // Return common currencies if API fails
     return [
-      "AED", "AUD", "BDT", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", 
-      "IDR", "INR", "JPY", "KRW", "LKR", "MYR", "NZD", "PHP", "PKR",
-      "SAR", "SGD", "THB", "USD", "VND", "ZAR"
+      "AED",
+      "AUD",
+      "BDT",
+      "CAD",
+      "CHF",
+      "CNY",
+      "EUR",
+      "GBP",
+      "HKD",
+      "IDR",
+      "INR",
+      "JPY",
+      "KRW",
+      "LKR",
+      "MYR",
+      "NZD",
+      "PHP",
+      "PKR",
+      "SAR",
+      "SGD",
+      "THB",
+      "USD",
+      "VND",
+      "ZAR",
     ];
   }
 }

@@ -18,7 +18,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { workerPaymentId, type, category, description, amount } = body;
 
-    if (!workerPaymentId || !type || !category || !description || amount === undefined) {
+    if (
+      !workerPaymentId ||
+      !type ||
+      !category ||
+      !description ||
+      amount === undefined
+    ) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -30,11 +36,17 @@ export async function POST(request: NextRequest) {
       session.user.id
     );
 
-    return NextResponse.json({ success: true, data: adjustment }, { status: 201 });
+    return NextResponse.json(
+      { success: true, data: adjustment },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Error adding adjustment:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to add adjustment" },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to add adjustment",
+      },
       { status: 500 }
     );
   }
@@ -68,7 +80,12 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error("Error deleting adjustment:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to delete adjustment" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete adjustment",
+      },
       { status: 500 }
     );
   }

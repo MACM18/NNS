@@ -65,7 +65,9 @@ export async function getPayrollPeriods(options?: {
   };
 }
 
-export async function getPayrollPeriodById(id: string): Promise<PayrollPeriod | null> {
+export async function getPayrollPeriodById(
+  id: string
+): Promise<PayrollPeriod | null> {
   const period = await prisma.payrollPeriod.findUnique({
     where: { id },
     include: {
@@ -125,7 +127,9 @@ export async function createPayrollPeriod(
   });
 
   if (existing) {
-    throw new Error(`Payroll period for ${input.month}/${input.year} already exists`);
+    throw new Error(
+      `Payroll period for ${input.month}/${input.year} already exists`
+    );
   }
 
   const period = await prisma.payrollPeriod.create({
@@ -262,7 +266,10 @@ export async function calculatePayrollForPeriod(
           linesCompleted,
           perLineRate,
           baseAmount,
-          netAmount: baseAmount + decimalToNumber(existingPayment.bonusAmount) - decimalToNumber(existingPayment.deductionAmount),
+          netAmount:
+            baseAmount +
+            decimalToNumber(existingPayment.bonusAmount) -
+            decimalToNumber(existingPayment.deductionAmount),
         },
         include: {
           worker: true,
@@ -370,7 +377,9 @@ export async function getWorkerPayments(
   }));
 }
 
-export async function getWorkerPaymentById(id: string): Promise<WorkerPayment | null> {
+export async function getWorkerPaymentById(
+  id: string
+): Promise<WorkerPayment | null> {
   const payment = await prisma.workerPayment.findUnique({
     where: { id },
     include: {
@@ -424,7 +433,7 @@ export async function updateWorkerPaymentStatus(
   paymentDetails?: { paymentMethod?: string; paymentRef?: string }
 ): Promise<WorkerPayment> {
   const updateData: Prisma.WorkerPaymentUpdateInput = { status };
-  
+
   if (status === "paid") {
     updateData.paidAt = new Date();
     if (paymentDetails?.paymentMethod) {
@@ -516,7 +525,8 @@ export async function addAdjustment(
   const deductionTotal = allAdjustments
     .filter((a) => a.type === "deduction")
     .reduce((sum, a) => sum + decimalToNumber(a.amount), 0);
-  const netAmount = decimalToNumber(payment.baseAmount) + bonusTotal - deductionTotal;
+  const netAmount =
+    decimalToNumber(payment.baseAmount) + bonusTotal - deductionTotal;
 
   await prisma.workerPayment.update({
     where: { id: input.workerPaymentId },
@@ -533,7 +543,10 @@ export async function addAdjustment(
   });
   const periodTotal = periodPayments.reduce(
     (sum, p) =>
-      sum + decimalToNumber(p.baseAmount) + decimalToNumber(p.bonusAmount) - decimalToNumber(p.deductionAmount),
+      sum +
+      decimalToNumber(p.baseAmount) +
+      decimalToNumber(p.bonusAmount) -
+      decimalToNumber(p.deductionAmount),
     0
   );
   await prisma.payrollPeriod.update({
@@ -577,7 +590,9 @@ export async function deleteAdjustment(id: string): Promise<void> {
     .filter((a) => a.type === "deduction")
     .reduce((sum, a) => sum + decimalToNumber(a.amount), 0);
   const netAmount =
-    decimalToNumber(adjustment.workerPayment.baseAmount) + bonusTotal - deductionTotal;
+    decimalToNumber(adjustment.workerPayment.baseAmount) +
+    bonusTotal -
+    deductionTotal;
 
   await prisma.workerPayment.update({
     where: { id: adjustment.workerPaymentId },
@@ -594,22 +609,28 @@ export async function deleteAdjustment(id: string): Promise<void> {
 // ==========================================
 
 export async function getPayrollSummary(): Promise<PayrollSummary> {
-  const [totalPeriods, draftPeriods, approvedPeriods, paidPeriods, paidAmountResult, currentPeriod] =
-    await Promise.all([
-      prisma.payrollPeriod.count(),
-      prisma.payrollPeriod.count({ where: { status: "draft" } }),
-      prisma.payrollPeriod.count({ where: { status: "approved" } }),
-      prisma.payrollPeriod.count({ where: { status: "paid" } }),
-      prisma.payrollPeriod.aggregate({
-        _sum: { totalAmount: true },
-        where: { status: "paid" },
-      }),
-      prisma.payrollPeriod.findFirst({
-        where: { status: { not: "paid" } },
-        orderBy: [{ year: "desc" }, { month: "desc" }],
-        include: { createdBy: { select: { id: true, fullName: true } } },
-      }),
-    ]);
+  const [
+    totalPeriods,
+    draftPeriods,
+    approvedPeriods,
+    paidPeriods,
+    paidAmountResult,
+    currentPeriod,
+  ] = await Promise.all([
+    prisma.payrollPeriod.count(),
+    prisma.payrollPeriod.count({ where: { status: "draft" } }),
+    prisma.payrollPeriod.count({ where: { status: "approved" } }),
+    prisma.payrollPeriod.count({ where: { status: "paid" } }),
+    prisma.payrollPeriod.aggregate({
+      _sum: { totalAmount: true },
+      where: { status: "paid" },
+    }),
+    prisma.payrollPeriod.findFirst({
+      where: { status: { not: "paid" } },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+      include: { createdBy: { select: { id: true, fullName: true } } },
+    }),
+  ]);
 
   return {
     totalPeriods,
@@ -644,8 +665,14 @@ export async function getWorkerPaymentHistory(
   });
 
   const totalPayments = payments.length;
-  const totalEarnings = payments.reduce((sum, p) => sum + decimalToNumber(p.netAmount), 0);
-  const totalBonuses = payments.reduce((sum, p) => sum + decimalToNumber(p.bonusAmount), 0);
+  const totalEarnings = payments.reduce(
+    (sum, p) => sum + decimalToNumber(p.netAmount),
+    0
+  );
+  const totalBonuses = payments.reduce(
+    (sum, p) => sum + decimalToNumber(p.bonusAmount),
+    0
+  );
   const totalDeductions = payments.reduce(
     (sum, p) => sum + decimalToNumber(p.deductionAmount),
     0
@@ -681,7 +708,8 @@ export async function generateSalarySlipData(
   const companySettings = await prisma.companySettings.findFirst();
 
   const bonuses = payment.adjustments?.filter((a) => a.type === "bonus") || [];
-  const deductions = payment.adjustments?.filter((a) => a.type === "deduction") || [];
+  const deductions =
+    payment.adjustments?.filter((a) => a.type === "deduction") || [];
 
   // Generate slip number
   const slipNumber = `PAY-${payment.payrollPeriod.year}${String(
@@ -778,7 +806,10 @@ export async function markPayrollAsPaid(
   // Update all payments to paid
   await prisma.workerPayment.updateMany({
     where: { payrollPeriodId: id, status: "approved" },
-    data: { status: "paid", paidAt: paidDate ? new Date(paidDate) : new Date() },
+    data: {
+      status: "paid",
+      paidAt: paidDate ? new Date(paidDate) : new Date(),
+    },
   });
 
   const updated = await prisma.payrollPeriod.update({
