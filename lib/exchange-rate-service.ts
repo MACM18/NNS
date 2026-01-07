@@ -8,8 +8,9 @@ import { prisma } from "@/lib/prisma";
 // Cache exchange rates for 1 hour
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
-// Allowed base currencies for external API requests
-const SUPPORTED_BASE_CURRENCIES = new Set<string>([
+// Allow-list of supported base currencies for the external API.
+// This restricts which values can influence the outbound request URL.
+const ALLOWED_BASE_CURRENCIES: Set<string> = new Set([
   "LKR",
   "USD",
   "EUR",
@@ -28,14 +29,17 @@ let rateCache: ExchangeRateCache | null = null;
 const EXCHANGE_RATE_API_URL = "https://open.er-api.com/v6/latest";
 
 /**
- * Normalize and validate a base currency value coming from untrusted input.
- * Falls back to "LKR" if the value is not in the supported allow-list.
+ * Normalize and validate the requested base currency against an allow-list.
+ * Falls back to "LKR" if the requested value is not allowed.
  */
-function sanitizeBaseCurrency(baseCurrency: string | null | undefined): string {
-  const normalized = (baseCurrency || "LKR").trim().toUpperCase();
-  if (SUPPORTED_BASE_CURRENCIES.has(normalized)) {
+function normalizeBaseCurrency(requestedBaseCurrency: string | undefined): string {
+  const normalized = (requestedBaseCurrency || "LKR").trim().toUpperCase();
+
+  if (ALLOWED_BASE_CURRENCIES.has(normalized)) {
     return normalized;
   }
+
+  // Fallback to a safe default under server control
   return "LKR";
 }
 
@@ -46,9 +50,10 @@ function sanitizeBaseCurrency(baseCurrency: string | null | undefined): string {
 export async function fetchExchangeRates(
   baseCurrency: string = "LKR"
 ): Promise<Record<string, number>> {
-  try {
-    const safeBaseCurrency = sanitizeBaseCurrency(baseCurrency);
+  // Ensure the base currency influencing the outbound URL is validated.
+  const safeBaseCurrency = normalizeBaseCurrency(baseCurrency);
 
+  try {
     // Check cache first
     if (
       rateCache &&
@@ -59,7 +64,7 @@ export async function fetchExchangeRates(
     }
 
     const response = await fetch(
-      `${EXCHANGE_RATE_API_URL}/${safeBaseCurrency}`,
+      `${EXCHANGE_RATE_API_URL}/${encodeURIComponent(safeBaseCurrency)}`,
       {
         next: { revalidate: 3600 }, // Cache for 1 hour in Next.js
       }

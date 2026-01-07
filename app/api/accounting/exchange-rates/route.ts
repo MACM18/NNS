@@ -35,8 +35,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const rawBaseCurrency = searchParams.get("base") || "LKR";
-    const baseCurrency = rawBaseCurrency.trim().toUpperCase();
+    const baseCurrency = searchParams.get("base") || "LKR";
     const action = searchParams.get("action");
 
     if (action === "supported") {
@@ -48,7 +47,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Fetch latest exchange rates
+    // Fetch latest exchange rates (baseCurrency will be validated in the service)
     const rates = await fetchExchangeRates(baseCurrency);
 
     return NextResponse.json({
