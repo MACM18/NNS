@@ -62,8 +62,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       setNotifications((prev) => [data as Notification, ...prev]);
 
-      // Show toast for immediate feedback
-      toast(notification.title, {
+      // Show toast for immediate feedback with proper styling
+      const toastFn =
+        notification.type === "error"
+          ? toast.error
+          : notification.type === "warning"
+          ? toast.warning
+          : notification.type === "success"
+          ? toast.success
+          : toast;
+
+      toastFn(notification.title, {
         description: notification.message,
         action: notification.action_url
           ? {

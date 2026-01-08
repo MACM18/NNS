@@ -1,60 +1,115 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DayPicker } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
-export type CalendarProps = React.ComponentProps<typeof DayPicker>;
+export type DateRange = { from?: Date; to?: Date };
 
-function Calendar({
-  className,
-  classNames,
-  showOutsideDays = true,
-  ...props
-}: CalendarProps) {
+type CalendarSingleProps = {
+  mode?: "single";
+  selected?: Date;
+  onSelect?: (date?: Date) => void;
+};
+
+type CalendarRangeProps = {
+  mode: "range";
+  selected?: DateRange;
+  onSelect?: (range?: DateRange) => void;
+};
+
+export type CalendarProps = (CalendarSingleProps | CalendarRangeProps) &
+  React.HTMLAttributes<HTMLDivElement> &
+  Record<string, unknown>;
+
+function formatDateForInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateFromInput(value: string): Date | undefined {
+  // value is expected as YYYY-MM-DD
+  const match = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (!match) return undefined;
+  const [yyyy, mm, dd] = value.split("-").map((v) => Number(v));
+  if (!yyyy || !mm || !dd) return undefined;
+  // Construct as local date to avoid timezone shifting.
+  return new Date(yyyy, mm - 1, dd);
+}
+
+function Calendar({ className, ...props }: CalendarProps) {
+  const { mode = "single", selected, onSelect, ...rest } = props as any;
+
+  if (mode === "range") {
+    const range = selected as DateRange | undefined;
+    const handleSelect = onSelect as ((range?: DateRange) => void) | undefined;
+
+    const fromValue = range?.from ? formatDateForInput(range.from) : "";
+    const toValue = range?.to ? formatDateForInput(range.to) : "";
+
+    return (
+      <div {...rest} className={cn("p-3", className)}>
+        <div className='grid gap-3 sm:grid-cols-2'>
+          <div className='grid gap-1'>
+            <span className='text-xs text-muted-foreground'>From</span>
+            <Input
+              type='date'
+              value={fromValue}
+              onChange={(e) => {
+                const from = parseDateFromInput(e.target.value);
+                const next: DateRange = {
+                  from,
+                  to: range?.to,
+                };
+                if (next.from && next.to && next.from > next.to) {
+                  next.to = undefined;
+                }
+                handleSelect?.(next);
+              }}
+            />
+          </div>
+
+          <div className='grid gap-1'>
+            <span className='text-xs text-muted-foreground'>To</span>
+            <Input
+              type='date'
+              value={toValue}
+              onChange={(e) => {
+                const to = parseDateFromInput(e.target.value);
+                const next: DateRange = {
+                  from: range?.from,
+                  to,
+                };
+                if (next.from && next.to && next.to < next.from) {
+                  next.from = undefined;
+                }
+                handleSelect?.(next);
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const date = selected as Date | undefined;
+  const handleSelect = onSelect as ((date?: Date) => void) | undefined;
+
+  const value = date ? formatDateForInput(date) : "";
   return (
-    <DayPicker
-      showOutsideDays={showOutsideDays}
-      className={cn("p-3", className)}
-      classNames={{
-        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-        month: "space-y-4",
-        caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
-        nav: "space-x-1 flex items-center",
-        nav_button: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-        ),
-        nav_button_previous: "absolute left-1",
-        nav_button_next: "absolute right-1",
-        table: "w-full border-collapse space-y-1",
-        head_row: "flex justify-between w-full",
-        head_cell:
-          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] flex items-center justify-center",
-        row: "flex w-full mt-2 justify-between",
-        cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-        day: cn(
-          buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
-        ),
-        day_range_end: "day-range-end",
-        day_selected:
-          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-        day_today: "bg-accent text-accent-foreground",
-        day_outside:
-          "day-outside text-muted-foreground aria-selected:bg-accent/50 aria-selected:text-muted-foreground",
-        day_disabled: "text-muted-foreground opacity-50",
-        day_range_middle:
-          "aria-selected:bg-accent aria-selected:text-accent-foreground",
-        day_hidden: "invisible",
-        ...classNames,
-      }}
-      {...props}
-    />
+    <div {...rest} className={cn("p-3", className)}>
+      <Input
+        type='date'
+        value={value}
+        onChange={(e) => {
+          const next = parseDateFromInput(e.target.value);
+          handleSelect?.(next);
+        }}
+      />
+    </div>
   );
 }
 Calendar.displayName = "Calendar";

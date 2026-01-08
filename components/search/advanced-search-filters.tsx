@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { DateRange } from "react-day-picker";
+import type { DateRange } from "@/components/ui/calendar";
 import { X, Filter, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

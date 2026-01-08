@@ -1,15 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Search,
-  Plus,
-  Eye,
-  RotateCcw,
-  Check,
-  Filter,
-  Calendar,
-} from "lucide-react";
+import { Search, Plus, Eye, RotateCcw, Check, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -39,12 +31,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useNotification } from "@/contexts/notification-context";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import type {
@@ -54,7 +40,6 @@ import type {
 } from "@/types/accounting";
 import { JournalEntryStatus } from "@/types/accounting";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
 
 interface JournalEntryTableProps {
   onViewEntry?: (entry: JournalEntry) => void;
@@ -379,36 +364,30 @@ export function JournalEntryTable({
               ))}
             </SelectContent>
           </Select>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant='outline' className='w-[150px]'>
-                <Calendar className='mr-2 h-4 w-4' />
-                {dateFrom ? format(dateFrom, "MMM d") : "From"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className='w-auto p-0'>
-              <CalendarComponent
-                mode='single'
-                selected={dateFrom}
-                onSelect={setDateFrom}
-              />
-            </PopoverContent>
-          </Popover>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant='outline' className='w-[150px]'>
-                <Calendar className='mr-2 h-4 w-4' />
-                {dateTo ? format(dateTo, "MMM d") : "To"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className='w-auto p-0'>
-              <CalendarComponent
-                mode='single'
-                selected={dateTo}
-                onSelect={setDateTo}
-              />
-            </PopoverContent>
-          </Popover>
+          <Input
+            type='date'
+            className='w-[150px]'
+            value={dateFrom ? format(dateFrom, "yyyy-MM-dd") : ""}
+            placeholder='From'
+            onChange={(e) => {
+              const date = e.target.value
+                ? new Date(e.target.value + "T00:00:00")
+                : undefined;
+              setDateFrom(date);
+            }}
+          />
+          <Input
+            type='date'
+            className='w-[150px]'
+            value={dateTo ? format(dateTo, "yyyy-MM-dd") : ""}
+            placeholder='To'
+            onChange={(e) => {
+              const date = e.target.value
+                ? new Date(e.target.value + "T00:00:00")
+                : undefined;
+              setDateTo(date);
+            }}
+          />
         </div>
       </CardHeader>
       <CardContent>
@@ -556,31 +535,18 @@ export function JournalEntryTable({
             <div className='grid grid-cols-2 gap-4'>
               <div>
                 <Label>Date *</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant='outline'
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !formData.date && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className='mr-2 h-4 w-4' />
-                      {formData.date
-                        ? format(formData.date, "PPP")
-                        : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className='w-auto p-0'>
-                    <CalendarComponent
-                      mode='single'
-                      selected={formData.date}
-                      onSelect={(date) =>
-                        setFormData({ ...formData, date: date || new Date() })
-                      }
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Input
+                  type='date'
+                  value={
+                    formData.date ? format(formData.date, "yyyy-MM-dd") : ""
+                  }
+                  onChange={(e) => {
+                    const date = e.target.value
+                      ? new Date(e.target.value + "T00:00:00")
+                      : new Date();
+                    setFormData({ ...formData, date });
+                  }}
+                />
               </div>
               <div>
                 <Label htmlFor='reference'>Reference</Label>
