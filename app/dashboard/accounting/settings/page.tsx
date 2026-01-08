@@ -91,7 +91,9 @@ export default function AccountingSettingsPage() {
   const [periodModalOpen, setPeriodModalOpen] = useState(false);
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [editCurrencyId, setEditCurrencyId] = useState<string | null>(null);
+  const [editPeriodId, setEditPeriodId] = useState<string | null>(null);
   const [closePeriodId, setClosePeriodId] = useState<string | null>(null);
+  const [deletePeriodId, setDeletePeriodId] = useState<string | null>(null);
   const [deleteCurrencyId, setDeleteCurrencyId] = useState<string | null>(null);
   const [currencySearch, setCurrencySearch] = useState("");
   const [savingSettings, setSavingSettings] = useState<string | null>(null);
@@ -231,10 +233,15 @@ export default function AccountingSettingsPage() {
     }
   };
 
-  const handleCreatePeriod = async () => {
+  const handleSavePeriod = async () => {
     try {
-      const response = await fetch("/api/accounting/periods", {
-        method: "POST",
+      const url = editPeriodId
+        ? `/api/accounting/periods/${editPeriodId}`
+        : "/api/accounting/periods";
+      const method = editPeriodId ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: periodForm.name,
@@ -245,15 +252,19 @@ export default function AccountingSettingsPage() {
       });
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to create period");
+        throw new Error(
+          error.error ||
+            `Failed to ${editPeriodId ? "update" : "create"} period`
+        );
       }
       addNotification({
         title: "Success",
-        message: "Period created successfully",
+        message: `Period ${editPeriodId ? "updated" : "created"} successfully`,
         type: "success",
         category: "accounting",
       });
       setPeriodModalOpen(false);
+      setEditPeriodId(null);
       setPeriodForm({
         name: "",
         startDate: startOfMonth(new Date()),
@@ -265,7 +276,9 @@ export default function AccountingSettingsPage() {
       addNotification({
         title: "Error",
         message:
-          error instanceof Error ? error.message : "Failed to create period",
+          error instanceof Error
+            ? error.message
+            : `Failed to ${editPeriodId ? "update" : "create"} period`,
         type: "error",
         category: "accounting",
       });
@@ -295,6 +308,48 @@ export default function AccountingSettingsPage() {
         title: "Error",
         message:
           error instanceof Error ? error.message : "Failed to close period",
+        type: "error",
+        category: "accounting",
+      });
+    }
+  };
+
+  const handleEditPeriod = (period: AccountingPeriod) => {
+    setPeriodForm({
+      name: period.name,
+      startDate: new Date(period.startDate),
+      endDate: new Date(period.endDate),
+      periodType: (period.periodType || "monthly") as
+        | "monthly"
+        | "quarterly"
+        | "yearly",
+    });
+    setEditPeriodId(period.id);
+    setPeriodModalOpen(true);
+  };
+
+  const handleDeletePeriod = async (periodId: string) => {
+    try {
+      const response = await fetch(`/api/accounting/periods/${periodId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete period");
+      }
+      addNotification({
+        title: "Success",
+        message: "Period deleted successfully",
+        type: "success",
+        category: "accounting",
+      });
+      setDeletePeriodId(null);
+      fetchData();
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message:
+          error instanceof Error ? error.message : "Failed to delete period",
         type: "error",
         category: "accounting",
       });
@@ -664,15 +719,35 @@ export default function AccountingSettingsPage() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {!period.isClosed && (
+                            <div className='flex gap-2'>
+                              {!period.isClosed && (
+                                <>
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    onClick={() => handleEditPeriod(period)}
+                                    title='Edit period'
+                                  >
+                                    <Edit className='h-4 w-4' />
+                                  </Button>
+                                  <Button
+                                    variant='outline'
+                                    size='sm'
+                                    onClick={() => setClosePeriodId(period.id)}
+                                  >
+                                    Close
+                                  </Button>
+                                </>
+                              )}
                               <Button
-                                variant='outline'
-                                size='sm'
-                                onClick={() => setClosePeriodId(period.id)}
+                                variant='ghost'
+                                size='icon'
+                                onClick={() => setDeletePeriodId(period.id)}
+                                title='Delete period'
                               >
-                                Close Period
+                                <Trash2 className='h-4 w-4 text-destructive' />
                               </Button>
-                            )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -1024,12 +1099,21 @@ export default function AccountingSettingsPage() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={periodModalOpen} onOpenChange={setPeriodModalOpen}>
+      <Dialog
+        open={periodModalOpen}
+        onOpenChange={(open) => {
+          setPeriodModalOpen(open);
+          if (!open) setEditPeriodId(null);
+        }}
+      >
         <DialogContent className='sm:max-w-[425px]'>
           <DialogHeader>
-            <DialogTitle>Create Accounting Period</DialogTitle>
+            <DialogTitle>
+              {editPeriodId ? "Edit" : "Create"} Accounting Period
+            </DialogTitle>
             <DialogDescription>
-              Add a new accounting period for financial reporting
+              {editPeriodId ? "Update the" : "Add a new"} accounting period for
+              financial reporting
             </DialogDescription>
           </DialogHeader>
           <div className='space-y-4 py-4'>
@@ -1100,8 +1184,8 @@ export default function AccountingSettingsPage() {
             <Button variant='outline' onClick={() => setPeriodModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreatePeriod} disabled={!periodForm.name}>
-              Create Period
+            <Button onClick={handleSavePeriod} disabled={!periodForm.name}>
+              {editPeriodId ? "Update" : "Create"} Period
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1274,6 +1358,34 @@ export default function AccountingSettingsPage() {
               onClick={() => closePeriodId && handleClosePeriod(closePeriodId)}
             >
               Close Period
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!deletePeriodId}
+        onOpenChange={(open) => !open && setDeletePeriodId(null)}
+      >
+        <DialogContent className='sm:max-w-[400px]'>
+          <DialogHeader>
+            <DialogTitle>Delete Accounting Period</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this period? This will permanently
+              remove it and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setDeletePeriodId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant='destructive'
+              onClick={() =>
+                deletePeriodId && handleDeletePeriod(deletePeriodId)
+              }
+            >
+              Delete Period
             </Button>
           </DialogFooter>
         </DialogContent>
