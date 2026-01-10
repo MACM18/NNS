@@ -285,7 +285,7 @@ export default function AccountingSettingsPage() {
 
   const handleClosePeriod = async (periodId: string) => {
     try {
-      const response = await fetch(\`/api/accounting/periods/\${periodId}/close\`, {
+      const response = await fetch(`/api/accounting/periods/${periodId}/close`, {
         method: "POST",
       });
 
@@ -316,7 +316,7 @@ export default function AccountingSettingsPage() {
   const handleSaveCurrency = async () => {
     try {
       const url = editCurrencyId 
-        ? \`/api/accounting/currencies/\${editCurrencyId}\`
+        ? `/api/accounting/currencies/${editCurrencyId}`
         : "/api/accounting/currencies";
       
       const response = await fetch(url, {
@@ -359,7 +359,7 @@ export default function AccountingSettingsPage() {
 
   const handleDeleteCurrency = async (id: string) => {
     try {
-      const response = await fetch(\`/api/accounting/currencies/\${id}\`, {
+      const response = await fetch(`/api/accounting/currencies/${id}`, {
         method: "DELETE",
       });
 
@@ -450,9 +450,9 @@ export default function AccountingSettingsPage() {
         return format(date, "MMMM yyyy");
       case "quarterly":
         const quarter = Math.floor(month / 3) + 1;
-        return \`Q\${quarter} \${year}\`;
+        return `Q${quarter} ${year}`;
       case "yearly":
-        return \`FY \${year}\`;
+        return `FY ${year}`;
       default:
         return "";
     }
@@ -989,9 +989,11 @@ export default function AccountingSettingsPage() {
                     <CalendarComponent
                       mode="single"
                       selected={periodForm.startDate}
-                      onSelect={(date) =>
-                        setPeriodForm({ ...periodForm, startDate: date || new Date() })
-                      }
+                      onSelect={(date) => {
+                        if (date instanceof Date) {
+                          setPeriodForm({ ...periodForm, startDate: date });
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -1019,9 +1021,11 @@ export default function AccountingSettingsPage() {
                     <CalendarComponent
                       mode="single"
                       selected={periodForm.endDate}
-                      onSelect={(date) =>
-                        setPeriodForm({ ...periodForm, endDate: date || new Date() })
-                      }
+                      onSelect={(date) => {
+                        if (date instanceof Date) {
+                          setPeriodForm({ ...periodForm, endDate: date });
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
