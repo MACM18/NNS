@@ -195,7 +195,7 @@ export function ManageWorkersModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-4xl max-h-[90vh] overflow-hidden flex flex-col'>
+      <DialogContent className='max-w-4xl max-h-[90vh] overflow-y-auto md:overflow-hidden flex flex-col'>
         <DialogHeader>
           <DialogTitle>Manage Workers</DialogTitle>
           <DialogDescription>
@@ -204,7 +204,7 @@ export function ManageWorkersModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className='grid gap-6 md:grid-cols-[1fr,400px] flex-1 overflow-hidden'>
+        <div className='grid gap-6 md:grid-cols-[1fr,400px] flex-1 overflow-visible md:overflow-hidden min-h-0'>
           {/* Workers List */}
           <div className='overflow-auto border rounded-lg p-4 space-y-2'>
             <h3 className='font-semibold mb-4'>Workers List</h3>
