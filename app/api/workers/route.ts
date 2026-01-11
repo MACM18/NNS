@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getErrorMessage } from "@/lib/error-utils";
 
-const ALLOWED_ROLES = ["admin"];
+const ALLOWED_ROLES = ["admin", "moderator"];
 
 interface WorkerResponse {
   id: string;
@@ -116,7 +116,9 @@ async function authorize(): Promise<AuthorizedContext | Response> {
   const role = (profile.role || "").toLowerCase();
   if (!ALLOWED_ROLES.includes(role)) {
     return new Response(
-      JSON.stringify({ error: "Forbidden - Admin access required" }),
+      JSON.stringify({
+        error: "Forbidden - Admin or Moderator access required",
+      }),
       { status: 403 }
     );
   }
