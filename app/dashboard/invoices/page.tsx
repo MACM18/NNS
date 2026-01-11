@@ -63,7 +63,7 @@ interface InvoiceStats {
 }
 
 export default function InvoicesPage() {
-  const { user, loading } = useAuth();
+  const { user, role, loading } = useAuth();
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
@@ -276,6 +276,9 @@ export default function InvoicesPage() {
     return <AuthWrapper />;
   }
 
+  const normalizedRole = (role || "").toLowerCase();
+  const canEditSettings = ["admin", "moderator"].includes(normalizedRole);
+
   return (
     <div className='space-y-6'>
       {/* Page Header */}
@@ -298,14 +301,16 @@ export default function InvoicesPage() {
             />
             Refresh
           </Button>
-          <Button
-            onClick={() => setSettingsModalOpen(true)}
-            variant='outline'
-            className='gap-2'
-          >
-            <Settings className='h-4 w-4' />
-            Settings
-          </Button>
+          {canEditSettings && (
+            <Button
+              onClick={() => setSettingsModalOpen(true)}
+              variant='outline'
+              className='gap-2'
+            >
+              <Settings className='h-4 w-4' />
+              Settings
+            </Button>
+          )}
           <Button onClick={() => setGenerateModalOpen(true)} className='gap-2'>
             <Plus className='h-4 w-4' />
             Generate Invoices
@@ -373,7 +378,9 @@ export default function InvoicesPage() {
       <Tabs defaultValue='invoices' className='space-y-6'>
         <TabsList>
           <TabsTrigger value='invoices'>Generated Invoices</TabsTrigger>
-          <TabsTrigger value='settings'>Pricing & Settings</TabsTrigger>
+          {canEditSettings && (
+            <TabsTrigger value='settings'>Pricing & Settings</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value='invoices'>

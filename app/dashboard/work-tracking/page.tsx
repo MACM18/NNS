@@ -154,6 +154,7 @@ export default function WorkTrackingCalendarPage() {
   }
 
   const isAdmin = normalizedRole === "admin";
+  const canManageWorkers = ["admin", "moderator"].includes(normalizedRole);
 
   const handleUnauthorized = (status: number, message?: string) => {
     const description =
@@ -303,7 +304,7 @@ export default function WorkTrackingCalendarPage() {
             </p>
           </div>
           <div className='flex gap-2'>
-            {isAdmin && (
+            {canManageWorkers && (
               <Button
                 variant='outline'
                 onClick={() => setWorkersDialogOpen(true)}
