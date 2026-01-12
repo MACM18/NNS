@@ -14,7 +14,7 @@ function escapeHtml(text: string): string {
     .replace(/\//g, "&#x2F;");
 }
 
-type AuthorizedContext = { userId: string; role: string };
+type AuthorizedContext = { userId: string; profileId: string; role: string };
 
 type LineDetail = {
   id: string;
@@ -63,17 +63,23 @@ async function authorize(): Promise<AuthorizedContext | Response> {
 
   const profile = await prisma.profile.findUnique({
     where: { userId: session.user.id },
-    select: { role: true },
+    select: { id: true, role: true },
   });
 
-  const role = (profile?.role || "").toLowerCase();
+  if (!profile) {
+    return new Response(JSON.stringify({ error: "Profile not found" }), {
+      status: 404,
+    });
+  }
+
+  const role = (profile.role || "").toLowerCase();
   if (!ALLOWED_ROLES.includes(role)) {
     return new Response(JSON.stringify({ error: "Forbidden" }), {
       status: 403,
     });
   }
 
-  return { userId: session.user.id, role };
+  return { userId: session.user.id, profileId: profile.id, role };
 }
 
 function monthStartEnd(month: number, year: number) {
@@ -232,7 +238,7 @@ export async function POST(req: NextRequest) {
           lineId,
           workerId,
           assignedDate: new Date(date),
-          createdById: auth.userId,
+          createdById: auth.profileId,
         },
         select: { id: true },
       });
