@@ -14,6 +14,7 @@ import {
   Cable,
   ToggleLeft,
   ToggleRight,
+  Search,
 } from "lucide-react";
 import {
   Card,
@@ -53,18 +54,14 @@ import { ManageInventoryItemsModal } from "@/components/modals/manage-inventory-
 import { EditInventoryInvoiceModal } from "@/components/modals/edit-inventory-invoice-modal";
 import { EditInventoryItemModal } from "@/components/modals/edit-inventory-item-modal";
 import { EditDrumModal } from "@/components/modals/edit-drum-modal";
-import { DrumUsageDetailsModal } from "@/components/modals/drum-usage-details-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { useNotification } from "@/contexts/notification-context";
 import { recalculateAllDrumQuantities } from "@/app/dashboard/integrations/google-sheets/actions";
-import {
-  calculateSmartWastage,
-  calculateLegacyWastage,
-  type DrumUsage,
-} from "@/lib/drum-wastage-calculator";
+import { AddDrumModal } from "@/components/modals/add-drum-modal";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 
 interface InventoryStats {
   totalItems: number;
@@ -100,6 +97,10 @@ export interface DrumTracking {
   item_id: string;
   initial_quantity: number;
   current_quantity: number;
+  received_date: string;
+  status: string;
+  item_name?: string;
+  // Legacy/Calculated fields (kept optional to avoid breaking other components temporarily)
   calculated_current_quantity?: number;
   calculated_status?: string;
   total_used?: number;
@@ -108,16 +109,6 @@ export interface DrumTracking {
   usage_count?: number;
   last_usage_date?: string;
   usages?: any[];
-  received_date: string;
-  status: string;
-  item_name?: string;
-  wastage_calculation_method?:
-    | "smart_segments"
-    | "legacy_gaps"
-    | "manual_override";
-  manual_wastage_override?: number;
-  usageSegments?: { start: number; end: number; length: number }[];
-  wastedSegments?: { start: number; end: number; length: number }[];
 }
 
 interface WasteReport {
@@ -142,110 +133,8 @@ interface InventoryInvoiceItem {
 }
 
 // Enhanced drum calculation logic with smart wastage calculation
-const calculateDrumMetrics = (drum: any, usageData: any[]) => {
-  const drumUsages = usageData.filter((usage) => usage.drum_id === drum.id);
-
-  if (drumUsages.length === 0) {
-    return {
-      totalUsed: 0,
-      totalWastage:
-        drum.manual_wastage_override ||
-        (drum.status === "inactive" ? drum.initial_quantity : 0),
-      calculatedCurrentQuantity:
-        drum.initial_quantity -
-        (drum.manual_wastage_override ||
-          (drum.status === "inactive" ? drum.initial_quantity : 0)),
-      remainingCable: drum.status === "inactive" ? 0 : drum.initial_quantity,
-      calculatedStatus: drum.initial_quantity > 10 ? drum.status : "inactive",
-      usageCount: 0,
-      lastUsageDate: null,
-      usages: [],
-      wastageCalculationMethod:
-        drum.manual_wastage_override !== undefined
-          ? "manual_override"
-          : "smart_segments",
-    };
-  }
-
-  // Convert to the format expected by our calculation functions
-  let drumUsageData: DrumUsage[] = drumUsages.map((usage) => ({
-    id: usage.id,
-    cable_start_point: usage.cable_start_point || 0,
-    cable_end_point: usage.cable_end_point || 0,
-    usage_date: usage.usage_date,
-    quantity_used: usage.quantity_used,
-  }));
-
-  // Fallback: if start/end points are missing (zero-length) but quantities exist,
-  // synthesize sequential segments based on quantity_used ordered by date
-  const hasValidSegments = drumUsageData.some(
-    (u) => (u.cable_end_point || 0) !== (u.cable_start_point || 0)
-  );
-  const hasQuantities = drumUsageData.some(
-    (u) => typeof u.quantity_used === "number" && (u.quantity_used || 0) > 0
-  );
-  if (!hasValidSegments && hasQuantities) {
-    const sorted = [...drumUsageData].sort(
-      (a, b) =>
-        new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime()
-    );
-    let pos = 0;
-    drumUsageData = sorted.map((u) => {
-      const len = Number(u.quantity_used || 0);
-      const start = pos;
-      const end = pos + Math.max(0, len);
-      pos = end;
-      return {
-        ...u,
-        cable_start_point: start,
-        cable_end_point: end,
-      };
-    });
-  }
-
-  // Use smart calculation by default, with manual override if set
-  const calculation = calculateSmartWastage(
-    drumUsageData,
-    drum.initial_quantity,
-    drum.manual_wastage_override,
-    drum.status
-  );
-
-  // Sort usages by date for UI display
-  const sortedUsages = [...drumUsages].sort(
-    (a, b) =>
-      new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime()
-  );
-
-  // Determine status based on calculated quantity
-  let calculatedStatus = drum.status;
-  if (calculation.calculatedCurrentQuantity <= 0) {
-    calculatedStatus = "empty";
-  } else if (
-    calculation.calculatedCurrentQuantity <= 10 &&
-    drum.status !== "inactive"
-  ) {
-    calculatedStatus = "inactive";
-  }
-
-  return {
-    totalUsed: calculation.totalUsed,
-    totalWastage: calculation.totalWastage,
-    calculatedCurrentQuantity: calculation.calculatedCurrentQuantity,
-    remainingCable: calculation.remainingCable,
-    calculatedStatus,
-    usageCount: sortedUsages.length,
-    lastUsageDate:
-      sortedUsages.length > 0
-        ? sortedUsages[sortedUsages.length - 1].usage_date
-        : null,
-    usages: sortedUsages.slice(-5), // Keep last 5 usages for details
-    wastageCalculationMethod: calculation.calculationMethod,
-    usageSegments: calculation.usageSegments,
-    wastedSegments: calculation.wastedSegments,
-    manualWastageOverride: calculation.manualWastageOverride,
-  };
-};
+// Simplified drum metrics - removed complex usage tracking
+// const calculateDrumMetrics = (drum: any, usageData: any[]) => { ... };
 
 export default function InventoryPage() {
   const { user, loading, role } = useAuth();
@@ -284,12 +173,13 @@ export default function InventoryPage() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [deleteWasteConfirmOpen, setDeleteWasteConfirmOpen] = useState(false);
   const [wasteToDelete, setWasteToDelete] = useState<WasteReport | null>(null);
-  const [drumUsageModalOpen, setDrumUsageModalOpen] = useState(false);
-  const [selectedDrumForUsage, setSelectedDrumForUsage] =
-    useState<DrumTracking | null>(null);
-  const [showInactiveDrums, setShowInactiveDrums] = useState(false);
+  const [addDrumModalOpen, setAddDrumModalOpen] = useState(false);
+
 
   const { addNotification } = useNotification();
+
+  const [searchDrumQuery, setSearchDrumQuery] = useState("");
+  const [drumStatusFilter, setDrumStatusFilter] = useState("all");
 
   useEffect(() => {
     if (user) {
@@ -364,33 +254,12 @@ export default function InventoryPage() {
 
   const fetchDrums = async () => {
     try {
-      const response = await fetch("/api/drums?all=true&includeUsage=true");
+      // Simplied: Fetch drums without complex usage calculation
+      const response = await fetch("/api/drums?all=true");
       if (!response.ok) throw new Error("Failed to fetch drums");
       const result = await response.json();
 
-      const drumsData = result.data || [];
-      const usageData = result.usageData || [];
-
-      // Calculate metrics using the enhanced logic
-      const drumsWithUsage = drumsData.map((drum: any) => {
-        const metrics = calculateDrumMetrics(drum, usageData);
-
-        return {
-          ...drum,
-          calculated_current_quantity: metrics.calculatedCurrentQuantity,
-          calculated_status: metrics.calculatedStatus,
-          total_used: metrics.totalUsed,
-          total_wastage: metrics.totalWastage,
-          remaining_cable: metrics.remainingCable,
-          usage_count: metrics.usageCount,
-          last_usage_date: metrics.lastUsageDate,
-          usages: metrics.usages,
-          usageSegments: metrics.usageSegments,
-          wastedSegments: metrics.wastedSegments,
-        };
-      });
-
-      setDrums(drumsWithUsage as DrumTracking[]);
+      setDrums((result.data || []) as DrumTracking[]);
     } catch (error) {
       console.error("Error fetching drums:", error);
     }
@@ -543,11 +412,10 @@ export default function InventoryPage() {
 
       addNotification({
         title: "Success",
-        message: `Drum ${
-          drum.drum_number
-        } quantity synced successfully (${calculatedQuantity.toFixed(
-          1
-        )}m remaining)`,
+        message: `Drum ${drum.drum_number
+          } quantity synced successfully (${calculatedQuantity.toFixed(
+            1
+          )}m remaining)`,
         type: "success",
         category: "system",
       });
@@ -562,6 +430,17 @@ export default function InventoryPage() {
       });
     }
   };
+
+  const filteredDrums = drums.filter((drum) => {
+    const matchesSearch =
+      drum.drum_number.toLowerCase().includes(searchDrumQuery.toLowerCase()) ||
+      (drum.item_name || "").toLowerCase().includes(searchDrumQuery.toLowerCase());
+    const matchesStatus =
+      drumStatusFilter === "all"
+        ? true
+        : drum.status === drumStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className='space-y-6'>
@@ -644,9 +523,8 @@ export default function InventoryPage() {
             ) : (
               <>
                 <div
-                  className={`text-2xl font-bold ${
-                    stats.lowStockAlerts > 0 ? "text-orange-600" : ""
-                  }`}
+                  className={`text-2xl font-bold ${stats.lowStockAlerts > 0 ? "text-orange-600" : ""
+                    }`}
                 >
                   {stats.lowStockAlerts}
                 </div>
@@ -797,20 +675,20 @@ export default function InventoryPage() {
                                     </Button>
                                     {(role === "admin" ||
                                       role === "moderator") && (
-                                      <Button
-                                        size='sm'
-                                        variant='secondary'
-                                        onClick={async () => {
-                                          if (!invoiceItems[invoice.id]) {
-                                            await fetchInvoiceItems(invoice.id);
-                                          }
-                                          setSelectedInvoice(invoice);
-                                          setEditInvoiceModalOpen(true);
-                                        }}
-                                      >
-                                        Edit
-                                      </Button>
-                                    )}
+                                        <Button
+                                          size='sm'
+                                          variant='secondary'
+                                          onClick={async () => {
+                                            if (!invoiceItems[invoice.id]) {
+                                              await fetchInvoiceItems(invoice.id);
+                                            }
+                                            setSelectedInvoice(invoice);
+                                            setEditInvoiceModalOpen(true);
+                                          }}
+                                        >
+                                          Edit
+                                        </Button>
+                                      )}
                                     {role === "admin" && (
                                       <Button
                                         size='sm'
@@ -837,7 +715,7 @@ export default function InventoryPage() {
                                         Invoice Items
                                       </h4>
                                       {invoiceItems[invoice.id] &&
-                                      invoiceItems[invoice.id].length > 0 ? (
+                                        invoiceItems[invoice.id].length > 0 ? (
                                         <Table>
                                           <TableHeader>
                                             <TableRow>
@@ -956,8 +834,8 @@ export default function InventoryPage() {
                               <TableCell>
                                 {item.last_updated
                                   ? new Date(
-                                      item.last_updated
-                                    ).toLocaleDateString()
+                                    item.last_updated
+                                  ).toLocaleDateString()
                                   : "N/A"}
                               </TableCell>
                               <TableCell className='text-right'>
@@ -999,362 +877,113 @@ export default function InventoryPage() {
         <TabsContent value='drums'>
           <Card>
             <CardHeader>
-              <CardTitle>Drum Tracking</CardTitle>
-              <CardDescription>
-                Cable drum usage and remaining quantities with enhanced tracking
-                logic
-              </CardDescription>
-              <div className='flex items-center gap-2 mt-4'>
-                <Button
-                  variant='outline'
-                  size='sm'
-                  onClick={() => setShowInactiveDrums(!showInactiveDrums)}
-                  className='gap-2'
-                >
-                  {showInactiveDrums ? (
-                    <ToggleRight className='h-4 w-4' />
-                  ) : (
-                    <ToggleLeft className='h-4 w-4' />
-                  )}
-                  {showInactiveDrums
-                    ? "Hide Inactive Drums"
-                    : "Show Inactive Drums"}
-                </Button>
-                {(role === "admin" || role === "moderator") && (
+              <div className="flex flex-col md:flex-row justify-between gap-4">
+                <div>
+                  <CardTitle>Drum Inventory</CardTitle>
+                  <CardDescription>
+                    Manage cable drums and their status
+                  </CardDescription>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Button
-                    variant='secondary'
-                    size='sm'
-                    onClick={async () => {
-                      try {
-                        // The server action handles its own authentication via NextAuth
-                        await recalculateAllDrumQuantities();
-                        addNotification({
-                          title: "Success",
-                          message:
-                            "All drum quantities recalculated successfully",
-                          type: "success",
-                          category: "system",
-                        });
-                        handleSuccess();
-                      } catch (error: any) {
-                        const msg =
-                          error?.message ||
-                          "Failed to recalculate drum quantities";
-                        addNotification({
-                          title: "Error",
-                          message: msg,
-                          type: "error",
-                          category: "system",
-                        });
-                      }
-                    }}
-                    className='gap-2'
+                    onClick={() => setAddDrumModalOpen(true)}
+                    size="sm"
+                    className="h-9 gap-1"
                   >
-                    <RefreshCw className='h-4 w-4' />
-                    Recalculate All
+                    <Plus className="h-4 w-4" />
+                    <span className="sr-only sm:not-sr-only">New Drum</span>
                   </Button>
-                )}
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search drums..."
+                      value={searchDrumQuery}
+                      onChange={(e) => setSearchDrumQuery(e.target.value)}
+                      className="pl-8 w-full sm:w-[200px]"
+                    />
+                  </div>
+                  <Select
+                    value={drumStatusFilter}
+                    onValueChange={setDrumStatusFilter}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="empty">Empty</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               {loadingData ? (
-                <TableSkeleton columns={8} rows={6} />
-              ) : drums.length > 0 ? (
+                <TableSkeleton columns={6} rows={6} />
+              ) : filteredDrums.length > 0 ? (
                 <div className='overflow-x-auto -mx-4 sm:mx-0'>
                   <div className='inline-block min-w-full align-middle'>
                     <div className='overflow-hidden'>
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className='min-w-[120px]'>
-                              Drum Number
-                            </TableHead>
-                            <TableHead className='min-w-[150px]'>
-                              Item
-                            </TableHead>
-                            <TableHead className='min-w-[90px]'>
-                              Initial Qty
-                            </TableHead>
-                            <TableHead className='min-w-[100px]'>
-                              Current Qty
-                            </TableHead>
-                            <TableHead className='min-w-[140px]'>
-                              Usage %
-                            </TableHead>
-                            <TableHead className='min-w-[120px]'>
-                              Received Date
-                            </TableHead>
-                            <TableHead className='min-w-[120px]'>
-                              Status
-                            </TableHead>
-                            <TableHead className='min-w-[150px] text-center'>
-                              Actions
-                            </TableHead>
+                            <TableHead>Drum Number</TableHead>
+                            <TableHead>Item</TableHead>
+                            <TableHead>Initial Qty</TableHead>
+                            <TableHead>Current Qty</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className='text-right'>Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {drums
-                            .filter(
-                              (drum) =>
-                                showInactiveDrums || drum.status !== "inactive"
-                            )
-                            .map((drum) => {
-                              const displayQuantity =
-                                drum.calculated_current_quantity ?? 0;
-                              const displayStatus = drum.status;
-                              const totalUsed = drum.total_used ?? 0;
-                              const totalWastage = drum.total_wastage ?? 0;
-                              const usagePercentage =
-                                drum.initial_quantity > 0
-                                  ? (
-                                      ((totalUsed + totalWastage) /
-                                        drum.initial_quantity) *
-                                      100
-                                    ).toFixed(1)
-                                  : "0.0";
-
-                              return (
-                                <TableRow key={drum.id}>
-                                  <TableCell className='font-mono'>
-                                    {drum.drum_number}
-                                  </TableCell>
-                                  <TableCell>{drum.item_name || "-"}</TableCell>
-                                  <TableCell>
-                                    {drum.initial_quantity}m
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className='flex flex-col'>
-                                      <span className='text-blue-600 font-medium'>
-                                        {displayQuantity.toFixed(1)}m
-                                      </span>
-                                      <span className='text-xs text-muted-foreground'>
-                                        (Calculated)
-                                      </span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className='flex items-center gap-2'>
-                                      <span>{usagePercentage}%</span>
-                                      <div className='flex flex-col gap-1'>
-                                        <div className='w-24 h-2 bg-gray-200 rounded-full overflow-hidden relative'>
-                                          {/* Composite bar: green usage segments */}
-                                          {drum.usageSegments &&
-                                            drum.initial_quantity > 0 &&
-                                            drum.usageSegments.map((seg, i) => (
-                                              <div
-                                                key={`u-${i}`}
-                                                className='absolute top-0 h-full bg-green-500/80'
-                                                style={{
-                                                  left: `${
-                                                    (seg.start /
-                                                      drum.initial_quantity) *
-                                                    100
-                                                  }%`,
-                                                  width: `${
-                                                    (seg.length /
-                                                      drum.initial_quantity) *
-                                                    100
-                                                  }%`,
-                                                }}
-                                                title={`Used ${seg.length.toFixed(
-                                                  1
-                                                )}m (${seg.start.toFixed(
-                                                  1
-                                                )}-${seg.end.toFixed(1)})`}
-                                              />
-                                            ))}
-
-                                          {/* Remaining (implicit background) */}
-                                        </div>
-                                        <div className='w-24 h-1 bg-gray-100 rounded-full overflow-hidden'>
-                                          <div
-                                            className={`h-full transition-all ${
-                                              Number(usagePercentage) > 80
-                                                ? "bg-red-500"
-                                                : Number(usagePercentage) > 60
-                                                ? "bg-orange-500"
-                                                : "bg-green-500"
-                                            }`}
-                                            style={{
-                                              width: `${Math.min(
-                                                100,
-                                                Number(usagePercentage)
-                                              )}%`,
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                    {drum.usage_count &&
-                                      drum.usage_count > 0 && (
-                                        <div className='text-xs text-muted-foreground mt-1'>
-                                          {drum.usage_count} installation
-                                          {drum.usage_count !== 1 ? "s" : ""}
-                                          {totalWastage > 0 && (
-                                            <>
-                                              <span className='text-orange-600'>
-                                                {" "}
-                                                • {totalWastage.toFixed(1)}m
-                                                waste
-                                              </span>
-                                              {drum.wastage_calculation_method ===
-                                                "manual_override" && (
-                                                <span className='text-blue-600'>
-                                                  {" "}
-                                                  (manual)
-                                                </span>
-                                              )}
-                                              {drum.wastage_calculation_method ===
-                                                "smart_segments" && (
-                                                <span className='text-green-600'>
-                                                  {" "}
-                                                  (smart)
-                                                </span>
-                                              )}
-                                            </>
-                                          )}
-                                          {drum.remaining_cable !== undefined &&
-                                            drum.remaining_cable > 0 && (
-                                              <span className='text-gray-600'>
-                                                {" "}
-                                                •{" "}
-                                                {drum.remaining_cable.toFixed(
-                                                  1
-                                                )}
-                                                m remaining
-                                              </span>
-                                            )}
-                                          {drum.status === "inactive" &&
-                                            drum.remaining_cable &&
-                                            drum.remaining_cable > 0 && (
-                                              <span className='text-red-600'>
-                                                {" "}
-                                                (added to waste)
-                                              </span>
-                                            )}
-                                        </div>
-                                      )}
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className='flex flex-col'>
-                                      <span>
-                                        {drum.received_date
-                                          ? new Date(
-                                              drum.received_date
-                                            ).toLocaleDateString()
-                                          : "N/A"}
-                                      </span>
-                                      {drum.last_usage_date && (
-                                        <span className='text-xs text-muted-foreground'>
-                                          Last used:{" "}
-                                          {new Date(
-                                            drum.last_usage_date
-                                          ).toLocaleDateString()}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className='flex flex-col gap-1'>
-                                      {role === "admin" ||
-                                      role === "moderator" ? (
-                                        <Select
-                                          value={displayStatus}
-                                          onValueChange={(value) =>
-                                            updateDrumStatus(
-                                              drum.id,
-                                              value,
-                                              drum.drum_number
-                                            )
-                                          }
-                                        >
-                                          <SelectTrigger className='w-[100px] h-7 text-xs'>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value='active'>
-                                              Active
-                                            </SelectItem>
-                                            <SelectItem value='inactive'>
-                                              Inactive
-                                            </SelectItem>
-                                            <SelectItem value='empty'>
-                                              Empty
-                                            </SelectItem>
-                                            <SelectItem value='maintenance'>
-                                              Maintenance
-                                            </SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      ) : (
-                                        getStatusBadge(displayStatus)
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className='text-center align-middle'>
-                                    <div className='flex gap-1 justify-center items-center min-h-[32px]'>
-                                      <Button
-                                        size='icon'
-                                        variant='outline'
-                                        aria-label='View Usage Details'
-                                        className='p-1 h-7 w-7 bg-transparent'
-                                        onClick={() => {
-                                          setSelectedDrumForUsage(drum);
-                                          setDrumUsageModalOpen(true);
-                                        }}
-                                      >
-                                        <Cable className='h-4 w-4' />
-                                      </Button>
-                                      {(role === "admin" ||
-                                        role === "moderator") && (
-                                        <>
-                                          <Button
-                                            size='icon'
-                                            variant='ghost'
-                                            aria-label='Edit Drum'
-                                            className='p-1 h-7 w-7'
-                                            onClick={() => {
-                                              setSelectedDrum(drum);
-                                              setEditDrumModalOpen(true);
-                                            }}
-                                          >
-                                            <Pencil className='h-4 w-4' />
-                                          </Button>
-                                          {displayQuantity !==
-                                            drum.current_quantity && (
-                                            <Button
-                                              size='icon'
-                                              variant='secondary'
-                                              aria-label='Sync Database'
-                                              className='p-1 h-7 w-7'
-                                              onClick={() =>
-                                                syncDrumQuantity(drum)
-                                              }
-                                            >
-                                              <Package className='h-4 w-4' />
-                                            </Button>
-                                          )}
-                                        </>
-                                      )}
-                                      {role === "admin" && (
-                                        <Button
-                                          size='icon'
-                                          variant='ghost'
-                                          aria-label='Delete Drum'
-                                          className='p-1 h-7 w-7'
-                                          onClick={() => {
-                                            setDrumToDelete(drum);
-                                            setDeleteDrumConfirmOpen(true);
-                                          }}
-                                        >
-                                          <Trash className='h-4 w-4 text-red-500' />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
+                          {filteredDrums.map((drum) => (
+                            <TableRow key={drum.id}>
+                              <TableCell className='font-mono'>
+                                {drum.drum_number}
+                              </TableCell>
+                              <TableCell>{drum.item_name || "-"}</TableCell>
+                              <TableCell>{drum.initial_quantity}m</TableCell>
+                              <TableCell>{drum.current_quantity}m</TableCell>
+                              <TableCell>{getStatusBadge(drum.status)}</TableCell>
+                              <TableCell className='text-right'>
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setSelectedDrum(drum);
+                                      setEditDrumModalOpen(true);
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  {/* Quick Status Toggle */}
+                                  {drum.status === 'active' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      title="Mark Inactive"
+                                      onClick={() => updateDrumStatus(drum.id, 'inactive', drum.drum_number)}
+                                    >
+                                      <ToggleRight className="h-4 w-4 text-green-600" />
+                                    </Button>
+                                  )}
+                                  {drum.status === 'inactive' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      title="Mark Active"
+                                      onClick={() => updateDrumStatus(drum.id, 'active', drum.drum_number)}
+                                    >
+                                      <ToggleLeft className="h-4 w-4 text-orange-600" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
                         </TableBody>
                       </Table>
                     </div>
@@ -1362,11 +991,8 @@ export default function InventoryPage() {
                 </div>
               ) : (
                 <div className='text-center py-8 text-muted-foreground'>
-                  <BarChart3 className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                  <p>No drums found</p>
-                  <p className='text-sm'>
-                    Add cable drums through invoices to track usage
-                  </p>
+                  <Package className='h-12 w-12 mx-auto mb-4 opacity-50' />
+                  <p>No drums match your filter</p>
                 </div>
               )}
             </CardContent>
@@ -1422,8 +1048,8 @@ export default function InventoryPage() {
                               <TableCell>
                                 {waste.waste_date
                                   ? new Date(
-                                      waste.waste_date
-                                    ).toLocaleDateString()
+                                    waste.waste_date
+                                  ).toLocaleDateString()
                                   : "N/A"}
                               </TableCell>
                               <TableCell>{waste.full_name}</TableCell>
@@ -1500,19 +1126,20 @@ export default function InventoryPage() {
         onSuccess={handleSuccess}
         addNotification={addNotification}
       />
+
+      <AddDrumModal
+        isOpen={addDrumModalOpen}
+        onClose={() => setAddDrumModalOpen(false)}
+        onSuccess={handleSuccess}
+      />
+
       <EditInventoryItemModal
         open={editItemModalOpen}
         onOpenChange={setEditItemModalOpen}
         item={selectedItem}
         onSuccess={handleSuccess}
       />
-      <DrumUsageDetailsModal
-        open={drumUsageModalOpen}
-        onOpenChange={setDrumUsageModalOpen}
-        drumId={selectedDrumForUsage?.id || null}
-        drumNumber={selectedDrumForUsage?.drum_number || ""}
-        onWastageUpdate={fetchDrums}
-      />
+
 
       {/* Delete Confirmation Dialogs */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
@@ -1648,9 +1275,8 @@ export default function InventoryPage() {
                       throw new Error("Failed to delete waste record");
                     addNotification({
                       title: "Waste Record Deleted",
-                      message: `Waste record deleted and stock restored for ${
-                        wasteToDelete.item_name || "item"
-                      }`,
+                      message: `Waste record deleted and stock restored for ${wasteToDelete.item_name || "item"
+                        }`,
                       type: "success",
                       category: "system",
                     });

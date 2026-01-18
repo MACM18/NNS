@@ -116,13 +116,52 @@ export async function PUT(
 
     // Whitelist allowed fields (accept snake_case or camelCase)
     const updateData: Record<string, unknown> = {};
-    if (body.status !== undefined) updateData.status = body.status;
-    if (body.completed_date !== undefined || body.completedDate !== undefined)
-      updateData.completedDate = body.completed_date ?? body.completedDate;
-    if (body.drum_number !== undefined || body.drumNumber !== undefined)
-      updateData.drumNumber = body.drum_number ?? body.drumNumber;
-    if (body.ont_serial !== undefined || body.ontSerial !== undefined)
-      updateData.ontSerial = body.ont_serial ?? body.ontSerial;
+    const fields = [
+      "status", "name", "address", "dp", "telephone_no",
+      "power_dp", "power_inbox", "cable_start", "cable_middle", "cable_end",
+      "wastage", "retainers", "l_hook", "top_bolt", "c_hook", "fiber_rosette",
+      "internal_wire", "s_rosette", "fac", "casing", "c_tie", "c_clip",
+      "conduit", "tag_tie", "ont_serial", "voice_test_no", "stb_serial",
+      "flexible", "rj45", "cat5", "pole_67", "pole", "concrete_nail",
+      "roll_plug", "u_clip", "socket", "bend", "rj11", "rj12", "nut_bolt",
+      "screw_nail", "completed_date", "drum_number"
+    ];
+
+    const prismaMapping: Record<string, string> = {
+      telephone_no: "telephoneNo",
+      power_dp: "powerDp",
+      power_inbox: "powerInbox",
+      cable_start: "cableStart",
+      cable_middle: "cableMiddle",
+      cable_end: "cableEnd",
+      l_hook: "lHook",
+      top_bolt: "topBolt",
+      c_hook: "cHook",
+      fiber_rosette: "fiberRosette",
+      internal_wire: "internalWire",
+      s_rosette: "sRosette",
+      c_tie: "cTie",
+      c_clip: "cClip",
+      tag_tie: "tagTie",
+      ont_serial: "ontSerial",
+      voice_test_no: "voiceTestNo",
+      stb_serial: "stbSerial",
+      pole_67: "pole67",
+      concrete_nail: "concreteNail",
+      roll_plug: "rollPlug",
+      u_clip: "uClip",
+      nut_bolt: "nutBolt",
+      screw_nail: "screwNail",
+      completed_date: "completedDate",
+      drum_number: "drumNumber",
+    };
+
+    for (const field of fields) {
+      if (body[field] !== undefined) {
+        const prismaKey = prismaMapping[field] || field;
+        updateData[prismaKey] = body[field];
+      }
+    }
 
     const line = await prisma.lineDetails.update({
       where: { id },
@@ -130,6 +169,8 @@ export async function PUT(
     });
 
     // Return formatted snake_case response to match front-end expectations
+    // We can reuse the same formatting logic as GET if we want, or just return basic info
+    // For now, let's keep the return simple or expand it if the UI needs immediate update
     const formatted = {
       id: line.id,
       name: line.name,
