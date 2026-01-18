@@ -330,9 +330,8 @@ export function LineDetailsTable({
             <div className='flex justify-between'>
               <span className='text-sm text-muted-foreground'>Power (DP):</span>
               <span
-                className={`font-medium ${
-                  isPowerHigh(line.power_dp) ? "text-red-600" : "text-green-600"
-                }`}
+                className={`font-medium ${isPowerHigh(line.power_dp) ? "text-red-600" : "text-green-600"
+                  }`}
               >
                 {line.power_dp ? Number(line.power_dp).toFixed(2) : "N/A"}
                 {isPowerHigh(line.power_dp) && " ⚠️"}
@@ -343,11 +342,10 @@ export function LineDetailsTable({
                 Power (Inbox):
               </span>
               <span
-                className={`font-medium ${
-                  isPowerHigh(line.power_inbox)
+                className={`font-medium ${isPowerHigh(line.power_inbox)
                     ? "text-red-600"
                     : "text-green-600"
-                }`}
+                  }`}
               >
                 {line.power_inbox ? Number(line.power_inbox).toFixed(2) : "N/A"}
                 {isPowerHigh(line.power_inbox) && " ⚠️"}
@@ -662,9 +660,8 @@ export function LineDetailsTable({
                 Line No.
                 {sortField === "telephone_no" && (
                   <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${
-                      sortDirection === "asc" ? "rotate-180" : ""
-                    }`}
+                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                      }`}
                   />
                 )}
               </TableHead>
@@ -675,9 +672,8 @@ export function LineDetailsTable({
                 Customer
                 {sortField === "name" && (
                   <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${
-                      sortDirection === "asc" ? "rotate-180" : ""
-                    }`}
+                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                      }`}
                   />
                 )}
               </TableHead>
@@ -688,9 +684,8 @@ export function LineDetailsTable({
                 DP
                 {sortField === "dp" && (
                   <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${
-                      sortDirection === "asc" ? "rotate-180" : ""
-                    }`}
+                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                      }`}
                   />
                 )}
               </TableHead>
@@ -701,9 +696,8 @@ export function LineDetailsTable({
                 Distance
                 {sortField === "total_cable" && (
                   <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${
-                      sortDirection === "asc" ? "rotate-180" : ""
-                    }`}
+                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                      }`}
                   />
                 )}
               </TableHead>
@@ -716,9 +710,8 @@ export function LineDetailsTable({
                 Date
                 {sortField === "date" && (
                   <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${
-                      sortDirection === "asc" ? "rotate-180" : ""
-                    }`}
+                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                      }`}
                   />
                 )}
               </TableHead>
@@ -866,8 +859,8 @@ export function LineDetailsTable({
                           <Edit2 className='h-4 w-4 mr-1' /> Edit
                         </Button>
                       )}
-                      {/* Delete button for admin only */}
-                      {role === "admin" && (
+                      {/* Delete button for admin/moderator only */}
+                      {role && ["admin", "moderator"].includes(role) && (
                         <Button
                           variant='destructive'
                           size='sm'

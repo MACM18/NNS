@@ -331,14 +331,14 @@ export function EditTelephoneLineModal({
               <Select
                 value={formData.drum_id}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, drum_id: value })
+                  setFormData({ ...formData, drum_id: value === "no_drum" ? "" : value })
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder='Select a drum (optional)' />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value=''>No drum selected</SelectItem>
+                  <SelectItem value='no_drum'>No drum selected</SelectItem>
                   {drums.map((drum) => (
                     <SelectItem key={drum.id} value={drum.id}>
                       {drum.drum_number} (Available:{" "}

@@ -82,9 +82,11 @@ export default function LineDetailsPage() {
         completed: lines.filter(
           (l: any) => l.completed === true || l.status === "completed"
         ).length,
-        inProgress: 0,
+        inProgress: lines.filter((l: any) => l.status === "in_progress").length,
         pending: lines.filter(
-          (l: any) => !(l.completed === true || l.status === "completed")
+          (l: any) =>
+            !(l.completed === true || l.status === "completed") &&
+            l.status !== "in_progress"
         ).length,
       };
 
