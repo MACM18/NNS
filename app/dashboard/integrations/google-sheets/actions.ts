@@ -201,7 +201,7 @@ export async function syncConnection(
     const progress = (m: string) => {
       try {
         onProgress?.(m);
-      } catch {}
+      } catch { }
     };
 
     progress("Authorizing");
@@ -317,24 +317,40 @@ export async function syncConnection(
     let updatedCount = 0;
     const lineIds: string[] = [];
 
+    // Define month start/end for duplicate checking
+    const syncMonthStart = new Date(Date.UTC(year, month - 1, 1));
+    const syncMonthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
     for (const row of sheetRows) {
       const payload = sheetToLinePayload(row);
       if (!payload) continue;
 
-      // Check if line exists for this phone + date
+      // Check if line exists for this phone within the current month
       const existing = await prisma.lineDetails.findFirst({
         where: {
           telephoneNo: payload.telephoneNo,
-          date: payload.date,
+          date: {
+            gte: syncMonthStart,
+            lte: syncMonthEnd,
+          },
         },
-        select: { id: true },
+        select: { id: true, date: true },
       });
 
       if (existing) {
-        // Update existing record
+        // Enforce latest date rule: use the later of the two dates
+        const existingDate = new Date(existing.date);
+        const newDate = new Date(payload.date);
+        const finalDate =
+          existingDate.getTime() > newDate.getTime() ? existingDate : newDate;
+
+        // Update existing record with payload but keep the latest date
         await prisma.lineDetails.update({
           where: { id: existing.id },
-          data: payload,
+          data: {
+            ...payload,
+            date: finalDate,
+          },
         });
         lineIds.push(existing.id);
         updatedCount++;
@@ -594,8 +610,7 @@ async function getSheetsClient() {
   } catch (error) {
     console.error("[getSheetsClient] Authentication failed:", error);
     throw new Error(
-      `Google Sheets API authentication failed: ${
-        error instanceof Error ? error.message : "Unknown error"
+      `Google Sheets API authentication failed: ${error instanceof Error ? error.message : "Unknown error"
       }`
     );
   }
@@ -802,7 +817,7 @@ function toDateISO(
       // CRITICAL: Always enforce connection month/year to prevent wrong years like 2001
       return enforceConnectionDate(dateISO, monthContext, yearContext);
     }
-  } catch {}
+  } catch { }
 
   return null;
 }
