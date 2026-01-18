@@ -274,16 +274,18 @@ export default function LineDetailsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LineDetailsTable
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            refreshTrigger={refreshTrigger}
-            onAssigneeManage={(lineId) => {
-              setSelectedLineId(lineId);
-              setAssigneeModalOpen(true);
-            }}
-            onRefresh={() => setRefreshTrigger((prev) => prev + 1)}
-          />
+          <div className='overflow-x-auto'>
+            <LineDetailsTable
+              selectedMonth={selectedMonth}
+              selectedYear={selectedYear}
+              refreshTrigger={refreshTrigger}
+              onAssigneeManage={(lineId) => {
+                setSelectedLineId(lineId);
+                setAssigneeModalOpen(true);
+              }}
+              onRefresh={() => setRefreshTrigger((prev) => prev + 1)}
+            />
+          </div>
         </CardContent>
       </Card>
 

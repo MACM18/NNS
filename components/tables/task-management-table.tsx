@@ -2,6 +2,12 @@
 
 import { useState, useEffect } from "react";
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Search,
   ChevronDown,
   Eye,
@@ -11,7 +17,19 @@ import {
   Phone,
   User,
   Trash2,
+  Columns,
 } from "lucide-react";
+
+const COLUMNS = [
+  { id: "task_date", label: "Date" },
+  { id: "customer_name", label: "Customer" },
+  { id: "telephone_no", label: "Phone" },
+  { id: "dp", label: "DP" },
+  { id: "connection_type_new", label: "Type" },
+  { id: "connection_services", label: "Services" },
+  { id: "status", label: "Status" },
+  { id: "actions", label: "Actions" },
+];
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -102,6 +120,20 @@ export function TaskManagementTable({
     null
   );
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
+    new Set(COLUMNS.map((c) => c.id))
+  );
+
+  const toggleColumn = (id: string) => {
+    const newVisible = new Set(visibleColumns);
+    if (newVisible.has(id)) {
+      newVisible.delete(id);
+    } else {
+      newVisible.add(id);
+    }
+    setVisibleColumns(newVisible);
+  };
 
   const { addNotification } = useNotification();
   const { user, profile, role } = useAuth();
@@ -569,6 +601,26 @@ export function TaskManagementTable({
         >
           {sortDirection === "asc" ? "↑" : "↓"}
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant='outline' className='w-full sm:w-auto'>
+              <Columns className='mr-2 h-4 w-4' />
+              Columns
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align='end'>
+            {COLUMNS.map((column) => (
+              <DropdownMenuCheckboxItem
+                key={column.id}
+                className='capitalize'
+                checked={visibleColumns.has(column.id)}
+                onCheckedChange={() => toggleColumn(column.id)}
+              >
+                {column.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Results Count */}
@@ -577,41 +629,43 @@ export function TaskManagementTable({
       </div>
 
       {/* Table */}
-      <div className='overflow-hidden rounded-lg border'>
-        <div className='w-full overflow-x-auto'>
-          <Table className='min-w-[960px]'>
-            <TableHeader>
-              <TableRow>
-                <TableHead
-                  className='cursor-pointer hover:bg-muted/50'
-                  onClick={() => handleSort("task_date")}
-                >
-                  Date
-                  {sortField === "task_date" && (
-                    <ChevronDown
-                      className={`inline ml-1 h-4 w-4 ${
-                        sortDirection === "asc" ? "rotate-180" : ""
+      <div className='rounded-lg border'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead
+                className='cursor-pointer hover:bg-muted/50'
+                onClick={() => handleSort("task_date")}
+              >
+                Date
+                {sortField === "task_date" && (
+                  <ChevronDown
+                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
                       }`}
-                    />
-                  )}
-                </TableHead>
-                <TableHead
-                  className='cursor-pointer hover:bg-muted/50'
-                  onClick={() => handleSort("customer_name")}
-                >
-                  Customer
-                  {sortField === "customer_name" && (
-                    <ChevronDown
-                      className={`inline ml-1 h-4 w-4 ${
-                        sortDirection === "asc" ? "rotate-180" : ""
+                  />
+                )}
+              </TableHead>
+              <TableHead
+                className='cursor-pointer hover:bg-muted/50'
+                onClick={() => handleSort("customer_name")}
+              >
+                Customer
+                {sortField === "customer_name" && (
+                  <ChevronDown
+                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
                       }`}
-                    />
-                  )}
-                </TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>DP</TableHead>
+                  />
+                )}
+              </TableHead>
+              {visibleColumns.has("telephone_no") && <TableHead>Phone</TableHead>}
+              {visibleColumns.has("dp") && <TableHead>DP</TableHead>}
+              {visibleColumns.has("connection_type_new") && (
                 <TableHead>Type</TableHead>
+              )}
+              {visibleColumns.has("connection_services") && (
                 <TableHead>Services</TableHead>
+              )}
+              {visibleColumns.has("status") && (
                 <TableHead
                   className='cursor-pointer hover:bg-muted/50'
                   onClick={() => handleSort("status")}
@@ -619,33 +673,44 @@ export function TaskManagementTable({
                   Status
                   {sortField === "status" && (
                     <ChevronDown
-                      className={`inline ml-1 h-4 w-4 ${
-                        sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
+                      className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                        }`}
                     />
                   )}
                 </TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedData.map((item) => (
-                <TableRow key={item.id}>
+              )}
+              {visibleColumns.has("actions") && <TableHead>Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedData.map((item) => (
+              <TableRow key={item.id}>
+                {visibleColumns.has("task_date") && (
                   <TableCell>
                     {new Date(item.task_date).toLocaleDateString()}
                   </TableCell>
+                )}
+                {visibleColumns.has("customer_name") && (
                   <TableCell className='font-medium'>
                     {item.customer_name}
                   </TableCell>
+                )}
+                {visibleColumns.has("telephone_no") && (
                   <TableCell>{item.telephone_no}</TableCell>
+                )}
+                {visibleColumns.has("dp") && (
                   <TableCell>
                     <Badge variant='outline' className='font-mono text-xs'>
                       {item.dp}
                     </Badge>
                   </TableCell>
+                )}
+                {visibleColumns.has("connection_type_new") && (
                   <TableCell>
                     {getConnectionTypeBadge(item.connection_type_new)}
                   </TableCell>
+                )}
+                {visibleColumns.has("connection_services") && (
                   <TableCell>
                     <div className='flex flex-wrap gap-1'>
                       {item.connection_services?.slice(0, 2).map((service) => (
@@ -664,7 +729,11 @@ export function TaskManagementTable({
                       )}
                     </div>
                   </TableCell>
+                )}
+                {visibleColumns.has("status") && (
                   <TableCell>{getStatusBadge(item.status)}</TableCell>
+                )}
+                {visibleColumns.has("actions") && (
                   <TableCell>
                     <div className='flex gap-2'>
                       {item.status === "pending" && (
@@ -790,20 +859,22 @@ export function TaskManagementTable({
                       )}
                     </div>
                   </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
 
-      {filteredData.length === 0 && (
-        <div className='text-center py-8'>
-          <p className='text-muted-foreground'>
-            No tasks found matching your search criteria.
-          </p>
-        </div>
-      )}
+      {
+        filteredData.length === 0 && (
+          <div className='text-center py-8'>
+            <p className='text-muted-foreground'>
+              No tasks found matching your search criteria.
+            </p>
+          </div>
+        )
+      }
 
       {/* Rejection Modal */}
       <Dialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
@@ -845,6 +916,6 @@ export function TaskManagementTable({
         task={editTask}
         onSuccess={fetchData}
       />
-    </div>
+    </div >
   );
 }

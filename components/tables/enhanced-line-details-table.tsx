@@ -1,6 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Search,
   ChevronDown,
@@ -10,7 +17,19 @@ import {
   Zap,
   Trash2,
   Edit2,
+  Columns,
 } from "lucide-react";
+
+const COLUMNS = [
+  { id: "telephone_no", label: "Line No." },
+  { id: "name", label: "Customer" },
+  { id: "dp", label: "DP" },
+  { id: "total_cable", label: "Distance" },
+  { id: "status", label: "Status" },
+  { id: "assignees", label: "Assignees" },
+  { id: "date", label: "Date" },
+  { id: "actions", label: "Actions" },
+];
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -154,6 +173,20 @@ export function LineDetailsTable({
   const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [completeLoading, setCompleteLoading] = useState(false);
+
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
+    new Set(COLUMNS.map((c) => c.id))
+  );
+
+  const toggleColumn = (id: string) => {
+    const newVisible = new Set(visibleColumns);
+    if (newVisible.has(id)) {
+      newVisible.delete(id);
+    } else {
+      newVisible.add(id);
+    }
+    setVisibleColumns(newVisible);
+  };
 
   const { addNotification } = useNotification();
   const { role } = useAuth();
@@ -343,8 +376,8 @@ export function LineDetailsTable({
               </span>
               <span
                 className={`font-medium ${isPowerHigh(line.power_inbox)
-                    ? "text-red-600"
-                    : "text-green-600"
+                  ? "text-red-600"
+                  : "text-green-600"
                   }`}
               >
                 {line.power_inbox ? Number(line.power_inbox).toFixed(2) : "N/A"}
@@ -641,6 +674,26 @@ export function LineDetailsTable({
         >
           {sortDirection === "asc" ? "↑" : "↓"}
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant='outline' className='w-full sm:w-auto'>
+              <Columns className='mr-2 h-4 w-4' />
+              Columns
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align='end'>
+            {COLUMNS.map((column) => (
+              <DropdownMenuCheckboxItem
+                key={column.id}
+                className='capitalize'
+                checked={visibleColumns.has(column.id)}
+                onCheckedChange={() => toggleColumn(column.id)}
+              >
+                {column.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Results Count */}
@@ -653,240 +706,266 @@ export function LineDetailsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead
-                className='cursor-pointer hover:bg-muted/50'
-                onClick={() => handleSort("telephone_no")}
-              >
-                Line No.
-                {sortField === "telephone_no" && (
-                  <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                  />
-                )}
-              </TableHead>
-              <TableHead
-                className='cursor-pointer hover:bg-muted/50'
-                onClick={() => handleSort("name")}
-              >
-                Customer
-                {sortField === "name" && (
-                  <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                  />
-                )}
-              </TableHead>
-              <TableHead
-                className='cursor-pointer hover:bg-muted/50'
-                onClick={() => handleSort("dp")}
-              >
-                DP
-                {sortField === "dp" && (
-                  <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                  />
-                )}
-              </TableHead>
-              <TableHead
-                className='cursor-pointer hover:bg-muted/50'
-                onClick={() => handleSort("total_cable")}
-              >
-                Distance
-                {sortField === "total_cable" && (
-                  <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                  />
-                )}
-              </TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Asignees</TableHead>
-              <TableHead
-                className='cursor-pointer hover:bg-muted/50'
-                onClick={() => handleSort("date")}
-              >
-                Date
-                {sortField === "date" && (
-                  <ChevronDown
-                    className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
-                      }`}
-                  />
-                )}
-              </TableHead>
-              <TableHead>Actions</TableHead>
+              {visibleColumns.has("telephone_no") && (
+                <TableHead
+                  className='cursor-pointer hover:bg-muted/50'
+                  onClick={() => handleSort("telephone_no")}
+                >
+                  Line No.
+                  {sortField === "telephone_no" && (
+                    <ChevronDown
+                      className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                        }`}
+                    />
+                  )}
+                </TableHead>
+              )}
+              {visibleColumns.has("name") && (
+                <TableHead
+                  className='cursor-pointer hover:bg-muted/50'
+                  onClick={() => handleSort("name")}
+                >
+                  Customer
+                  {sortField === "name" && (
+                    <ChevronDown
+                      className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                        }`}
+                    />
+                  )}
+                </TableHead>
+              )}
+              {visibleColumns.has("dp") && (
+                <TableHead
+                  className='cursor-pointer hover:bg-muted/50'
+                  onClick={() => handleSort("dp")}
+                >
+                  DP
+                  {sortField === "dp" && (
+                    <ChevronDown
+                      className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                        }`}
+                    />
+                  )}
+                </TableHead>
+              )}
+              {visibleColumns.has("total_cable") && (
+                <TableHead
+                  className='cursor-pointer hover:bg-muted/50'
+                  onClick={() => handleSort("total_cable")}
+                >
+                  Distance
+                  {sortField === "total_cable" && (
+                    <ChevronDown
+                      className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                        }`}
+                    />
+                  )}
+                </TableHead>
+              )}
+              {visibleColumns.has("status") && <TableHead>Status</TableHead>}
+              {visibleColumns.has("assignees") && <TableHead>Assignees</TableHead>}
+              {visibleColumns.has("date") && (
+                <TableHead
+                  className='cursor-pointer hover:bg-muted/50'
+                  onClick={() => handleSort("date")}
+                >
+                  Date
+                  {sortField === "date" && (
+                    <ChevronDown
+                      className={`inline ml-1 h-4 w-4 ${sortDirection === "asc" ? "rotate-180" : ""
+                        }`}
+                    />
+                  )}
+                </TableHead>
+              )}
+              {visibleColumns.has("actions") && <TableHead>Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredData.map((line) => (
               <React.Fragment key={line.id}>
                 <TableRow>
-                  <TableCell className='font-medium'>
-                    {line.telephone_no}
-                  </TableCell>
-                  <TableCell>{line.name}</TableCell>
-                  <TableCell>
-                    <Badge variant='outline' className='font-mono text-xs'>
-                      {line.dp}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <span className='font-medium'>
-                      {Number(line.total_cable || 0).toFixed(2)}m
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className='relative'>
-                      <Select
-                        value={
-                          line.status === "in_progress"
-                            ? "in_progress"
-                            : line.status || "pending"
-                        }
-                        aria-label='Change status'
-                        disabled={statusLoadingId === line.id}
-                        onValueChange={async (newStatus) => {
-                          setStatusLoadingId(line.id);
-                          setData((prev) =>
-                            prev.map((l) =>
-                              l.id === line.id ? { ...l, status: newStatus } : l
-                            )
-                          );
-                          try {
-                            const response = await fetch(
-                              `/api/lines/${line.id}`,
-                              {
-                                method: "PUT",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ status: newStatus }),
-                              }
-                            );
-                            if (!response.ok) {
-                              const error = await response.json();
-                              throw new Error(
-                                error.error || "Failed to update status"
-                              );
-                            }
-                            addNotification({
-                              title: "Success",
-                              message: `Status updated to ${newStatus}.`,
-                              type: "success",
-                              category: "system",
-                            });
-                            onRefresh();
-                          } catch (error: any) {
-                            addNotification({
-                              title: "Error",
-                              message: error.message,
-                              type: "error",
-                              category: "system",
-                            });
+                  {visibleColumns.has("telephone_no") && (
+                    <TableCell className='font-medium'>
+                      {line.telephone_no}
+                    </TableCell>
+                  )}
+                  {visibleColumns.has("name") && (
+                    <TableCell>{line.name}</TableCell>
+                  )}
+                  {visibleColumns.has("dp") && (
+                    <TableCell>
+                      <Badge variant='outline' className='font-mono text-xs'>
+                        {line.dp}
+                      </Badge>
+                    </TableCell>
+                  )}
+                  {visibleColumns.has("total_cable") && (
+                    <TableCell>
+                      <span className='font-medium'>
+                        {Number(line.total_cable || 0).toFixed(2)}m
+                      </span>
+                    </TableCell>
+                  )}
+                  {visibleColumns.has("status") && (
+                    <TableCell>
+                      <div className='relative'>
+                        <Select
+                          value={
+                            line.status === "in_progress"
+                              ? "in_progress"
+                              : line.status || "pending"
+                          }
+                          aria-label='Change status'
+                          disabled={statusLoadingId === line.id}
+                          onValueChange={async (newStatus) => {
+                            setStatusLoadingId(line.id);
                             setData((prev) =>
                               prev.map((l) =>
-                                l.id === line.id
-                                  ? { ...l, status: line.status }
-                                  : l
+                                l.id === line.id ? { ...l, status: newStatus } : l
                               )
                             );
-                          }
-                          setStatusLoadingId(null);
-                        }}
-                      >
-                        <SelectTrigger className='w-[130px]'>
-                          <SelectValue />
-                          {statusLoadingId === line.id && (
-                            <span className='absolute right-2 top-1/2 -translate-y-1/2'>
-                              <span className='animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full inline-block' />
+                            try {
+                              const response = await fetch(
+                                `/api/lines/${line.id}`,
+                                {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ status: newStatus }),
+                                }
+                              );
+                              if (!response.ok) {
+                                const error = await response.json();
+                                throw new Error(
+                                  error.error || "Failed to update status"
+                                );
+                              }
+                              addNotification({
+                                title: "Success",
+                                message: `Status updated to ${newStatus}.`,
+                                type: "success",
+                                category: "system",
+                              });
+                              onRefresh();
+                            } catch (error: any) {
+                              addNotification({
+                                title: "Error",
+                                message: error.message,
+                                type: "error",
+                                category: "system",
+                              });
+                              setData((prev) =>
+                                prev.map((l) =>
+                                  l.id === line.id
+                                    ? { ...l, status: line.status }
+                                    : l
+                                )
+                              );
+                            }
+                            setStatusLoadingId(null);
+                          }}
+                        >
+                          <SelectTrigger className='w-[130px]'>
+                            <SelectValue />
+                            {statusLoadingId === line.id && (
+                              <span className='absolute right-2 top-1/2 -translate-y-1/2'>
+                                <span className='animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full inline-block' />
+                              </span>
+                            )}
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value='pending'>Pending</SelectItem>
+                            <SelectItem value='in_progress'>
+                              In Progress
+                            </SelectItem>
+                            <SelectItem value='completed'>Completed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </TableCell>
+                  )}
+                  {visibleColumns.has("assignees") && (
+                    <TableCell>
+                      <div className='flex -space-x-1'>
+                        {line.assignees?.slice(0, 3).map((assignee) => (
+                          <Avatar
+                            key={assignee.id}
+                            className='h-6 w-6 border-2 border-background'
+                          >
+                            <AvatarFallback className='text-xs'>
+                              {assignee.full_name?.charAt(0) || "U"}
+                            </AvatarFallback>
+                          </Avatar>
+                        ))}
+                        {line.assignees && line.assignees.length > 3 && (
+                          <div className='h-6 w-6 rounded-full bg-muted border-2 border-background flex items-center justify-center'>
+                            <span className='text-xs'>
+                              +{line.assignees.length - 3}
                             </span>
-                          )}
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value='pending'>Pending</SelectItem>
-                          <SelectItem value='in_progress'>
-                            In Progress
-                          </SelectItem>
-                          <SelectItem value='completed'>Completed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className='flex -space-x-1'>
-                      {line.assignees?.slice(0, 3).map((assignee) => (
-                        <Avatar
-                          key={assignee.id}
-                          className='h-6 w-6 border-2 border-background'
-                        >
-                          <AvatarFallback className='text-xs'>
-                            {assignee.full_name?.charAt(0) || "U"}
-                          </AvatarFallback>
-                        </Avatar>
-                      ))}
-                      {line.assignees && line.assignees.length > 3 && (
-                        <div className='h-6 w-6 rounded-full bg-muted border-2 border-background flex items-center justify-center'>
-                          <span className='text-xs'>
-                            +{line.assignees.length - 3}
+                          </div>
+                        )}
+                        {(!line.assignees || line.assignees.length === 0) && (
+                          <span className='text-xs text-muted-foreground'>
+                            None
                           </span>
-                        </div>
-                      )}
-                      {(!line.assignees || line.assignees.length === 0) && (
-                        <span className='text-xs text-muted-foreground'>
-                          None
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(line.date).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <div className='flex gap-2'>
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        onClick={() => toggleRowExpansion(line.id)}
-                      >
-                        <Eye className='h-4 w-4' />
-                      </Button>
-                      {/* Edit button for admin/moderator only */}
-                      {role && ["admin", "moderator"].includes(role) && (
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
+                  {visibleColumns.has("date") && (
+                    <TableCell>
+                      {new Date(line.date).toLocaleDateString()}
+                    </TableCell>
+                  )}
+                  {visibleColumns.has("actions") && (
+                    <TableCell>
+                      <div className='flex gap-2'>
                         <Button
-                          variant='outline'
+                          variant='ghost'
                           size='sm'
-                          onClick={() => handleEditLine(line)}
+                          onClick={() => toggleRowExpansion(line.id)}
                         >
-                          <Edit2 className='h-4 w-4 mr-1' /> Edit
+                          <Eye className='h-4 w-4' />
                         </Button>
-                      )}
-                      {/* Delete button for admin/moderator only */}
-                      {role && ["admin", "moderator"].includes(role) && (
-                        <Button
-                          variant='destructive'
-                          size='sm'
-                          onClick={() => handleDeleteLine(line)}
-                        >
-                          <Trash2 className='h-4 w-4 mr-1' /> Delete
-                        </Button>
-                      )}
-                      {/* Complete button for moderator/admin only, and only if not already completed */}
-                      {role &&
-                        ["admin", "moderator"].includes(role) &&
-                        line.status !== "completed" && (
+                        {/* Edit button for admin/moderator only */}
+                        {role && ["admin", "moderator"].includes(role) && (
                           <Button
                             variant='outline'
                             size='sm'
-                            onClick={() => handleCompleteLine(line.id)}
+                            onClick={() => handleEditLine(line)}
                           >
-                            Complete
+                            <Edit2 className='h-4 w-4 mr-1' /> Edit
                           </Button>
                         )}
-                    </div>
-                  </TableCell>
+                        {/* Delete button for admin/moderator only */}
+                        {role && ["admin", "moderator"].includes(role) && (
+                          <Button
+                            variant='destructive'
+                            size='sm'
+                            onClick={() => handleDeleteLine(line)}
+                          >
+                            <Trash2 className='h-4 w-4 mr-1' /> Delete
+                          </Button>
+                        )}
+                        {/* Complete button for moderator/admin only, and only if not already completed */}
+                        {role &&
+                          ["admin", "moderator"].includes(role) &&
+                          line.status !== "completed" && (
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={() => handleCompleteLine(line.id)}
+                            >
+                              Complete
+                            </Button>
+                          )}
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
                 {expandedRows.has(line.id) && (
                   <TableRow>
-                    <TableCell colSpan={8} className='p-0'>
+                    <TableCell colSpan={visibleColumns.size} className='p-0'>
                       <ExpandedRowContent line={line} />
                     </TableCell>
                   </TableRow>

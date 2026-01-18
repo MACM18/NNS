@@ -143,9 +143,8 @@ export default function TasksPage() {
                 className='w-full sm:w-auto'
               >
                 <RefreshCw
-                  className={`mr-2 h-4 w-4 ${
-                    isRefreshing ? "animate-spin" : ""
-                  }`}
+                  className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""
+                    }`}
                 />
                 Refresh
               </Button>
@@ -266,10 +265,12 @@ export default function TasksPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <TaskManagementTable
-                refreshTrigger={refreshTrigger}
-                dateFilter={dateFilter}
-              />
+              <div className='overflow-x-auto'>
+                <TaskManagementTable
+                  refreshTrigger={refreshTrigger}
+                  dateFilter={dateFilter}
+                />
+              </div>
             </CardContent>
           </Card>
         </>

@@ -16,7 +16,14 @@ import {
   AlertCircle,
   ChevronRight,
   TrendingUp,
+  Columns,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,12 +79,35 @@ const MONTHS = [
   "December",
 ];
 
+const COLUMNS = [
+  { id: "name", label: "Period" },
+  { id: "date_range", label: "Date Range" },
+  { id: "status", label: "Status" },
+  { id: "workers", label: "Workers" },
+  { id: "total_amount", label: "Total Amount" },
+  { id: "actions", label: "Actions" },
+];
+
 export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<PayrollSummary | null>(null);
   const [periods, setPeriods] = useState<PayrollPeriod[]>([]);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [processingPeriod, setProcessingPeriod] = useState<string | null>(null);
+
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
+    new Set(COLUMNS.map((c) => c.id))
+  );
+
+  const toggleColumn = (id: string) => {
+    const newVisible = new Set(visibleColumns);
+    if (newVisible.has(id)) {
+      newVisible.delete(id);
+    } else {
+      newVisible.add(id);
+    }
+    setVisibleColumns(newVisible);
+  };
 
   // Form state
   const [periodForm, setPeriodForm] = useState({
@@ -352,30 +382,64 @@ export default function PayrollPage() {
 
       {/* Periods Table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Payroll Periods</CardTitle>
-          <CardDescription>
-            Manage monthly payroll periods and payments
-          </CardDescription>
+        <CardHeader className='flex flex-row items-center justify-between'>
+          <div className='space-y-1.5'>
+            <CardTitle>Payroll Periods</CardTitle>
+            <CardDescription>
+              Manage monthly payroll periods and payments
+            </CardDescription>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant='outline' size='sm' className='h-8'>
+                <Columns className='mr-2 h-4 w-4' />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end'>
+              {COLUMNS.map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.id}
+                  className='capitalize'
+                  checked={visibleColumns.has(column.id)}
+                  onCheckedChange={() => toggleColumn(column.id)}
+                >
+                  {column.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </CardHeader>
-        <CardContent>
+        <CardContent className='p-0'>
           <div className='overflow-x-auto'>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className='min-w-[180px]'>Period</TableHead>
-                  <TableHead className='min-w-[120px]'>Date Range</TableHead>
-                  <TableHead className='min-w-[100px]'>Status</TableHead>
-                  <TableHead className='min-w-[100px]'>Workers</TableHead>
-                  <TableHead className='min-w-[120px]'>Total Amount</TableHead>
-                  <TableHead className='min-w-[200px]'>Actions</TableHead>
+                  {visibleColumns.has("name") && (
+                    <TableHead className='min-w-[180px]'>Period</TableHead>
+                  )}
+                  {visibleColumns.has("date_range") && (
+                    <TableHead className='min-w-[120px]'>Date Range</TableHead>
+                  )}
+                  {visibleColumns.has("status") && (
+                    <TableHead className='min-w-[100px]'>Status</TableHead>
+                  )}
+                  {visibleColumns.has("workers") && (
+                    <TableHead className='min-w-[100px]'>Workers</TableHead>
+                  )}
+                  {visibleColumns.has("total_amount") && (
+                    <TableHead className='min-w-[120px]'>Total Amount</TableHead>
+                  )}
+                  {visibleColumns.has("actions") && (
+                    <TableHead className='min-w-[200px]'>Actions</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {periods.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={visibleColumns.size}
                       className='text-center text-muted-foreground py-8'
                     >
                       No payroll periods yet. Create your first period to get
@@ -385,86 +449,100 @@ export default function PayrollPage() {
                 ) : (
                   periods.map((period) => (
                     <TableRow key={period.id}>
-                      <TableCell className='font-medium'>
-                        {period.name}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(period.startDate), "MMM d")} -{" "}
-                        {format(new Date(period.endDate), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(period.status)}</TableCell>
-                      <TableCell>
-                        <div className='flex items-center gap-1'>
-                          <Users className='h-4 w-4 text-muted-foreground' />
-                          {period._count?.payments || 0}
-                        </div>
-                      </TableCell>
-                      <TableCell className='font-mono'>
-                        {formatCurrency(period.totalAmount)}
-                      </TableCell>
-                      <TableCell>
-                        <div className='flex items-center gap-2'>
-                          {canManage && period.status === "draft" && (
-                            <Button
-                              size='sm'
-                              variant='outline'
-                              onClick={() =>
-                                handleAction(period.id, "calculate")
-                              }
-                              disabled={processingPeriod === period.id}
-                            >
-                              {processingPeriod === period.id ? (
-                                <Loader2 className='h-4 w-4 animate-spin' />
-                              ) : (
-                                <>
-                                  <Calculator className='h-4 w-4 mr-1' />
-                                  Calculate
-                                </>
-                              )}
+                      {visibleColumns.has("name") && (
+                        <TableCell className='font-medium'>
+                          {period.name}
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("date_range") && (
+                        <TableCell>
+                          {format(new Date(period.startDate), "MMM d")} -{" "}
+                          {format(new Date(period.endDate), "MMM d, yyyy")}
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("status") && (
+                        <TableCell>{getStatusBadge(period.status)}</TableCell>
+                      )}
+                      {visibleColumns.has("workers") && (
+                        <TableCell>
+                          <div className='flex items-center gap-1'>
+                            <Users className='h-4 w-4 text-muted-foreground' />
+                            {period._count?.payments || 0}
+                          </div>
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("total_amount") && (
+                        <TableCell className='font-mono'>
+                          {formatCurrency(period.totalAmount)}
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("actions") && (
+                        <TableCell>
+                          <div className='flex items-center gap-2'>
+                            {canManage && period.status === "draft" && (
+                              <Button
+                                size='sm'
+                                variant='outline'
+                                onClick={() =>
+                                  handleAction(period.id, "calculate")
+                                }
+                                disabled={processingPeriod === period.id}
+                              >
+                                {processingPeriod === period.id ? (
+                                  <Loader2 className='h-4 w-4 animate-spin' />
+                                ) : (
+                                  <>
+                                    <Calculator className='h-4 w-4 mr-1' />
+                                    Calculate
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            {canManage && period.status === "processing" && (
+                              <Button
+                                size='sm'
+                                variant='outline'
+                                onClick={() =>
+                                  handleAction(period.id, "approve")
+                                }
+                                disabled={processingPeriod === period.id}
+                              >
+                                {processingPeriod === period.id ? (
+                                  <Loader2 className='h-4 w-4 animate-spin' />
+                                ) : (
+                                  <>
+                                    <CheckCircle className='h-4 w-4 mr-1' />
+                                    Approve
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            {canManage && period.status === "approved" && (
+                              <Button
+                                size='sm'
+                                variant='default'
+                                onClick={() => handleAction(period.id, "pay")}
+                                disabled={processingPeriod === period.id}
+                              >
+                                {processingPeriod === period.id ? (
+                                  <Loader2 className='h-4 w-4 animate-spin' />
+                                ) : (
+                                  <>
+                                    <CreditCard className='h-4 w-4 mr-1' />
+                                    Mark Paid
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            <Button size='sm' variant='ghost' asChild>
+                              <Link href={`/dashboard/payroll/${period.id}`}>
+                                View
+                                <ChevronRight className='h-4 w-4 ml-1' />
+                              </Link>
                             </Button>
-                          )}
-                          {canManage && period.status === "processing" && (
-                            <Button
-                              size='sm'
-                              variant='outline'
-                              onClick={() => handleAction(period.id, "approve")}
-                              disabled={processingPeriod === period.id}
-                            >
-                              {processingPeriod === period.id ? (
-                                <Loader2 className='h-4 w-4 animate-spin' />
-                              ) : (
-                                <>
-                                  <CheckCircle className='h-4 w-4 mr-1' />
-                                  Approve
-                                </>
-                              )}
-                            </Button>
-                          )}
-                          {canManage && period.status === "approved" && (
-                            <Button
-                              size='sm'
-                              variant='default'
-                              onClick={() => handleAction(period.id, "pay")}
-                              disabled={processingPeriod === period.id}
-                            >
-                              {processingPeriod === period.id ? (
-                                <Loader2 className='h-4 w-4 animate-spin' />
-                              ) : (
-                                <>
-                                  <CreditCard className='h-4 w-4 mr-1' />
-                                  Mark Paid
-                                </>
-                              )}
-                            </Button>
-                          )}
-                          <Button size='sm' variant='ghost' asChild>
-                            <Link href={`/dashboard/payroll/${period.id}`}>
-                              View
-                              <ChevronRight className='h-4 w-4 ml-1' />
-                            </Link>
-                          </Button>
-                        </div>
-                      </TableCell>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}

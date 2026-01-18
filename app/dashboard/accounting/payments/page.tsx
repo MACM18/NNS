@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, CreditCard, FileText, Check, X, Clock } from "lucide-react";
+import { Search, CreditCard, FileText, Check, X, Clock, Columns } from "lucide-react";
 import { format } from "date-fns";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -45,12 +51,38 @@ interface Invoice {
   type: "generated" | "inventory";
 }
 
+const COLUMNS = [
+  { id: "invoice_number", label: "Invoice #" },
+  { id: "type", label: "Type" },
+  { id: "name", label: "Customer/Vendor" },
+  { id: "date", label: "Date" },
+  { id: "total", label: "Total" },
+  { id: "paid", label: "Paid" },
+  { id: "remaining", label: "Remaining" },
+  { id: "status", label: "Status" },
+  { id: "actions", label: "Actions" },
+];
+
 export default function PaymentsPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("unpaid");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
+    new Set(COLUMNS.map((c) => c.id))
+  );
+
+  const toggleColumn = (id: string) => {
+    const newVisible = new Set(visibleColumns);
+    if (newVisible.has(id)) {
+      newVisible.delete(id);
+    } else {
+      newVisible.add(id);
+    }
+    setVisibleColumns(newVisible);
+  };
 
   // Payment modal state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -293,6 +325,26 @@ export default function PaymentsPage() {
                 <SelectItem value='inventory'>Purchase Invoices</SelectItem>
               </SelectContent>
             </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant='outline' className='w-full sm:w-auto'>
+                  <Columns className='mr-2 h-4 w-4' />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align='end'>
+                {COLUMNS.map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    className='capitalize'
+                    checked={visibleColumns.has(column.id)}
+                    onCheckedChange={() => toggleColumn(column.id)}
+                  >
+                    {column.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardContent>
       </Card>
@@ -300,80 +352,119 @@ export default function PaymentsPage() {
       {/* Invoices Table */}
       <Card>
         <CardContent className='p-0'>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice #</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Customer/Vendor</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className='text-right'>Total</TableHead>
-                <TableHead className='text-right'>Paid</TableHead>
-                <TableHead className='text-right'>Remaining</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInvoices.length === 0 ? (
+          <div className='overflow-x-auto'>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={9}
-                    className='text-center text-muted-foreground py-8'
-                  >
-                    No invoices found
-                  </TableCell>
+                  {visibleColumns.has("invoice_number") && (
+                    <TableHead>Invoice #</TableHead>
+                  )}
+                  {visibleColumns.has("type") && <TableHead>Type</TableHead>}
+                  {visibleColumns.has("name") && (
+                    <TableHead>Customer/Vendor</TableHead>
+                  )}
+                  {visibleColumns.has("date") && <TableHead>Date</TableHead>}
+                  {visibleColumns.has("total") && (
+                    <TableHead className='text-right'>Total</TableHead>
+                  )}
+                  {visibleColumns.has("paid") && (
+                    <TableHead className='text-right'>Paid</TableHead>
+                  )}
+                  {visibleColumns.has("remaining") && (
+                    <TableHead className='text-right'>Remaining</TableHead>
+                  )}
+                  {visibleColumns.has("status") && (
+                    <TableHead>Status</TableHead>
+                  )}
+                  {visibleColumns.has("actions") && (
+                    <TableHead>Actions</TableHead>
+                  )}
                 </TableRow>
-              ) : (
-                filteredInvoices.map((invoice) => (
-                  <TableRow key={`${invoice.type}-${invoice.id}`}>
-                    <TableCell className='font-mono'>
-                      {getInvoiceNumber(invoice)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant='outline'>
-                        {invoice.type === "generated" ? "Sales" : "Purchase"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{getName(invoice)}</TableCell>
-                    <TableCell>
-                      {format(new Date(getCreatedAt(invoice)), "MMM d, yyyy")}
-                    </TableCell>
-                    <TableCell className='text-right font-mono'>
-                      {formatCurrency(getTotalAmount(invoice))}
-                    </TableCell>
-                    <TableCell className='text-right font-mono text-green-600'>
-                      {formatCurrency(getPaidAmount(invoice))}
-                    </TableCell>
-                    <TableCell className='text-right font-mono'>
-                      {getRemainingAmount(invoice) > 0 ? (
-                        <span className='text-red-600'>
-                          {formatCurrency(getRemainingAmount(invoice))}
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {getStatusBadge(getPaymentStatus(invoice))}
-                    </TableCell>
-                    <TableCell>
-                      {getPaymentStatus(invoice) !== "paid" && (
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          onClick={() => handleRecordPayment(invoice)}
-                        >
-                          <CreditCard className='h-4 w-4 mr-1' />
-                          Pay
-                        </Button>
-                      )}
+              </TableHeader>
+              <TableBody>
+                {filteredInvoices.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={visibleColumns.size}
+                      className='text-center text-muted-foreground py-8'
+                    >
+                      No invoices found
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  filteredInvoices.map((invoice) => (
+                    <TableRow key={`${invoice.type}-${invoice.id}`}>
+                      {visibleColumns.has("invoice_number") && (
+                        <TableCell className='font-mono'>
+                          {getInvoiceNumber(invoice)}
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("type") && (
+                        <TableCell>
+                          <Badge variant='outline'>
+                            {invoice.type === "generated"
+                              ? "Sales"
+                              : "Purchase"}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("name") && (
+                        <TableCell>{getName(invoice)}</TableCell>
+                      )}
+                      {visibleColumns.has("date") && (
+                        <TableCell>
+                          {format(
+                            new Date(getCreatedAt(invoice)),
+                            "MMM d, yyyy"
+                          )}
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("total") && (
+                        <TableCell className='text-right font-mono'>
+                          {formatCurrency(getTotalAmount(invoice))}
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("paid") && (
+                        <TableCell className='text-right font-mono text-green-600'>
+                          {formatCurrency(getPaidAmount(invoice))}
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("remaining") && (
+                        <TableCell className='text-right font-mono'>
+                          {getRemainingAmount(invoice) > 0 ? (
+                            <span className='text-red-600'>
+                              {formatCurrency(getRemainingAmount(invoice))}
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("status") && (
+                        <TableCell>
+                          {getStatusBadge(getPaymentStatus(invoice))}
+                        </TableCell>
+                      )}
+                      {visibleColumns.has("actions") && (
+                        <TableCell>
+                          {getPaymentStatus(invoice) !== "paid" && (
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={() => handleRecordPayment(invoice)}
+                            >
+                              <CreditCard className='h-4 w-4 mr-1' />
+                              Pay
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 

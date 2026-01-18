@@ -10,7 +10,14 @@ import {
   Eye,
   Calendar,
   RefreshCw,
+  Columns,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -62,6 +69,16 @@ interface InvoiceStats {
   avgRate: number;
 }
 
+const COLUMNS = [
+  { id: "invoice_number", label: "Invoice Number" },
+  { id: "invoice_type", label: "Type" },
+  { id: "job_month", label: "Month" },
+  { id: "line_count", label: "Lines" },
+  { id: "total_amount", label: "Amount" },
+  { id: "status", label: "Status" },
+  { id: "actions", label: "Actions" },
+];
+
 export default function InvoicesPage() {
   const { user, role, loading } = useAuth();
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
@@ -110,6 +127,20 @@ export default function InvoicesPage() {
       min_length: 501,
     },
   ]);
+
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
+    new Set(COLUMNS.map((c) => c.id))
+  );
+
+  const toggleColumn = (id: string) => {
+    const newVisible = new Set(visibleColumns);
+    if (newVisible.has(id)) {
+      newVisible.delete(id);
+    } else {
+      newVisible.add(id);
+    }
+    setVisibleColumns(newVisible);
+  };
 
   const invoices = cache.invoices.data || [];
   const stats = cache.invoices.stats || {
@@ -311,6 +342,26 @@ export default function InvoicesPage() {
               Settings
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant='outline' className='gap-2'>
+                <Columns className='h-4 w-4' />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end'>
+              {COLUMNS.map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.id}
+                  className='capitalize'
+                  checked={visibleColumns.has(column.id)}
+                  onCheckedChange={() => toggleColumn(column.id)}
+                >
+                  {column.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={() => setGenerateModalOpen(true)} className='gap-2'>
             <Plus className='h-4 w-4' />
             Generate Invoices
@@ -404,56 +455,86 @@ export default function InvoicesPage() {
                   </p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Invoice Number</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Month</TableHead>
-                      <TableHead>Lines</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoices.map((invoice) => (
-                      <TableRow key={invoice.id}>
-                        <TableCell className='font-mono text-sm'>
-                          {invoice.invoice_number}
-                        </TableCell>
-                        <TableCell>
-                          {getInvoiceTypeBadge(invoice.invoice_type)}
-                        </TableCell>
-                        <TableCell>{invoice.job_month}</TableCell>
-                        <TableCell>{invoice.line_count}</TableCell>
-                        <TableCell>
-                          LKR{" "}
-                          {Number(invoice.total_amount || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                        <TableCell>
-                          <div className='flex gap-2'>
-                            <Button
-                              size='sm'
-                              variant='outline'
-                              onClick={() => handlePreviewInvoice(invoice)}
-                            >
-                              <Eye className='h-4 w-4' />
-                            </Button>
-                            <Button
-                              size='sm'
-                              variant='outline'
-                              onClick={() => handleDownloadInvoice(invoice)}
-                            >
-                              <Download className='h-4 w-4' />
-                            </Button>
-                          </div>
-                        </TableCell>
+                <div className='overflow-x-auto'>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {visibleColumns.has("invoice_number") && (
+                          <TableHead>Invoice Number</TableHead>
+                        )}
+                        {visibleColumns.has("invoice_type") && (
+                          <TableHead>Type</TableHead>
+                        )}
+                        {visibleColumns.has("job_month") && (
+                          <TableHead>Month</TableHead>
+                        )}
+                        {visibleColumns.has("line_count") && (
+                          <TableHead>Lines</TableHead>
+                        )}
+                        {visibleColumns.has("total_amount") && (
+                          <TableHead>Amount</TableHead>
+                        )}
+                        {visibleColumns.has("status") && (
+                          <TableHead>Status</TableHead>
+                        )}
+                        {visibleColumns.has("actions") && (
+                          <TableHead>Actions</TableHead>
+                        )}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {invoices.map((invoice) => (
+                        <TableRow key={invoice.id}>
+                          {visibleColumns.has("invoice_number") && (
+                            <TableCell className='font-mono text-sm'>
+                              {invoice.invoice_number}
+                            </TableCell>
+                          )}
+                          {visibleColumns.has("invoice_type") && (
+                            <TableCell>
+                              {getInvoiceTypeBadge(invoice.invoice_type)}
+                            </TableCell>
+                          )}
+                          {visibleColumns.has("job_month") && (
+                            <TableCell>{invoice.job_month}</TableCell>
+                          )}
+                          {visibleColumns.has("line_count") && (
+                            <TableCell>{invoice.line_count}</TableCell>
+                          )}
+                          {visibleColumns.has("total_amount") && (
+                            <TableCell>
+                              LKR{" "}
+                              {Number(invoice.total_amount || 0).toLocaleString()}
+                            </TableCell>
+                          )}
+                          {visibleColumns.has("status") && (
+                            <TableCell>{getStatusBadge(invoice.status)}</TableCell>
+                          )}
+                          {visibleColumns.has("actions") && (
+                            <TableCell>
+                              <div className='flex gap-2'>
+                                <Button
+                                  size='sm'
+                                  variant='outline'
+                                  onClick={() => handlePreviewInvoice(invoice)}
+                                >
+                                  <Eye className='h-4 w-4' />
+                                </Button>
+                                <Button
+                                  size='sm'
+                                  variant='outline'
+                                  onClick={() => handleDownloadInvoice(invoice)}
+                                >
+                                  <Download className='h-4 w-4' />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
