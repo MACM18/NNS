@@ -6,13 +6,20 @@ import type { TaskRecord } from "@/types/tasks";
 
 export interface DashboardStats {
   totalLines: number;
-  activeTasks: number;
-  pendingReviews: number;
+  completed?: number;
+  inProgress?: number;
+  pending?: number;
   monthlyRevenue: number;
   lineChange: number;
-  taskChange: number;
-  reviewChange: number;
+  completedChange?: number;
+  inProgressChange?: number;
+  pendingChange?: number;
   revenueChange: number;
+  // legacy fields (kept for backward compatibility)
+  activeTasks?: number;
+  pendingReviews?: number;
+  taskChange?: number;
+  reviewChange?: number;
 }
 
 export interface RecentActivity {
@@ -80,7 +87,7 @@ interface DataCacheContextType {
   cache: CacheData;
   updateCache: (
     page: keyof CacheData,
-    data: Partial<CacheData[keyof CacheData]>
+    data: Partial<CacheData[keyof CacheData]>,
   ) => void;
   clearCache: (page?: keyof CacheData) => void;
   isStale: (page: keyof CacheData, maxAge?: number) => boolean;
@@ -94,7 +101,7 @@ const initialCache: CacheData = {
 };
 
 const DataCacheContext = createContext<DataCacheContextType | undefined>(
-  undefined
+  undefined,
 );
 
 export function DataCacheProvider({ children }: { children: React.ReactNode }) {
@@ -111,7 +118,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         },
       }));
     },
-    []
+    [],
   );
 
   const clearCache = useCallback((page?: keyof CacheData) => {
@@ -131,7 +138,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       if (!lastUpdated) return true;
       return Date.now() - lastUpdated.getTime() > maxAge;
     },
-    [cache]
+    [cache],
   );
 
   return (

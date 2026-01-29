@@ -21,6 +21,7 @@ import {
   Plus,
   ArrowRight,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
@@ -29,13 +30,20 @@ import { DashboardSkeleton } from "@/components/skeletons/dashboard-skeleton";
 
 interface DashboardStats {
   totalLines: number;
-  activeTasks: number;
-  pendingReviews: number;
+  completed?: number;
+  inProgress?: number;
+  pending?: number;
   monthlyRevenue: number;
   lineChange: number;
-  taskChange: number;
-  reviewChange: number;
+  completedChange?: number;
+  inProgressChange?: number;
+  pendingChange?: number;
   revenueChange: number;
+  // legacy fields (kept for backward compatibility)
+  activeTasks?: number;
+  pendingReviews?: number;
+  taskChange?: number;
+  reviewChange?: number;
 }
 
 interface RecentActivity {
@@ -57,14 +65,21 @@ export default function Dashboard() {
 
   const stats: DashboardStats = cache.dashboard?.stats || {
     totalLines: 0,
-    activeTasks: 0,
-    pendingReviews: 0,
+    activeTasks: 0, // kept for type compatibility but not shown
+    pendingReviews: 0, // kept for compatibility
     monthlyRevenue: 0,
     lineChange: 0,
     taskChange: 0,
     reviewChange: 0,
     revenueChange: 0,
   };
+
+  // If backend provides new keys, prefer them
+  const totalLines = cache.dashboard?.stats?.totalLines ?? stats.totalLines;
+  const completedLines = cache.dashboard?.stats?.completed ?? 0;
+  const inProgressLines = cache.dashboard?.stats?.inProgress ?? 0;
+  const pendingLines = cache.dashboard?.stats?.pending ?? 0;
+  const monthlyRevenueValue = cache.dashboard?.stats?.monthlyRevenue ?? 0;
 
   const recentActivities: RecentActivity[] = cache.dashboard?.activities || [];
 
@@ -112,7 +127,7 @@ export default function Dashboard() {
       const currentYear = selectedDate.getFullYear();
 
       const response = await fetch(
-        `/api/dashboard/stats?month=${currentMonth}&year=${currentYear}`
+        `/api/dashboard/stats?month=${currentMonth}&year=${currentYear}`,
       );
 
       if (!response.ok) {
@@ -127,7 +142,7 @@ export default function Dashboard() {
         (activity: any) => ({
           ...activity,
           time: formatTimeAgo(activity.created_at),
-        })
+        }),
       );
 
       updateCache("dashboard", {
@@ -146,7 +161,7 @@ export default function Dashboard() {
     const date = new Date(dateString);
     const now = new Date();
     const diffInHours = Math.floor(
-      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
     );
     if (diffInHours < 1) return "Less than an hour ago";
     if (diffInHours < 24) return `${diffInHours} hours ago`;
@@ -167,34 +182,41 @@ export default function Dashboard() {
     return `${sign}${change.toFixed(1)}%`;
   };
 
+  const completionRate =
+    totalLines > 0 ? Math.round((completedLines / totalLines) * 100) : 0;
+
   const dashboardStats = [
     {
       title: "Total Lines",
-      value: stats.totalLines.toLocaleString(),
-      change: formatChange(stats.lineChange),
+      value: totalLines.toLocaleString(),
+      change: formatChange(cache.dashboard?.stats?.lineChange ?? 0),
       icon: Cable,
       color: "text-blue-600",
+      subtitle: `${selectedDate.toLocaleString(undefined, { month: "long" })} ${selectedDate.getFullYear()}`,
     },
     {
-      title: "Active Tasks",
-      value: stats.activeTasks.toString(),
-      change: formatChange(stats.taskChange),
+      title: "Completed",
+      value: completedLines.toString(),
+      change: formatChange(cache.dashboard?.stats?.completedChange ?? 0),
       icon: CheckCircle,
       color: "text-green-600",
+      subtitle: `${completionRate}% completion rate`,
     },
     {
-      title: "Pending Reviews",
-      value: stats.pendingReviews.toString(),
-      change: formatChange(stats.reviewChange),
-      icon: AlertCircle,
-      color: "text-orange-600",
+      title: "In Progress",
+      value: inProgressLines.toString(),
+      change: formatChange(cache.dashboard?.stats?.inProgressChange ?? 0),
+      icon: Clock,
+      color: "text-blue-600",
+      subtitle: "Currently being worked on",
     },
     {
       title: "Monthly Revenue",
-      value: formatCurrency(stats.monthlyRevenue),
-      change: formatChange(stats.revenueChange),
+      value: formatCurrency(monthlyRevenueValue),
+      change: formatChange(cache.dashboard?.stats?.revenueChange ?? 0),
       icon: TrendingUp,
       color: "text-purple-600",
+      subtitle: "Based on 90% invoice A calculation",
     },
   ];
 
@@ -254,14 +276,21 @@ export default function Dashboard() {
                       stat.value
                     )}
                   </div>
+
+                  {stat.subtitle && (
+                    <p className='text-xs text-muted-foreground mb-1'>
+                      {stat.subtitle}
+                    </p>
+                  )}
+
                   <p className='text-xs text-muted-foreground'>
                     <span
                       className={
                         stat.change.startsWith("+")
                           ? "text-green-600"
                           : stat.change.startsWith("-")
-                          ? "text-red-600"
-                          : "text-gray-600"
+                            ? "text-red-600"
+                            : "text-gray-600"
                       }
                     >
                       {isRefreshing ? "..." : stat.change}
@@ -313,10 +342,10 @@ export default function Dashboard() {
                               activity.status === "completed"
                                 ? "default"
                                 : activity.status === "in_progress"
-                                ? "secondary"
-                                : activity.status === "pending"
-                                ? "destructive"
-                                : "outline"
+                                  ? "secondary"
+                                  : activity.status === "pending"
+                                    ? "destructive"
+                                    : "outline"
                             }
                           >
                             {activity.status}

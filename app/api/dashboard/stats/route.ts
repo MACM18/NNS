@@ -11,10 +11,10 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const month = parseInt(
-      searchParams.get("month") || String(new Date().getMonth() + 1)
+      searchParams.get("month") || String(new Date().getMonth() + 1),
     );
     const year = parseInt(
-      searchParams.get("year") || String(new Date().getFullYear())
+      searchParams.get("year") || String(new Date().getFullYear()),
     );
 
     // Calculate date ranges
@@ -31,100 +31,152 @@ export async function GET(req: NextRequest) {
       23,
       59,
       59,
-      999
+      999,
     );
 
-    // Current month stats
-    const [currentLines, previousLines] = await Promise.all([
-      prisma.lineDetails.count({
+    // Fetch lines in the current and previous month (we'll compute counts by status)
+    const [currentLinesRaw, previousLinesRaw] = await Promise.all([
+      prisma.lineDetails.findMany({
         where: {
           date: {
             gte: currentMonthStartDate,
             lte: currentMonthEndDate,
           },
         },
+        select: {
+          id: true,
+          cableStart: true,
+          cableMiddle: true,
+          cableEnd: true,
+          status: true,
+          completedDate: true,
+        },
       }),
-      prisma.lineDetails.count({
+      prisma.lineDetails.findMany({
         where: {
           date: {
             gte: previousMonthStartDate,
             lte: previousMonthEndDate,
           },
         },
-      }),
-    ]);
-
-    // Active tasks (in_progress)
-    const [currentTasks, previousTasks] = await Promise.all([
-      prisma.task.count({
-        where: {
-          status: "in_progress",
-          createdAt: {
-            gte: currentMonthStartDate,
-            lte: currentMonthEndDate,
-          },
-        },
-      }),
-      prisma.task.count({
-        where: {
-          status: "in_progress",
-          createdAt: {
-            gte: previousMonthStartDate,
-            lte: previousMonthEndDate,
-          },
+        select: {
+          id: true,
+          cableStart: true,
+          cableMiddle: true,
+          cableEnd: true,
+          status: true,
+          completedDate: true,
         },
       }),
     ]);
 
-    // Pending reviews
-    const [currentReviews, previousReviews] = await Promise.all([
-      prisma.task.count({
-        where: {
-          status: "pending",
-          createdAt: {
-            gte: currentMonthStartDate,
-            lte: currentMonthEndDate,
-          },
-        },
-      }),
-      prisma.task.count({
-        where: {
-          status: "pending",
-          createdAt: {
-            gte: previousMonthStartDate,
-            lte: previousMonthEndDate,
-          },
-        },
-      }),
-    ]);
+    // Helper to compute totals and counts for a set of lines
+    const { computeCableMeasurements } = await import("@/lib/db");
 
-    // Invoices revenue (A & B types only)
-    const [currentInvoices, previousInvoices] = await Promise.all([
-      prisma.generatedInvoice.aggregate({
-        where: {
-          invoiceType: { in: ["A", "B"] },
-          invoiceDate: {
-            gte: currentMonthStartDate,
-            lte: currentMonthEndDate,
-          },
-        },
-        _sum: {
-          totalAmount: true,
-        },
-      }),
-      prisma.generatedInvoice.aggregate({
-        where: {
-          invoiceType: { in: ["A", "B"] },
-          invoiceDate: {
-            gte: previousMonthStartDate,
-            lte: previousMonthEndDate,
-          },
-        },
-        _sum: {
-          totalAmount: true,
-        },
-      }),
-    ]);
+    // Load company settings for pricing tiers
+    const companySettings = await prisma.companySettings.findFirst();
+
+    const normalizePricingTiers = (tiers: any) => {
+      if (!tiers) return [];
+      if (typeof tiers === "string") {
+        try {
+          tiers = JSON.parse(tiers);
+        } catch {
+          return [];
+        }
+      }
+      if (typeof tiers === "object" && !Array.isArray(tiers)) {
+        return Object.entries(tiers).map(([range, rate]) => {
+          if (range === "500+")
+            return {
+              min_length: 501,
+              max_length: 999999,
+              rate: Number(rate) || 0,
+            };
+          const [min, max] = range.split("-").map(Number);
+          return {
+            min_length: Number(min) || 0,
+            max_length: Number(max) || 999999,
+            rate: Number(rate) || 0,
+          };
+        });
+      }
+      if (Array.isArray(tiers)) {
+        return tiers.map((t: any) => ({
+          min_length: Number(t.min_length) || 0,
+          max_length:
+            t.max_length === 999999 || String(t.max_length) === ""
+              ? 999999
+              : Number(t.max_length) || 999999,
+          rate: Number(t.rate) || 0,
+        }));
+      }
+      return [];
+    };
+
+    const pricingTiers = normalizePricingTiers(companySettings?.pricingTiers);
+
+    const calculateRate = (cableLength: number) => {
+      if (
+        !pricingTiers ||
+        !Array.isArray(pricingTiers) ||
+        pricingTiers.length === 0
+      ) {
+        // Default pricing (match frontend defaults)
+        if (cableLength <= 100) return 6000;
+        if (cableLength <= 200) return 6500;
+        if (cableLength <= 300) return 7200;
+        if (cableLength <= 400) return 7800;
+        if (cableLength <= 500) return 8200;
+        return 8400;
+      }
+
+      const tier = pricingTiers.find(
+        (t: any) => cableLength >= t.min_length && cableLength <= t.max_length,
+      );
+      return tier ? tier.rate : 8400;
+    };
+
+    const summarizeLines = (lines: any[]) => {
+      let total = 0;
+      let completed = 0;
+      let inProgress = 0;
+      let pending = 0;
+
+      for (const line of lines) {
+        const { totalCable } = computeCableMeasurements(
+          Number(line.cableStart || 0),
+          Number(line.cableMiddle || 0),
+          Number(line.cableEnd || 0),
+        );
+        const isCompleted = Boolean(
+          line.completedDate || line.status === "completed",
+        );
+        if (isCompleted) {
+          completed += 1;
+          total += calculateRate(totalCable);
+        } else if (line.status === "in_progress") {
+          inProgress += 1;
+        } else {
+          pending += 1;
+        }
+      }
+
+      return {
+        count: lines.length,
+        completed,
+        inProgress,
+        pending,
+        totalAmount: total,
+      };
+    };
+
+    const currentSummary = summarizeLines(currentLinesRaw);
+    const previousSummary = summarizeLines(previousLinesRaw);
+
+    // Monthly revenue is 90% of total rates (invoice A logic)
+    const monthlyRevenue = Math.round(currentSummary.totalAmount * 0.9);
+    const prevRevenue = Math.round(previousSummary.totalAmount * 0.9);
 
     // Recent activities (latest 5 tasks)
     const recentTasks = await prisma.task.findMany({
@@ -139,29 +191,31 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Calculate stats
-    const totalLines = currentLines;
-    const activeTasks = currentTasks;
-    const pendingReviews = currentReviews;
-    const monthlyRevenue = Number(currentInvoices._sum.totalAmount ?? 0);
+    // Calculate stats from the summaries
+    const totalLines = currentSummary.count;
+    const completed = currentSummary.completed;
+    const inProgress = currentSummary.inProgress;
+    const pending = currentSummary.pending;
 
-    const prevLines = previousLines;
-    const prevTasks = previousTasks;
-    const prevReviews = previousReviews;
-    const prevRevenue = Number(previousInvoices._sum.totalAmount ?? 0);
+    const prevTotalLines = previousSummary.count;
+    const prevCompleted = previousSummary.completed;
+    const prevInProgress = previousSummary.inProgress;
+    const prevPending = previousSummary.pending;
 
-    const lineChange =
-      prevLines > 0 ? ((totalLines - prevLines) / prevLines) * 100 : 0;
-    const taskChange =
-      prevTasks > 0 ? ((activeTasks - prevTasks) / prevTasks) * 100 : 0;
-    const reviewChange =
-      prevReviews > 0
-        ? ((pendingReviews - prevReviews) / prevReviews) * 100
-        : 0;
-    const revenueChange =
-      prevRevenue > 0
-        ? ((monthlyRevenue - prevRevenue) / prevRevenue) * 100
-        : 0;
+    const monthlyRevenueValue = monthlyRevenue; // already calculated (90% of rates)
+    const previousMonthlyRevenue = prevRevenue;
+
+    const percentChange = (current: number, previous: number) =>
+      previous > 0 ? ((current - previous) / previous) * 100 : 0;
+
+    const lineChange = percentChange(totalLines, prevTotalLines);
+    const completedChange = percentChange(completed, prevCompleted);
+    const inProgressChange = percentChange(inProgress, prevInProgress);
+    const pendingChange = percentChange(pending, prevPending);
+    const revenueChange = percentChange(
+      monthlyRevenueValue,
+      previousMonthlyRevenue,
+    );
 
     // Format activities
     const activities = recentTasks.map((task: any) => ({
@@ -176,12 +230,14 @@ export async function GET(req: NextRequest) {
       data: {
         stats: {
           totalLines,
-          activeTasks,
-          pendingReviews,
-          monthlyRevenue,
+          completed,
+          inProgress,
+          pending,
+          monthlyRevenue: monthlyRevenueValue,
           lineChange,
-          taskChange,
-          reviewChange,
+          completedChange,
+          inProgressChange,
+          pendingChange,
           revenueChange,
         },
         activities,
@@ -191,7 +247,7 @@ export async function GET(req: NextRequest) {
     console.error("Error fetching dashboard stats:", error);
     return NextResponse.json(
       { error: "Failed to fetch dashboard stats" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

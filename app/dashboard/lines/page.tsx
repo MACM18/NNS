@@ -66,8 +66,9 @@ export default function LineDetailsPage() {
   const fetchLineStats = async () => {
     setIsRefreshing(true);
     try {
+      // Use the enhanced endpoint which normalizes status and includes a `completed` boolean
       const response = await fetch(
-        `/api/lines?month=${selectedMonth}&year=${selectedYear}`
+        `/api/lines/enhanced?month=${selectedMonth}&year=${selectedYear}`,
       );
 
       if (!response.ok) {
@@ -77,16 +78,17 @@ export default function LineDetailsPage() {
       const result = await response.json();
       const lines = result.data || [];
 
+      // Compute stats using normalized fields from the enhanced endpoint
       const stats = {
         total: lines.length,
         completed: lines.filter(
-          (l: any) => l.completed === true || l.status === "completed"
+          (l: any) => l.completed === true || l.status === "completed",
         ).length,
         inProgress: lines.filter((l: any) => l.status === "in_progress").length,
         pending: lines.filter(
           (l: any) =>
             !(l.completed === true || l.status === "completed") &&
-            l.status !== "in_progress"
+            l.status !== "in_progress",
         ).length,
       };
 
@@ -141,7 +143,7 @@ export default function LineDetailsPage() {
 
   const years = Array.from(
     { length: 5 },
-    (_, i) => new Date().getFullYear() - 2 + i
+    (_, i) => new Date().getFullYear() - 2 + i,
   );
 
   return (
