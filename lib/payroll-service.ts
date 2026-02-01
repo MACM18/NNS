@@ -420,7 +420,7 @@ export async function addWorkerToPayrollPeriod(
   workerId: string,
   createdById: string
 ) {
-  const profile = await prisma.profile.findUnique({ where: { id: createdById } });
+  const profile = await prisma.profile.findUnique({ where: { userId: createdById } });
   if (!profile) throw new Error("Unauthorized");
 
   const period = await prisma.payrollPeriod.findUnique({ where: { id: periodId } });
