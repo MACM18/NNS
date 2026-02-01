@@ -101,11 +101,11 @@ export async function getPayrollPeriodById(
       perLineRate: decimalToNumber(p.perLineRate),
       worker: p.worker
         ? {
-            ...p.worker,
-            paymentType: p.worker.paymentType as PaymentType,
-            perLineRate: decimalToNumber(p.worker.perLineRate),
-            monthlyRate: decimalToNumber(p.worker.monthlyRate),
-          }
+          ...p.worker,
+          paymentType: p.worker.paymentType as PaymentType,
+          perLineRate: decimalToNumber(p.worker.perLineRate),
+          monthlyRate: decimalToNumber(p.worker.monthlyRate),
+        }
         : undefined,
       adjustments: p.adjustments.map((a) => ({
         ...a,
@@ -132,6 +132,14 @@ export async function createPayrollPeriod(
     );
   }
 
+  const profile = await prisma.profile.findUnique({
+    where: { userId: createdById }
+  });
+
+  if (!profile) {
+    throw new Error("Profile not found for the current user");
+  }
+
   const period = await prisma.payrollPeriod.create({
     data: {
       name: input.name,
@@ -139,7 +147,7 @@ export async function createPayrollPeriod(
       year: input.year,
       startDate: new Date(input.startDate),
       endDate: new Date(input.endDate),
-      createdById,
+      createdById: profile.id,
     },
     include: {
       createdBy: { select: { id: true, fullName: true } },
@@ -201,6 +209,14 @@ export async function calculatePayrollForPeriod(
   periodId: string,
   createdById: string
 ): Promise<WorkerPayment[]> {
+  const profile = await prisma.profile.findUnique({
+    where: { userId: createdById }
+  });
+
+  if (!profile) {
+    throw new Error("Profile not found for the current user");
+  }
+
   const period = await prisma.payrollPeriod.findUnique({
     where: { id: periodId },
   });
@@ -287,7 +303,7 @@ export async function calculatePayrollForPeriod(
           perLineRate,
           baseAmount,
           netAmount: baseAmount,
-          createdById,
+          createdById: profile.id,
         },
         include: {
           worker: true,
@@ -308,11 +324,11 @@ export async function calculatePayrollForPeriod(
       perLineRate: decimalToNumber(payment.perLineRate),
       worker: payment.worker
         ? {
-            ...payment.worker,
-            paymentType: payment.worker.paymentType as PaymentType,
-            perLineRate: decimalToNumber(payment.worker.perLineRate),
-            monthlyRate: decimalToNumber(payment.worker.monthlyRate),
-          }
+          ...payment.worker,
+          paymentType: payment.worker.paymentType as PaymentType,
+          perLineRate: decimalToNumber(payment.worker.perLineRate),
+          monthlyRate: decimalToNumber(payment.worker.monthlyRate),
+        }
         : undefined,
       adjustments: payment.adjustments.map((a) => ({
         ...a,
@@ -362,11 +378,11 @@ export async function getWorkerPayments(
     perLineRate: decimalToNumber(p.perLineRate),
     worker: p.worker
       ? {
-          ...p.worker,
-          paymentType: p.worker.paymentType as PaymentType,
-          perLineRate: decimalToNumber(p.worker.perLineRate),
-          monthlyRate: decimalToNumber(p.worker.monthlyRate),
-        }
+        ...p.worker,
+        paymentType: p.worker.paymentType as PaymentType,
+        perLineRate: decimalToNumber(p.worker.perLineRate),
+        monthlyRate: decimalToNumber(p.worker.monthlyRate),
+      }
       : undefined,
     adjustments: p.adjustments.map((a) => ({
       ...a,
@@ -405,18 +421,18 @@ export async function getWorkerPaymentById(
     perLineRate: decimalToNumber(payment.perLineRate),
     worker: payment.worker
       ? {
-          ...payment.worker,
-          paymentType: payment.worker.paymentType as PaymentType,
-          perLineRate: decimalToNumber(payment.worker.perLineRate),
-          monthlyRate: decimalToNumber(payment.worker.monthlyRate),
-        }
+        ...payment.worker,
+        paymentType: payment.worker.paymentType as PaymentType,
+        perLineRate: decimalToNumber(payment.worker.perLineRate),
+        monthlyRate: decimalToNumber(payment.worker.monthlyRate),
+      }
       : undefined,
     payrollPeriod: payment.payrollPeriod
       ? {
-          ...payment.payrollPeriod,
-          status: payment.payrollPeriod.status as PayrollStatus,
-          totalAmount: decimalToNumber(payment.payrollPeriod.totalAmount),
-        }
+        ...payment.payrollPeriod,
+        status: payment.payrollPeriod.status as PayrollStatus,
+        totalAmount: decimalToNumber(payment.payrollPeriod.totalAmount),
+      }
       : undefined,
     adjustments: payment.adjustments.map((a) => ({
       ...a,
@@ -465,11 +481,11 @@ export async function updateWorkerPaymentStatus(
     perLineRate: decimalToNumber(payment.perLineRate),
     worker: payment.worker
       ? {
-          ...payment.worker,
-          paymentType: payment.worker.paymentType as PaymentType,
-          perLineRate: decimalToNumber(payment.worker.perLineRate),
-          monthlyRate: decimalToNumber(payment.worker.monthlyRate),
-        }
+        ...payment.worker,
+        paymentType: payment.worker.paymentType as PaymentType,
+        perLineRate: decimalToNumber(payment.worker.perLineRate),
+        monthlyRate: decimalToNumber(payment.worker.monthlyRate),
+      }
       : undefined,
     adjustments: payment.adjustments.map((a) => ({
       ...a,
@@ -500,6 +516,14 @@ export async function addAdjustment(
     throw new Error("Cannot add adjustments to a paid payment");
   }
 
+  const profile = await prisma.profile.findUnique({
+    where: { userId: createdById }
+  });
+
+  if (!profile) {
+    throw new Error("Profile not found for the current user");
+  }
+
   const adjustment = await prisma.payrollAdjustment.create({
     data: {
       workerPaymentId: input.workerPaymentId,
@@ -507,7 +531,7 @@ export async function addAdjustment(
       category: input.category,
       description: input.description,
       amount: input.amount,
-      createdById,
+      createdById: profile.id,
     },
     include: {
       createdBy: { select: { id: true, fullName: true } },
@@ -640,10 +664,10 @@ export async function getPayrollSummary(): Promise<PayrollSummary> {
     totalPaidAmount: decimalToNumber(paidAmountResult._sum.totalAmount),
     currentPeriod: currentPeriod
       ? {
-          ...currentPeriod,
-          status: currentPeriod.status as PayrollStatus,
-          totalAmount: decimalToNumber(currentPeriod.totalAmount),
-        }
+        ...currentPeriod,
+        status: currentPeriod.status as PayrollStatus,
+        totalAmount: decimalToNumber(currentPeriod.totalAmount),
+      }
       : undefined,
   };
 }
@@ -735,11 +759,11 @@ export async function generateSalarySlipData(
 
     bankDetails: payment.worker.bankName
       ? {
-          bankName: payment.worker.bankName || undefined,
-          branch: payment.worker.bankBranch || undefined,
-          accountNumber: payment.worker.accountNumber || undefined,
-          accountName: payment.worker.accountName || undefined,
-        }
+        bankName: payment.worker.bankName || undefined,
+        branch: payment.worker.bankBranch || undefined,
+        accountNumber: payment.worker.accountNumber || undefined,
+        accountName: payment.worker.accountName || undefined,
+      }
       : undefined,
 
     slipNumber,

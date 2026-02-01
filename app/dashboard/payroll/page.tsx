@@ -302,12 +302,65 @@ export default function PayrollPage() {
             Manage worker payments and salary processing
           </p>
         </div>
-        {canManage && (
-          <Button onClick={() => setCreateModalOpen(true)}>
-            <Plus className='h-4 w-4 mr-2' />
-            New Payroll Period
-          </Button>
-        )}
+        <div className="flex flex-col sm:flex-row gap-2">
+          {canManage && (
+            <>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const now = new Date();
+                  const m = now.getMonth() + 1;
+                  const y = now.getFullYear();
+                  const name = `${MONTHS[m - 1]} ${y} Payroll`;
+                  const startDate = startOfMonth(now);
+                  const endDate = endOfMonth(now);
+
+                  try {
+                    const response = await fetch("/api/payroll/periods", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        name,
+                        month: m,
+                        year: y,
+                        startDate: startDate.toISOString(),
+                        endDate: endDate.toISOString(),
+                      }),
+                    });
+
+                    if (!response.ok) {
+                      const error = await response.json();
+                      throw new Error(error.error || "Failed to create period");
+                    }
+
+                    addNotification({
+                      title: "Success",
+                      message: "Current month payroll period created",
+                      type: "success",
+                      category: "system",
+                    });
+                    fetchData();
+                  } catch (error: any) {
+                    addNotification({
+                      title: "Error",
+                      message: error.message,
+                      type: "error",
+                      category: "system",
+                    });
+                  }
+                }}
+                disabled={periods.some(p => p.month === new Date().getMonth() + 1 && p.year === new Date().getFullYear())}
+              >
+                <Calculator className='h-4 w-4 mr-2' />
+                Quick Create ({format(new Date(), "MMMM")})
+              </Button>
+              <Button onClick={() => setCreateModalOpen(true)}>
+                <Plus className='h-4 w-4 mr-2' />
+                New Payroll Period
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -595,8 +648,8 @@ export default function PayrollPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[...Array(5)].map((_, i) => {
-                      const year = new Date().getFullYear() - 1 + i;
+                    {[...Array(8)].map((_, i) => {
+                      const year = new Date().getFullYear() - 5 + i;
                       return (
                         <SelectItem key={year} value={year.toString()}>
                           {year}
