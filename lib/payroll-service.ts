@@ -256,10 +256,10 @@ export async function calculatePayrollForPeriod(
     let perLineRate: number | null = null;
 
     if (paymentType === "per_line") {
-      perLineRate = decimalToNumber(worker.perLineRate) || 500; // Default rate
-      baseAmount = linesCompleted * perLineRate;
+      perLineRate = decimalToNumber(worker.perLineRate); // Strict: No default 500
+      baseAmount = linesCompleted * (perLineRate || 0);
     } else {
-      baseAmount = decimalToNumber(worker.monthlyRate) || 0;
+      baseAmount = decimalToNumber(worker.monthlyRate); // Strict: No default 0 check needed as it returns 0
     }
 
     // Check if payment already exists
@@ -849,5 +849,139 @@ export async function markPayrollAsPaid(
     ...updated,
     status: updated.status as PayrollStatus,
     totalAmount: decimalToNumber(updated.totalAmount),
+  };
+}
+
+export async function payWorkerPayment(
+  paymentId: string,
+  details: { paymentMethod: string; paymentRef?: string },
+  userId: string
+): Promise<WorkerPayment> {
+  const payment = await prisma.workerPayment.findUnique({
+    where: { id: paymentId },
+    include: { worker: true, payrollPeriod: true },
+  });
+
+  if (!payment) throw new Error("Payment record not found");
+  if (payment.status === "paid") throw new Error("Payment already marked as paid");
+
+  const profile = await prisma.profile.findUnique({ where: { userId } });
+  if (!profile) throw new Error("Profile not found");
+
+  // Use a transaction for payment update and accounting entry
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Mark as paid
+    const updatedPayment = await tx.workerPayment.update({
+      where: { id: paymentId },
+      data: {
+        status: "paid",
+        paidAt: new Date(),
+        paymentMethod: details.paymentMethod,
+        paymentRef: details.paymentRef,
+      },
+      include: { worker: true, adjustments: true },
+    });
+
+    // 2. Create Journal Entry if accounting settings allow
+    const settings = await tx.accountingSettings.findFirst();
+    if (settings?.autoGenerateJournalEntries) {
+      const expenseAccountId = settings.defaultExpenseAccountId;
+      const cashAccountId = settings.defaultCashAccountId;
+
+      if (expenseAccountId && cashAccountId) {
+        // We'll call createJournalEntry logic here but manually since we are in a transaction
+        // Actually, it's safer to use the service but we need to pass the tx
+        // For simplicity, let's create it manually in this tx
+
+        const year = new Date().getFullYear();
+        const prefix = settings.entryNumberPrefix || "JE";
+
+        // Find last number (internal logic)
+        const last = await tx.journalEntry.findFirst({
+          where: { entryNumber: { startsWith: `${prefix}-${year}-` } },
+          orderBy: { entryNumber: "desc" },
+          select: { entryNumber: true },
+        });
+
+        let nextSeq = 1;
+        if (last?.entryNumber) {
+          const parts = last.entryNumber.split("-");
+          const lastSeq = parseInt(parts[parts.length - 1], 10);
+          if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+        }
+        const entryNumber = `${prefix}-${year}-${String(nextSeq).padStart(4, "0")}`;
+
+        const netAmount = decimalToNumber(updatedPayment.netAmount);
+
+        await tx.journalEntry.create({
+          data: {
+            entryNumber,
+            date: new Date(),
+            description: `Payroll: ${payment.worker.fullName} - ${payment.payrollPeriod.name}`,
+            reference: payment.payrollPeriod.name,
+            referenceType: "payroll_payment",
+            referenceId: paymentId,
+            status: "approved",
+            totalDebit: netAmount,
+            totalCredit: netAmount,
+            createdById: profile.id,
+            lines: {
+              create: [
+                {
+                  accountId: expenseAccountId,
+                  description: `Payroll expense for ${payment.worker.fullName}`,
+                  debitAmount: netAmount,
+                  creditAmount: 0,
+                  lineOrder: 0,
+                },
+                {
+                  accountId: cashAccountId,
+                  description: `Payroll payment to ${payment.worker.fullName}`,
+                  debitAmount: 0,
+                  creditAmount: netAmount,
+                  lineOrder: 1,
+                },
+              ],
+            },
+          },
+        });
+
+        // Update account balances
+        await tx.chartOfAccount.update({
+          where: { id: expenseAccountId },
+          data: { currentBalance: { increment: netAmount } },
+        });
+        await tx.chartOfAccount.update({
+          where: { id: cashAccountId },
+          data: { currentBalance: { decrement: netAmount } },
+        });
+      }
+    }
+
+    return updatedPayment;
+  });
+
+  return {
+    ...result,
+    status: result.status as PaymentStatus,
+    paymentType: result.paymentType as PaymentType,
+    paymentMethod: result.paymentMethod as PaymentMethod | null,
+    baseAmount: decimalToNumber(result.baseAmount),
+    bonusAmount: decimalToNumber(result.bonusAmount),
+    deductionAmount: decimalToNumber(result.deductionAmount),
+    netAmount: decimalToNumber(result.netAmount),
+    perLineRate: decimalToNumber(result.perLineRate),
+    worker: result.worker ? {
+      ...result.worker,
+      paymentType: result.worker.paymentType as PaymentType,
+      perLineRate: decimalToNumber(result.worker.perLineRate),
+      monthlyRate: decimalToNumber(result.worker.monthlyRate),
+    } : undefined,
+    adjustments: result.adjustments.map(a => ({
+      ...a,
+      type: a.type as AdjustmentType,
+      category: a.category as AdjustmentCategory,
+      amount: decimalToNumber(a.amount),
+    })),
   };
 }

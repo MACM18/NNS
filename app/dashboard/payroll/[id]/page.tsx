@@ -16,6 +16,8 @@ import {
   Calculator,
   CheckCircle,
   CreditCard,
+  RefreshCw,
+  FileDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +65,7 @@ import type {
 } from "@/types/payroll";
 import Link from "next/link";
 import { generateSalarySlipPDF } from "@/lib/salary-slip-pdf";
+import { generatePayrollSummaryPDF } from "@/lib/payroll-summary-pdf";
 
 const ADJUSTMENT_CATEGORIES: Record<
   AdjustmentType,
@@ -104,6 +107,12 @@ export default function PayrollPeriodDetailPage({
   const [salarySlipPayment, setSalarySlipPayment] =
     useState<WorkerPayment | null>(null);
   const [processingAction, setProcessingAction] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [payWorkerModalOpen, setPayWorkerModalOpen] = useState(false);
+  const [payWorkerForm, setPayWorkerForm] = useState({
+    paymentMethod: "bank_transfer",
+    paymentRef: "",
+  });
 
   // Adjustment form
   const [adjustmentForm, setAdjustmentForm] = useState({
@@ -117,9 +126,11 @@ export default function PayrollPeriodDetailPage({
   const { role } = useAuth();
   const canManage = role === "admin" || role === "moderator";
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+
       const response = await fetch(`/api/payroll/periods/${id}`);
 
       if (!response.ok) {
@@ -138,6 +149,7 @@ export default function PayrollPeriodDetailPage({
       });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [id, addNotification]);
 
@@ -263,6 +275,47 @@ export default function PayrollPeriodDetailPage({
     }
   };
 
+  const handlePayWorker = async (paymentId: string) => {
+    try {
+      setProcessingAction(true);
+      const response = await fetch(`/api/payroll/periods/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "pay-worker",
+          paymentId,
+          paymentMethod: payWorkerForm.paymentMethod,
+          paymentRef: payWorkerForm.paymentRef,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to process payment");
+      }
+
+      addNotification({
+        title: "Success",
+        message: "Worker payment recorded and accounting entry created",
+        type: "success",
+        category: "system",
+      });
+
+      setPayWorkerModalOpen(false);
+      setSelectedPayment(null);
+      fetchData(true);
+    } catch (error: any) {
+      addNotification({
+        title: "Error",
+        message: error.message,
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-LK", {
       style: "currency",
@@ -286,15 +339,8 @@ export default function PayrollPeriodDetailPage({
     );
   };
 
-  if (loading) {
-    return (
-      <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
-        <div className='flex items-center justify-center h-64'>
-          <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
-        </div>
-      </div>
-    );
-  }
+  // No early return on loading to prevent unmounting/flicker if refreshing
+  // if (loading) { ... }
 
   if (!period) {
     return (
@@ -338,8 +384,24 @@ export default function PayrollPeriodDetailPage({
           </div>
         </div>
         <div className='flex items-center gap-2'>
+          <Button
+            variant="outline"
+            disabled={loading || refreshing || !period || payments.length === 0}
+            onClick={() => period && payments.length > 0 && generatePayrollSummaryPDF({ period, payments })}
+          >
+            <FileDown className="h-4 w-4 mr-2" />
+            Download PDF
+          </Button>
+          <Button
+            variant="outline"
+            disabled={loading || refreshing}
+            onClick={() => fetchData(true)}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
           {getStatusBadge(period.status)}
-          {canManage && period.status === "draft" && (
+          {canManage && (period.status === "draft" || period.status === "processing") && (
             <Button
               onClick={() => handleAction("calculate")}
               disabled={processingAction}
@@ -532,6 +594,20 @@ export default function PayrollPeriodDetailPage({
                               <Plus className='h-4 w-4' />
                             </Button>
                           )}
+                          {canManage && payment.status !== "paid" && (
+                            <Button
+                              size='sm'
+                              variant='outline'
+                              className="text-green-600 border-green-200 hover:bg-green-50"
+                              onClick={() => {
+                                setSelectedPayment(payment);
+                                setPayWorkerModalOpen(true);
+                              }}
+                              title="Mark as Paid"
+                            >
+                              <CreditCard className='h-4 w-4' />
+                            </Button>
+                          )}
                           <Button
                             size='sm'
                             variant='ghost'
@@ -602,11 +678,10 @@ export default function PayrollPeriodDetailPage({
                         </TableCell>
                         <TableCell>{adjustment.description}</TableCell>
                         <TableCell
-                          className={`text-right font-mono ${
-                            adjustment.type === "bonus"
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }`}
+                          className={`text-right font-mono ${adjustment.type === "bonus"
+                            ? "text-green-600"
+                            : "text-red-600"
+                            }`}
                         >
                           {adjustment.type === "bonus" ? "+" : "-"}
                           {formatCurrency(adjustment.amount)}
@@ -798,8 +873,7 @@ export default function PayrollPeriodDetailPage({
                     <span>
                       Base Pay{" "}
                       {salarySlipPayment.paymentType === "per_line" &&
-                        `(${
-                          salarySlipPayment.linesCompleted
+                        `(${salarySlipPayment.linesCompleted
                         } lines × ${formatCurrency(
                           salarySlipPayment.perLineRate || 0
                         )})`}
@@ -828,25 +902,25 @@ export default function PayrollPeriodDetailPage({
               {salarySlipPayment.adjustments?.some(
                 (a) => a.type === "deduction"
               ) && (
-                <div>
-                  <h4 className='font-semibold mb-2'>Deductions</h4>
-                  <div className='space-y-1 text-sm'>
-                    {salarySlipPayment.adjustments
-                      ?.filter((a) => a.type === "deduction")
-                      .map((deduction) => (
-                        <div
-                          key={deduction.id}
-                          className='flex justify-between text-red-600'
-                        >
-                          <span>{deduction.description}</span>
-                          <span className='font-mono'>
-                            -{formatCurrency(deduction.amount)}
-                          </span>
-                        </div>
-                      ))}
+                  <div>
+                    <h4 className='font-semibold mb-2'>Deductions</h4>
+                    <div className='space-y-1 text-sm'>
+                      {salarySlipPayment.adjustments
+                        ?.filter((a) => a.type === "deduction")
+                        .map((deduction) => (
+                          <div
+                            key={deduction.id}
+                            className='flex justify-between text-red-600'
+                          >
+                            <span>{deduction.description}</span>
+                            <span className='font-mono'>
+                              -{formatCurrency(deduction.amount)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <Separator />
 
@@ -857,7 +931,7 @@ export default function PayrollPeriodDetailPage({
                   <span className='font-mono'>
                     {formatCurrency(
                       salarySlipPayment.baseAmount +
-                        salarySlipPayment.bonusAmount
+                      salarySlipPayment.bonusAmount
                     )}
                   </span>
                 </div>
@@ -925,6 +999,75 @@ export default function PayrollPeriodDetailPage({
             >
               <Download className='h-4 w-4 mr-2' />
               Download PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pay Worker Modal */}
+      <Dialog open={payWorkerModalOpen} onOpenChange={setPayWorkerModalOpen}>
+        <DialogContent className='sm:max-w-[425px]'>
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Mark payment as paid for {selectedPayment?.worker?.fullName} and create accounting entry.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            <div className='space-y-2'>
+              <Label>Payment Method</Label>
+              <Select
+                value={payWorkerForm.paymentMethod}
+                onValueChange={(value) =>
+                  setPayWorkerForm({ ...payWorkerForm, paymentMethod: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='bank_transfer'>Bank Transfer</SelectItem>
+                  <SelectItem value='cash'>Cash</SelectItem>
+                  <SelectItem value='cheque'>Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className='space-y-2'>
+              <Label>Reference (Optional)</Label>
+              <Input
+                value={payWorkerForm.paymentRef}
+                onChange={(e) =>
+                  setPayWorkerForm({
+                    ...payWorkerForm,
+                    paymentRef: e.target.value,
+                  })
+                }
+                placeholder='Transaction ID or check number'
+              />
+            </div>
+
+            <div className="bg-muted p-3 rounded-md">
+              <div className="flex justify-between text-sm">
+                <span>Net Amount:</span>
+                <span className="font-bold">{selectedPayment && formatCurrency(selectedPayment.netAmount)}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant='outline'
+              onClick={() => setPayWorkerModalOpen(false)}
+              disabled={processingAction}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedPayment && handlePayWorker(selectedPayment.id)}
+              disabled={processingAction}
+            >
+              {processingAction && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Confirm Payment
             </Button>
           </DialogFooter>
         </DialogContent>

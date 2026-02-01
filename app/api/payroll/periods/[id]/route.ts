@@ -8,6 +8,7 @@ import {
   calculatePayrollForPeriod,
   approvePayrollPeriod,
   markPayrollAsPaid,
+  payWorkerPayment,
 } from "@/lib/payroll-service";
 
 export async function GET(
@@ -146,6 +147,25 @@ export async function POST(
         return NextResponse.json({
           success: true,
           message: "Payroll marked as paid",
+          data: result,
+        });
+
+      case "pay-worker":
+        const { paymentId, paymentMethod, paymentRef } = body;
+        if (!paymentId) {
+          return NextResponse.json(
+            { error: "Payment ID is required" },
+            { status: 400 }
+          );
+        }
+        result = await payWorkerPayment(
+          paymentId,
+          { paymentMethod, paymentRef },
+          session.user.id
+        );
+        return NextResponse.json({
+          success: true,
+          message: "Worker payment recorded",
           data: result,
         });
 
