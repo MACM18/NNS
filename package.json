@@ -18,7 +18,7 @@
     "@auth/prisma-adapter": "^2.11.1",
     "@hookform/resolvers": "latest",
     "@prisma/adapter-pg": "^7.1.0",
-    "@prisma/client": "^7.1.0",
+    "@prisma/client": "^7.3.0",
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
     "@radix-ui/react-aspect-ratio": "latest",
