@@ -113,6 +113,7 @@ export default function PayrollPeriodDetailPage({
     paymentMethod: "bank_transfer",
     paymentRef: "",
   });
+  const [adjustmentError, setAdjustmentError] = useState<string | null>(null);
   const [addWorkerModalOpen, setAddWorkerModalOpen] = useState(false);
   const [allWorkers, setAllWorkers] = useState<any[]>([]);
   const [searchWorker, setSearchWorker] = useState("");
@@ -198,6 +199,13 @@ export default function PayrollPeriodDetailPage({
   const handleAddAdjustment = async () => {
     if (!selectedPayment || !adjustmentForm.category) return;
 
+    if (adjustmentForm.amount <= 0) {
+      setAdjustmentError("Amount must be greater than zero");
+      return;
+    }
+
+    setAdjustmentError(null);
+
     try {
       const response = await fetch("/api/payroll/adjustments", {
         method: "POST",
@@ -231,6 +239,7 @@ export default function PayrollPeriodDetailPage({
         description: "",
         amount: 0,
       });
+      setAdjustmentError(null);
       fetchData();
     } catch (error) {
       addNotification({
@@ -830,24 +839,31 @@ export default function PayrollPeriodDetailPage({
             </div>
 
             <div className='space-y-2'>
-              <Label>Amount (LKR)</Label>
+              <Label htmlFor="adj-amount">Amount (LKR)</Label>
               <Input
+                id="adj-amount"
                 type='number'
                 min='0'
                 step='0.01'
-                value={adjustmentForm.amount}
-                onChange={(e) =>
+                value={adjustmentForm.amount || ""}
+                onChange={(e) => {
                   setAdjustmentForm({
                     ...adjustmentForm,
                     amount: parseFloat(e.target.value) || 0,
-                  })
-                }
+                  });
+                  if (parseFloat(e.target.value) > 0) setAdjustmentError(null);
+                }}
+                className={adjustmentError ? "border-destructive" : ""}
               />
+              {adjustmentError && (
+                <p className="text-xs text-destructive mt-1">{adjustmentError}</p>
+              )}
             </div>
 
             <div className='space-y-2'>
-              <Label>Description</Label>
+              <Label htmlFor="adj-desc">Description (Optional)</Label>
               <Textarea
+                id="adj-desc"
                 value={adjustmentForm.description}
                 onChange={(e) =>
                   setAdjustmentForm({
@@ -856,6 +872,7 @@ export default function PayrollPeriodDetailPage({
                   })
                 }
                 placeholder='Reason for adjustment...'
+                className="resize-none"
               />
             </div>
           </div>
@@ -868,7 +885,7 @@ export default function PayrollPeriodDetailPage({
             </Button>
             <Button
               onClick={handleAddAdjustment}
-              disabled={!adjustmentForm.category || adjustmentForm.amount <= 0}
+              disabled={!adjustmentForm.category}
             >
               Add Adjustment
             </Button>

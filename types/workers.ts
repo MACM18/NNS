@@ -21,6 +21,7 @@ export type WorkerRole = "technician" | "installer" | "supervisor" | "helper";
 export interface Worker {
   id: string;
   full_name: string;
+  employee_no: string | null;
   phone_number: string | null;
   email: string | null;
   role: WorkerRole;
@@ -88,6 +89,7 @@ export interface WorkAssignmentsCalendar {
  */
 export interface CreateWorkerRequest {
   full_name: string;
+  employee_no?: string;
   phone_number?: string;
   email?: string;
   role?: WorkerRole;
@@ -124,6 +126,7 @@ export interface DeleteAssignmentRequest {
  */
 export interface WorkerFormData {
   full_name: string;
+  employee_no: string;
   phone_number: string;
   email: string;
   role: string;

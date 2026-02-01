@@ -154,6 +154,31 @@ export async function createPayrollPeriod(
     },
   });
 
+  // Automatically add all active workers to the new period
+  const activeWorkers = await prisma.worker.findMany({
+    where: { status: "active" },
+  });
+
+  if (activeWorkers.length > 0) {
+    for (const worker of activeWorkers) {
+      const paymentType = worker.paymentType as PaymentType;
+      const perLineRate = decimalToNumber(worker.perLineRate) || 0;
+      const baseAmount = paymentType === "fixed_monthly" ? decimalToNumber(worker.monthlyRate) || 0 : 0;
+
+      await prisma.workerPayment.create({
+        data: {
+          payrollPeriodId: period.id,
+          workerId: worker.id,
+          paymentType,
+          perLineRate,
+          baseAmount,
+          netAmount: baseAmount,
+          createdById: profile.id,
+        },
+      });
+    }
+  }
+
   return {
     ...period,
     status: period.status as PayrollStatus,

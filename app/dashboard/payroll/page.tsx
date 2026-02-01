@@ -816,6 +816,7 @@ export default function PayrollPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Worker Name</TableHead>
+                      <TableHead>Employee No</TableHead>
                       <TableHead>Payment Type</TableHead>
                       <TableHead>Monthly Rate (LKR)</TableHead>
                       <TableHead>Per Line Rate (LKR)</TableHead>
@@ -827,6 +828,18 @@ export default function PayrollPage() {
                       workers.map((worker) => (
                         <TableRow key={worker.id}>
                           <TableCell className="font-medium">{worker.full_name}</TableCell>
+                          <TableCell>
+                            {editingWorker === worker.id ? (
+                              <Input
+                                className="w-[120px]"
+                                value={workerFormData.employee_no || ''}
+                                onChange={(e) => setWorkerFormData({ ...workerFormData, employee_no: e.target.value })}
+                                placeholder="EMP-001"
+                              />
+                            ) : (
+                              worker.employee_no || <span className="text-muted-foreground italic text-xs">Not set</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             {editingWorker === worker.id ? (
                               <Select
@@ -892,6 +905,7 @@ export default function PayrollPage() {
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({
                                           id: worker.id,
+                                          employee_no: workerFormData.employee_no,
                                           payment_type: workerFormData.payment_type,
                                           per_line_rate: workerFormData.per_line_rate,
                                           monthly_rate: workerFormData.monthly_rate,
@@ -928,6 +942,7 @@ export default function PayrollPage() {
                                 onClick={() => {
                                   setEditingWorker(worker.id);
                                   setWorkerFormData({
+                                    employee_no: worker.employee_no || '',
                                     payment_type: worker.payment_type || 'per_line',
                                     per_line_rate: worker.per_line_rate || 0,
                                     monthly_rate: worker.monthly_rate || 0,
@@ -942,7 +957,7 @@ export default function PayrollPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
                           No workers found
                         </TableCell>
                       </TableRow>

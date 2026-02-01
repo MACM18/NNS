@@ -20,6 +20,7 @@ export type PaymentMethod = "bank_transfer" | "cash" | "cheque";
 export interface WorkerPayrollInfo {
   id: string;
   fullName: string;
+  employeeNo?: string | null;
   phoneNumber?: string | null;
   email?: string | null;
   role: string;

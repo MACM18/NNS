@@ -51,6 +51,7 @@ export function ManageWorkersModal({
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
   const [formData, setFormData] = useState({
     full_name: "",
+    employee_no: "",
     phone_number: "",
     email: "",
     role: "technician",
@@ -90,6 +91,7 @@ export function ManageWorkersModal({
   const resetForm = () => {
     setFormData({
       full_name: "",
+      employee_no: "",
       phone_number: "",
       email: "",
       role: "technician",
@@ -103,6 +105,7 @@ export function ManageWorkersModal({
     setEditingWorker(worker);
     setFormData({
       full_name: worker.full_name,
+      employee_no: worker.employee_no || "",
       phone_number: worker.phone_number || "",
       email: worker.email || "",
       role: worker.role || "technician",
@@ -139,15 +142,14 @@ export function ManageWorkersModal({
       if (!res.ok) {
         throw new Error(
           json.error ||
-            `Failed to ${editingWorker ? "update" : "create"} worker`
+          `Failed to ${editingWorker ? "update" : "create"} worker`
         );
       }
 
       toast({
         title: editingWorker ? "Worker updated" : "Worker created",
-        description: `${formData.full_name} has been ${
-          editingWorker ? "updated" : "added"
-        } successfully.`,
+        description: `${formData.full_name} has been ${editingWorker ? "updated" : "added"
+          } successfully.`,
       });
 
       resetForm();
@@ -233,6 +235,11 @@ export function ManageWorkersModal({
                       >
                         {worker.status}
                       </Badge>
+                      {worker.employee_no && (
+                        <Badge variant='outline' className='text-xs font-mono uppercase'>
+                          {worker.employee_no}
+                        </Badge>
+                      )}
                       {worker.role && (
                         <Badge variant='outline' className='text-xs'>
                           {worker.role}
@@ -312,6 +319,18 @@ export function ManageWorkersModal({
                   }
                   placeholder='John Doe'
                   required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor='employee_no'>Employee No</Label>
+                <Input
+                  id='employee_no'
+                  value={formData.employee_no}
+                  onChange={(e) =>
+                    setFormData({ ...formData, employee_no: e.target.value })
+                  }
+                  placeholder='EMP-001'
                 />
               </div>
 

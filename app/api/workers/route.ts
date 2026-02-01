@@ -17,6 +17,7 @@ interface WorkerResponse {
   payment_type: string;
   per_line_rate: number | null;
   monthly_rate: number | null;
+  employee_no: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -152,6 +153,7 @@ export async function GET() {
       payment_type: w.paymentType,
       per_line_rate: w.perLineRate ? Number(w.perLineRate) : null,
       monthly_rate: w.monthlyRate ? Number(w.monthlyRate) : null,
+      employee_no: w.employeeNo,
       created_by: w.createdById,
       created_at: w.createdAt.toISOString(),
       updated_at: w.updatedAt.toISOString(),
@@ -178,7 +180,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { full_name, phone_number, email, role, notes, profile_id } =
+    const { full_name, employee_no, phone_number, email, role, notes, profile_id } =
       body || {};
 
     // Validation
@@ -242,6 +244,7 @@ export async function POST(req: NextRequest) {
         role: role || "technician",
         notes: notes?.trim() || null,
         profileId: profile_id || null,
+        employeeNo: employee_no?.trim() || null,
         createdById: auth.profileId,
       },
     });
@@ -258,6 +261,7 @@ export async function POST(req: NextRequest) {
       payment_type: data.paymentType,
       per_line_rate: data.perLineRate ? Number(data.perLineRate) : null,
       monthly_rate: data.monthlyRate ? Number(data.monthlyRate) : null,
+      employee_no: data.employeeNo,
       created_by: data.createdById,
       created_at: data.createdAt.toISOString(),
       updated_at: data.updatedAt.toISOString(),
@@ -292,6 +296,7 @@ export async function PATCH(req: NextRequest) {
       status,
       notes,
       profile_id,
+      employee_no,
     } = body || {};
 
     if (!id) {
@@ -377,6 +382,7 @@ export async function PATCH(req: NextRequest) {
     if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes?.trim() || null;
     if (profile_id !== undefined) updateData.profileId = profile_id;
+    if (employee_no !== undefined) updateData.employeeNo = employee_no?.trim() || null;
     if (body.payment_type !== undefined) updateData.paymentType = body.payment_type;
     if (body.per_line_rate !== undefined) updateData.perLineRate = body.per_line_rate;
     if (body.monthly_rate !== undefined) updateData.monthlyRate = body.monthly_rate;
@@ -398,6 +404,7 @@ export async function PATCH(req: NextRequest) {
       payment_type: data.paymentType,
       per_line_rate: data.perLineRate ? Number(data.perLineRate) : null,
       monthly_rate: data.monthlyRate ? Number(data.monthlyRate) : null,
+      employee_no: data.employeeNo,
       created_by: data.createdById,
       created_at: data.createdAt.toISOString(),
       updated_at: data.updatedAt.toISOString(),

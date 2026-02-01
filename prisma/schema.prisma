@@ -466,6 +466,7 @@ model Task {
 model Worker {
   id          String   @id @default(uuid())
   fullName    String   @map("full_name")
+  employeeNo  String?  @unique @map("employee_no")
   phoneNumber String?  @map("phone_number")
   email       String?
   role        String   @default("technician")
