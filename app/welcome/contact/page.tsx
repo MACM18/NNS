@@ -1,15 +1,15 @@
 "use client";
 
 import type React from "react";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Phone, Mail, MapPin } from "lucide-react";
+import { Phone, Mail, MapPin, Send, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -49,7 +49,6 @@ export default function ContactPage() {
             "Thank you for contacting us. We will get back to you shortly.",
         });
       } else {
-        // Handle detailed validation errors from Zod
         if (result.details && Array.isArray(result.details)) {
           const errorMessages = result.details
             .map((err: any) => `${err.field}: ${err.message}`)
@@ -75,57 +74,90 @@ export default function ContactPage() {
   };
 
   return (
-    <section className='py-12 md:py-24 lg:py-32 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950'>
-      <div className='container mx-auto px-4 md:px-6'>
-        <div className='max-w-6xl mx-auto'>
-          <div className='max-w-3xl mx-auto text-center mb-12'>
-            <h1 className='text-4xl font-bold tracking-tight text-foreground sm:text-5xl'>
-              Get in Touch
-            </h1>
-            <p className='mt-4 text-lg text-muted-foreground'>
-              Have questions or want to discuss a project? Reach out to us!
-            </p>
-          </div>
+    <div className="relative overflow-hidden bg-background min-h-screen">
+      <div className='absolute inset-0 bg-grid-pattern opacity-5'></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5"></div>
 
-          <div className='grid gap-12 lg:grid-cols-2 lg:gap-24'>
-            <div className='space-y-8'>
-              <h2 className='text-3xl font-bold tracking-tight text-foreground'>
+      {/* Hero Section */}
+      <section className='relative pt-24 pb-12 md:pt-32 md:pb-16 text-center px-4'>
+        <Badge variant="outline" className="mb-6 px-4 py-2 rounded-full border-primary/20 bg-primary/5 text-primary backdrop-blur-sm">
+          Contact Us
+        </Badge>
+        <h1 className='text-4xl md:text-6xl font-bold tracking-tight text-foreground mb-6'>
+          Get in Touch
+        </h1>
+        <p className='text-xl text-muted-foreground max-w-2xl mx-auto'>
+          Have questions or want to discuss a project? We're here to help.
+        </p>
+      </section>
+
+      <div className='container mx-auto px-4 md:px-6 pb-24'>
+        <div className='grid gap-12 lg:grid-cols-2 lg:gap-24 items-start'>
+
+          {/* Contact Info */}
+          <div className='space-y-8 animate-fade-in-up'>
+            <div className="glass-card p-8 rounded-3xl relative overflow-hidden h-full">
+              <h2 className='text-2xl font-bold tracking-tight text-foreground mb-8'>
                 Contact Information
               </h2>
-              <div className='space-y-4'>
-                <div className='flex items-center gap-4'>
-                  <Phone className='h-6 w-6 text-primary' />
+
+              <div className='space-y-8'>
+                <div className='flex items-start gap-4'>
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <Phone className='h-6 w-6 text-primary' />
+                  </div>
                   <div>
-                    <Link href='tel:+94342263642' className='no-underline'>
-                      <h3 className='font-semibold text-foreground'>Phone</h3>
-                      <p className='text-muted-foreground'>+94 34 2263 642</p>
+                    <h3 className='font-semibold text-lg text-foreground mb-1'>Phone</h3>
+                    <Link href='tel:+94342263642' className='text-muted-foreground hover:text-primary transition-colors block'>
+                      +94 34 2263 642
                     </Link>
                   </div>
                 </div>
-                <div className='flex items-center gap-4'>
-                  <Mail className='h-6 w-6 text-primary' />
+
+                <div className='flex items-start gap-4'>
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <Mail className='h-6 w-6 text-primary' />
+                  </div>
                   <div>
-                    <Link href='mailto:hello@macm.dev' className='no-underline'>
-                      <h3 className='font-semibold text-foreground'>Email</h3>
-                      <p className='text-muted-foreground'>hello@macm.dev</p>
+                    <h3 className='font-semibold text-lg text-foreground mb-1'>Email</h3>
+                    <Link href='mailto:hello@macm.dev' className='text-muted-foreground hover:text-primary transition-colors block'>
+                      hello@macm.dev
                     </Link>
                   </div>
                 </div>
-                <div className='flex items-center gap-4'>
-                  <MapPin className='h-6 w-6 text-primary' />
+
+                <div className='flex items-start gap-4'>
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <MapPin className='h-6 w-6 text-primary' />
+                  </div>
                   <div>
-                    <h3 className='font-semibold text-foreground'>Address</h3>
+                    <h3 className='font-semibold text-lg text-foreground mb-1'>Office Address</h3>
                     <p className='text-muted-foreground'>
-                      89, Welikala, Pokunuwita, Sri Lanka 12404
+                      89, Welikala,<br />
+                      Pokunuwita,<br />
+                      Sri Lanka 12404
                     </p>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className='space-y-8'>
-              <h2 className='text-3xl font-bold tracking-tight text-foreground'>
-                Send Us a Message
+              <div className="mt-12 p-6 bg-secondary/30 rounded-2xl border border-border/50">
+                <h3 className="font-semibold mb-2 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" /> Support Hours
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Monday - Friday: 9:00 AM - 6:00 PM <br />
+                  Weekend support available for emergencies.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Form */}
+          <div className='space-y-8 animate-fade-in-up animation-delay-200'>
+            <div className="glass-card p-8 rounded-3xl relative overflow-hidden">
+              <h2 className='text-2xl font-bold tracking-tight text-foreground mb-6'>
+                Send a Message
               </h2>
               <form onSubmit={handleSubmit} className='grid gap-6'>
                 <div className='grid gap-2'>
@@ -136,6 +168,7 @@ export default function ContactPage() {
                     value={formData.name}
                     onChange={handleChange}
                     required
+                    className="bg-background/50 border-input/50 focus:bg-background transition-colors"
                   />
                 </div>
                 <div className='grid gap-2'>
@@ -147,6 +180,7 @@ export default function ContactPage() {
                     value={formData.email}
                     onChange={handleChange}
                     required
+                    className="bg-background/50 border-input/50 focus:bg-background transition-colors"
                   />
                 </div>
                 <div className='grid gap-2'>
@@ -157,31 +191,39 @@ export default function ContactPage() {
                     value={formData.subject}
                     onChange={handleChange}
                     required
+                    className="bg-background/50 border-input/50 focus:bg-background transition-colors"
                   />
                 </div>
                 <div className='grid gap-2'>
                   <Label htmlFor='message'>Message</Label>
                   <Textarea
                     id='message'
-                    placeholder='Your message here...'
+                    placeholder='How can we help you?'
                     rows={5}
                     value={formData.message}
                     onChange={handleChange}
                     required
+                    className="bg-background/50 border-input/50 focus:bg-background transition-colors resize-none"
                   />
                 </div>
                 <Button
                   type='submit'
-                  className='w-full'
+                  className='w-full glass-button'
                   disabled={isSubmitting}
+                  size="lg"
                 >
-                  {isSubmitting ? "Sending..." : "Send Message"}
+                  {isSubmitting ? (
+                    <>Sending...</>
+                  ) : (
+                    <>Send Message <Send className="ml-2 h-4 w-4" /></>
+                  )}
                 </Button>
               </form>
             </div>
           </div>
+
         </div>
       </div>
-    </section>
+    </div>
   );
 }

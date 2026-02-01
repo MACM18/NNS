@@ -23,6 +23,7 @@ import {
 import { useNotification } from "@/contexts/notification-context";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
+import { Icons } from "@/components/icons";
 
 interface RegisterFormProps {
   onSwitchToLogin?: () => void;
@@ -154,58 +155,66 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
   const passwordStrength = getPasswordStrength(formData.password);
 
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900'>
-      <Card className='w-full max-w-md'>
-        <CardHeader className='text-center'>
-          <CardTitle className='text-2xl font-bold'>NNS Enterprise</CardTitle>
-          <CardDescription>
-            Create your telecom dashboard account
+    <div className='flex items-center justify-center p-4 animate-fade-in-up'>
+      <Card className='w-full max-w-md glass-card border-none'>
+        <CardHeader className='text-center space-y-2'>
+          <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-2">
+            <Icons.logo className="h-6 w-6 text-primary" />
+          </div>
+          <CardTitle className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent'>
+            Create Account
+          </CardTitle>
+          <CardDescription className="text-base">
+            Join NNS Enterprise today
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleRegister} className='space-y-4'>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor='fullName'>Full Name</Label>
               <Input
                 id='fullName'
                 type='text'
+                className="h-11 bg-background/50 focus:bg-background transition-colors"
                 value={formData.fullName}
                 onChange={(e) => handleInputChange("fullName", e.target.value)}
                 required
-                placeholder='Enter your full name'
+                placeholder='John Doe'
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor='email'>Email</Label>
               <Input
                 id='email'
                 type='email'
+                className="h-11 bg-background/50 focus:bg-background transition-colors"
                 value={formData.email}
                 onChange={(e) => handleInputChange("email", e.target.value)}
                 required
-                placeholder='Enter your email address'
+                placeholder='name@example.com'
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor='password'>Password</Label>
               <div className='relative'>
                 <Input
                   id='password'
                   type={showPassword ? "text" : "password"}
+                  className="h-11 bg-background/50 focus:bg-background transition-colors pr-10"
                   value={formData.password}
                   onChange={(e) =>
                     handleInputChange("password", e.target.value)
                   }
                   required
-                  placeholder='Enter your password'
+                  placeholder='••••••••'
                 />
                 <Button
                   type='button'
                   variant='ghost'
                   size='sm'
-                  className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
+                  className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground'
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
@@ -216,12 +225,12 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                 </Button>
               </div>
               {formData.password && (
-                <div className='mt-2'>
-                  <div className='flex space-x-1'>
+                <div className='mt-2 animate-in fade-in slide-in-from-top-1'>
+                  <div className='flex space-x-1 h-1'>
                     {[1, 2, 3, 4].map((level) => (
                       <div
                         key={level}
-                        className={`h-1 w-full rounded ${level <= passwordStrength.strength
+                        className={`w-full rounded-full transition-colors duration-300 ${level <= passwordStrength.strength
                           ? passwordStrength.strength === 1
                             ? "bg-red-500"
                             : passwordStrength.strength === 2
@@ -229,36 +238,37 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                               : passwordStrength.strength === 3
                                 ? "bg-blue-500"
                                 : "bg-green-500"
-                          : "bg-gray-200"
+                          : "bg-muted"
                           }`}
                       />
                     ))}
                   </div>
-                  <p className='text-xs text-muted-foreground mt-1'>
+                  <p className='text-xs text-muted-foreground mt-1 text-right font-medium'>
                     {passwordStrength.text}
                   </p>
                 </div>
               )}
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor='confirmPassword'>Confirm Password</Label>
               <div className='relative'>
                 <Input
                   id='confirmPassword'
                   type={showConfirmPassword ? "text" : "password"}
+                  className="h-11 bg-background/50 focus:bg-background transition-colors pr-10"
                   value={formData.confirmPassword}
                   onChange={(e) =>
                     handleInputChange("confirmPassword", e.target.value)
                   }
                   required
-                  placeholder='Confirm your password'
+                  placeholder='••••••••'
                 />
                 <Button
                   type='button'
                   variant='ghost'
                   size='sm'
-                  className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
+                  className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground'
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
                   {showConfirmPassword ? (
@@ -270,25 +280,28 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
               </div>
               {formData.confirmPassword &&
                 formData.password !== formData.confirmPassword && (
-                  <p className='text-xs text-red-500 mt-1'>
+                  <p className='text-xs text-red-500 mt-1 animate-in fade-in slide-in-from-top-1'>
                     Passwords do not match
                   </p>
                 )}
             </div>
 
-            <Button type='submit' className='w-full' disabled={loading}>
+            <Button type='submit' className='w-full h-11 text-base shadow-lg hover:shadow-primary/25 transition-all mt-2' disabled={loading}>
               {loading ? "Creating Account..." : "Create Account"}
             </Button>
 
             {onSwitchToLogin && (
-              <div className='text-center'>
-                <Button
-                  variant='link'
-                  onClick={onSwitchToLogin}
-                  className='text-sm'
-                >
-                  Already have an account? Sign in
-                </Button>
+              <div className='text-center pt-2'>
+                <p className="text-sm text-muted-foreground">
+                  Already have an account?{" "}
+                  <Button
+                    variant='link'
+                    onClick={onSwitchToLogin}
+                    className='p-0 h-auto font-semibold text-primary hover:text-primary/80'
+                  >
+                    Sign in
+                  </Button>
+                </p>
               </div>
             )}
           </form>

@@ -5,10 +5,6 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { LoginForm } from "@/components/auth/login-form"
-import { AuthWrapper } from "@/components/auth/auth-wrapper"
-
-// Cast AuthWrapper to a relaxed component type to allow children without touching the original component types.
-const AW = (AuthWrapper as unknown) as React.ComponentType<any>
 
 export default function LoginPage() {
   const { user, loading } = useAuth()
@@ -16,27 +12,25 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.push("/dashboard") // Redirect to dashboard if already logged in
+      router.push("/dashboard")
     }
   }, [user, loading, router])
 
   if (loading || user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <AW
-      title="Welcome Back"
-      description="Sign in to your account to continue"
-      footerText="Don't have an account?"
-      footerLinkHref="/register"
-      footerLinkText="Sign Up"
-    >
-      <LoginForm />
-    </AW>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background">
+      <div className='absolute inset-0 bg-grid-pattern opacity-5'></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5"></div>
+      <div className="z-10 w-full max-w-md">
+        <LoginForm onSwitchToRegister={() => router.push("/register")} />
+      </div>
+    </div>
   )
 }

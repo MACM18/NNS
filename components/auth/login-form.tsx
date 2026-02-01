@@ -87,18 +87,25 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
   };
 
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900'>
-      <Card className='w-full max-w-md'>
-        <CardHeader className='text-center'>
-          <CardTitle className='text-2xl font-bold'>NNS Enterprise</CardTitle>
-          <CardDescription>Sign in to your telecom dashboard</CardDescription>
+    <div className='flex items-center justify-center p-4 animate-fade-in-up'>
+      <Card className='w-full max-w-md glass-card border-none'>
+        <CardHeader className='text-center space-y-2'>
+          <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-2">
+            <Icons.logo className="h-6 w-6 text-primary" />
+          </div>
+          <CardTitle className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent'>
+            Welcome Back
+          </CardTitle>
+          <CardDescription className="text-base">
+            Sign in to your NNS Enterprise dashboard
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className='space-y-4'>
             <Button
               type='button'
               variant='outline'
-              className='w-full flex items-center justify-center gap-2'
+              className='w-full h-11 flex items-center justify-center gap-2 hover:bg-background/50 transition-colors'
               onClick={handleGoogleSignIn}
               disabled={loading || oauthLoading}
             >
@@ -120,54 +127,70 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
                 </>
               )}
             </Button>
-            <div className='text-center text-sm text-muted-foreground'>
-              or sign in with your email
+
+            <div className='relative'>
+              <div className='absolute inset-0 flex items-center'>
+                <span className='w-full border-t' />
+              </div>
+              <div className='relative flex justify-center text-xs uppercase'>
+                <span className='bg-background px-2 text-muted-foreground'>
+                  Or continue with
+                </span>
+              </div>
             </div>
           </div>
 
-          <form onSubmit={handleLogin} className='space-y-4 mt-6'>
-            <div>
+          <form onSubmit={handleLogin} className='space-y-4 mt-4'>
+            <div className="space-y-2">
               <Label htmlFor='email'>Email</Label>
               <Input
                 id='email'
                 type='email'
+                className="h-11 bg-background/50 focus:bg-background transition-colors"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                placeholder="name@example.com"
               />
             </div>
-            <div>
-              <Label htmlFor='password'>Password</Label>
-              <Input
-                id='password'
-                type='password'
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <div className='mt-2 text-right'>
-                <Button asChild variant='link' className='px-0 text-sm'>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor='password'>Password</Label>
+                <Button asChild variant='link' className='px-0 text-xs font-normal h-auto'>
                   <a href='/auth/forgot-password'>Forgot password?</a>
                 </Button>
               </div>
+              <Input
+                id='password'
+                type='password'
+                className="h-11 bg-background/50 focus:bg-background transition-colors"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+              />
             </div>
+
             <Button
               type='submit'
-              className='w-full'
+              className='w-full h-11 text-base shadow-lg hover:shadow-primary/25 transition-all'
               disabled={loading || oauthLoading}
             >
               {loading ? "Signing in..." : "Sign In"}
             </Button>
 
             {onSwitchToRegister && (
-              <div className='text-center'>
-                <Button
-                  variant='link'
-                  onClick={onSwitchToRegister}
-                  className='text-sm'
-                >
-                  Don&apos;t have an account? Sign up
-                </Button>
+              <div className='text-center pt-2'>
+                <p className="text-sm text-muted-foreground">
+                  Don&apos;t have an account?{" "}
+                  <Button
+                    variant='link'
+                    onClick={onSwitchToRegister}
+                    className='p-0 h-auto font-semibold text-primary hover:text-primary/80'
+                  >
+                    Sign up
+                  </Button>
+                </p>
               </div>
             )}
           </form>

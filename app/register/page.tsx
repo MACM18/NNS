@@ -17,8 +17,8 @@ export default function RegisterPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
       </div>
     )
   }
@@ -28,8 +28,12 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <RegisterForm onSwitchToLogin={() => router.push("/login")} />
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background">
+      <div className='absolute inset-0 bg-grid-pattern opacity-5'></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5"></div>
+      <div className="z-10 w-full max-w-md">
+        <RegisterForm onSwitchToLogin={() => router.push("/login")} />
+      </div>
     </div>
   )
 }

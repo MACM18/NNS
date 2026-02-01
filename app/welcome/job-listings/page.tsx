@@ -1,17 +1,10 @@
 import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { format } from "date-fns";
-import { Briefcase, MapPin, Calendar, Clock } from "lucide-react";
+import { Briefcase, MapPin, Calendar, Clock, ArrowRight } from "lucide-react";
 
 interface JobVacancy {
   id: string;
@@ -64,80 +57,83 @@ export default async function JobListingsPage() {
   const jobVacancies = await fetchJobVacancies();
 
   return (
-    <section className='py-12 md:py-24 lg:py-32 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950'>
-      <div className='container mx-auto px-4 md:px-6'>
-        <div className='max-w-6xl mx-auto'>
-          <div className='max-w-3xl mx-auto text-center mb-12'>
-            <h1 className='text-4xl font-bold tracking-tight text-foreground sm:text-5xl'>
-              Current Job Openings
-            </h1>
-            <p className='mt-4 text-lg text-muted-foreground'>
-              Explore exciting career opportunities at NNS Enterprise and join
-              our growing team.
-            </p>
-          </div>
-          <div className='grid gap-6 lg:grid-cols-2 lg:gap-8'>
-            {jobVacancies.length > 0 ? (
-              jobVacancies.map((job) => (
-                <Card
-                  key={job.id}
-                  className='flex flex-col justify-between hover:shadow-lg transition-all duration-300 hover:scale-[1.02]'
-                >
-                  <CardHeader>
-                    <div className='flex items-start justify-between gap-2'>
-                      <CardTitle className='text-xl'>{job.title}</CardTitle>
-                      <Briefcase className='h-5 w-5 text-primary flex-shrink-0' />
-                    </div>
-                    <CardDescription className='flex flex-wrap items-center gap-2 mt-2'>
-                      <Badge variant='secondary' className='font-medium'>
-                        {job.employment_type}
-                      </Badge>
-                      <span className='flex items-center gap-1 text-xs'>
-                        <MapPin className='h-3 w-3' />
-                        {job.location}
+    <div className="relative overflow-hidden bg-background min-h-screen">
+      <div className='absolute inset-0 bg-grid-pattern opacity-5'></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5"></div>
+
+      {/* Hero Section */}
+      <section className='relative pt-24 pb-12 md:pt-32 md:pb-16 text-center px-4'>
+        <Badge variant="outline" className="mb-6 px-4 py-2 rounded-full border-primary/20 bg-primary/5 text-primary backdrop-blur-sm">
+          Careers at NNS
+        </Badge>
+        <h1 className='text-4xl md:text-6xl font-bold tracking-tight text-foreground mb-6'>
+          Current Job Openings
+        </h1>
+        <p className='text-xl text-muted-foreground max-w-2xl mx-auto'>
+          Explore exciting career opportunities and join our growing team of professionals.
+        </p>
+      </section>
+
+      <div className='container mx-auto px-4 md:px-6 pb-24'>
+        <div className='grid gap-6 lg:grid-cols-2 lg:gap-8 max-w-6xl mx-auto'>
+          {jobVacancies.length > 0 ? (
+            jobVacancies.map((job) => (
+              <div
+                key={job.id}
+                className='glass-card rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] transition-transform duration-300 group'
+              >
+                <div className="mb-4">
+                  <div className='flex items-center justify-between gap-4 mb-3'>
+                    <Badge variant='secondary' className='font-medium bg-primary/10 text-primary hover:bg-primary/20'>
+                      {job.employment_type}
+                    </Badge>
+                    <span className='flex items-center gap-1 text-xs text-muted-foreground'>
+                      <MapPin className='h-3 w-3' />
+                      {job.location}
+                    </span>
+                  </div>
+                  <h3 className='text-xl font-bold mb-3 group-hover:text-primary transition-colors'>
+                    {job.title}
+                  </h3>
+                  <p className='text-sm text-muted-foreground line-clamp-3 leading-relaxed'>
+                    {job.description}
+                  </p>
+                </div>
+
+                <div className='pt-4 border-t border-border/50 space-y-3 mt-auto'>
+                  <div className='flex items-center justify-between text-xs text-muted-foreground'>
+                    <span className='flex items-center gap-1'>
+                      <Calendar className='h-3 w-3' />
+                      Posted: {format(new Date(job.created_at), "MMM dd, yyyy")}
+                    </span>
+                    {job.end_date && (
+                      <span className='flex items-center gap-1 text-orange-600/80 dark:text-orange-400/80 font-medium'>
+                        <Clock className='h-3 w-3' />
+                        Apply by: {format(new Date(job.end_date), "MMM dd, yyyy")}
                       </span>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='space-y-4'>
-                    <p className='text-sm text-muted-foreground line-clamp-3 leading-relaxed'>
-                      {job.description}
-                    </p>
-                    <div className='flex flex-col gap-2 text-xs text-muted-foreground border-t pt-3'>
-                      <span className='flex items-center gap-1'>
-                        <Calendar className='h-3 w-3' />
-                        Posted:{" "}
-                        {format(new Date(job.created_at), "MMM dd, yyyy")}
-                      </span>
-                      {job.end_date && (
-                        <span className='flex items-center gap-1'>
-                          <Clock className='h-3 w-3' />
-                          Apply by:{" "}
-                          {format(new Date(job.end_date), "MMM dd, yyyy")}
-                        </span>
-                      )}
-                    </div>
-                    <Button asChild className='w-full'>
-                      <Link href={`/welcome/job-listings/${job.id}`}>
-                        View Details
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <div className='col-span-full text-center py-12'>
-                <Briefcase className='h-12 w-12 text-muted-foreground/50 mx-auto mb-4' />
-                <p className='text-lg text-muted-foreground'>
-                  No active job vacancies available at the moment.
-                </p>
-                <p className='text-sm text-muted-foreground mt-2'>
-                  Please check back later for new opportunities!
-                </p>
+                    )}
+                  </div>
+                  <Button asChild className='w-full glass-button group-hover:bg-primary/90'>
+                    <Link href={`/welcome/job-listings/${job.id}`}>
+                      View Details <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
               </div>
-            )}
-          </div>
+            ))
+          ) : (
+            <div className='col-span-full text-center py-24 glass-card rounded-3xl'>
+              <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                <Briefcase className='h-8 w-8 text-muted-foreground' />
+              </div>
+              <h3 className='text-xl font-bold text-foreground'>No active openings</h3>
+              <p className='text-muted-foreground mt-2 max-w-sm mx-auto'>
+                We don't have any vacancies right now. Please check back later!
+              </p>
+            </div>
+          )}
         </div>
       </div>
-    </section>
+    </div>
   );
 }
