@@ -533,11 +533,13 @@ export default function PayrollPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="periods">Payroll Periods</TabsTrigger>
-          <TabsTrigger value="workers">Worker Settings</TabsTrigger>
-          {canManage && <TabsTrigger value="settings">Payroll Settings</TabsTrigger>}
-        </TabsList>
+        <div className="overflow-x-auto pb-2">
+          <TabsList className="w-full sm:w-auto h-auto p-1 flex-nowrap sm:flex-wrap">
+            <TabsTrigger value="periods" className="flex-1 sm:flex-none">Payroll Periods</TabsTrigger>
+            <TabsTrigger value="workers" className="flex-1 sm:flex-none">Worker Settings</TabsTrigger>
+            {canManage && <TabsTrigger value="settings" className="flex-1 sm:flex-none">Payroll Settings</TabsTrigger>}
+          </TabsList>
+        </div>
 
         <TabsContent value="periods" className="space-y-4">
           {loading ? (
@@ -546,7 +548,7 @@ export default function PayrollPage() {
             </div>
           ) : (
             <>
-              <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
+              <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
                 <Card>
                   <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
                     <CardTitle className='text-sm font-medium'>Total Periods</CardTitle>
@@ -653,13 +655,13 @@ export default function PayrollPage() {
                             <TableHead className='min-w-[180px]'>Period</TableHead>
                           )}
                           {visibleColumns.has("date_range") && (
-                            <TableHead className='min-w-[120px]'>Date Range</TableHead>
+                            <TableHead className='min-w-[120px] hidden md:table-cell'>Date Range</TableHead>
                           )}
                           {visibleColumns.has("status") && (
                             <TableHead className='min-w-[100px]'>Status</TableHead>
                           )}
                           {visibleColumns.has("workers") && (
-                            <TableHead className='min-w-[100px]'>Workers</TableHead>
+                            <TableHead className='min-w-[100px] hidden sm:table-cell'>Workers</TableHead>
                           )}
                           {visibleColumns.has("total_amount") && (
                             <TableHead className='min-w-[120px]'>Total Amount</TableHead>
@@ -689,7 +691,7 @@ export default function PayrollPage() {
                                 </TableCell>
                               )}
                               {visibleColumns.has("date_range") && (
-                                <TableCell>
+                                <TableCell className="hidden md:table-cell">
                                   {format(new Date(period.startDate), "MMM d")} -{" "}
                                   {format(new Date(period.endDate), "MMM d, yyyy")}
                                 </TableCell>
@@ -698,7 +700,7 @@ export default function PayrollPage() {
                                 <TableCell>{getStatusBadge(period.status)}</TableCell>
                               )}
                               {visibleColumns.has("workers") && (
-                                <TableCell>
+                                <TableCell className="hidden sm:table-cell">
                                   <div className='flex items-center gap-1'>
                                     <Users className='h-4 w-4 text-muted-foreground' />
                                     {period._count?.payments || 0}

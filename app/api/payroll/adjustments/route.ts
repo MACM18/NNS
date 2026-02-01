@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
       !workerPaymentId ||
       !type ||
       !category ||
-      !description ||
       amount === undefined
     ) {
       return NextResponse.json(

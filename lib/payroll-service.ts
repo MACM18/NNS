@@ -660,7 +660,7 @@ export async function addAdjustment(
       workerPaymentId: input.workerPaymentId,
       type: input.type,
       category: input.category,
-      description: input.description,
+      description: input.description ?? "",
       amount: input.amount,
       createdById: profile.id,
     },

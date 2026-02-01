@@ -170,7 +170,7 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       doc.setTextColor(...mutedColor);
-      doc.text(bonus.description, margin + 5, y);
+      doc.text(bonus.description || "", margin + 5, y);
       doc.setFontSize(9);
       doc.setTextColor(...textColor);
     }
@@ -215,7 +215,7 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
         doc.setTextColor(...mutedColor);
-        doc.text(deduction.description, margin + 5, y);
+        doc.text(deduction.description || "", margin + 5, y);
         doc.setFontSize(9);
         doc.setTextColor(...textColor);
       }

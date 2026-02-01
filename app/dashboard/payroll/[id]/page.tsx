@@ -519,7 +519,7 @@ export default function PayrollPeriodDetailPage({
       </div>
 
       {/* Summary Cards */}
-      <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-5'>
+      <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'>
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
             <CardTitle className='text-sm font-medium'>Workers</CardTitle>
@@ -593,20 +593,20 @@ export default function PayrollPeriodDetailPage({
               <TableHeader>
                 <TableRow>
                   <TableHead className='min-w-[150px]'>Worker</TableHead>
-                  <TableHead className='min-w-[100px]'>Type</TableHead>
-                  <TableHead className='min-w-[80px] text-right'>
+                  <TableHead className='min-w-[100px] hidden md:table-cell'>Type</TableHead>
+                  <TableHead className='min-w-[80px] text-right hidden sm:table-cell'>
                     Lines
                   </TableHead>
-                  <TableHead className='min-w-[100px] text-right'>
+                  <TableHead className='min-w-[100px] text-right hidden lg:table-cell'>
                     Base
                   </TableHead>
-                  <TableHead className='min-w-[100px] text-right'>
+                  <TableHead className='min-w-[100px] text-right hidden lg:table-cell'>
                     Bonus
                   </TableHead>
-                  <TableHead className='min-w-[100px] text-right'>
+                  <TableHead className='min-w-[100px] text-right hidden lg:table-cell'>
                     Deduction
                   </TableHead>
-                  <TableHead className='min-w-[100px] text-right'>
+                  <TableHead className='min-w-[100px] text-right font-bold'>
                     Net
                   </TableHead>
                   <TableHead className='min-w-[120px]'>Actions</TableHead>
@@ -629,25 +629,25 @@ export default function PayrollPeriodDetailPage({
                       <TableCell className='font-medium'>
                         {payment.worker?.fullName || "Unknown"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">
                         <Badge variant='outline'>
                           {payment.paymentType === "per_line"
                             ? "Per Line"
                             : "Monthly"}
                         </Badge>
                       </TableCell>
-                      <TableCell className='text-right font-mono'>
+                      <TableCell className='text-right font-mono hidden sm:table-cell'>
                         {payment.linesCompleted}
                       </TableCell>
-                      <TableCell className='text-right font-mono'>
+                      <TableCell className='text-right font-mono hidden lg:table-cell'>
                         {formatCurrency(payment.baseAmount)}
                       </TableCell>
-                      <TableCell className='text-right font-mono text-green-600'>
+                      <TableCell className='text-right font-mono text-green-600 hidden lg:table-cell'>
                         {payment.bonusAmount > 0
                           ? `+${formatCurrency(payment.bonusAmount)}`
                           : "-"}
                       </TableCell>
-                      <TableCell className='text-right font-mono text-red-600'>
+                      <TableCell className='text-right font-mono text-red-600 hidden lg:table-cell'>
                         {payment.deductionAmount > 0
                           ? `-${formatCurrency(payment.deductionAmount)}`
                           : "-"}

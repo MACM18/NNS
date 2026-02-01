@@ -89,7 +89,7 @@ export interface PayrollAdjustment {
   workerPaymentId: string;
   type: AdjustmentType;
   category: AdjustmentCategory;
-  description: string;
+  description?: string | null;
   amount: number;
   createdById: string;
   createdAt: string | Date;
@@ -140,7 +140,7 @@ export interface AddAdjustmentInput {
   workerPaymentId: string;
   type: AdjustmentType;
   category: AdjustmentCategory;
-  description: string;
+  description?: string;
   amount: number;
 }
 

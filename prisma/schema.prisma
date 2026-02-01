@@ -992,7 +992,7 @@ model PayrollAdjustment {
   workerPaymentId String   @map("worker_payment_id")
   type            String   // bonus, deduction
   category        String   // performance_bonus, attendance_bonus, overtime, tax, advance, fine, other
-  description     String
+  description     String?
   amount          Decimal  @db.Decimal(10, 2)
   createdById     String   @map("created_by")
   createdAt       DateTime @default(now()) @map("created_at")
