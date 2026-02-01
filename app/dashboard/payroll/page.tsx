@@ -17,6 +17,8 @@ import {
   ChevronRight,
   TrendingUp,
   Columns,
+  RefreshCw,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -41,6 +43,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -94,6 +97,10 @@ export default function PayrollPage() {
   const [periods, setPeriods] = useState<PayrollPeriod[]>([]);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [processingPeriod, setProcessingPeriod] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [workers, setWorkers] = useState<any[]>([]);
+  const [editingWorker, setEditingWorker] = useState<string | null>(null);
+  const [workerFormData, setWorkerFormData] = useState<any>(null);
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
     new Set(COLUMNS.map((c) => c.id))
@@ -120,12 +127,14 @@ export default function PayrollPage() {
   const { role } = useAuth();
   const canManage = role === "admin" || role === "moderator";
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (showRefreshState = false) => {
     try {
+      if (showRefreshState) setRefreshing(true);
       setLoading(true);
-      const [summaryRes, periodsRes] = await Promise.all([
+      const [summaryRes, periodsRes, workersRes] = await Promise.all([
         fetch("/api/payroll/periods?action=summary"),
         fetch("/api/payroll/periods?pageSize=20"),
+        fetch("/api/workers"),
       ]);
 
       if (summaryRes.ok) {
@@ -137,6 +146,11 @@ export default function PayrollPage() {
         const data = await periodsRes.json();
         setPeriods(data.data || []);
       }
+
+      if (workersRes.ok) {
+        const data = await workersRes.json();
+        setWorkers(data.workers || []);
+      }
     } catch (error) {
       addNotification({
         title: "Error",
@@ -146,12 +160,14 @@ export default function PayrollPage() {
       });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [addNotification]);
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Auto-generate period name when month/year changes
@@ -162,7 +178,7 @@ export default function PayrollPage() {
   const handleCreatePeriod = async () => {
     try {
       const startDate = startOfMonth(
-        new Date(periodForm.year, periodForm.month - 1)
+        new Date(periodForm.year, periodForm.month - 1, 1)
       );
       const endDate = endOfMonth(startDate);
 
@@ -244,6 +260,47 @@ export default function PayrollPage() {
     }
   };
 
+  const handleDeletePeriod = async (periodId: string) => {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this payroll period? This will delete all associated payment data."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setProcessingPeriod(periodId);
+      const response = await fetch(`/api/payroll/periods/${periodId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete period");
+      }
+
+      addNotification({
+        title: "Success",
+        message: "Payroll period deleted",
+        type: "success",
+        category: "system",
+      });
+
+      fetchData();
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message:
+          error instanceof Error ? error.message : "Failed to delete period",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setProcessingPeriod(null);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const variants: Record<
       string,
@@ -304,7 +361,26 @@ export default function PayrollPage() {
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           {canManage && (
+            <Button
+              variant="outline"
+              disabled={loading || refreshing}
+              onClick={() => fetchData(true)}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          )}
+          {canManage && (
             <>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => fetchData(true)}
+                disabled={loading || refreshing}
+                title="Refresh Data"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
               <Button
                 variant="outline"
                 onClick={async () => {
@@ -312,8 +388,8 @@ export default function PayrollPage() {
                   const m = now.getMonth() + 1;
                   const y = now.getFullYear();
                   const name = `${MONTHS[m - 1]} ${y} Payroll`;
-                  const startDate = startOfMonth(now);
-                  const endDate = endOfMonth(now);
+                  const startDate = startOfMonth(new Date(y, m - 1));
+                  const endDate = endOfMonth(startDate);
 
                   try {
                     const response = await fetch("/api/payroll/periods", {
@@ -363,247 +439,413 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Total Periods</CardTitle>
-            <Calendar className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {summary?.totalPeriods || 0}
-            </div>
-            <p className='text-xs text-muted-foreground'>
-              {summary?.draftPeriods || 0} drafts,{" "}
-              {summary?.approvedPeriods || 0} pending
-            </p>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="periods" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="periods">Payroll Periods</TabsTrigger>
+          <TabsTrigger value="workers">Worker Settings</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Total Paid</CardTitle>
-            <DollarSign className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {formatCurrency(summary?.totalPaidAmount || 0)}
-            </div>
-            <p className='text-xs text-muted-foreground'>
-              Across {summary?.paidPeriods || 0} periods
-            </p>
-          </CardContent>
-        </Card>
+        <TabsContent value="periods" className="space-y-4">
+          <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
+            <Card>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>Total Periods</CardTitle>
+                <Calendar className='h-4 w-4 text-muted-foreground' />
+              </CardHeader>
+              <CardContent>
+                <div className='text-2xl font-bold'>
+                  {summary?.totalPeriods || 0}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  {summary?.draftPeriods || 0} drafts,{" "}
+                  {summary?.approvedPeriods || 0} pending
+                </p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>
-              Current Period
-            </CardTitle>
-            <TrendingUp className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {summary?.currentPeriod
-                ? formatCurrency(summary.currentPeriod.totalAmount)
-                : "N/A"}
-            </div>
-            <p className='text-xs text-muted-foreground'>
-              {summary?.currentPeriod?.name || "No active period"}
-            </p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>Total Paid</CardTitle>
+                <DollarSign className='h-4 w-4 text-muted-foreground' />
+              </CardHeader>
+              <CardContent>
+                <div className='text-2xl font-bold'>
+                  {formatCurrency(summary?.totalPaidAmount || 0)}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Across {summary?.paidPeriods || 0} periods
+                </p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>
-              Pending Approval
-            </CardTitle>
-            <AlertCircle className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {periods.filter((p) => p.status === "processing").length}
-            </div>
-            <p className='text-xs text-muted-foreground'>
-              Periods awaiting approval
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+            <Card>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>
+                  Current Period
+                </CardTitle>
+                <TrendingUp className='h-4 w-4 text-muted-foreground' />
+              </CardHeader>
+              <CardContent>
+                <div className='text-2xl font-bold'>
+                  {summary?.currentPeriod
+                    ? formatCurrency(summary.currentPeriod.totalAmount)
+                    : "N/A"}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  {summary?.currentPeriod?.name || "No active period"}
+                </p>
+              </CardContent>
+            </Card>
 
-      {/* Periods Table */}
-      <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
-          <div className='space-y-1.5'>
-            <CardTitle>Payroll Periods</CardTitle>
-            <CardDescription>
-              Manage monthly payroll periods and payments
-            </CardDescription>
+            <Card>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>
+                  Pending Approval
+                </CardTitle>
+                <AlertCircle className='h-4 w-4 text-muted-foreground' />
+              </CardHeader>
+              <CardContent>
+                <div className='text-2xl font-bold'>
+                  {periods.filter((p) => p.status === "processing").length}
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Periods awaiting approval
+                </p>
+              </CardContent>
+            </Card>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant='outline' size='sm' className='h-8'>
-                <Columns className='mr-2 h-4 w-4' />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='end'>
-              {COLUMNS.map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className='capitalize'
-                  checked={visibleColumns.has(column.id)}
-                  onCheckedChange={() => toggleColumn(column.id)}
-                >
-                  {column.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </CardHeader>
-        <CardContent className='p-0'>
-          <div className='overflow-x-auto'>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {visibleColumns.has("name") && (
-                    <TableHead className='min-w-[180px]'>Period</TableHead>
-                  )}
-                  {visibleColumns.has("date_range") && (
-                    <TableHead className='min-w-[120px]'>Date Range</TableHead>
-                  )}
-                  {visibleColumns.has("status") && (
-                    <TableHead className='min-w-[100px]'>Status</TableHead>
-                  )}
-                  {visibleColumns.has("workers") && (
-                    <TableHead className='min-w-[100px]'>Workers</TableHead>
-                  )}
-                  {visibleColumns.has("total_amount") && (
-                    <TableHead className='min-w-[120px]'>Total Amount</TableHead>
-                  )}
-                  {visibleColumns.has("actions") && (
-                    <TableHead className='min-w-[200px]'>Actions</TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {periods.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={visibleColumns.size}
-                      className='text-center text-muted-foreground py-8'
+
+          <Card>
+            <CardHeader className='flex flex-row items-center justify-between'>
+              <div className='space-y-1.5'>
+                <CardTitle>Payroll Periods</CardTitle>
+                <CardDescription>
+                  Manage monthly payroll periods and payments
+                </CardDescription>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant='outline' size='sm' className='h-8'>
+                    <Columns className='mr-2 h-4 w-4' />
+                    Columns
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align='end'>
+                  {COLUMNS.map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      className='capitalize'
+                      checked={visibleColumns.has(column.id)}
+                      onCheckedChange={() => toggleColumn(column.id)}
                     >
-                      No payroll periods yet. Create your first period to get
-                      started.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  periods.map((period) => (
-                    <TableRow key={period.id}>
+                      {column.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </CardHeader>
+            <CardContent className='p-0'>
+              <div className='overflow-x-auto'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
                       {visibleColumns.has("name") && (
-                        <TableCell className='font-medium'>
-                          {period.name}
-                        </TableCell>
+                        <TableHead className='min-w-[180px]'>Period</TableHead>
                       )}
                       {visibleColumns.has("date_range") && (
-                        <TableCell>
-                          {format(new Date(period.startDate), "MMM d")} -{" "}
-                          {format(new Date(period.endDate), "MMM d, yyyy")}
-                        </TableCell>
+                        <TableHead className='min-w-[120px]'>Date Range</TableHead>
                       )}
                       {visibleColumns.has("status") && (
-                        <TableCell>{getStatusBadge(period.status)}</TableCell>
+                        <TableHead className='min-w-[100px]'>Status</TableHead>
                       )}
                       {visibleColumns.has("workers") && (
-                        <TableCell>
-                          <div className='flex items-center gap-1'>
-                            <Users className='h-4 w-4 text-muted-foreground' />
-                            {period._count?.payments || 0}
-                          </div>
-                        </TableCell>
+                        <TableHead className='min-w-[100px]'>Workers</TableHead>
                       )}
                       {visibleColumns.has("total_amount") && (
-                        <TableCell className='font-mono'>
-                          {formatCurrency(period.totalAmount)}
-                        </TableCell>
+                        <TableHead className='min-w-[120px]'>Total Amount</TableHead>
                       )}
                       {visibleColumns.has("actions") && (
-                        <TableCell>
-                          <div className='flex items-center gap-2'>
-                            {canManage && period.status === "draft" && (
-                              <Button
-                                size='sm'
-                                variant='outline'
-                                onClick={() =>
-                                  handleAction(period.id, "calculate")
-                                }
-                                disabled={processingPeriod === period.id}
-                              >
-                                {processingPeriod === period.id ? (
-                                  <Loader2 className='h-4 w-4 animate-spin' />
-                                ) : (
-                                  <>
-                                    <Calculator className='h-4 w-4 mr-1' />
-                                    Calculate
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            {canManage && period.status === "processing" && (
-                              <Button
-                                size='sm'
-                                variant='outline'
-                                onClick={() =>
-                                  handleAction(period.id, "approve")
-                                }
-                                disabled={processingPeriod === period.id}
-                              >
-                                {processingPeriod === period.id ? (
-                                  <Loader2 className='h-4 w-4 animate-spin' />
-                                ) : (
-                                  <>
-                                    <CheckCircle className='h-4 w-4 mr-1' />
-                                    Approve
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            {canManage && period.status === "approved" && (
-                              <Button
-                                size='sm'
-                                variant='default'
-                                onClick={() => handleAction(period.id, "pay")}
-                                disabled={processingPeriod === period.id}
-                              >
-                                {processingPeriod === period.id ? (
-                                  <Loader2 className='h-4 w-4 animate-spin' />
-                                ) : (
-                                  <>
-                                    <CreditCard className='h-4 w-4 mr-1' />
-                                    Mark Paid
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            <Button size='sm' variant='ghost' asChild>
-                              <Link href={`/dashboard/payroll/${period.id}`}>
-                                View
-                                <ChevronRight className='h-4 w-4 ml-1' />
-                              </Link>
-                            </Button>
-                          </div>
-                        </TableCell>
+                        <TableHead className='min-w-[200px]'>Actions</TableHead>
                       )}
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {periods.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={visibleColumns.size}
+                          className='text-center text-muted-foreground py-8'
+                        >
+                          No payroll periods yet. Create your first period to get
+                          started.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      periods.map((period) => (
+                        <TableRow key={period.id}>
+                          {visibleColumns.has("name") && (
+                            <TableCell className='font-medium'>
+                              {period.name}
+                            </TableCell>
+                          )}
+                          {visibleColumns.has("date_range") && (
+                            <TableCell>
+                              {format(new Date(period.startDate), "MMM d")} -{" "}
+                              {format(new Date(period.endDate), "MMM d, yyyy")}
+                            </TableCell>
+                          )}
+                          {visibleColumns.has("status") && (
+                            <TableCell>{getStatusBadge(period.status)}</TableCell>
+                          )}
+                          {visibleColumns.has("workers") && (
+                            <TableCell>
+                              <div className='flex items-center gap-1'>
+                                <Users className='h-4 w-4 text-muted-foreground' />
+                                {period._count?.payments || 0}
+                              </div>
+                            </TableCell>
+                          )}
+                          {visibleColumns.has("total_amount") && (
+                            <TableCell className='font-mono'>
+                              {formatCurrency(period.totalAmount)}
+                            </TableCell>
+                          )}
+                          {visibleColumns.has("actions") && (
+                            <TableCell>
+                              <div className='flex items-center gap-2'>
+                                {canManage && period.status === "draft" && (
+                                  <Button
+                                    size='sm'
+                                    variant='outline'
+                                    onClick={() =>
+                                      handleAction(period.id, "calculate")
+                                    }
+                                    disabled={processingPeriod === period.id}
+                                  >
+                                    {processingPeriod === period.id ? (
+                                      <Loader2 className='h-4 w-4 animate-spin' />
+                                    ) : (
+                                      <>
+                                        <Calculator className='h-4 w-4 mr-1' />
+                                        Calculate
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+                                {canManage && period.status === "processing" && (
+                                  <Button
+                                    size='sm'
+                                    variant='outline'
+                                    onClick={() =>
+                                      handleAction(period.id, "approve")
+                                    }
+                                    disabled={processingPeriod === period.id}
+                                  >
+                                    {processingPeriod === period.id ? (
+                                      <Loader2 className='h-4 w-4 animate-spin' />
+                                    ) : (
+                                      <>
+                                        <CheckCircle className='h-4 w-4 mr-1' />
+                                        Approve
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+                                {canManage && period.status === "approved" && (
+                                  <Button
+                                    size='sm'
+                                    variant='default'
+                                    onClick={() => handleAction(period.id, "pay")}
+                                    disabled={processingPeriod === period.id}
+                                  >
+                                    {processingPeriod === period.id ? (
+                                      <Loader2 className='h-4 w-4 animate-spin' />
+                                    ) : (
+                                      <>
+                                        <CreditCard className='h-4 w-4 mr-1' />
+                                        Mark Paid
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+                                <Button size='sm' variant='ghost' asChild>
+                                  <Link href={`/dashboard/payroll/${period.id}`}>
+                                    View
+                                    <ChevronRight className='h-4 w-4 ml-1' />
+                                  </Link>
+                                </Button>
+                                {canManage && (
+                                  <Button
+                                    size='sm'
+                                    variant='ghost'
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => handleDeletePeriod(period.id)}
+                                    disabled={processingPeriod === period.id}
+                                  >
+                                    <Trash2 className='h-4 w-4' />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="workers">
+          <Card>
+            <CardHeader>
+              <CardTitle>Worker Salary Settings</CardTitle>
+              <CardDescription>Configure payment methods and rates for each worker.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Worker Name</TableHead>
+                    <TableHead>Payment Type</TableHead>
+                    <TableHead>Monthly Rate (LKR)</TableHead>
+                    <TableHead>Per Line Rate (LKR)</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {workers.length > 0 ? (
+                    workers.map((worker) => (
+                      <TableRow key={worker.id}>
+                        <TableCell className="font-medium">{worker.full_name}</TableCell>
+                        <TableCell>
+                          {editingWorker === worker.id ? (
+                            <Select
+                              value={workerFormData.payment_type}
+                              onValueChange={(val) => setWorkerFormData({ ...workerFormData, payment_type: val })}
+                            >
+                              <SelectTrigger className="w-[150px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="per_line">Per Line</SelectItem>
+                                <SelectItem value="fixed_monthly">Fixed Monthly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="outline">
+                              {worker.role === 'supervisor' ? 'Monthly' : (worker.payment_type === 'fixed_monthly' ? 'Fixed Monthly' : 'Per Line')}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editingWorker === worker.id ? (
+                            <Input
+                              type="number"
+                              className="w-[120px]"
+                              value={workerFormData.monthly_rate || ''}
+                              onChange={(e) => setWorkerFormData({ ...workerFormData, monthly_rate: parseFloat(e.target.value) })}
+                              placeholder="0.00"
+                            />
+                          ) : (
+                            formatCurrency(worker.monthly_rate || 0)
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editingWorker === worker.id ? (
+                            <Input
+                              type="number"
+                              className="w-[120px]"
+                              value={workerFormData.per_line_rate || ''}
+                              onChange={(e) => setWorkerFormData({ ...workerFormData, per_line_rate: parseFloat(e.target.value) })}
+                              placeholder="0.00"
+                            />
+                          ) : (
+                            formatCurrency(worker.per_line_rate || 0)
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {editingWorker === worker.id ? (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingWorker(null)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const response = await fetch(`/api/workers`, {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        id: worker.id,
+                                        payment_type: workerFormData.payment_type,
+                                        per_line_rate: workerFormData.per_line_rate,
+                                        monthly_rate: workerFormData.monthly_rate,
+                                      }),
+                                    });
+
+                                    if (!response.ok) throw new Error('Failed to update worker');
+
+                                    addNotification({
+                                      title: 'Success',
+                                      message: 'Worker settings updated',
+                                      type: 'success',
+                                      category: 'system',
+                                    });
+                                    setEditingWorker(null);
+                                    fetchData();
+                                  } catch (error: any) {
+                                    addNotification({
+                                      title: 'Error',
+                                      message: error.message,
+                                      type: 'error',
+                                      category: 'system',
+                                    });
+                                  }
+                                }}
+                              >
+                                Save
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingWorker(worker.id);
+                                setWorkerFormData({
+                                  payment_type: worker.payment_type || 'per_line',
+                                  per_line_rate: worker.per_line_rate || 0,
+                                  monthly_rate: worker.monthly_rate || 0,
+                                });
+                              }}
+                            >
+                              Edit
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
+                        No workers found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Create Period Modal */}
       <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>

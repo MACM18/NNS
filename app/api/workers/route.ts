@@ -368,6 +368,9 @@ export async function PATCH(req: NextRequest) {
     if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes?.trim() || null;
     if (profile_id !== undefined) updateData.profileId = profile_id;
+    if (body.payment_type !== undefined) updateData.paymentType = body.payment_type;
+    if (body.per_line_rate !== undefined) updateData.perLineRate = body.per_line_rate;
+    if (body.monthly_rate !== undefined) updateData.monthlyRate = body.monthly_rate;
 
     const data = await prisma.worker.update({
       where: { id },
