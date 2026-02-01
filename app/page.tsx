@@ -103,7 +103,7 @@ export default function LandingPage() {
       {/* Services Section - Bento Grid Style */}
       <section id='services' className='py-24 relative overflow-hidden'>
         <div className="absolute inset-0 bg-secondary/30"></div>
-        <div className='container px-4 md:px-6 relative z-10'>
+        <div className='container px-4 mx-auto md:px-6 relative z-10'>
           <div className='text-center max-w-3xl mx-auto mb-16'>
             <h2 className='text-3xl md:text-5xl font-bold mb-6'>Comprehensive Technical Solutions</h2>
             <p className='text-muted-foreground text-lg'>
@@ -179,7 +179,7 @@ export default function LandingPage() {
 
       {/* Why Choose Us */}
       <section className='py-24 bg-background relative'>
-        <div className='container px-4 md:px-6'>
+        <div className='container px-4 md:px-6 mx-auto'>
           <div className='text-center max-w-3xl mx-auto mb-16'>
             <h2 className='text-3xl md:text-5xl font-bold mb-6'>Why Industry Leaders Choose NNS</h2>
             <p className='text-muted-foreground text-lg'>
@@ -236,7 +236,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-primary skew-y-3 transform origin-bottom-left scale-110"></div>
         <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
 
-        <div className='container px-4 md:px-6 relative z-10 text-center'>
+        <div className='container px-4 md:px-6 mx-auto relative z-10 text-center'>
           <h2 className='text-3xl md:text-5xl font-bold text-primary-foreground mb-6'>
             Ready to Transform Your Network?
           </h2>

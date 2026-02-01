@@ -2,6 +2,7 @@
 import jsPDF from "jspdf";
 import type { WorkerPayment, PayrollPeriod } from "@/types/payroll";
 import { format } from "date-fns";
+import { getThemeColors } from "./pdf-theme-utils";
 
 interface SalarySlipPDFOptions {
   payment: WorkerPayment;
@@ -42,13 +43,14 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
   let y = margin;
 
   // Colors
-  const primaryColor: [number, number, number] = [15, 118, 110]; // Teal-700
-  const headerBg: [number, number, number] = [17, 24, 39]; // Gray-900
-  const textColor: [number, number, number] = [31, 41, 55]; // Gray-800
-  const mutedColor: [number, number, number] = [107, 114, 128]; // Gray-500
-  const greenColor: [number, number, number] = [22, 163, 74]; // Green-600
-  const redColor: [number, number, number] = [220, 38, 38]; // Red-600
-  const lightBg: [number, number, number] = [249, 250, 251]; // Gray-50
+  const theme = getThemeColors();
+  const primaryColor = theme.primary;
+  const headerBg = theme.headerBg;
+  const textColor = theme.text;
+  const mutedColor = theme.muted;
+  const greenColor: [number, number, number] = [22, 163, 74]; // Keep semantic green
+  const redColor = theme.destructive;
+  const lightBg = theme.muted; // Use muted background for light sections
 
   // ========== HEADER ==========
   doc.setFillColor(...headerBg);

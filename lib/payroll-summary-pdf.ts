@@ -2,6 +2,7 @@
 import jsPDF from "jspdf";
 import { format } from "date-fns";
 import type { WorkerPayment, PayrollPeriod } from "@/types/payroll";
+import { getThemeColors } from "./pdf-theme-utils";
 
 interface PayrollSummaryPDFOptions {
     period: PayrollPeriod;
@@ -42,11 +43,11 @@ export function generatePayrollSummaryPDF(options: PayrollSummaryPDFOptions): vo
     let y = margin;
 
     // Colors (matching salary-slip-pdf.ts)
-    const primaryColor: [number, number, number] = [15, 118, 110]; // Teal-700
-    const textColor: [number, number, number] = [31, 41, 55]; // Gray-800
-    const mutedColor: [number, number, number] = [107, 114, 128]; // Gray-500
-    const lightGray: [number, number, number] = [249, 250, 251]; // Gray-50
-    const borderColor: [number, number, number] = [229, 231, 235]; // Gray-200
+    const theme = getThemeColors();
+    const primaryColor = theme.primary;
+    const textColor = theme.text;
+    const mutedColor = theme.muted;
+    const borderColor = theme.border;
 
     // ========== HEADER ==========
     doc.setFillColor(...primaryColor);
@@ -124,7 +125,7 @@ export function generatePayrollSummaryPDF(options: PayrollSummaryPDFOptions): vo
     payments.forEach((payment, index) => {
         // Alternate row background
         if (index % 2 === 1) {
-            doc.setFillColor(...lightGray);
+            doc.setFillColor(...theme.muted);
             doc.rect(margin, y, contentWidth, 8, "F");
         }
 

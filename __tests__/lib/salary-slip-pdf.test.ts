@@ -23,6 +23,7 @@ describe("Salary Slip PDF Generator", () => {
     setFontSize: jest.Mock;
     setFont: jest.Mock;
     setDrawColor: jest.Mock;
+    setLineWidth: jest.Mock;
     rect: jest.Mock;
     text: jest.Mock;
     line: jest.Mock;
@@ -46,6 +47,7 @@ describe("Salary Slip PDF Generator", () => {
       setFontSize: jest.fn(),
       setFont: jest.fn(),
       setDrawColor: jest.fn(),
+      setLineWidth: jest.fn(),
       rect: jest.fn(),
       text: jest.fn(),
       line: jest.fn(),
