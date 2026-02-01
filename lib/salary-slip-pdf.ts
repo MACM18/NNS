@@ -42,7 +42,7 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
   let y = margin;
 
   // Colors
-  const primaryColor: [number, number, number] = [37, 99, 235]; // Blue-600
+  const primaryColor: [number, number, number] = [15, 118, 110]; // Teal-700
   const headerBg: [number, number, number] = [17, 24, 39]; // Gray-900
   const textColor: [number, number, number] = [31, 41, 55]; // Gray-800
   const mutedColor: [number, number, number] = [107, 114, 128]; // Gray-500

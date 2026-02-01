@@ -231,8 +231,8 @@ export default function PayrollPage() {
           name: periodForm.name,
           month: periodForm.month,
           year: periodForm.year,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
+          startDate: new Date(Date.UTC(periodForm.year, periodForm.month - 1, 1)).toISOString(),
+          endDate: new Date(Date.UTC(periodForm.year, periodForm.month, 0, 23, 59, 59, 999)).toISOString(),
         }),
       });
 
@@ -492,8 +492,8 @@ export default function PayrollPage() {
                         name,
                         month: m,
                         year: y,
-                        startDate: startDate.toISOString(),
-                        endDate: endDate.toISOString(),
+                        startDate: new Date(Date.UTC(y, m - 1, 1)).toISOString(),
+                        endDate: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)).toISOString(),
                       }),
                     });
 

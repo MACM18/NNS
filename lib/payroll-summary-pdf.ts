@@ -42,7 +42,7 @@ export function generatePayrollSummaryPDF(options: PayrollSummaryPDFOptions): vo
     let y = margin;
 
     // Colors (matching salary-slip-pdf.ts)
-    const primaryColor: [number, number, number] = [37, 99, 235]; // Blue-600
+    const primaryColor: [number, number, number] = [15, 118, 110]; // Teal-700
     const textColor: [number, number, number] = [31, 41, 55]; // Gray-800
     const mutedColor: [number, number, number] = [107, 114, 128]; // Gray-500
     const lightGray: [number, number, number] = [249, 250, 251]; // Gray-50
