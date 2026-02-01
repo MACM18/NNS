@@ -6,7 +6,7 @@ import { AuthSessionProvider } from "@/components/auth/session-provider";
 import { AuthProvider } from "@/contexts/auth-context";
 import { NotificationProvider } from "@/contexts/notification-context";
 import { DataCacheProvider } from "@/contexts/data-cache-context";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "sonner";
 import { PWAInitializer } from "@/components/pwa/pwa-initializer";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 

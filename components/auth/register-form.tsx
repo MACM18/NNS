@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useNotification } from "@/contexts/notification-context";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 
 interface RegisterFormProps {
@@ -47,40 +47,32 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
   const validateForm = () => {
     if (!formData.fullName.trim()) {
-      toast({
-        title: "Validation Error",
+      toast.error("Validation Error", {
         description: "Full name is required",
-        variant: "destructive",
         duration: 3000,
       });
       return false;
     }
 
     if (!formData.email.trim()) {
-      toast({
-        title: "Validation Error",
+      toast.error("Validation Error", {
         description: "Email is required",
-        variant: "destructive",
         duration: 3000,
       });
       return false;
     }
 
     if (formData.password.length < 6) {
-      toast({
-        title: "Validation Error",
+      toast.error("Validation Error", {
         description: "Password must be at least 6 characters long",
-        variant: "destructive",
         duration: 3000,
       });
       return false;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      toast({
-        title: "Validation Error",
+      toast.error("Validation Error", {
         description: "Passwords do not match",
-        variant: "destructive",
         duration: 3000,
       });
       return false;
@@ -116,10 +108,8 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         throw new Error(data.error || "Registration failed");
       }
 
-      toast({
-        title: "Registration Successful",
+      toast.success("Registration Successful", {
         description: "Your account has been created. You can now sign in.",
-        variant: "default",
         duration: 4000,
       });
 
@@ -139,10 +129,8 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         }
       }, 2000);
     } catch (error: any) {
-      toast({
-        title: "Registration Failed",
+      toast.error("Registration Failed", {
         description: error.message || "An error occurred during registration",
-        variant: "destructive",
         duration: 4000,
       });
     } finally {
@@ -233,17 +221,16 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                     {[1, 2, 3, 4].map((level) => (
                       <div
                         key={level}
-                        className={`h-1 w-full rounded ${
-                          level <= passwordStrength.strength
-                            ? passwordStrength.strength === 1
-                              ? "bg-red-500"
-                              : passwordStrength.strength === 2
+                        className={`h-1 w-full rounded ${level <= passwordStrength.strength
+                          ? passwordStrength.strength === 1
+                            ? "bg-red-500"
+                            : passwordStrength.strength === 2
                               ? "bg-yellow-500"
                               : passwordStrength.strength === 3
-                              ? "bg-blue-500"
-                              : "bg-green-500"
-                            : "bg-gray-200"
-                        }`}
+                                ? "bg-blue-500"
+                                : "bg-green-500"
+                          : "bg-gray-200"
+                          }`}
                       />
                     ))}
                   </div>

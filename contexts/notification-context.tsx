@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/contexts/auth-context";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type {
   Notification,
   NotificationContextType,
@@ -22,7 +22,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
-  const { toast } = useToast();
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -63,11 +62,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       setNotifications((prev) => [data as Notification, ...prev]);
 
-      // Show toast using shadcn useToast logic
-      toast({
-        title: notification.title,
+      // Show toast using sonner
+      toast(notification.title, {
         description: notification.message,
-        variant: notification.type === "error" ? "destructive" : "default",
+        action: {
+          label: "Close",
+          onClick: () => console.log("Toast closed"),
+        },
       });
     } catch (error) {
       console.error("Error adding notification:", error);
@@ -134,17 +135,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error("Failed to delete all notifications");
 
       setNotifications([]);
-      toast({
-        title: "Success",
-        description: "All notifications have been deleted",
-      });
+      setNotifications([]);
+      toast.success("All notifications have been deleted");
     } catch (error) {
       console.error("Error deleting all notifications:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete notifications",
-        variant: "destructive",
-      });
+      toast.error("Failed to delete notifications");
     }
   };
 

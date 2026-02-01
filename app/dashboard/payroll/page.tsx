@@ -647,7 +647,7 @@ export default function PayrollPage() {
                   </DropdownMenu>
                 </CardHeader>
                 <CardContent className='p-0'>
-                  <div className='overflow-x-auto'>
+                  <div className='overflow-x-auto w-full'>
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -692,8 +692,19 @@ export default function PayrollPage() {
                               )}
                               {visibleColumns.has("date_range") && (
                                 <TableCell className="hidden md:table-cell">
-                                  {format(new Date(period.startDate), "MMM d")} -{" "}
-                                  {format(new Date(period.endDate), "MMM d, yyyy")}
+                                  {(() => {
+                                    // create naive dates from the UTC ISO string to prevent timezone shifts
+                                    const start = new Date(period.startDate);
+                                    const end = new Date(period.endDate);
+                                    const naiveStart = new Date(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+                                    const naiveEnd = new Date(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+                                    return (
+                                      <>
+                                        {format(naiveStart, "MMM d")} -{" "}
+                                        {format(naiveEnd, "MMM d, yyyy")}
+                                      </>
+                                    );
+                                  })()}
                                 </TableCell>
                               )}
                               {visibleColumns.has("status") && (
@@ -814,158 +825,160 @@ export default function PayrollPage() {
                 <CardDescription>Configure payment methods and rates for each worker.</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Worker Name</TableHead>
-                      <TableHead>Employee No</TableHead>
-                      <TableHead>Payment Type</TableHead>
-                      <TableHead>Monthly Rate (LKR)</TableHead>
-                      <TableHead>Per Line Rate (LKR)</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {workers.length > 0 ? (
-                      workers.map((worker) => (
-                        <TableRow key={worker.id}>
-                          <TableCell className="font-medium">{worker.full_name}</TableCell>
-                          <TableCell>
-                            {editingWorker === worker.id ? (
-                              <Input
-                                className="w-[120px]"
-                                value={workerFormData.employee_no || ''}
-                                onChange={(e) => setWorkerFormData({ ...workerFormData, employee_no: e.target.value })}
-                                placeholder="EMP-001"
-                              />
-                            ) : (
-                              worker.employee_no || <span className="text-muted-foreground italic text-xs">Not set</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {editingWorker === worker.id ? (
-                              <Select
-                                value={workerFormData.payment_type}
-                                onValueChange={(val) => setWorkerFormData({ ...workerFormData, payment_type: val })}
-                              >
-                                <SelectTrigger className="w-[150px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="per_line">Per Line</SelectItem>
-                                  <SelectItem value="fixed_monthly">Fixed Monthly</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <Badge variant="outline">
-                                {worker.role === 'supervisor' ? 'Monthly' : (worker.payment_type === 'fixed_monthly' ? 'Fixed Monthly' : 'Per Line')}
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {editingWorker === worker.id ? (
-                              <Input
-                                type="number"
-                                className="w-[120px]"
-                                value={workerFormData.monthly_rate || ''}
-                                onChange={(e) => setWorkerFormData({ ...workerFormData, monthly_rate: parseFloat(e.target.value) })}
-                                placeholder="0.00"
-                              />
-                            ) : (
-                              formatCurrency(worker.monthly_rate || 0)
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {editingWorker === worker.id ? (
-                              <Input
-                                type="number"
-                                className="w-[120px]"
-                                value={workerFormData.per_line_rate || ''}
-                                onChange={(e) => setWorkerFormData({ ...workerFormData, per_line_rate: parseFloat(e.target.value) })}
-                                placeholder="0.00"
-                              />
-                            ) : (
-                              formatCurrency(worker.per_line_rate || 0)
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {editingWorker === worker.id ? (
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setEditingWorker(null)}
+                <div className="overflow-x-auto w-full">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Worker Name</TableHead>
+                        <TableHead>Employee No</TableHead>
+                        <TableHead>Payment Type</TableHead>
+                        <TableHead>Monthly Rate (LKR)</TableHead>
+                        <TableHead>Per Line Rate (LKR)</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {workers.length > 0 ? (
+                        workers.map((worker) => (
+                          <TableRow key={worker.id}>
+                            <TableCell className="font-medium">{worker.full_name}</TableCell>
+                            <TableCell>
+                              {editingWorker === worker.id ? (
+                                <Input
+                                  className="w-[120px]"
+                                  value={workerFormData.employee_no || ''}
+                                  onChange={(e) => setWorkerFormData({ ...workerFormData, employee_no: e.target.value })}
+                                  placeholder="EMP-001"
+                                />
+                              ) : (
+                                worker.employee_no || <span className="text-muted-foreground italic text-xs">Not set</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {editingWorker === worker.id ? (
+                                <Select
+                                  value={workerFormData.payment_type}
+                                  onValueChange={(val) => setWorkerFormData({ ...workerFormData, payment_type: val })}
                                 >
-                                  Cancel
-                                </Button>
+                                  <SelectTrigger className="w-[150px]">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="per_line">Per Line</SelectItem>
+                                    <SelectItem value="fixed_monthly">Fixed Monthly</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Badge variant="outline">
+                                  {worker.role === 'supervisor' ? 'Monthly' : (worker.payment_type === 'fixed_monthly' ? 'Fixed Monthly' : 'Per Line')}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {editingWorker === worker.id ? (
+                                <Input
+                                  type="number"
+                                  className="w-[120px]"
+                                  value={workerFormData.monthly_rate || ''}
+                                  onChange={(e) => setWorkerFormData({ ...workerFormData, monthly_rate: parseFloat(e.target.value) })}
+                                  placeholder="0.00"
+                                />
+                              ) : (
+                                formatCurrency(worker.monthly_rate || 0)
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {editingWorker === worker.id ? (
+                                <Input
+                                  type="number"
+                                  className="w-[120px]"
+                                  value={workerFormData.per_line_rate || ''}
+                                  onChange={(e) => setWorkerFormData({ ...workerFormData, per_line_rate: parseFloat(e.target.value) })}
+                                  placeholder="0.00"
+                                />
+                              ) : (
+                                formatCurrency(worker.per_line_rate || 0)
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {editingWorker === worker.id ? (
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setEditingWorker(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        const response = await fetch(`/api/workers`, {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({
+                                            id: worker.id,
+                                            employee_no: workerFormData.employee_no,
+                                            payment_type: workerFormData.payment_type,
+                                            per_line_rate: workerFormData.per_line_rate,
+                                            monthly_rate: workerFormData.monthly_rate,
+                                          }),
+                                        });
+
+                                        if (!response.ok) throw new Error('Failed to update worker');
+
+                                        addNotification({
+                                          title: 'Success',
+                                          message: 'Worker settings updated',
+                                          type: 'success',
+                                          category: 'system',
+                                        });
+                                        setEditingWorker(null);
+                                        fetchData();
+                                      } catch (error: any) {
+                                        addNotification({
+                                          title: 'Error',
+                                          message: error.message,
+                                          type: 'error',
+                                          category: 'system',
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    Save
+                                  </Button>
+                                </div>
+                              ) : (
                                 <Button
                                   size="sm"
-                                  onClick={async () => {
-                                    try {
-                                      const response = await fetch(`/api/workers`, {
-                                        method: 'PATCH',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                          id: worker.id,
-                                          employee_no: workerFormData.employee_no,
-                                          payment_type: workerFormData.payment_type,
-                                          per_line_rate: workerFormData.per_line_rate,
-                                          monthly_rate: workerFormData.monthly_rate,
-                                        }),
-                                      });
-
-                                      if (!response.ok) throw new Error('Failed to update worker');
-
-                                      addNotification({
-                                        title: 'Success',
-                                        message: 'Worker settings updated',
-                                        type: 'success',
-                                        category: 'system',
-                                      });
-                                      setEditingWorker(null);
-                                      fetchData();
-                                    } catch (error: any) {
-                                      addNotification({
-                                        title: 'Error',
-                                        message: error.message,
-                                        type: 'error',
-                                        category: 'system',
-                                      });
-                                    }
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setEditingWorker(worker.id);
+                                    setWorkerFormData({
+                                      employee_no: worker.employee_no || '',
+                                      payment_type: worker.payment_type || 'per_line',
+                                      per_line_rate: worker.per_line_rate || 0,
+                                      monthly_rate: worker.monthly_rate || 0,
+                                    });
                                   }}
                                 >
-                                  Save
+                                  Edit
                                 </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setEditingWorker(worker.id);
-                                  setWorkerFormData({
-                                    employee_no: worker.employee_no || '',
-                                    payment_type: worker.payment_type || 'per_line',
-                                    per_line_rate: worker.per_line_rate || 0,
-                                    monthly_rate: worker.monthly_rate || 0,
-                                  });
-                                }}
-                              >
-                                Edit
-                              </Button>
-                            )}
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                            No workers found
                           </TableCell>
                         </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
-                          No workers found
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -1279,6 +1292,6 @@ export default function PayrollPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   );
 }

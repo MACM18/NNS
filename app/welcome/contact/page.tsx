@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useState } from "react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import Link from "next/link";
 
 export default function ContactPage() {
@@ -19,7 +19,6 @@ export default function ContactPage() {
     message: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -45,11 +44,9 @@ export default function ContactPage() {
 
       if (response.ok) {
         setFormData({ name: "", email: "", subject: "", message: "" });
-        toast({
-          title: "Message Sent!",
+        toast.success("Message Sent!", {
           description:
             "Thank you for contacting us. We will get back to you shortly.",
-          variant: "default",
         });
       } else {
         // Handle detailed validation errors from Zod
@@ -57,26 +54,20 @@ export default function ContactPage() {
           const errorMessages = result.details
             .map((err: any) => `${err.field}: ${err.message}`)
             .join("\n");
-          toast({
-            title: "Validation Error",
+          toast.error("Validation Error", {
             description: errorMessages,
-            variant: "destructive",
           });
         } else {
-          toast({
-            title: "Error",
+          toast.error("Error", {
             description:
               result.error || "Failed to send message. Please try again.",
-            variant: "destructive",
           });
         }
       }
     } catch (error) {
       console.error("Form submission error:", error);
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Failed to send message. Please try again.",
-        variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
