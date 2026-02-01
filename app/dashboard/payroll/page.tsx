@@ -62,6 +62,16 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useNotification } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
 import type { PayrollPeriod, PayrollSummary } from "@/types/payroll";
@@ -114,6 +124,18 @@ export default function PayrollPage() {
     fixedAmount: null,
     enabled: true,
     description: "",
+  });
+
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    onConfirm: () => { },
   });
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
@@ -321,71 +343,73 @@ export default function PayrollPage() {
   };
 
   const handleDeleteRule = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this rule?")) return;
+    setDeleteConfirm({
+      open: true,
+      title: "Delete Payroll Rule",
+      description: "Are you sure you want to delete this rule? This action cannot be undone.",
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/payroll/rules?id=${id}`, {
+            method: "DELETE",
+          });
 
-    try {
-      const response = await fetch(`/api/payroll/rules?id=${id}`, {
-        method: "DELETE",
-      });
+          if (!response.ok) throw new Error("Failed to delete rule");
 
-      if (!response.ok) throw new Error("Failed to delete rule");
-
-      addNotification({
-        title: "Success",
-        message: "Payroll rule deleted",
-        type: "success",
-        category: "system",
-      });
-      fetchData();
-    } catch (error) {
-      addNotification({
-        title: "Error",
-        message: "Failed to delete rule",
-        type: "error",
-        category: "system",
-      });
-    }
+          addNotification({
+            title: "Success",
+            message: "Payroll rule deleted",
+            type: "success",
+            category: "system",
+          });
+          fetchData();
+        } catch (error) {
+          addNotification({
+            title: "Error",
+            message: "Failed to delete rule",
+            type: "error",
+            category: "system",
+          });
+        }
+      },
+    });
   };
 
   const handleDeletePeriod = async (periodId: string) => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this payroll period? This will delete all associated payment data."
-      )
-    ) {
-      return;
-    }
+    setDeleteConfirm({
+      open: true,
+      title: "Delete Payroll Period",
+      description: "Are you sure you want to delete this payroll period? This will delete all associated payment data and cannot be undone.",
+      onConfirm: async () => {
+        try {
+          setProcessingPeriod(periodId);
+          const response = await fetch(`/api/payroll/periods/${periodId}`, {
+            method: "DELETE",
+          });
 
-    try {
-      setProcessingPeriod(periodId);
-      const response = await fetch(`/api/payroll/periods/${periodId}`, {
-        method: "DELETE",
-      });
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || "Failed to delete period");
+          }
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to delete period");
-      }
-
-      addNotification({
-        title: "Success",
-        message: "Payroll period deleted",
-        type: "success",
-        category: "system",
-      });
-
-      fetchData();
-    } catch (error) {
-      addNotification({
-        title: "Error",
-        message:
-          error instanceof Error ? error.message : "Failed to delete period",
-        type: "error",
-        category: "system",
-      });
-    } finally {
-      setProcessingPeriod(null);
-    }
+          addNotification({
+            title: "Success",
+            message: "Payroll period deleted",
+            type: "success",
+            category: "system",
+          });
+          fetchData();
+        } catch (error: any) {
+          addNotification({
+            title: "Error",
+            message: error.message,
+            type: "error",
+            category: "system",
+          });
+        } finally {
+          setProcessingPeriod(null);
+        }
+      },
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -1212,6 +1236,32 @@ export default function PayrollPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm((prev) => ({ ...prev, open }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{deleteConfirm.title}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteConfirm.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                deleteConfirm.onConfirm();
+                setDeleteConfirm((prev) => ({ ...prev, open: false }));
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

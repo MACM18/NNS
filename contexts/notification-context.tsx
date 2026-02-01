@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/contexts/auth-context";
-import { toast } from "sonner";
+import { useToast } from "@/components/ui/use-toast";
 import type {
   Notification,
   NotificationContextType,
@@ -22,6 +22,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -62,24 +63,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       setNotifications((prev) => [data as Notification, ...prev]);
 
-      // Show toast for immediate feedback with proper styling
-      const toastFn =
-        notification.type === "error"
-          ? toast.error
-          : notification.type === "warning"
-          ? toast.warning
-          : notification.type === "success"
-          ? toast.success
-          : toast;
-
-      toastFn(notification.title, {
+      // Show toast using shadcn useToast logic
+      toast({
+        title: notification.title,
         description: notification.message,
-        action: notification.action_url
-          ? {
-              label: "View",
-              onClick: () => (window.location.href = notification.action_url!),
-            }
-          : undefined,
+        variant: notification.type === "error" ? "destructive" : "default",
       });
     } catch (error) {
       console.error("Error adding notification:", error);
