@@ -197,142 +197,193 @@ export function ManageWorkersModal({
     }
   };
 
+  const [activeTab, setActiveTab] = useState<"list" | "form">("list");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-4xl max-h-[90vh] overflow-y-auto md:overflow-hidden flex flex-col'>
-        <DialogHeader>
-          <DialogTitle>Manage Workers</DialogTitle>
-          <DialogDescription>
-            Add, edit, or remove workers who can be assigned to line
-            installations.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0">
+        <div className="p-6 pb-4 border-b">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <DialogTitle className="text-xl font-bold">Manage Workers</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Add, edit, or remove workers who can be assigned to line installations.
+                </DialogDescription>
+              </div>
+              <Button
+                onClick={() => {
+                  resetForm();
+                  setActiveTab("form");
+                }}
+                size="sm"
+                className="md:hidden h-9 px-4 gap-2 rounded-full"
+              >
+                <Plus className="h-4 w-4" />
+                Add New
+              </Button>
+            </div>
+          </DialogHeader>
+        </div>
 
-        <Tabs defaultValue="list" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <TabsList className="grid w-full grid-cols-2 mb-4 md:hidden">
-            <TabsTrigger value="list">Workers List</TabsTrigger>
-            <TabsTrigger value="form">{editingWorker ? "Edit Worker" : "Add New"}</TabsTrigger>
-          </TabsList>
+        <div className="flex-1 flex flex-col min-h-0 p-4 md:p-6 overflow-hidden bg-muted/20">
+          {/* Mobile Tab Switcher */}
+          <div className="flex md:hidden bg-muted p-1 rounded-xl mb-4 border shadow-sm">
+            <button
+              onClick={() => setActiveTab("list")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-all",
+                activeTab === "list" ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <UserCircle className="h-4 w-4" />
+              Workers List
+            </button>
+            <button
+              onClick={() => setActiveTab("form")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-all",
+                activeTab === "form" ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {editingWorker ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {editingWorker ? "Edit Profile" : "Add Profile"}
+            </button>
+          </div>
 
-          <div className="grid gap-6 md:grid-cols-[1fr,380px] flex-1 overflow-hidden min-h-0">
-            {/* Workers List */}
-            <TabsContent value="list" className="flex-1 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden md:data-[state=inactive]:flex">
-              <div className='flex-1 overflow-auto border rounded-xl p-4 bg-muted/30 space-y-3'>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className='font-semibold flex items-center gap-2'>
-                    <UserCircle className="h-4 w-4 text-primary" />
-                    Team Members
-                  </h3>
-                  <Badge variant="secondary" className="font-mono">{workers.length}</Badge>
-                </div>
+          <div className="grid gap-6 md:grid-cols-[1fr,400px] lg:grid-cols-[1fr,420px] flex-1 overflow-hidden min-h-0">
+            {/* Workers List Column */}
+            <div className={cn(
+              "flex-1 flex flex-col min-h-0 bg-background border rounded-2xl shadow-sm overflow-hidden",
+              activeTab !== "list" && "hidden md:flex"
+            )}>
+              <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
+                <h3 className='font-bold flex items-center gap-2 text-foreground/80'>
+                  <UserCircle className="h-4 w-4 text-primary" />
+                  Team Directory
+                  <Badge variant="secondary" className="ml-1 text-[10px] h-5 bg-background border-muted-foreground/20">{workers.length}</Badge>
+                </h3>
+              </div>
 
+              <div className='flex-1 overflow-auto p-3 space-y-3 custom-scrollbar'>
                 {loading ? (
-                  <div className='flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground'>
-                    <Loader2 className='h-8 w-8 animate-spin text-primary' />
-                    <p className="text-sm">Loading team...</p>
+                  <div className='flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground'>
+                    <Loader2 className='h-8 w-8 animate-spin text-primary opacity-50' />
+                    <p className="text-sm font-medium">Synchronizing team data...</p>
                   </div>
                 ) : workers.length === 0 ? (
-                  <div className='flex flex-col items-center justify-center py-12 px-4 text-center border-2 border-dashed rounded-xl bg-background/50'>
-                    <UserCircle className="h-12 w-12 text-muted-foreground/30 mb-3" />
-                    <h4 className="font-medium text-foreground">No workers found</h4>
-                    <p className='text-sm text-muted-foreground mt-1 max-w-[200px]'>
-                      Start by adding your first team member using the form.
+                  <div className='flex flex-col items-center justify-center py-16 px-4 text-center border-2 border-dashed rounded-xl bg-muted/10'>
+                    <div className="bg-background p-4 rounded-full shadow-sm mb-4">
+                      <UserCircle className="h-10 w-10 text-muted-foreground/30" />
+                    </div>
+                    <h4 className="font-bold text-foreground">No workers assigned</h4>
+                    <p className='text-sm text-muted-foreground mt-2 max-w-[240px]'>
+                      Assign your first worker to start managing line installations and payroll.
                     </p>
+                    <Button
+                      variant="outline"
+                      className="mt-6 rounded-full px-6"
+                      onClick={() => setActiveTab("form")}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Worker Now
+                    </Button>
                   </div>
                 ) : (
                   workers.map((worker) => (
                     <div
                       key={worker.id}
-                      className='group relative bg-background border rounded-xl p-4 transition-all hover:shadow-md hover:border-primary/30'
+                      className={cn(
+                        'group relative bg-background border rounded-xl p-4 transition-all hover:shadow-lg hover:border-primary/40 active:scale-[0.99]',
+                        editingWorker?.id === worker.id && "border-primary bg-primary/5 ring-1 ring-primary/20"
+                      )}
                     >
                       <div className='flex items-start justify-between gap-3'>
-                        <div className='flex-1 space-y-2'>
+                        <div className='flex-1 space-y-3'>
                           <div className='flex flex-wrap items-center gap-2'>
-                            <h4 className='font-bold text-foreground leading-none'>{worker.full_name}</h4>
-                            <Badge
-                              variant={worker.status === "active" ? "default" : "secondary"}
-                              className={cn(
-                                "text-[10px] h-5 px-1.5 uppercase font-bold",
-                                worker.status === "active" ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20" : ""
-                              )}
-                            >
-                              {worker.status}
-                            </Badge>
-                            {worker.employee_no && (
-                              <Badge variant='outline' className='text-[10px] h-5 px-1.5 font-mono uppercase bg-muted/50'>
-                                {worker.employee_no}
+                            <h4 className='font-bold text-foreground text-sm uppercase tracking-tight'>{worker.full_name}</h4>
+                            <div className="flex gap-1">
+                              <Badge
+                                variant={worker.status === "active" ? "default" : "secondary"}
+                                className={cn(
+                                  "text-[9px] h-4 px-1.5 uppercase font-black",
+                                  worker.status === "active" ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20" : ""
+                                )}
+                              >
+                                {worker.status}
                               </Badge>
-                            )}
+                              {worker.employee_no && (
+                                <Badge variant='outline' className='text-[9px] h-4 px-1.5 font-mono uppercase bg-muted/80 text-muted-foreground border-muted-foreground/30'>
+                                  {worker.employee_no}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 pt-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-x-4 gap-y-2">
                             {worker.role && (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <ShieldCheck className="h-3.5 w-3.5 text-primary/70" />
+                              <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+                                <ShieldCheck className="h-3.5 w-3.5 text-primary/60" />
                                 <span className="capitalize">{worker.role}</span>
                               </div>
                             )}
                             {worker.phone_number && (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Phone className="h-3.5 w-3.5 text-primary/70" />
+                              <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+                                <Phone className="h-3.5 w-3.5 text-primary/60" />
                                 {worker.phone_number}
                               </div>
                             )}
                             {worker.email && (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground col-span-full">
-                                <Mail className="h-3.5 w-3.5 text-primary/70" />
+                              <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground col-span-full">
+                                <Mail className="h-3.5 w-3.5 text-primary/60" />
                                 <span className="truncate">{worker.email}</span>
                               </div>
                             )}
                           </div>
 
                           {worker.notes && (
-                            <div className='flex items-start gap-2 bg-muted/50 rounded-lg p-2 mt-2'>
+                            <div className='flex items-start gap-2 bg-muted/30 rounded-lg p-2.5 mt-2 border border-muted/50'>
                               <FileText className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
-                              <p className='text-[11px] text-muted-foreground line-clamp-2 italic'>
+                              <p className='text-[10px] text-muted-foreground leading-relaxed italic line-clamp-2'>
                                 {worker.notes}
                               </p>
                             </div>
                           )}
                         </div>
 
-                        <div className='flex flex-col gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity'>
+                        <div className='flex flex-col gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-all duration-200'>
                           <Button
                             variant='ghost'
                             size='icon'
-                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
+                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg border border-transparent hover:border-primary/20 shadow-sm transition-all"
                             onClick={() => {
                               handleEdit(worker);
-                              // On mobile, switch to form tab automatically
-                              if (window.innerWidth < 768) {
-                                const tabTrigger = document.querySelector('[value="form"]') as HTMLElement;
-                                tabTrigger?.click();
-                              }
+                              setActiveTab("form");
                             }}
                           >
                             <Pencil className='h-4 w-4' />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant='ghost' size='icon' className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive">
+                              <Button variant='ghost' size='icon' className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive rounded-lg border border-transparent hover:border-destructive/20 shadow-sm transition-all">
                                 <Trash2 className='h-4 w-4' />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete worker?</AlertDialogTitle>
+                                <AlertDialogTitle>Delete Team Member?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  This will permanently delete {worker.full_name} from
-                                  the system. This action cannot be undone.
+                                  This will permanently remove <b>{worker.full_name}</b> from the system.
+                                  They will no longer be assignable to new installations.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogCancel className="rounded-full">Keep Worker</AlertDialogCancel>
                                 <AlertDialogAction
                                   onClick={() => handleDelete(worker.id)}
-                                  className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                                  className='bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-full'
                                 >
-                                  Delete
+                                  Confirm Delete
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -343,173 +394,188 @@ export function ManageWorkersModal({
                   ))
                 )}
               </div>
-            </TabsContent>
+            </div>
 
-            {/* Add/Edit Form */}
-            <TabsContent value="form" className="flex-1 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden md:data-[state=inactive]:flex">
-              <div className='border rounded-xl p-5 bg-background shadow-sm space-y-6 overflow-auto'>
-                <div className="space-y-1">
-                  <h3 className='font-bold text-lg'>
-                    {editingWorker ? "Edit Team Member" : "New Team Member"}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {editingWorker ? "Update worker profile and roles." : "Fill in the details to add a new worker."}
-                  </p>
+            {/* Add/Edit Form Column */}
+            <div className={cn(
+              "flex-1 flex flex-col min-h-0",
+              activeTab !== "form" && "hidden md:flex"
+            )}>
+              <div className='flex-1 flex flex-col bg-background border rounded-2xl shadow-lg border-primary/10 overflow-hidden'>
+                <div className="p-5 border-b bg-gradient-to-r from-primary/5 to-transparent flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <h3 className='font-black text-foreground flex items-center gap-2 tracking-tight uppercase text-xs'>
+                      {editingWorker ? <Activity className="h-3.5 w-3.5 text-primary" /> : <Plus className="h-3.5 w-3.5 text-primary" />}
+                      {editingWorker ? "Edit Profile" : "Create Profile"}
+                    </h3>
+                  </div>
+                  {editingWorker && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={resetForm}
+                      className="h-7 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-primary"
+                    >
+                      Clear / New
+                    </Button>
+                  )}
                 </div>
 
-                <form onSubmit={handleSubmit} className='space-y-6'>
-                  {/* Basic Info Group */}
-                  <div className="space-y-4">
-                    <h4 className="text-[10px] uppercase font-bold tracking-wider text-primary flex items-center gap-2">
-                      <User className="h-3 w-3" />
-                      Basic Information
-                    </h4>
+                <form onSubmit={handleSubmit} className='flex-1 flex flex-col min-h-0'>
+                  <div className="flex-1 overflow-auto p-5 space-y-8 custom-scrollbar">
+                    {/* Basic Info Group */}
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] uppercase font-black tracking-[0.2em] text-primary/60 flex items-center gap-2">
+                        <User className="h-3 w-3" />
+                        Identity
+                      </h4>
 
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor='full_name' className="text-xs font-semibold">
-                          Full Name <span className='text-destructive'>*</span>
-                        </Label>
-                        <Input
-                          id='full_name'
-                          value={formData.full_name}
-                          onChange={(e) =>
-                            setFormData({ ...formData, full_name: e.target.value })
-                          }
-                          placeholder='John Doe'
-                          className="h-10 border-muted-foreground/20 focus-visible:ring-primary"
-                          required
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-5">
                         <div className="space-y-2">
-                          <Label htmlFor='employee_no' className="text-xs font-semibold">Employee No</Label>
+                          <Label htmlFor='full_name' className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                            Legal Full Name <span className='text-destructive'>*</span>
+                          </Label>
                           <Input
-                            id='employee_no'
-                            value={formData.employee_no}
+                            id='full_name'
+                            value={formData.full_name}
                             onChange={(e) =>
-                              setFormData({ ...formData, employee_no: e.target.value })
+                              setFormData({ ...formData, full_name: e.target.value })
                             }
-                            placeholder='EMP-001'
-                            className="h-10 font-mono text-sm border-muted-foreground/20"
+                            placeholder='e.g. Johnathan Smith'
+                            className="h-11 border-muted-foreground/20 focus-visible:ring-primary focus-visible:border-primary/50 bg-muted/5 rounded-xl transition-all"
+                            required
                           />
                         </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor='employee_no' className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">ID Number</Label>
+                            <Input
+                              id='employee_no'
+                              value={formData.employee_no}
+                              onChange={(e) =>
+                                setFormData({ ...formData, employee_no: e.target.value })
+                              }
+                              placeholder='EMP-123'
+                              className="h-11 font-mono text-xs border-muted-foreground/20 bg-muted/5 rounded-xl"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor='status' className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Availability</Label>
+                            <Select
+                              value={formData.status}
+                              onValueChange={(value) =>
+                                setFormData({ ...formData, status: value })
+                              }
+                            >
+                              <SelectTrigger id='status' className="h-11 border-muted-foreground/20 bg-muted/5 rounded-xl">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl">
+                                <SelectItem value='active'>Active</SelectItem>
+                                <SelectItem value='inactive'>Inactive</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Contact Info Group */}
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] uppercase font-black tracking-[0.2em] text-primary/60 flex items-center gap-2">
+                        <Phone className="h-3 w-3" />
+                        Communication
+                      </h4>
+
+                      <div className="grid gap-5">
                         <div className="space-y-2">
-                          <Label htmlFor='status' className="text-xs font-semibold">Status</Label>
+                          <Label htmlFor='phone_number' className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Primary Contact</Label>
+                          <Input
+                            id='phone_number'
+                            value={formData.phone_number}
+                            onChange={(e) =>
+                              setFormData({ ...formData, phone_number: e.target.value })
+                            }
+                            placeholder='+94 XX XXX XXXX'
+                            className="h-11 border-muted-foreground/20 bg-muted/5 rounded-xl"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor='email' className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Email Correspondence</Label>
+                          <Input
+                            id='email'
+                            type='email'
+                            value={formData.email}
+                            onChange={(e) =>
+                              setFormData({ ...formData, email: e.target.value })
+                            }
+                            placeholder='worker@organisation.com'
+                            className="h-11 border-muted-foreground/20 bg-muted/5 rounded-xl"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Role & Notes Group */}
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] uppercase font-black tracking-[0.2em] text-primary/60 flex items-center gap-2">
+                        <Activity className="h-3 w-3" />
+                        Assignment & Notes
+                      </h4>
+
+                      <div className="grid gap-5">
+                        <div className="space-y-2">
+                          <Label htmlFor='role' className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Expertise Domain</Label>
                           <Select
-                            value={formData.status}
+                            value={formData.role}
                             onValueChange={(value) =>
-                              setFormData({ ...formData, status: value })
+                              setFormData({ ...formData, role: value })
                             }
                           >
-                            <SelectTrigger id='status' className="h-10 border-muted-foreground/20">
+                            <SelectTrigger id='role' className="h-11 border-muted-foreground/20 bg-muted/5 rounded-xl">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value='active'>Active</SelectItem>
-                              <SelectItem value='inactive'>Inactive</SelectItem>
+                            <SelectContent className="rounded-xl">
+                              <SelectItem value='technician'>Technician</SelectItem>
+                              <SelectItem value='installer'>Installer</SelectItem>
+                              <SelectItem value='supervisor'>Supervisor</SelectItem>
+                              <SelectItem value='helper'>Helper</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor='notes' className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Office Reference</Label>
+                          <Textarea
+                            id='notes'
+                            value={formData.notes}
+                            onChange={(e) =>
+                              setFormData({ ...formData, notes: e.target.value })
+                            }
+                            placeholder='Internal only notes...'
+                            className="resize-none border-muted-foreground/20 focus-visible:ring-primary focus-visible:border-primary/50 bg-muted/5 min-h-[100px] rounded-xl transition-all"
+                            rows={3}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Contact Info Group */}
-                  <div className="space-y-4 pt-2">
-                    <h4 className="text-[10px] uppercase font-bold tracking-wider text-primary flex items-center gap-2">
-                      <Phone className="h-3 w-3" />
-                      Contact Details
-                    </h4>
-
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor='phone_number' className="text-xs font-semibold">Phone Number</Label>
-                        <Input
-                          id='phone_number'
-                          value={formData.phone_number}
-                          onChange={(e) =>
-                            setFormData({ ...formData, phone_number: e.target.value })
-                          }
-                          placeholder='+94 77 123 4567'
-                          className="h-10 border-muted-foreground/20"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor='email' className="text-xs font-semibold">Email Address</Label>
-                        <Input
-                          id='email'
-                          type='email'
-                          value={formData.email}
-                          onChange={(e) =>
-                            setFormData({ ...formData, email: e.target.value })
-                          }
-                          placeholder='worker@example.com'
-                          className="h-10 border-muted-foreground/20"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Role & Notes Group */}
-                  <div className="space-y-4 pt-2">
-                    <h4 className="text-[10px] uppercase font-bold tracking-wider text-primary flex items-center gap-2">
-                      <Activity className="h-3 w-3" />
-                      Role & Preferences
-                    </h4>
-
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor='role' className="text-xs font-semibold">Specialization / Role</Label>
-                        <Select
-                          value={formData.role}
-                          onValueChange={(value) =>
-                            setFormData({ ...formData, role: value })
-                          }
-                        >
-                          <SelectTrigger id='role' className="h-10 border-muted-foreground/20">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value='technician'>Technician</SelectItem>
-                            <SelectItem value='installer'>Installer</SelectItem>
-                            <SelectItem value='supervisor'>Supervisor</SelectItem>
-                            <SelectItem value='helper'>Helper</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor='notes' className="text-xs font-semibold">Administrative Notes</Label>
-                        <Textarea
-                          id='notes'
-                          value={formData.notes}
-                          onChange={(e) =>
-                            setFormData({ ...formData, notes: e.target.value })
-                          }
-                          placeholder='Any additional information for the office...'
-                          className="resize-none border-muted-foreground/20 focus-visible:ring-primary min-h-[80px]"
-                          rows={3}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className='flex gap-3 pt-4 sticky bottom-0 bg-background'>
+                  <div className='p-5 border-t bg-muted/10 backdrop-blur-sm sticky bottom-0 flex gap-3'>
                     <Button
                       type='submit'
                       disabled={submitting}
-                      className='flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg transition-all active:scale-[0.98]'
+                      className='flex-1 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-widest rounded-xl transition-all shadow-lg active:scale-[0.97]'
                     >
                       {submitting ? (
-                        <Loader2 className='h-4 w-4 animate-spin' />
+                        <Loader2 className='h-5 w-5 animate-spin' />
                       ) : editingWorker ? (
-                        "Update Profile"
+                        "Save Changes"
                       ) : (
                         <>
-                          <Plus className='h-4 w-4 mr-2' />
+                          <Plus className='h-5 w-5 mr-3' />
                           Add to Team
                         </>
                       )}
@@ -518,21 +584,19 @@ export function ManageWorkersModal({
                       <Button
                         type='button'
                         variant='outline'
-                        className="h-11 rounded-lg border-muted-foreground/20"
-                        onClick={() => {
-                          resetForm();
-                          // Optional: switch back to list
-                        }}
+                        className="h-12 w-12 rounded-xl border-muted-foreground/30 hover:bg-muted p-0"
+                        onClick={resetForm}
+                        title="Cancel editing"
                       >
-                        Cancel
+                        <Trash2 className="h-5 w-5 text-muted-foreground" />
                       </Button>
                     )}
                   </div>
                 </form>
               </div>
-            </TabsContent>
+            </div>
           </div>
-        </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );
