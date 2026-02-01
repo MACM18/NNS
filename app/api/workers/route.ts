@@ -14,6 +14,9 @@ interface WorkerResponse {
   status: string;
   notes: string | null;
   profile_id: string | null;
+  payment_type: string;
+  per_line_rate: number | null;
+  monthly_rate: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -146,6 +149,9 @@ export async function GET() {
       status: w.status,
       notes: w.notes,
       profile_id: w.profileId,
+      payment_type: w.paymentType,
+      per_line_rate: w.perLineRate ? Number(w.perLineRate) : null,
+      monthly_rate: w.monthlyRate ? Number(w.monthlyRate) : null,
       created_by: w.createdById,
       created_at: w.createdAt.toISOString(),
       updated_at: w.updatedAt.toISOString(),
@@ -249,6 +255,9 @@ export async function POST(req: NextRequest) {
       status: data.status,
       notes: data.notes,
       profile_id: data.profileId,
+      payment_type: data.paymentType,
+      per_line_rate: data.perLineRate ? Number(data.perLineRate) : null,
+      monthly_rate: data.monthlyRate ? Number(data.monthlyRate) : null,
       created_by: data.createdById,
       created_at: data.createdAt.toISOString(),
       updated_at: data.updatedAt.toISOString(),
@@ -386,6 +395,9 @@ export async function PATCH(req: NextRequest) {
       status: data.status,
       notes: data.notes,
       profile_id: data.profileId,
+      payment_type: data.paymentType,
+      per_line_rate: data.perLineRate ? Number(data.perLineRate) : null,
+      monthly_rate: data.monthlyRate ? Number(data.monthlyRate) : null,
       created_by: data.createdById,
       created_at: data.createdAt.toISOString(),
       updated_at: data.updatedAt.toISOString(),
