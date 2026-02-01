@@ -9,6 +9,7 @@ import {
   approvePayrollPeriod,
   markPayrollAsPaid,
   payWorkerPayment,
+  addWorkerToPayrollPeriod,
 } from "@/lib/payroll-service";
 
 export async function GET(
@@ -139,6 +140,21 @@ export async function POST(
         return NextResponse.json({
           success: true,
           message: "Payroll approved",
+          data: result,
+        });
+
+      case "add-worker":
+        const { workerId } = body;
+        if (!workerId) {
+          return NextResponse.json(
+            { error: "Worker ID is required" },
+            { status: 400 }
+          );
+        }
+        result = await addWorkerToPayrollPeriod(id, workerId, session.user.id);
+        return NextResponse.json({
+          success: true,
+          message: "Worker added to payroll period",
           data: result,
         });
 

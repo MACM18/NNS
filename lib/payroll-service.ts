@@ -229,8 +229,10 @@ export async function calculatePayrollForPeriod(
     throw new Error("Can only calculate payroll for draft periods");
   }
 
-  // Fetch Payroll Settings
-  const settings = await prisma.payrollSettings.findFirst();
+  // Fetch Enabled Payroll Rules
+  const rules = await prisma.payrollRule.findMany({
+    where: { enabled: true },
+  });
 
   // Get all active workers
   const workers = await prisma.worker.findMany({
@@ -312,44 +314,31 @@ export async function calculatePayrollForPeriod(
       });
     }
 
-    // Apply Automated Deductions
-    const automatedDeductions = [];
-    if (settings) {
-      if (settings.epfEnabled) {
-        automatedDeductions.push({
-          workerPaymentId: payment.id,
-          type: "deduction",
-          category: "epf",
-          description: `EPF (${settings.epfPercentage}%)`,
-          amount: baseAmount * (decimalToNumber(settings.epfPercentage) / 100),
-          createdById: profile.id,
-        });
+    // Apply Automated Deductions/Bonuses from Rules
+    const adjustments = [];
+    for (const rule of rules) {
+      let amount = 0;
+      if (rule.percentage) {
+        amount = baseAmount * (decimalToNumber(rule.percentage) / 100);
+      } else if (rule.fixedAmount) {
+        amount = decimalToNumber(rule.fixedAmount);
       }
-      if (settings.etfEnabled) {
-        automatedDeductions.push({
+
+      if (amount > 0) {
+        adjustments.push({
           workerPaymentId: payment.id,
-          type: "deduction",
-          category: "etf",
-          description: `ETF (${settings.etfPercentage}%)`,
-          amount: baseAmount * (decimalToNumber(settings.etfPercentage) / 100),
-          createdById: profile.id,
-        });
-      }
-      if (settings.taxEnabled) {
-        automatedDeductions.push({
-          workerPaymentId: payment.id,
-          type: "deduction",
-          category: "tax",
-          description: `Income Tax (${settings.taxPercentage}%)`,
-          amount: baseAmount * (decimalToNumber(settings.taxPercentage) / 100),
+          type: rule.type,
+          category: rule.category,
+          description: `${rule.name}${rule.percentage ? ` (${rule.percentage}%)` : ""}`,
+          amount: amount,
           createdById: profile.id,
         });
       }
     }
 
-    if (automatedDeductions.length > 0) {
+    if (adjustments.length > 0) {
       await prisma.payrollAdjustment.createMany({
-        data: automatedDeductions,
+        data: adjustments,
       });
     }
 
@@ -424,6 +413,49 @@ export async function calculatePayrollForPeriod(
   });
 
   return payments;
+}
+
+export async function addWorkerToPayrollPeriod(
+  periodId: string,
+  workerId: string,
+  createdById: string
+) {
+  const profile = await prisma.profile.findUnique({ where: { id: createdById } });
+  if (!profile) throw new Error("Unauthorized");
+
+  const period = await prisma.payrollPeriod.findUnique({ where: { id: periodId } });
+  if (!period) throw new Error("Payroll period not found");
+
+  const worker = await prisma.worker.findUnique({ where: { id: workerId } });
+  if (!worker) throw new Error("Worker not found");
+
+  // Check if already in period
+  const existing = await prisma.workerPayment.findUnique({
+    where: { payrollPeriodId_workerId: { payrollPeriodId: periodId, workerId } },
+  });
+
+  if (existing) throw new Error("Worker already added to this period");
+
+  // Determine rates
+  const paymentType = worker.paymentType as PaymentType;
+  const perLineRate = decimalToNumber(worker.perLineRate) || 0;
+  const baseAmount = paymentType === "fixed_monthly" ? decimalToNumber(worker.monthlyRate) || 0 : 0;
+
+  // Create payment record
+  const payment = await prisma.workerPayment.create({
+    data: {
+      payrollPeriodId: periodId,
+      workerId: worker.id,
+      paymentType,
+      perLineRate,
+      baseAmount,
+      netAmount: baseAmount,
+      createdById: profile.id,
+    },
+  });
+
+  // Calculate with rules
+  return calculatePayrollForPeriod(periodId, createdById);
 }
 
 export async function getWorkerPayments(

@@ -113,6 +113,9 @@ export default function PayrollPeriodDetailPage({
     paymentMethod: "bank_transfer",
     paymentRef: "",
   });
+  const [addWorkerModalOpen, setAddWorkerModalOpen] = useState(false);
+  const [allWorkers, setAllWorkers] = useState<any[]>([]);
+  const [searchWorker, setSearchWorker] = useState("");
 
   // Adjustment form
   const [adjustmentForm, setAdjustmentForm] = useState({
@@ -316,6 +319,56 @@ export default function PayrollPeriodDetailPage({
     }
   };
 
+  const handleAddWorker = async (workerId: string) => {
+    try {
+      setProcessingAction(true);
+      const response = await fetch(`/api/payroll/periods/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add-worker",
+          workerId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add worker");
+      }
+
+      addNotification({
+        title: "Success",
+        message: "Worker added to payroll period",
+        type: "success",
+        category: "system",
+      });
+
+      setAddWorkerModalOpen(false);
+      fetchData(true);
+    } catch (error: any) {
+      addNotification({
+        title: "Error",
+        message: error.message,
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  const fetchAllWorkers = async () => {
+    try {
+      const response = await fetch("/api/workers");
+      if (response.ok) {
+        const data = await response.json();
+        setAllWorkers(data.workers || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch workers", error);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-LK", {
       style: "currency",
@@ -400,6 +453,19 @@ export default function PayrollPeriodDetailPage({
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
             Refresh
           </Button>
+          {canManage && (period.status === "draft" || period.status === "processing") && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                fetchAllWorkers();
+                setAddWorkerModalOpen(true);
+              }}
+              disabled={processingAction}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Worker
+            </Button>
+          )}
           {getStatusBadge(period.status)}
           {canManage && (period.status === "draft" || period.status === "processing") && (
             <Button
@@ -1068,6 +1134,57 @@ export default function PayrollPeriodDetailPage({
             >
               {processingAction && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Confirm Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Add Worker Modal */}
+      <Dialog open={addWorkerModalOpen} onOpenChange={setAddWorkerModalOpen}>
+        <DialogContent className='sm:max-w-[425px] overflow-hidden flex flex-col max-h-[90vh]'>
+          <DialogHeader>
+            <DialogTitle>Add Worker to Payroll</DialogTitle>
+            <DialogDescription>
+              Select a worker to add to this payroll period.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 py-4 flex-1 overflow-hidden flex flex-col'>
+            <div className='space-y-2'>
+              <Label>Search Worker</Label>
+              <Input
+                value={searchWorker}
+                onChange={(e) => setSearchWorker(e.target.value)}
+                placeholder='Search by name...'
+              />
+            </div>
+            <div className='flex-1 overflow-y-auto space-y-1 border rounded-md p-2'>
+              {allWorkers
+                .filter(w =>
+                  !payments.some(p => p.workerId === w.id) &&
+                  w.full_name?.toLowerCase().includes(searchWorker.toLowerCase())
+                )
+                .map((worker) => (
+                  <div
+                    key={worker.id}
+                    className='flex justify-between items-center p-2 hover:bg-muted rounded-md cursor-pointer group'
+                    onClick={() => handleAddWorker(worker.id)}
+                  >
+                    <div>
+                      <p className='text-sm font-medium'>{worker.full_name}</p>
+                      <p className='text-xs text-muted-foreground capitalize'>{worker.role}</p>
+                    </div>
+                    <Button size='sm' variant='ghost' className="opacity-0 group-hover:opacity-100">
+                      Add
+                    </Button>
+                  </div>
+                ))}
+              {allWorkers.filter(w => !payments.some(p => p.workerId === w.id) && w.full_name?.toLowerCase().includes(searchWorker.toLowerCase())).length === 0 && (
+                <p className='text-center py-4 text-sm text-muted-foreground'>No workers available to add</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setAddWorkerModalOpen(false)}>
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

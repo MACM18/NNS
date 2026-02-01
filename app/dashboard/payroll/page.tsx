@@ -102,15 +102,19 @@ export default function PayrollPage() {
   const [editingWorker, setEditingWorker] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("periods");
   const [workerFormData, setWorkerFormData] = useState<any>(null);
-  const [payrollSettings, setPayrollSettings] = useState<any>({
-    epfEnabled: true,
-    epfPercentage: 8,
-    etfEnabled: true,
-    etfPercentage: 3,
-    taxEnabled: false,
-    taxPercentage: 0,
+  const [payrollRules, setPayrollRules] = useState<any[]>([]);
+  const [savingRule, setSavingRule] = useState(false);
+  const [ruleModalOpen, setRuleModalOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<any>(null);
+  const [ruleFormData, setRuleFormData] = useState<any>({
+    name: "",
+    type: "deduction",
+    category: "other",
+    percentage: null,
+    fixedAmount: null,
+    enabled: true,
+    description: "",
   });
-  const [savingSettings, setSavingSettings] = useState(false);
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
     new Set(COLUMNS.map((c) => c.id))
@@ -162,10 +166,10 @@ export default function PayrollPage() {
         setWorkers(data.workers || []);
       }
 
-      const settingsRes = await fetch("/api/payroll/settings");
-      if (settingsRes.ok) {
-        const data = await settingsRes.json();
-        setPayrollSettings(data.data);
+      const rulesRes = await fetch("/api/payroll/rules");
+      if (rulesRes.ok) {
+        const data = await rulesRes.json();
+        setPayrollRules(data.data || []);
       }
     } catch (error) {
       addNotification({
@@ -276,22 +280,59 @@ export default function PayrollPage() {
     }
   };
 
-  const handleSaveSettings = async () => {
+  const handleSaveRule = async () => {
     try {
-      setSavingSettings(true);
-      const response = await fetch("/api/payroll/settings", {
-        method: "POST",
+      setSavingRule(true);
+      const method = editingRule ? "PATCH" : "POST";
+      const payload = {
+        ...ruleFormData,
+        id: editingRule?.id,
+      };
+
+      const response = await fetch("/api/payroll/rules", {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payrollSettings),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to save settings");
+        throw new Error("Failed to save rule");
       }
 
       addNotification({
         title: "Success",
-        message: "Payroll settings updated",
+        message: `Payroll rule ${editingRule ? "updated" : "created"}`,
+        type: "success",
+        category: "system",
+      });
+      setRuleModalOpen(false);
+      setEditingRule(null);
+      fetchData();
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message: "Failed to save rule",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setSavingRule(false);
+    }
+  };
+
+  const handleDeleteRule = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this rule?")) return;
+
+    try {
+      const response = await fetch(`/api/payroll/rules?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) throw new Error("Failed to delete rule");
+
+      addNotification({
+        title: "Success",
+        message: "Payroll rule deleted",
         type: "success",
         category: "system",
       });
@@ -299,12 +340,10 @@ export default function PayrollPage() {
     } catch (error) {
       addNotification({
         title: "Error",
-        message: "Failed to update settings",
+        message: "Failed to delete rule",
         type: "error",
         category: "system",
       });
-    } finally {
-      setSavingSettings(false);
     }
   };
 
@@ -893,102 +932,100 @@ export default function PayrollPage() {
 
         <TabsContent value="settings">
           <Card>
-            <CardHeader>
-              <CardTitle>Payroll Calculations & Taxes</CardTitle>
-              <CardDescription>
-                Configure global settings for taxes, EPF, and ETF deductions.
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Payroll Rules & Deductions</CardTitle>
+                <CardDescription>
+                  Configure global rules for taxes, EPF, ETF, and custom deductions.
+                </CardDescription>
+              </div>
+              <Button onClick={() => {
+                setEditingRule(null);
+                setRuleFormData({
+                  name: "",
+                  type: "deduction",
+                  category: "other",
+                  percentage: null,
+                  fixedAmount: null,
+                  enabled: true,
+                  description: "",
+                });
+                setRuleModalOpen(true);
+              }}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Rule
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">EPF Contribution (Employee)</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Enable automated Employee Provident Fund deduction
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        className="w-20"
-                        value={payrollSettings?.epfPercentage || ""}
-                        onChange={(e) => setPayrollSettings({ ...payrollSettings, epfPercentage: parseFloat(e.target.value) })}
-                        disabled={!payrollSettings?.epfEnabled}
-                      />
-                      <span className="text-sm font-medium">%</span>
-                    </div>
-                    <Button
-                      variant={payrollSettings?.epfEnabled ? "default" : "outline"}
-                      onClick={() => setPayrollSettings({ ...payrollSettings, epfEnabled: !payrollSettings.epfEnabled })}
-                    >
-                      {payrollSettings?.epfEnabled ? "Enabled" : "Disabled"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">ETF Contribution (Employer)</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Enable automated Employee Trust Fund tracking
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        className="w-20"
-                        value={payrollSettings?.etfPercentage || ""}
-                        onChange={(e) => setPayrollSettings({ ...payrollSettings, etfPercentage: parseFloat(e.target.value) })}
-                        disabled={!payrollSettings?.etfEnabled}
-                      />
-                      <span className="text-sm font-medium">%</span>
-                    </div>
-                    <Button
-                      variant={payrollSettings?.etfEnabled ? "default" : "outline"}
-                      onClick={() => setPayrollSettings({ ...payrollSettings, etfEnabled: !payrollSettings.etfEnabled })}
-                    >
-                      {payrollSettings?.etfEnabled ? "Enabled" : "Disabled"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Income Tax (PAYE)</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Enable automated standard income tax deduction
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        className="w-20"
-                        value={payrollSettings?.taxPercentage || ""}
-                        onChange={(e) => setPayrollSettings({ ...payrollSettings, taxPercentage: parseFloat(e.target.value) })}
-                        disabled={!payrollSettings?.taxEnabled}
-                      />
-                      <span className="text-sm font-medium">%</span>
-                    </div>
-                    <Button
-                      variant={payrollSettings?.taxEnabled ? "default" : "outline"}
-                      onClick={() => setPayrollSettings({ ...payrollSettings, taxEnabled: !payrollSettings.taxEnabled })}
-                    >
-                      {payrollSettings?.taxEnabled ? "Enabled" : "Disabled"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end border-t pt-6">
-                <Button onClick={handleSaveSettings} disabled={savingSettings}>
-                  {savingSettings && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Payroll Settings
-                </Button>
-              </div>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Rule Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payrollRules.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        No rules defined. Add a rule to automate payroll deductions.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    payrollRules.map((rule) => (
+                      <TableRow key={rule.id}>
+                        <TableCell className="font-medium">
+                          {rule.name}
+                          {rule.description && (
+                            <p className="text-xs text-muted-foreground font-normal">{rule.description}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="capitalize">{rule.type}</TableCell>
+                        <TableCell className="capitalize">{rule.category.replace(/_/g, " ")}</TableCell>
+                        <TableCell>
+                          {rule.percentage ? `${rule.percentage}%` : formatCurrency(rule.fixedAmount || 0)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={rule.enabled ? "default" : "outline"}>
+                            {rule.enabled ? "Active" : "Disabled"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingRule(rule);
+                                setRuleFormData({
+                                  ...rule,
+                                  percentage: rule.percentage ? parseFloat(rule.percentage) : null,
+                                  fixedAmount: rule.fixedAmount ? parseFloat(rule.fixedAmount) : null,
+                                });
+                                setRuleModalOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive"
+                              onClick={() => handleDeleteRule(rule.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1067,6 +1104,110 @@ export default function PayrollPage() {
             </Button>
             <Button onClick={handleCreatePeriod} disabled={!periodForm.name}>
               Create Period
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Rule Management Modal */}
+      <Dialog open={ruleModalOpen} onOpenChange={setRuleModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{editingRule ? "Edit Payroll Rule" : "Add Payroll Rule"}</DialogTitle>
+            <DialogDescription>
+              Define how this rule should be applied during payroll calculation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Rule Name</Label>
+              <Input
+                value={ruleFormData.name}
+                onChange={(e) => setRuleFormData({ ...ruleFormData, name: e.target.value })}
+                placeholder="e.g. EPF, Transport Allowance"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select
+                  value={ruleFormData.type}
+                  onValueChange={(val) => setRuleFormData({ ...ruleFormData, type: val })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bonus">Bonus (Earning)</SelectItem>
+                    <SelectItem value="deduction">Deduction</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select
+                  value={ruleFormData.category}
+                  onValueChange={(val) => setRuleFormData({ ...ruleFormData, category: val })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="epf">EPF</SelectItem>
+                    <SelectItem value="etf">ETF</SelectItem>
+                    <SelectItem value="tax">Tax</SelectItem>
+                    <SelectItem value="allowance">Allowance</SelectItem>
+                    <SelectItem value="fine">Fine</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Percentage (%)</Label>
+                <Input
+                  type="number"
+                  value={ruleFormData.percentage || ""}
+                  onChange={(e) => setRuleFormData({ ...ruleFormData, percentage: e.target.value ? parseFloat(e.target.value) : null, fixedAmount: null })}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fixed Amount (LKR)</Label>
+                <Input
+                  type="number"
+                  value={ruleFormData.fixedAmount || ""}
+                  onChange={(e) => setRuleFormData({ ...ruleFormData, fixedAmount: e.target.value ? parseFloat(e.target.value) : null, percentage: null })}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input
+                value={ruleFormData.description || ""}
+                onChange={(e) => setRuleFormData({ ...ruleFormData, description: e.target.value })}
+                placeholder="Optional description"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="rule-enabled"
+                checked={ruleFormData.enabled}
+                onChange={(e) => setRuleFormData({ ...ruleFormData, enabled: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="rule-enabled">Enabled by default</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRuleModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveRule} disabled={savingRule || !ruleFormData.name}>
+              {savingRule && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Rule
             </Button>
           </DialogFooter>
         </DialogContent>
