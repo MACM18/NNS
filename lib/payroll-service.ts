@@ -388,23 +388,23 @@ export async function calculatePayrollForPeriod(
 
     payments.push({
       ...updatedPayment,
-      status: payment.status as PaymentStatus,
-      paymentType: payment.paymentType as PaymentType,
-      paymentMethod: payment.paymentMethod as PaymentMethod | null,
-      baseAmount: decimalToNumber(payment.baseAmount),
-      bonusAmount: decimalToNumber(payment.bonusAmount),
-      deductionAmount: decimalToNumber(payment.deductionAmount),
-      netAmount: decimalToNumber(payment.netAmount),
-      perLineRate: decimalToNumber(payment.perLineRate),
-      worker: payment.worker
+      status: updatedPayment.status as PaymentStatus,
+      paymentType: updatedPayment.paymentType as PaymentType,
+      paymentMethod: updatedPayment.paymentMethod as PaymentMethod | null,
+      baseAmount: decimalToNumber(updatedPayment.baseAmount),
+      bonusAmount: decimalToNumber(updatedPayment.bonusAmount),
+      deductionAmount: decimalToNumber(updatedPayment.deductionAmount),
+      netAmount: decimalToNumber(updatedPayment.netAmount),
+      perLineRate: decimalToNumber(updatedPayment.perLineRate),
+      worker: updatedPayment.worker
         ? {
-          ...payment.worker,
-          paymentType: payment.worker.paymentType as PaymentType,
-          perLineRate: decimalToNumber(payment.worker.perLineRate),
-          monthlyRate: decimalToNumber(payment.worker.monthlyRate),
+          ...updatedPayment.worker,
+          paymentType: updatedPayment.worker.paymentType as PaymentType,
+          perLineRate: decimalToNumber(updatedPayment.worker.perLineRate),
+          monthlyRate: decimalToNumber(updatedPayment.worker.monthlyRate),
         }
         : undefined,
-      adjustments: payment.adjustments.map((a) => ({
+      adjustments: updatedPayment.adjustments.map((a) => ({
         ...a,
         type: a.type as AdjustmentType,
         category: a.category as AdjustmentCategory,
