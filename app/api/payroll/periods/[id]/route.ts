@@ -112,6 +112,7 @@ export async function POST(
 ) {
   try {
     const session = await auth();
+    console.log("DEBUG: Add Worker Session:", JSON.stringify(session, null, 2));
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

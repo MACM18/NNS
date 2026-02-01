@@ -5,15 +5,15 @@ export interface Notification {
   message: string;
   type: "info" | "success" | "warning" | "error";
   category:
-    | "line_added"
-    | "task_completed"
-    | "invoice_generated"
-    | "report_ready"
-    | "inventory_low"
-    | "system"
-    | "post"
-    | "job"
-    | "accounting";
+  | "line_added"
+  | "task_completed"
+  | "invoice_generated"
+  | "report_ready"
+  | "inventory_low"
+  | "system"
+  | "post"
+  | "job"
+  | "accounting";
   is_read: boolean;
   action_url?: string;
   metadata?: Record<string, any>;
@@ -32,6 +32,7 @@ export interface NotificationContextType {
   ) => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteAllNotifications: () => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
   fetchNotifications: () => Promise<void>;
   isLoading: boolean;

@@ -121,3 +121,30 @@ export async function PUT(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const action = searchParams.get("action");
+
+    if (action === "deleteAll") {
+      await prisma.notification.deleteMany({
+        where: { userId: session.user.id },
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  } catch (error) {
+    console.error("Error deleting notifications:", error);
+    return NextResponse.json(
+      { error: "Failed to delete notifications" },
+      { status: 500 }
+    );
+  }
+}

@@ -123,6 +123,31 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteAllNotifications = async () => {
+    if (!user) return;
+
+    try {
+      const response = await fetch("/api/notifications?action=deleteAll", {
+        method: "DELETE",
+      });
+
+      if (!response.ok) throw new Error("Failed to delete all notifications");
+
+      setNotifications([]);
+      toast({
+        title: "Success",
+        description: "All notifications have been deleted",
+      });
+    } catch (error) {
+      console.error("Error deleting all notifications:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete notifications",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Fetch notifications on mount and user change
   useEffect(() => {
     if (user) {
@@ -151,6 +176,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         addNotification,
         markAsRead,
         markAllAsRead,
+        deleteAllNotifications,
         deleteNotification,
         fetchNotifications,
         isLoading,

@@ -63,6 +63,7 @@ export function Header() {
     unreadCount,
     markAsRead,
     markAllAsRead,
+    deleteAllNotifications,
     deleteNotification,
     isLoading,
   } = useNotification();
@@ -604,6 +605,17 @@ export function Header() {
             <DropdownMenuLabel className='flex items-center justify-between'>
               <span>Notifications</span>
               <div className='flex gap-1'>
+                {notifications.length > 0 && (
+                  <Button
+                    variant='ghost'
+                    size='sm'
+                    onClick={deleteAllNotifications}
+                    className='h-6 px-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950'
+                  >
+                    <Trash2 className='mr-1 h-3 w-3' />
+                    Delete all
+                  </Button>
+                )}
                 {unreadCount > 0 && (
                   <Button
                     variant='ghost'
