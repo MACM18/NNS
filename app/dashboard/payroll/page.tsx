@@ -102,6 +102,15 @@ export default function PayrollPage() {
   const [editingWorker, setEditingWorker] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("periods");
   const [workerFormData, setWorkerFormData] = useState<any>(null);
+  const [payrollSettings, setPayrollSettings] = useState<any>({
+    epfEnabled: true,
+    epfPercentage: 8,
+    etfEnabled: true,
+    etfPercentage: 3,
+    taxEnabled: false,
+    taxPercentage: 0,
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
     new Set(COLUMNS.map((c) => c.id))
@@ -151,6 +160,12 @@ export default function PayrollPage() {
       if (workersRes.ok) {
         const data = await workersRes.json();
         setWorkers(data.workers || []);
+      }
+
+      const settingsRes = await fetch("/api/payroll/settings");
+      if (settingsRes.ok) {
+        const data = await settingsRes.json();
+        setPayrollSettings(data.data);
       }
     } catch (error) {
       addNotification({
@@ -258,6 +273,38 @@ export default function PayrollPage() {
       });
     } finally {
       setProcessingPeriod(null);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      setSavingSettings(true);
+      const response = await fetch("/api/payroll/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payrollSettings),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save settings");
+      }
+
+      addNotification({
+        title: "Success",
+        message: "Payroll settings updated",
+        type: "success",
+        category: "system",
+      });
+      fetchData();
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message: "Failed to update settings",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -426,6 +473,7 @@ export default function PayrollPage() {
         <TabsList>
           <TabsTrigger value="periods">Payroll Periods</TabsTrigger>
           <TabsTrigger value="workers">Worker Settings</TabsTrigger>
+          {canManage && <TabsTrigger value="settings">Payroll Settings</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="periods" className="space-y-4">
@@ -841,6 +889,108 @@ export default function PayrollPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="settings">
+          <Card>
+            <CardHeader>
+              <CardTitle>Payroll Calculations & Taxes</CardTitle>
+              <CardDescription>
+                Configure global settings for taxes, EPF, and ETF deductions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">EPF Contribution (Employee)</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enable automated Employee Provident Fund deduction
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        className="w-20"
+                        value={payrollSettings?.epfPercentage || ""}
+                        onChange={(e) => setPayrollSettings({ ...payrollSettings, epfPercentage: parseFloat(e.target.value) })}
+                        disabled={!payrollSettings?.epfEnabled}
+                      />
+                      <span className="text-sm font-medium">%</span>
+                    </div>
+                    <Button
+                      variant={payrollSettings?.epfEnabled ? "default" : "outline"}
+                      onClick={() => setPayrollSettings({ ...payrollSettings, epfEnabled: !payrollSettings.epfEnabled })}
+                    >
+                      {payrollSettings?.epfEnabled ? "Enabled" : "Disabled"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">ETF Contribution (Employer)</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enable automated Employee Trust Fund tracking
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        className="w-20"
+                        value={payrollSettings?.etfPercentage || ""}
+                        onChange={(e) => setPayrollSettings({ ...payrollSettings, etfPercentage: parseFloat(e.target.value) })}
+                        disabled={!payrollSettings?.etfEnabled}
+                      />
+                      <span className="text-sm font-medium">%</span>
+                    </div>
+                    <Button
+                      variant={payrollSettings?.etfEnabled ? "default" : "outline"}
+                      onClick={() => setPayrollSettings({ ...payrollSettings, etfEnabled: !payrollSettings.etfEnabled })}
+                    >
+                      {payrollSettings?.etfEnabled ? "Enabled" : "Disabled"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Income Tax (PAYE)</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enable automated standard income tax deduction
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        className="w-20"
+                        value={payrollSettings?.taxPercentage || ""}
+                        onChange={(e) => setPayrollSettings({ ...payrollSettings, taxPercentage: parseFloat(e.target.value) })}
+                        disabled={!payrollSettings?.taxEnabled}
+                      />
+                      <span className="text-sm font-medium">%</span>
+                    </div>
+                    <Button
+                      variant={payrollSettings?.taxEnabled ? "default" : "outline"}
+                      onClick={() => setPayrollSettings({ ...payrollSettings, taxEnabled: !payrollSettings.taxEnabled })}
+                    >
+                      {payrollSettings?.taxEnabled ? "Enabled" : "Disabled"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t pt-6">
+                <Button onClick={handleSaveSettings} disabled={savingSettings}>
+                  {savingSettings && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Payroll Settings
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

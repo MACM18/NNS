@@ -101,19 +101,24 @@ export function generatePayrollSummaryPDF(options: PayrollSummaryPDFOptions): vo
 
     const cols = {
         name: margin + 5,
-        earnings: margin + 70,
-        adjustments: margin + 110,
+        gross: margin + 65,
+        epf: margin + 90,
+        etf: margin + 115,
+        tax: margin + 140,
         netPay: pageWidth - margin - 5,
     };
 
     doc.text("EMPLOYEE NAME", cols.name, y + 6.5);
-    doc.text("EARNINGS", cols.earnings, y + 6.5, { align: "right" });
-    doc.text("ADJUSTMENTS", cols.adjustments, y + 6.5, { align: "right" });
+    doc.text("GROSS", cols.gross, y + 6.5, { align: "right" });
+    doc.text("EPF", cols.epf, y + 6.5, { align: "right" });
+    doc.text("ETF", cols.etf, y + 6.5, { align: "right" });
+    doc.text("TAX", cols.tax, y + 6.5, { align: "right" });
     doc.text("NET PAY", cols.netPay, y + 6.5, { align: "right" });
 
     y += 10;
     doc.setTextColor(...textColor);
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
 
     // Rows
     payments.forEach((payment, index) => {
@@ -123,11 +128,15 @@ export function generatePayrollSummaryPDF(options: PayrollSummaryPDFOptions): vo
             doc.rect(margin, y, contentWidth, 8, "F");
         }
 
-        doc.text(payment.worker?.fullName || "Unknown", cols.name, y + 5.5);
-        doc.text(formatCurrency(payment.baseAmount), cols.earnings, y + 5.5, { align: "right" });
+        const epf = payment.adjustments?.find(a => a.category === "epf")?.amount || 0;
+        const etf = payment.adjustments?.find(a => a.category === "etf")?.amount || 0;
+        const tax = payment.adjustments?.find(a => a.category === "tax")?.amount || 0;
 
-        const adjAmount = payment.bonusAmount - payment.deductionAmount;
-        doc.text(formatCurrency(adjAmount), cols.adjustments, y + 5.5, { align: "right" });
+        doc.text(payment.worker?.fullName || "Unknown", cols.name, y + 5.5);
+        doc.text(formatCurrency(payment.baseAmount + payment.bonusAmount), cols.gross, y + 5.5, { align: "right" });
+        doc.text(formatCurrency(epf), cols.epf, y + 5.5, { align: "right" });
+        doc.text(formatCurrency(etf), cols.etf, y + 5.5, { align: "right" });
+        doc.text(formatCurrency(tax), cols.tax, y + 5.5, { align: "right" });
 
         doc.setFont("helvetica", "bold");
         doc.text(formatCurrency(payment.netAmount), cols.netPay, y + 5.5, { align: "right" });
@@ -139,7 +148,6 @@ export function generatePayrollSummaryPDF(options: PayrollSummaryPDFOptions): vo
         if (y > 260) {
             doc.addPage();
             y = 20;
-            // Re-draw header if needed or just continue
         }
     });
 
@@ -149,23 +157,25 @@ export function generatePayrollSummaryPDF(options: PayrollSummaryPDFOptions): vo
     doc.line(margin, y, pageWidth - margin, y);
     y += 8;
 
-    const totalBase = payments.reduce((sum, p) => sum + p.baseAmount, 0);
-    const totalBonus = payments.reduce((sum, p) => sum + p.bonusAmount, 0);
-    const totalDeduction = payments.reduce((sum, p) => sum + p.deductionAmount, 0);
+    const totalGross = payments.reduce((sum, p) => sum + p.baseAmount + (p.bonusAmount || 0), 0);
+    const totalEPF = payments.reduce((sum, p) => sum + (p.adjustments?.find(a => a.category === "epf")?.amount || 0), 0);
+    const totalETF = payments.reduce((sum, p) => sum + (p.adjustments?.find(a => a.category === "etf")?.amount || 0), 0);
+    const totalTax = payments.reduce((sum, p) => sum + (p.adjustments?.find(a => a.category === "tax")?.amount || 0), 0);
     const totalNet = payments.reduce((sum, p) => sum + p.netAmount, 0);
 
-    doc.setFontSize(11);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("GRAND TOTALS", margin + 5, y);
+    doc.text("TOTALS", margin + 5, y);
 
-    doc.setFontSize(10);
-    doc.text(formatCurrency(totalBase), cols.earnings, y, { align: "right" });
-    doc.text(formatCurrency(totalBonus - totalDeduction), cols.adjustments, y, { align: "right" });
+    doc.text(formatCurrency(totalGross), cols.gross, y, { align: "right" });
+    doc.text(formatCurrency(totalEPF), cols.epf, y, { align: "right" });
+    doc.text(formatCurrency(totalETF), cols.etf, y, { align: "right" });
+    doc.text(formatCurrency(totalTax), cols.tax, y, { align: "right" });
 
     doc.setFillColor(...primaryColor);
-    doc.rect(cols.netPay - 40, y - 6, 45, 10, "F");
+    doc.rect(cols.netPay - 35, y - 6, 40, 10, "F");
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(12);
+    doc.setFontSize(10);
     doc.text(formatCurrency(totalNet), cols.netPay, y + 1, { align: "right" });
 
     // ========== FOOTER ==========

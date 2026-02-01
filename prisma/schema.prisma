@@ -1003,3 +1003,17 @@ model PayrollAdjustment {
   @@map("payroll_adjustments")
 }
 
+
+model PayrollSettings {
+  id              String   @id @default(uuid())
+  epfEnabled      Boolean  @default(true) @map("epf_enabled")
+  epfPercentage   Decimal  @default(8.0) @map("epf_percentage") @db.Decimal(5, 2)
+  etfEnabled      Boolean  @default(true) @map("etf_enabled")
+  etfPercentage   Decimal  @default(3.0) @map("etf_percentage") @db.Decimal(5, 2)
+  taxEnabled      Boolean  @default(false) @map("tax_enabled")
+  taxPercentage   Decimal  @default(0.0) @map("tax_percentage") @db.Decimal(5, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("payroll_settings")
+}

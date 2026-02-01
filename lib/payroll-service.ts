@@ -229,6 +229,9 @@ export async function calculatePayrollForPeriod(
     throw new Error("Can only calculate payroll for draft periods");
   }
 
+  // Fetch Payroll Settings
+  const settings = await prisma.payrollSettings.findFirst();
+
   // Get all active workers
   const workers = await prisma.worker.findMany({
     where: { status: "active" },
@@ -274,6 +277,14 @@ export async function calculatePayrollForPeriod(
 
     let payment;
     if (existingPayment) {
+      // Clear previous automated deductions to allow recalculation
+      await prisma.payrollAdjustment.deleteMany({
+        where: {
+          workerPaymentId: existingPayment.id,
+          category: { in: ["epf", "etf", "tax"] },
+        },
+      });
+
       // Update existing payment
       payment = await prisma.workerPayment.update({
         where: { id: existingPayment.id },
@@ -282,14 +293,7 @@ export async function calculatePayrollForPeriod(
           linesCompleted,
           perLineRate,
           baseAmount,
-          netAmount:
-            baseAmount +
-            decimalToNumber(existingPayment.bonusAmount) -
-            decimalToNumber(existingPayment.deductionAmount),
-        },
-        include: {
-          worker: true,
-          adjustments: true,
+          // bonusAmount and deductionAmount will be updated after adding adjustments below
         },
       });
     } else {
@@ -305,15 +309,85 @@ export async function calculatePayrollForPeriod(
           netAmount: baseAmount,
           createdById: profile.id,
         },
-        include: {
-          worker: true,
-          adjustments: true,
-        },
       });
     }
 
+    // Apply Automated Deductions
+    const automatedDeductions = [];
+    if (settings) {
+      if (settings.epfEnabled) {
+        automatedDeductions.push({
+          workerPaymentId: payment.id,
+          type: "deduction",
+          category: "epf",
+          description: `EPF (${settings.epfPercentage}%)`,
+          amount: baseAmount * (decimalToNumber(settings.epfPercentage) / 100),
+          createdById: profile.id,
+        });
+      }
+      if (settings.etfEnabled) {
+        automatedDeductions.push({
+          workerPaymentId: payment.id,
+          type: "deduction",
+          category: "etf",
+          description: `ETF (${settings.etfPercentage}%)`,
+          amount: baseAmount * (decimalToNumber(settings.etfPercentage) / 100),
+          createdById: profile.id,
+        });
+      }
+      if (settings.taxEnabled) {
+        automatedDeductions.push({
+          workerPaymentId: payment.id,
+          type: "deduction",
+          category: "tax",
+          description: `Income Tax (${settings.taxPercentage}%)`,
+          amount: baseAmount * (decimalToNumber(settings.taxPercentage) / 100),
+          createdById: profile.id,
+        });
+      }
+    }
+
+    if (automatedDeductions.length > 0) {
+      await prisma.payrollAdjustment.createMany({
+        data: automatedDeductions,
+      });
+    }
+
+    // Final fetch with adjustments to calculate net amount
+    const finalPayment = await prisma.workerPayment.findUnique({
+      where: { id: payment.id },
+      include: {
+        worker: true,
+        adjustments: true,
+      },
+    });
+
+    if (!finalPayment) throw new Error("Failed to fetch updated payment");
+
+    const bonusAmount = finalPayment.adjustments
+      .filter((a) => a.type === "bonus")
+      .reduce((sum, a) => sum + decimalToNumber(a.amount), 0);
+    const deductionAmount = finalPayment.adjustments
+      .filter((a) => a.type === "deduction")
+      .reduce((sum, a) => sum + decimalToNumber(a.amount), 0);
+    const netAmount = decimalToNumber(finalPayment.baseAmount) + bonusAmount - deductionAmount;
+
+    // Save recalculated totals
+    const updatedPayment = await prisma.workerPayment.update({
+      where: { id: payment.id },
+      data: {
+        bonusAmount,
+        deductionAmount,
+        netAmount,
+      },
+      include: {
+        worker: true,
+        adjustments: true,
+      },
+    });
+
     payments.push({
-      ...payment,
+      ...updatedPayment,
       status: payment.status as PaymentStatus,
       paymentType: payment.paymentType as PaymentType,
       paymentMethod: payment.paymentMethod as PaymentMethod | null,

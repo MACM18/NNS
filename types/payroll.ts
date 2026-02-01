@@ -9,6 +9,8 @@ export type AdjustmentCategory =
   | "attendance_bonus"
   | "overtime"
   | "tax"
+  | "epf"
+  | "etf"
   | "advance"
   | "fine"
   | "other";
