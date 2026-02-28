@@ -41,6 +41,7 @@ describe("Payroll Dashboard Page", () => {
       startDate: "2026-01-01T00:00:00Z",
       endDate: "2026-01-31T00:00:00Z",
       status: "draft",
+      paymentType: "per_line",
       totalAmount: 0,
       _count: { payments: 0 },
     },
@@ -52,6 +53,7 @@ describe("Payroll Dashboard Page", () => {
       startDate: "2026-02-01T00:00:00Z",
       endDate: "2026-02-28T00:00:00Z",
       status: "processing",
+      paymentType: "per_line",
       totalAmount: 150000,
       _count: { payments: 25 },
     },
@@ -63,6 +65,7 @@ describe("Payroll Dashboard Page", () => {
       startDate: "2026-03-01T00:00:00Z",
       endDate: "2026-03-31T00:00:00Z",
       status: "approved",
+      paymentType: "fixed_monthly",
       totalAmount: 200000,
       _count: { payments: 30 },
     },
@@ -91,8 +94,8 @@ describe("Payroll Dashboard Page", () => {
           typeof input === "string"
             ? input
             : input instanceof URL
-            ? input.toString()
-            : (input as Request).url;
+              ? input.toString()
+              : (input as Request).url;
         const method = (init?.method ?? "GET").toUpperCase();
 
         if (method === "GET" && url === "/api/payroll/periods?action=summary") {
@@ -130,7 +133,7 @@ describe("Payroll Dashboard Page", () => {
           ok: false,
           json: async () => ({ error: "Not found" }),
         });
-      }
+      },
     );
   });
 
@@ -139,16 +142,16 @@ describe("Payroll Dashboard Page", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "Payroll" })
+        screen.getByRole("heading", { name: "Payroll" }),
       ).toBeInTheDocument();
     });
 
     expect(screen.getByText("Payroll Periods")).toBeInTheDocument();
     expect(screen.getAllByText("January 2026 Payroll").length).toBeGreaterThan(
-      0
+      0,
     );
     expect(screen.getAllByText("February 2026 Payroll").length).toBeGreaterThan(
-      0
+      0,
     );
     expect(screen.getAllByText("March 2026 Payroll").length).toBeGreaterThan(0);
   });
@@ -161,6 +164,7 @@ describe("Payroll Dashboard Page", () => {
       expect(screen.getByText("January 2026 Payroll")).toBeInTheDocument();
     });
 
+    // calculate button remains for draft periods
     await user.click(screen.getByRole("button", { name: /calculate/i }));
 
     expect(global.fetch).toHaveBeenCalledWith(
@@ -168,7 +172,30 @@ describe("Payroll Dashboard Page", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ action: "calculate" }),
-      })
+      }),
+    );
+  });
+
+  it("renders type column and allows toggling period paymentType", async () => {
+    const user = userEvent.setup();
+    render(<PayrollDashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("January 2026 Payroll")).toBeInTheDocument();
+    });
+
+    // should show a select or text indicating type
+    expect(screen.getByText(/per line/i)).toBeInTheDocument();
+
+    // toggle january period to monthly
+    const typeSelect = screen.getAllByRole("combobox")[0];
+    await user.selectOptions(typeSelect, "fixed_monthly");
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/payroll/periods/period1",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ paymentType: "fixed_monthly" }),
+      }),
     );
   });
 
@@ -178,12 +205,12 @@ describe("Payroll Dashboard Page", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "Payroll" })
+        screen.getByRole("heading", { name: "Payroll" }),
       ).toBeInTheDocument();
     });
 
     await user.click(
-      screen.getByRole("button", { name: /new payroll period/i })
+      screen.getByRole("button", { name: /new payroll period/i }),
     );
     expect(screen.getByText("Create Payroll Period")).toBeInTheDocument();
 
@@ -200,7 +227,7 @@ describe("Payroll Dashboard Page", () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: expect.stringContaining("April 2026 Payroll"),
-        })
+        }),
       );
     });
   });
@@ -221,7 +248,7 @@ describe("Payroll Dashboard Page", () => {
         expect.objectContaining({
           title: "Error",
           message: "Failed to load payroll data",
-        })
+        }),
       );
     });
   });

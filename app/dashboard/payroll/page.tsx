@@ -74,7 +74,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useNotification } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
-import type { PayrollPeriod, PayrollSummary } from "@/types/payroll";
+import type {
+  PayrollPeriod,
+  PayrollSummary,
+  PaymentType,
+} from "@/types/payroll";
 import Link from "next/link";
 
 const MONTHS = [
@@ -96,6 +100,7 @@ const COLUMNS = [
   { id: "name", label: "Period" },
   { id: "date_range", label: "Date Range" },
   { id: "status", label: "Status" },
+  { id: "type", label: "Type" },
   { id: "workers", label: "Workers" },
   { id: "total_amount", label: "Total Amount" },
   { id: "actions", label: "Actions" },
@@ -135,11 +140,11 @@ export default function PayrollPage() {
     open: false,
     title: "",
     description: "",
-    onConfirm: () => { },
+    onConfirm: () => {},
   });
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
-    new Set(COLUMNS.map((c) => c.id))
+    new Set(COLUMNS.map((c) => c.id)),
   );
 
   const toggleColumn = (id: string) => {
@@ -157,54 +162,58 @@ export default function PayrollPage() {
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
     name: "",
+    paymentType: "per_line" as PaymentType,
   });
 
   const { addNotification } = useNotification();
   const { role } = useAuth();
   const canManage = role === "admin" || role === "moderator";
 
-  const fetchData = useCallback(async (showRefreshState = false) => {
-    try {
-      if (showRefreshState) setRefreshing(true);
-      setLoading(true);
-      const [summaryRes, periodsRes, workersRes] = await Promise.all([
-        fetch("/api/payroll/periods?action=summary"),
-        fetch("/api/payroll/periods?pageSize=20"),
-        fetch("/api/workers"),
-      ]);
+  const fetchData = useCallback(
+    async (showRefreshState = false) => {
+      try {
+        if (showRefreshState) setRefreshing(true);
+        setLoading(true);
+        const [summaryRes, periodsRes, workersRes] = await Promise.all([
+          fetch("/api/payroll/periods?action=summary"),
+          fetch("/api/payroll/periods?pageSize=20"),
+          fetch("/api/workers"),
+        ]);
 
-      if (summaryRes.ok) {
-        const data = await summaryRes.json();
-        setSummary(data.data);
-      }
+        if (summaryRes.ok) {
+          const data = await summaryRes.json();
+          setSummary(data.data);
+        }
 
-      if (periodsRes.ok) {
-        const data = await periodsRes.json();
-        setPeriods(data.data || []);
-      }
+        if (periodsRes.ok) {
+          const data = await periodsRes.json();
+          setPeriods(data.data || []);
+        }
 
-      if (workersRes.ok) {
-        const data = await workersRes.json();
-        setWorkers(data.workers || []);
-      }
+        if (workersRes.ok) {
+          const data = await workersRes.json();
+          setWorkers(data.workers || []);
+        }
 
-      const rulesRes = await fetch("/api/payroll/rules");
-      if (rulesRes.ok) {
-        const data = await rulesRes.json();
-        setPayrollRules(data.data || []);
+        const rulesRes = await fetch("/api/payroll/rules");
+        if (rulesRes.ok) {
+          const data = await rulesRes.json();
+          setPayrollRules(data.data || []);
+        }
+      } catch (error) {
+        addNotification({
+          title: "Error",
+          message: "Failed to load payroll data",
+          type: "error",
+          category: "system",
+        });
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (error) {
-      addNotification({
-        title: "Error",
-        message: "Failed to load payroll data",
-        type: "error",
-        category: "system",
-      });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [addNotification]);
+    },
+    [addNotification],
+  );
 
   useEffect(() => {
     fetchData();
@@ -220,7 +229,7 @@ export default function PayrollPage() {
   const handleCreatePeriod = async () => {
     try {
       const startDate = startOfMonth(
-        new Date(periodForm.year, periodForm.month - 1, 1)
+        new Date(periodForm.year, periodForm.month - 1, 1),
       );
       const endDate = endOfMonth(startDate);
 
@@ -231,8 +240,13 @@ export default function PayrollPage() {
           name: periodForm.name,
           month: periodForm.month,
           year: periodForm.year,
-          startDate: new Date(Date.UTC(periodForm.year, periodForm.month - 1, 1)).toISOString(),
-          endDate: new Date(Date.UTC(periodForm.year, periodForm.month, 0, 23, 59, 59, 999)).toISOString(),
+          startDate: new Date(
+            Date.UTC(periodForm.year, periodForm.month - 1, 1),
+          ).toISOString(),
+          endDate: new Date(
+            Date.UTC(periodForm.year, periodForm.month, 0, 23, 59, 59, 999),
+          ).toISOString(),
+          paymentType: periodForm.paymentType,
         }),
       });
 
@@ -302,6 +316,40 @@ export default function PayrollPage() {
     }
   };
 
+  const handleUpdatePeriodType = async (
+    periodId: string,
+    type: PaymentType,
+  ) => {
+    try {
+      setProcessingPeriod(periodId);
+      const res = await fetch(`/api/payroll/periods/${periodId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentType: type }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update period type");
+      }
+      addNotification({
+        title: "Success",
+        message: "Payroll period type updated",
+        type: "success",
+        category: "system",
+      });
+      fetchData();
+    } catch (e: any) {
+      addNotification({
+        title: "Error",
+        message: e.message || "Unable to update type",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setProcessingPeriod(null);
+    }
+  };
+
   const handleSaveRule = async () => {
     try {
       setSavingRule(true);
@@ -346,7 +394,8 @@ export default function PayrollPage() {
     setDeleteConfirm({
       open: true,
       title: "Delete Payroll Rule",
-      description: "Are you sure you want to delete this rule? This action cannot be undone.",
+      description:
+        "Are you sure you want to delete this rule? This action cannot be undone.",
       onConfirm: async () => {
         try {
           const response = await fetch(`/api/payroll/rules?id=${id}`, {
@@ -378,7 +427,8 @@ export default function PayrollPage() {
     setDeleteConfirm({
       open: true,
       title: "Delete Payroll Period",
-      description: "Are you sure you want to delete this payroll period? This will delete all associated payment data and cannot be undone.",
+      description:
+        "Are you sure you want to delete this payroll period? This will delete all associated payment data and cannot be undone.",
       onConfirm: async () => {
         try {
           setProcessingPeriod(periodId);
@@ -463,19 +513,21 @@ export default function PayrollPage() {
             Manage worker payments and salary processing
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className='flex flex-col sm:flex-row gap-2'>
           {canManage && (
             <>
               <Button
-                variant="outline"
+                variant='outline'
                 onClick={() => fetchData(true)}
                 disabled={loading || refreshing}
               >
-                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+                />
                 Refresh
               </Button>
               <Button
-                variant="outline"
+                variant='outline'
                 onClick={async () => {
                   const now = new Date();
                   const m = now.getMonth() + 1;
@@ -492,8 +544,12 @@ export default function PayrollPage() {
                         name,
                         month: m,
                         year: y,
-                        startDate: new Date(Date.UTC(y, m - 1, 1)).toISOString(),
-                        endDate: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)).toISOString(),
+                        startDate: new Date(
+                          Date.UTC(y, m - 1, 1),
+                        ).toISOString(),
+                        endDate: new Date(
+                          Date.UTC(y, m, 0, 23, 59, 59, 999),
+                        ).toISOString(),
                       }),
                     });
 
@@ -518,7 +574,11 @@ export default function PayrollPage() {
                     });
                   }
                 }}
-                disabled={periods.some(p => p.month === new Date().getMonth() + 1 && p.year === new Date().getFullYear())}
+                disabled={periods.some(
+                  (p) =>
+                    p.month === new Date().getMonth() + 1 &&
+                    p.year === new Date().getFullYear(),
+                )}
               >
                 <Calculator className='h-4 w-4 mr-2' />
                 Quick Create ({format(new Date(), "MMMM")})
@@ -532,16 +592,28 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="overflow-x-auto pb-2">
-          <TabsList className="w-full sm:w-auto h-auto p-1 flex-nowrap sm:flex-wrap">
-            <TabsTrigger value="periods" className="flex-1 sm:flex-none">Payroll Periods</TabsTrigger>
-            <TabsTrigger value="workers" className="flex-1 sm:flex-none">Worker Settings</TabsTrigger>
-            {canManage && <TabsTrigger value="settings" className="flex-1 sm:flex-none">Payroll Settings</TabsTrigger>}
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className='space-y-4'
+      >
+        <div className='overflow-x-auto pb-2'>
+          <TabsList className='w-full sm:w-auto h-auto p-1 flex-nowrap sm:flex-wrap'>
+            <TabsTrigger value='periods' className='flex-1 sm:flex-none'>
+              Payroll Periods
+            </TabsTrigger>
+            <TabsTrigger value='workers' className='flex-1 sm:flex-none'>
+              Worker Settings
+            </TabsTrigger>
+            {canManage && (
+              <TabsTrigger value='settings' className='flex-1 sm:flex-none'>
+                Payroll Settings
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
-        <TabsContent value="periods" className="space-y-4">
+        <TabsContent value='periods' className='space-y-4'>
           {loading ? (
             <div className='flex items-center justify-center h-64'>
               <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
@@ -551,7 +623,9 @@ export default function PayrollPage() {
               <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
                 <Card>
                   <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                    <CardTitle className='text-sm font-medium'>Total Periods</CardTitle>
+                    <CardTitle className='text-sm font-medium'>
+                      Total Periods
+                    </CardTitle>
                     <Calendar className='h-4 w-4 text-muted-foreground' />
                   </CardHeader>
                   <CardContent>
@@ -567,7 +641,9 @@ export default function PayrollPage() {
 
                 <Card>
                   <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                    <CardTitle className='text-sm font-medium'>Total Paid</CardTitle>
+                    <CardTitle className='text-sm font-medium'>
+                      Total Paid
+                    </CardTitle>
                     <DollarSign className='h-4 w-4 text-muted-foreground' />
                   </CardHeader>
                   <CardContent>
@@ -652,22 +728,34 @@ export default function PayrollPage() {
                       <TableHeader>
                         <TableRow>
                           {visibleColumns.has("name") && (
-                            <TableHead className='min-w-[180px]'>Period</TableHead>
+                            <TableHead className='min-w-[180px]'>
+                              Period
+                            </TableHead>
                           )}
                           {visibleColumns.has("date_range") && (
-                            <TableHead className='min-w-[120px] hidden md:table-cell'>Date Range</TableHead>
+                            <TableHead className='min-w-[120px] hidden md:table-cell'>
+                              Date Range
+                            </TableHead>
                           )}
                           {visibleColumns.has("status") && (
-                            <TableHead className='min-w-[100px]'>Status</TableHead>
+                            <TableHead className='min-w-[100px]'>
+                              Status
+                            </TableHead>
                           )}
                           {visibleColumns.has("workers") && (
-                            <TableHead className='min-w-[100px] hidden sm:table-cell'>Workers</TableHead>
+                            <TableHead className='min-w-[100px] hidden sm:table-cell'>
+                              Workers
+                            </TableHead>
                           )}
                           {visibleColumns.has("total_amount") && (
-                            <TableHead className='min-w-[120px]'>Total Amount</TableHead>
+                            <TableHead className='min-w-[120px]'>
+                              Total Amount
+                            </TableHead>
                           )}
                           {visibleColumns.has("actions") && (
-                            <TableHead className='min-w-[200px]'>Actions</TableHead>
+                            <TableHead className='min-w-[200px]'>
+                              Actions
+                            </TableHead>
                           )}
                         </TableRow>
                       </TableHeader>
@@ -678,8 +766,8 @@ export default function PayrollPage() {
                               colSpan={visibleColumns.size}
                               className='text-center text-muted-foreground py-8'
                             >
-                              No payroll periods yet. Create your first period to get
-                              started.
+                              No payroll periods yet. Create your first period
+                              to get started.
                             </TableCell>
                           </TableRow>
                         ) : (
@@ -691,13 +779,21 @@ export default function PayrollPage() {
                                 </TableCell>
                               )}
                               {visibleColumns.has("date_range") && (
-                                <TableCell className="hidden md:table-cell">
+                                <TableCell className='hidden md:table-cell'>
                                   {(() => {
                                     // create naive dates from the UTC ISO string to prevent timezone shifts
                                     const start = new Date(period.startDate);
                                     const end = new Date(period.endDate);
-                                    const naiveStart = new Date(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-                                    const naiveEnd = new Date(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+                                    const naiveStart = new Date(
+                                      start.getUTCFullYear(),
+                                      start.getUTCMonth(),
+                                      start.getUTCDate(),
+                                    );
+                                    const naiveEnd = new Date(
+                                      end.getUTCFullYear(),
+                                      end.getUTCMonth(),
+                                      end.getUTCDate(),
+                                    );
                                     return (
                                       <>
                                         {format(naiveStart, "MMM d")} -{" "}
@@ -708,10 +804,37 @@ export default function PayrollPage() {
                                 </TableCell>
                               )}
                               {visibleColumns.has("status") && (
-                                <TableCell>{getStatusBadge(period.status)}</TableCell>
+                                <TableCell>
+                                  {getStatusBadge(period.status)}
+                                </TableCell>
+                              )}
+                              {visibleColumns.has("type") && (
+                                <TableCell>
+                                  <Select
+                                    value={period.paymentType}
+                                    onValueChange={(val) =>
+                                      handleUpdatePeriodType(
+                                        period.id,
+                                        val as PaymentType,
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger className='w-[120px]'>
+                                      <SelectValue placeholder='Type' />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value='per_line'>
+                                        Per line
+                                      </SelectItem>
+                                      <SelectItem value='fixed_monthly'>
+                                        Monthly
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
                               )}
                               {visibleColumns.has("workers") && (
-                                <TableCell className="hidden sm:table-cell">
+                                <TableCell className='hidden sm:table-cell'>
                                   <div className='flex items-center gap-1'>
                                     <Users className='h-4 w-4 text-muted-foreground' />
                                     {period._count?.payments || 0}
@@ -726,6 +849,13 @@ export default function PayrollPage() {
                               {visibleColumns.has("actions") && (
                                 <TableCell>
                                   <div className='flex items-center gap-2'>
+                                    <Link
+                                      href={`/dashboard/payroll/${period.id}`}
+                                    >
+                                      <Button size='sm' variant='ghost'>
+                                        View
+                                      </Button>
+                                    </Link>
                                     {canManage && period.status === "draft" && (
                                       <Button
                                         size='sm'
@@ -733,7 +863,9 @@ export default function PayrollPage() {
                                         onClick={() =>
                                           handleAction(period.id, "calculate")
                                         }
-                                        disabled={processingPeriod === period.id}
+                                        disabled={
+                                          processingPeriod === period.id
+                                        }
                                       >
                                         {processingPeriod === period.id ? (
                                           <Loader2 className='h-4 w-4 animate-spin' />
@@ -745,44 +877,32 @@ export default function PayrollPage() {
                                         )}
                                       </Button>
                                     )}
-                                    {canManage && period.status === "processing" && (
-                                      <Button
-                                        size='sm'
-                                        variant='outline'
-                                        onClick={() =>
-                                          handleAction(period.id, "approve")
-                                        }
-                                        disabled={processingPeriod === period.id}
-                                      >
-                                        {processingPeriod === period.id ? (
-                                          <Loader2 className='h-4 w-4 animate-spin' />
-                                        ) : (
-                                          <>
-                                            <CheckCircle className='h-4 w-4 mr-1' />
-                                            Approve
-                                          </>
-                                        )}
-                                      </Button>
-                                    )}
-                                    {canManage && period.status === "approved" && (
-                                      <Button
-                                        size='sm'
-                                        variant='default'
-                                        onClick={() => handleAction(period.id, "pay")}
-                                        disabled={processingPeriod === period.id}
-                                      >
-                                        {processingPeriod === period.id ? (
-                                          <Loader2 className='h-4 w-4 animate-spin' />
-                                        ) : (
-                                          <>
-                                            <CreditCard className='h-4 w-4 mr-1' />
-                                            Mark Paid
-                                          </>
-                                        )}
-                                      </Button>
-                                    )}
+                                    {canManage &&
+                                      period.status === "approved" && (
+                                        <Button
+                                          size='sm'
+                                          variant='default'
+                                          onClick={() =>
+                                            handleAction(period.id, "pay")
+                                          }
+                                          disabled={
+                                            processingPeriod === period.id
+                                          }
+                                        >
+                                          {processingPeriod === period.id ? (
+                                            <Loader2 className='h-4 w-4 animate-spin' />
+                                          ) : (
+                                            <>
+                                              <CreditCard className='h-4 w-4 mr-1' />
+                                              Mark Paid
+                                            </>
+                                          )}
+                                        </Button>
+                                      )}
                                     <Button size='sm' variant='ghost' asChild>
-                                      <Link href={`/dashboard/payroll/${period.id}`}>
+                                      <Link
+                                        href={`/dashboard/payroll/${period.id}`}
+                                      >
                                         View
                                         <ChevronRight className='h-4 w-4 ml-1' />
                                       </Link>
@@ -791,9 +911,13 @@ export default function PayrollPage() {
                                       <Button
                                         size='sm'
                                         variant='ghost'
-                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        onClick={() => handleDeletePeriod(period.id)}
-                                        disabled={processingPeriod === period.id}
+                                        className='text-destructive hover:text-destructive hover:bg-destructive/10'
+                                        onClick={() =>
+                                          handleDeletePeriod(period.id)
+                                        }
+                                        disabled={
+                                          processingPeriod === period.id
+                                        }
                                       >
                                         <Trash2 className='h-4 w-4' />
                                       </Button>
@@ -813,7 +937,7 @@ export default function PayrollPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="workers">
+        <TabsContent value='workers'>
           {loading ? (
             <div className='flex items-center justify-center h-64'>
               <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
@@ -822,10 +946,12 @@ export default function PayrollPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Worker Salary Settings</CardTitle>
-                <CardDescription>Configure payment methods and rates for each worker.</CardDescription>
+                <CardDescription>
+                  Configure payment methods and rates for each worker.
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto w-full">
+                <div className='overflow-x-auto w-full'>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -834,54 +960,83 @@ export default function PayrollPage() {
                         <TableHead>Payment Type</TableHead>
                         <TableHead>Monthly Rate (LKR)</TableHead>
                         <TableHead>Per Line Rate (LKR)</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead className='text-right'>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {workers.length > 0 ? (
                         workers.map((worker) => (
                           <TableRow key={worker.id}>
-                            <TableCell className="font-medium">{worker.full_name}</TableCell>
+                            <TableCell className='font-medium'>
+                              {worker.full_name}
+                            </TableCell>
                             <TableCell>
                               {editingWorker === worker.id ? (
                                 <Input
-                                  className="w-[120px]"
-                                  value={workerFormData.employee_no || ''}
-                                  onChange={(e) => setWorkerFormData({ ...workerFormData, employee_no: e.target.value })}
-                                  placeholder="EMP-001"
+                                  className='w-[120px]'
+                                  value={workerFormData.employee_no || ""}
+                                  onChange={(e) =>
+                                    setWorkerFormData({
+                                      ...workerFormData,
+                                      employee_no: e.target.value,
+                                    })
+                                  }
+                                  placeholder='EMP-001'
                                 />
                               ) : (
-                                worker.employee_no || <span className="text-muted-foreground italic text-xs">Not set</span>
+                                worker.employee_no || (
+                                  <span className='text-muted-foreground italic text-xs'>
+                                    Not set
+                                  </span>
+                                )
                               )}
                             </TableCell>
                             <TableCell>
                               {editingWorker === worker.id ? (
                                 <Select
                                   value={workerFormData.payment_type}
-                                  onValueChange={(val) => setWorkerFormData({ ...workerFormData, payment_type: val })}
+                                  onValueChange={(val) =>
+                                    setWorkerFormData({
+                                      ...workerFormData,
+                                      payment_type: val,
+                                    })
+                                  }
                                 >
-                                  <SelectTrigger className="w-[150px]">
+                                  <SelectTrigger className='w-[150px]'>
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="per_line">Per Line</SelectItem>
-                                    <SelectItem value="fixed_monthly">Fixed Monthly</SelectItem>
+                                    <SelectItem value='per_line'>
+                                      Per Line
+                                    </SelectItem>
+                                    <SelectItem value='fixed_monthly'>
+                                      Fixed Monthly
+                                    </SelectItem>
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                <Badge variant="outline">
-                                  {worker.role === 'supervisor' ? 'Monthly' : (worker.payment_type === 'fixed_monthly' ? 'Fixed Monthly' : 'Per Line')}
+                                <Badge variant='outline'>
+                                  {worker.role === "supervisor"
+                                    ? "Monthly"
+                                    : worker.payment_type === "fixed_monthly"
+                                      ? "Fixed Monthly"
+                                      : "Per Line"}
                                 </Badge>
                               )}
                             </TableCell>
                             <TableCell>
                               {editingWorker === worker.id ? (
                                 <Input
-                                  type="number"
-                                  className="w-[120px]"
-                                  value={workerFormData.monthly_rate || ''}
-                                  onChange={(e) => setWorkerFormData({ ...workerFormData, monthly_rate: parseFloat(e.target.value) })}
-                                  placeholder="0.00"
+                                  type='number'
+                                  className='w-[120px]'
+                                  value={workerFormData.monthly_rate || ""}
+                                  onChange={(e) =>
+                                    setWorkerFormData({
+                                      ...workerFormData,
+                                      monthly_rate: parseFloat(e.target.value),
+                                    })
+                                  }
+                                  placeholder='0.00'
                                 />
                               ) : (
                                 formatCurrency(worker.monthly_rate || 0)
@@ -890,58 +1045,76 @@ export default function PayrollPage() {
                             <TableCell>
                               {editingWorker === worker.id ? (
                                 <Input
-                                  type="number"
-                                  className="w-[120px]"
-                                  value={workerFormData.per_line_rate || ''}
-                                  onChange={(e) => setWorkerFormData({ ...workerFormData, per_line_rate: parseFloat(e.target.value) })}
-                                  placeholder="0.00"
+                                  type='number'
+                                  className='w-[120px]'
+                                  value={workerFormData.per_line_rate || ""}
+                                  onChange={(e) =>
+                                    setWorkerFormData({
+                                      ...workerFormData,
+                                      per_line_rate: parseFloat(e.target.value),
+                                    })
+                                  }
+                                  placeholder='0.00'
                                 />
                               ) : (
                                 formatCurrency(worker.per_line_rate || 0)
                               )}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className='text-right'>
                               {editingWorker === worker.id ? (
-                                <div className="flex justify-end gap-2">
+                                <div className='flex justify-end gap-2'>
                                   <Button
-                                    size="sm"
-                                    variant="outline"
+                                    size='sm'
+                                    variant='outline'
                                     onClick={() => setEditingWorker(null)}
                                   >
                                     Cancel
                                   </Button>
                                   <Button
-                                    size="sm"
+                                    size='sm'
                                     onClick={async () => {
                                       try {
-                                        const response = await fetch(`/api/workers`, {
-                                          method: 'PATCH',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({
-                                            id: worker.id,
-                                            employee_no: workerFormData.employee_no,
-                                            payment_type: workerFormData.payment_type,
-                                            per_line_rate: workerFormData.per_line_rate,
-                                            monthly_rate: workerFormData.monthly_rate,
-                                          }),
-                                        });
+                                        const response = await fetch(
+                                          `/api/workers`,
+                                          {
+                                            method: "PATCH",
+                                            headers: {
+                                              "Content-Type":
+                                                "application/json",
+                                            },
+                                            body: JSON.stringify({
+                                              id: worker.id,
+                                              employee_no:
+                                                workerFormData.employee_no,
+                                              payment_type:
+                                                workerFormData.payment_type,
+                                              per_line_rate:
+                                                workerFormData.per_line_rate,
+                                              monthly_rate:
+                                                workerFormData.monthly_rate,
+                                            }),
+                                          },
+                                        );
 
-                                        if (!response.ok) throw new Error('Failed to update worker');
+                                        if (!response.ok)
+                                          throw new Error(
+                                            "Failed to update worker",
+                                          );
 
                                         addNotification({
-                                          title: 'Success',
-                                          message: 'Worker settings updated',
-                                          type: 'success',
-                                          category: 'system',
+                                          title: "Success",
+                                          message: "Worker settings updated",
+                                          type: "success",
+                                          category: "system",
                                         });
                                         setEditingWorker(null);
                                         fetchData();
                                       } catch (error: any) {
                                         addNotification({
-                                          title: 'Error',
+                                          title: "Error",
                                           message: error.message,
-                                          type: 'error',
-                                          category: 'system',
+                                          type: "error",
+                                          category: "system",
                                         });
                                       }
                                     }}
@@ -951,13 +1124,14 @@ export default function PayrollPage() {
                                 </div>
                               ) : (
                                 <Button
-                                  size="sm"
-                                  variant="ghost"
+                                  size='sm'
+                                  variant='ghost'
                                   onClick={() => {
                                     setEditingWorker(worker.id);
                                     setWorkerFormData({
-                                      employee_no: worker.employee_no || '',
-                                      payment_type: worker.payment_type || 'per_line',
+                                      employee_no: worker.employee_no || "",
+                                      payment_type:
+                                        worker.payment_type || "per_line",
                                       per_line_rate: worker.per_line_rate || 0,
                                       monthly_rate: worker.monthly_rate || 0,
                                     });
@@ -971,7 +1145,10 @@ export default function PayrollPage() {
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                          <TableCell
+                            colSpan={6}
+                            className='text-center py-4 text-muted-foreground'
+                          >
                             No workers found
                           </TableCell>
                         </TableRow>
@@ -984,29 +1161,32 @@ export default function PayrollPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="settings">
+        <TabsContent value='settings'>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className='flex flex-row items-center justify-between'>
               <div>
                 <CardTitle>Payroll Rules & Deductions</CardTitle>
                 <CardDescription>
-                  Configure global rules for taxes, EPF, ETF, and custom deductions.
+                  Configure global rules for taxes, EPF, ETF, and custom
+                  deductions.
                 </CardDescription>
               </div>
-              <Button onClick={() => {
-                setEditingRule(null);
-                setRuleFormData({
-                  name: "",
-                  type: "deduction",
-                  category: "other",
-                  percentage: null,
-                  fixedAmount: null,
-                  enabled: true,
-                  description: "",
-                });
-                setRuleModalOpen(true);
-              }}>
-                <Plus className="h-4 w-4 mr-2" />
+              <Button
+                onClick={() => {
+                  setEditingRule(null);
+                  setRuleFormData({
+                    name: "",
+                    type: "deduction",
+                    category: "other",
+                    percentage: null,
+                    fixedAmount: null,
+                    enabled: true,
+                    description: "",
+                  });
+                  setRuleModalOpen(true);
+                }}
+              >
+                <Plus className='h-4 w-4 mr-2' />
                 Add Rule
               </Button>
             </CardHeader>
@@ -1019,46 +1199,62 @@ export default function PayrollPage() {
                     <TableHead>Category</TableHead>
                     <TableHead>Value</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className='text-right'>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {payrollRules.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        No rules defined. Add a rule to automate payroll deductions.
+                      <TableCell
+                        colSpan={6}
+                        className='text-center py-8 text-muted-foreground'
+                      >
+                        No rules defined. Add a rule to automate payroll
+                        deductions.
                       </TableCell>
                     </TableRow>
                   ) : (
                     payrollRules.map((rule) => (
                       <TableRow key={rule.id}>
-                        <TableCell className="font-medium">
+                        <TableCell className='font-medium'>
                           {rule.name}
                           {rule.description && (
-                            <p className="text-xs text-muted-foreground font-normal">{rule.description}</p>
+                            <p className='text-xs text-muted-foreground font-normal'>
+                              {rule.description}
+                            </p>
                           )}
                         </TableCell>
-                        <TableCell className="capitalize">{rule.type}</TableCell>
-                        <TableCell className="capitalize">{rule.category.replace(/_/g, " ")}</TableCell>
+                        <TableCell className='capitalize'>
+                          {rule.type}
+                        </TableCell>
+                        <TableCell className='capitalize'>
+                          {rule.category.replace(/_/g, " ")}
+                        </TableCell>
                         <TableCell>
-                          {rule.percentage ? `${rule.percentage}%` : formatCurrency(rule.fixedAmount || 0)}
+                          {rule.percentage
+                            ? `${rule.percentage}%`
+                            : formatCurrency(rule.fixedAmount || 0)}
                         </TableCell>
                         <TableCell>
                           <Badge variant={rule.enabled ? "default" : "outline"}>
                             {rule.enabled ? "Active" : "Disabled"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                        <TableCell className='text-right'>
+                          <div className='flex justify-end gap-2'>
                             <Button
-                              size="sm"
-                              variant="ghost"
+                              size='sm'
+                              variant='ghost'
                               onClick={() => {
                                 setEditingRule(rule);
                                 setRuleFormData({
                                   ...rule,
-                                  percentage: rule.percentage ? parseFloat(rule.percentage) : null,
-                                  fixedAmount: rule.fixedAmount ? parseFloat(rule.fixedAmount) : null,
+                                  percentage: rule.percentage
+                                    ? parseFloat(rule.percentage)
+                                    : null,
+                                  fixedAmount: rule.fixedAmount
+                                    ? parseFloat(rule.fixedAmount)
+                                    : null,
                                 });
                                 setRuleModalOpen(true);
                               }}
@@ -1066,12 +1262,12 @@ export default function PayrollPage() {
                               Edit
                             </Button>
                             <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive"
+                              size='sm'
+                              variant='ghost'
+                              className='text-destructive'
                               onClick={() => handleDeleteRule(rule.id)}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className='h-4 w-4' />
                             </Button>
                           </div>
                         </TableCell>
@@ -1139,6 +1335,26 @@ export default function PayrollPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className='space-y-2 col-span-2'>
+                <Label>Calculation Type</Label>
+                <Select
+                  value={periodForm.paymentType}
+                  onValueChange={(val) =>
+                    setPeriodForm({
+                      ...periodForm,
+                      paymentType: val as PaymentType,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='per_line'>Per line</SelectItem>
+                    <SelectItem value='fixed_monthly'>Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className='space-y-2'>
@@ -1164,103 +1380,140 @@ export default function PayrollPage() {
       </Dialog>
       {/* Rule Management Modal */}
       <Dialog open={ruleModalOpen} onOpenChange={setRuleModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className='sm:max-w-[425px]'>
           <DialogHeader>
-            <DialogTitle>{editingRule ? "Edit Payroll Rule" : "Add Payroll Rule"}</DialogTitle>
+            <DialogTitle>
+              {editingRule ? "Edit Payroll Rule" : "Add Payroll Rule"}
+            </DialogTitle>
             <DialogDescription>
               Define how this rule should be applied during payroll calculation.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
+          <div className='space-y-4 py-4'>
+            <div className='space-y-2'>
               <Label>Rule Name</Label>
               <Input
                 value={ruleFormData.name}
-                onChange={(e) => setRuleFormData({ ...ruleFormData, name: e.target.value })}
-                placeholder="e.g. EPF, Transport Allowance"
+                onChange={(e) =>
+                  setRuleFormData({ ...ruleFormData, name: e.target.value })
+                }
+                placeholder='e.g. EPF, Transport Allowance'
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className='grid grid-cols-2 gap-4'>
+              <div className='space-y-2'>
                 <Label>Type</Label>
                 <Select
                   value={ruleFormData.type}
-                  onValueChange={(val) => setRuleFormData({ ...ruleFormData, type: val })}
+                  onValueChange={(val) =>
+                    setRuleFormData({ ...ruleFormData, type: val })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="bonus">Bonus (Earning)</SelectItem>
-                    <SelectItem value="deduction">Deduction</SelectItem>
+                    <SelectItem value='bonus'>Bonus (Earning)</SelectItem>
+                    <SelectItem value='deduction'>Deduction</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <Label>Category</Label>
                 <Select
                   value={ruleFormData.category}
-                  onValueChange={(val) => setRuleFormData({ ...ruleFormData, category: val })}
+                  onValueChange={(val) =>
+                    setRuleFormData({ ...ruleFormData, category: val })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="epf">EPF</SelectItem>
-                    <SelectItem value="etf">ETF</SelectItem>
-                    <SelectItem value="tax">Tax</SelectItem>
-                    <SelectItem value="allowance">Allowance</SelectItem>
-                    <SelectItem value="fine">Fine</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value='epf'>EPF</SelectItem>
+                    <SelectItem value='etf'>ETF</SelectItem>
+                    <SelectItem value='tax'>Tax</SelectItem>
+                    <SelectItem value='allowance'>Allowance</SelectItem>
+                    <SelectItem value='fine'>Fine</SelectItem>
+                    <SelectItem value='other'>Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className='grid grid-cols-2 gap-4'>
+              <div className='space-y-2'>
                 <Label>Percentage (%)</Label>
                 <Input
-                  type="number"
+                  type='number'
                   value={ruleFormData.percentage || ""}
-                  onChange={(e) => setRuleFormData({ ...ruleFormData, percentage: e.target.value ? parseFloat(e.target.value) : null, fixedAmount: null })}
-                  placeholder="0.00"
+                  onChange={(e) =>
+                    setRuleFormData({
+                      ...ruleFormData,
+                      percentage: e.target.value
+                        ? parseFloat(e.target.value)
+                        : null,
+                      fixedAmount: null,
+                    })
+                  }
+                  placeholder='0.00'
                 />
               </div>
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <Label>Fixed Amount (LKR)</Label>
                 <Input
-                  type="number"
+                  type='number'
                   value={ruleFormData.fixedAmount || ""}
-                  onChange={(e) => setRuleFormData({ ...ruleFormData, fixedAmount: e.target.value ? parseFloat(e.target.value) : null, percentage: null })}
-                  placeholder="0.00"
+                  onChange={(e) =>
+                    setRuleFormData({
+                      ...ruleFormData,
+                      fixedAmount: e.target.value
+                        ? parseFloat(e.target.value)
+                        : null,
+                      percentage: null,
+                    })
+                  }
+                  placeholder='0.00'
                 />
               </div>
             </div>
-            <div className="space-y-2">
+            <div className='space-y-2'>
               <Label>Description</Label>
               <Input
                 value={ruleFormData.description || ""}
-                onChange={(e) => setRuleFormData({ ...ruleFormData, description: e.target.value })}
-                placeholder="Optional description"
+                onChange={(e) =>
+                  setRuleFormData({
+                    ...ruleFormData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder='Optional description'
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className='flex items-center gap-2'>
               <input
-                type="checkbox"
-                id="rule-enabled"
+                type='checkbox'
+                id='rule-enabled'
                 checked={ruleFormData.enabled}
-                onChange={(e) => setRuleFormData({ ...ruleFormData, enabled: e.target.checked })}
-                className="rounded border-gray-300"
+                onChange={(e) =>
+                  setRuleFormData({
+                    ...ruleFormData,
+                    enabled: e.target.checked,
+                  })
+                }
+                className='rounded border-gray-300'
               />
-              <Label htmlFor="rule-enabled">Enabled by default</Label>
+              <Label htmlFor='rule-enabled'>Enabled by default</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRuleModalOpen(false)}>
+            <Button variant='outline' onClick={() => setRuleModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveRule} disabled={savingRule || !ruleFormData.name}>
-              {savingRule && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button
+              onClick={handleSaveRule}
+              disabled={savingRule || !ruleFormData.name}
+            >
+              {savingRule && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
               Save Rule
             </Button>
           </DialogFooter>
@@ -1281,7 +1534,7 @@ export default function PayrollPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
               onClick={() => {
                 deleteConfirm.onConfirm();
                 setDeleteConfirm((prev) => ({ ...prev, open: false }));
@@ -1292,6 +1545,6 @@ export default function PayrollPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div >
+    </div>
   );
 }

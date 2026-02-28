@@ -43,6 +43,7 @@ export interface PayrollPeriod {
   startDate: string | Date;
   endDate: string | Date;
   status: PayrollStatus;
+  paymentType: PaymentType; // new period-level override
   totalAmount: number;
   paidDate?: string | Date | null;
   createdById: string;
@@ -106,12 +107,14 @@ export interface CreatePayrollPeriodInput {
   year: number;
   startDate: string;
   endDate: string;
+  paymentType?: PaymentType;
 }
 
 export interface UpdatePayrollPeriodInput {
   name?: string;
   status?: PayrollStatus;
   paidDate?: string;
+  paymentType?: PaymentType;
 }
 
 export interface CreateWorkerPaymentInput {
