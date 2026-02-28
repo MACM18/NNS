@@ -91,7 +91,7 @@ export default function WorkTrackingCalendarPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeDate, setActiveDate] = useState<string | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
-  const [selectedWorker, setSelectedWorker] = useState<string | null>(null);
+  // worker selection is handled via grid toggle, no separate state needed
   const [assignLoading, setAssignLoading] = useState(false);
   const [workersDialogOpen, setWorkersDialogOpen] = useState(false);
   const { toast } = useToast();
@@ -214,41 +214,45 @@ export default function WorkTrackingCalendarPage() {
     setDialogOpen(true);
   };
 
-  const handleAssign = async () => {
-    if (!activeDate || !selectedWorker || !activeLineId) {
-      toast({
-        title: "Select worker and line",
-        description: "Choose both a worker and a line before assigning.",
-        variant: "destructive",
-      });
-      return;
-    }
+  // toggle assignment for a worker on the currently active line/date
+  const toggleWorkerAssignment = async (workerId: string) => {
+    if (!activeDate || !activeLineId) return;
+
+    // find existing assignment for this line & worker
+    const assignment = linesForActiveDay
+      .find((l) => l.id === activeLineId)
+      ?.assignments.find((a) => a.worker_id === workerId);
 
     try {
       setAssignLoading(true);
-      const res = await fetch("/api/work-assignments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lineId: activeLineId,
-          workerId: selectedWorker,
-          date: activeDate,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (res.status === 401 || res.status === 403) {
-        handleUnauthorized(res.status, json.error);
-        return;
+      if (assignment) {
+        // remove
+        await handleRemove(assignment.id);
+      } else {
+        const res = await fetch("/api/work-assignments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lineId: activeLineId,
+            workerId,
+            date: activeDate,
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403) {
+          handleUnauthorized(res.status, json.error);
+          return;
+        }
+        if (!res.ok) {
+          throw new Error(json.error || "Failed to assign worker");
+        }
+        toast({ title: "Worker assigned" });
       }
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to assign worker");
-      }
-      toast({ title: "Worker assigned" });
-      setSelectedWorker(null);
+      // refresh
       await fetchData(selectedMonth, selectedYear);
     } catch (error: any) {
       toast({
-        title: "Assignment failed",
+        title: assignment ? "Removal failed" : "Assignment failed",
         description: error.message,
         variant: "destructive",
       });
@@ -287,7 +291,6 @@ export default function WorkTrackingCalendarPage() {
     setDialogOpen(open);
     if (!open) {
       setActiveLineId(null);
-      setSelectedWorker(null);
       setActiveDate(null);
     }
   };
@@ -469,15 +472,7 @@ export default function WorkTrackingCalendarPage() {
                           </p>
                         )}
                       </div>
-                      <Button
-                        variant={
-                          activeLineId === line.id ? "default" : "outline"
-                        }
-                        size='sm'
-                        onClick={() => setActiveLineId(line.id)}
-                      >
-                        Manage
-                      </Button>
+                      {/* make the whole block clickable, remove separate manage button */}
                     </div>
 
                     <div className='mt-3 space-y-2'>
@@ -550,72 +545,85 @@ export default function WorkTrackingCalendarPage() {
               <div>
                 <h3 className='text-sm font-semibold'>Assign worker</h3>
                 <p className='text-xs text-muted-foreground'>
-                  Select a line and the worker who helped on that job.
+                  Select a line and click a technician to add/remove them.
                 </p>
-              </div>
-
-              <div className='space-y-2'>
-                <label className='text-xs font-medium text-muted-foreground'>
-                  Line
-                </label>
-                <Select
-                  value={activeLineId ?? undefined}
-                  onValueChange={(value) => setActiveLineId(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder='Choose a line' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {linesForActiveDay.map((line) => (
-                      <SelectItem key={line.id} value={line.id}>
-                        {line.telephone_no || line.customer_name || "Line"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className='space-y-2'>
-                <label className='text-xs font-medium text-muted-foreground'>
-                  Worker
-                </label>
-                <Select
-                  value={selectedWorker ?? undefined}
-                  onValueChange={(value) => setSelectedWorker(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder='Choose a worker' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {workers.length === 0 && (
-                      <SelectItem value='__none' disabled>
-                        No workers available
-                      </SelectItem>
-                    )}
-                    {workers.map((worker) => (
-                      <SelectItem key={worker.id} value={worker.id}>
-                        {worker.full_name || "Unnamed"}
-                        {worker.role ? ` (${worker.role})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button
-                className='mt-auto'
-                onClick={handleAssign}
-                disabled={assignLoading || !activeLineId || !selectedWorker}
-              >
-                {assignLoading ? (
-                  <Loader2 className='h-4 w-4 animate-spin' />
-                ) : (
-                  <div className='flex items-center gap-2'>
-                    <Plus className='h-4 w-4' />
-                    <span>Assign worker</span>
-                  </div>
+                {activeLineId && (
+                  <p className='text-xs font-medium mt-1'>
+                    Line:{" "}
+                    {linesForActiveDay.find((l) => l.id === activeLineId)
+                      ?.telephone_no ||
+                      linesForActiveDay.find((l) => l.id === activeLineId)
+                        ?.customer_name ||
+                      "(unknown)"}
+                  </p>
                 )}
-              </Button>
+              </div>
+
+              {/* show currently assigned people as circles */}
+              <div className='flex flex-wrap gap-2'>
+                {(() => {
+                  const assigned =
+                    (activeLineId &&
+                      linesForActiveDay
+                        .find((l) => l.id === activeLineId)
+                        ?.assignments.map((a) => a.worker_id)) ||
+                    [];
+                  return workers
+                    .filter((w) => assigned.includes(w.id))
+                    .map((w) => (
+                      <div
+                        key={w.id}
+                        className='w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs'
+                        title={w.full_name ?? ""}
+                      >
+                        {w.full_name?.[0] || "?"}
+                      </div>
+                    ));
+                })()}
+              </div>
+
+              {/* worker grid for toggling assignments */}
+              <div className='grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-auto'>
+                {workers.map((worker) => {
+                  const assigned =
+                    activeLineId &&
+                    linesForActiveDay
+                      .find((l) => l.id === activeLineId)
+                      ?.assignments.some((a) => a.worker_id === worker.id);
+                  return (
+                    <button
+                      key={worker.id}
+                      onClick={() => toggleWorkerAssignment(worker.id)}
+                      disabled={assignLoading || !activeLineId}
+                      className={cn(
+                        "relative p-2 rounded-lg border text-xs flex items-center justify-center",
+                        assigned
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background border-border",
+                        assignLoading && "opacity-50 cursor-wait",
+                      )}
+                    >
+                      {worker.full_name?.[0] || ""}
+                      {assigned && (
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          className='absolute top-1 right-1 h-3 w-3'
+                          fill='none'
+                          viewBox='0 0 24 24'
+                          stroke='currentColor'
+                        >
+                          <path
+                            strokeLinecap='round'
+                            strokeLinejoin='round'
+                            strokeWidth={2}
+                            d='M5 13l4 4L19 7'
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </DialogContent>
