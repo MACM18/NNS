@@ -1039,7 +1039,12 @@ export async function payWorkerPayment(
     // 2. Create Journal Entry if accounting settings allow
     const settings = await tx.accountingSettings.findFirst();
     if (settings?.autoGenerateJournalEntries) {
-      const expenseAccountId = settings.defaultExpenseAccountId;
+      // Prefer wages & salaries account (6100) for payroll payments, fallback to default expense
+      const wagesAccount = await tx.chartOfAccount.findFirst({
+        where: { code: "6100" },
+      });
+      const expenseAccountId =
+        wagesAccount?.id || settings.defaultExpenseAccountId;
       const cashAccountId = settings.defaultCashAccountId;
 
       if (expenseAccountId && cashAccountId) {

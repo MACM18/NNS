@@ -41,7 +41,7 @@ type Decimal = Prisma.Decimal;
 export async function generateSequentialNumber(
   prefix: string,
   table: "journal_entries" | "invoice_payments",
-  field: string
+  field: string,
 ): Promise<string> {
   const year = new Date().getFullYear();
   const pattern = `${prefix}-${year}-%`;
@@ -117,9 +117,8 @@ export async function initializeAccounting(): Promise<{
   }
 
   // Import default data
-  const { DEFAULT_ACCOUNTS, DEFAULT_CURRENCIES } = await import(
-    "@/types/accounting"
-  );
+  const { DEFAULT_ACCOUNTS, DEFAULT_CURRENCIES } =
+    await import("@/types/accounting");
 
   // Create default currencies
   for (const currency of DEFAULT_CURRENCIES) {
@@ -249,7 +248,7 @@ export async function updateExchangeRate(id: string, rate: number) {
 // ==========================================
 
 export async function getAccounts(
-  filters?: AccountFilters
+  filters?: AccountFilters,
 ): Promise<ChartOfAccount[]> {
   const where: Record<string, unknown> = {};
 
@@ -387,7 +386,7 @@ export async function updateAccount(
     currencyId?: string;
     isActive?: boolean;
     displayOrder?: number;
-  }
+  },
 ): Promise<ChartOfAccount> {
   // Don't allow changing code, category, or normalBalance of system accounts
   const existing = await prisma.chartOfAccount.findUnique({ where: { id } });
@@ -422,7 +421,7 @@ export async function updateAccount(
 export async function updateAccountBalance(
   id: string,
   debitAmount: number,
-  creditAmount: number
+  creditAmount: number,
 ): Promise<void> {
   const account = await prisma.chartOfAccount.findUnique({ where: { id } });
   if (!account) throw new Error("Account not found");
@@ -492,7 +491,7 @@ export async function closePeriod(id: string, userId: string) {
 export async function getJournalEntries(
   filters?: JournalEntryFilters,
   page = 1,
-  limit = 20
+  limit = 20,
 ): Promise<{ entries: JournalEntry[]; total: number }> {
   const where: Record<string, unknown> = {};
 
@@ -559,7 +558,7 @@ export async function getJournalEntries(
 }
 
 export async function getJournalEntry(
-  id: string
+  id: string,
 ): Promise<JournalEntry | null> {
   const entry = await prisma.journalEntry.findUnique({
     where: { id },
@@ -591,7 +590,7 @@ export async function getJournalEntry(
 export async function createJournalEntry(
   data: JournalEntryFormData,
   createdById: string,
-  autoApprove = false
+  autoApprove = false,
 ): Promise<JournalEntry> {
   // Validate balanced entry
   const totalDebit = data.lines.reduce((sum, l) => sum + l.debitAmount, 0);
@@ -599,7 +598,7 @@ export async function createJournalEntry(
 
   if (Math.abs(totalDebit - totalCredit) > 0.01) {
     throw new Error(
-      `Journal entry must be balanced. Debit: ${totalDebit}, Credit: ${totalCredit}`
+      `Journal entry must be balanced. Debit: ${totalDebit}, Credit: ${totalCredit}`,
     );
   }
 
@@ -609,7 +608,7 @@ export async function createJournalEntry(
   const entryNumber = await generateSequentialNumber(
     prefix,
     "journal_entries",
-    "entryNumber"
+    "entryNumber",
   );
 
   // Get current period if not specified
@@ -643,8 +642,8 @@ export async function createJournalEntry(
       status: autoApprove
         ? "approved"
         : settings?.requireApproval
-        ? "pending"
-        : "approved",
+          ? "pending"
+          : "approved",
       totalDebit,
       totalCredit,
       createdById,
@@ -674,7 +673,7 @@ export async function createJournalEntry(
       await updateAccountBalance(
         line.accountId,
         toNumber(line.debitAmount),
-        toNumber(line.creditAmount)
+        toNumber(line.creditAmount),
       );
     }
   }
@@ -692,9 +691,83 @@ export async function createJournalEntry(
   } as unknown as JournalEntry;
 }
 
+export async function updateJournalEntry(
+  id: string,
+  data: JournalEntryFormData,
+  updatedById: string,
+): Promise<JournalEntry> {
+  const existing = await prisma.journalEntry.findUnique({
+    where: { id },
+    include: { lines: true },
+  });
+
+  if (!existing) throw new Error("Journal entry not found");
+  if (existing.status === "approved" || existing.isReversed)
+    throw new Error("Cannot edit approved or reversed journal entries");
+
+  const totalDebit = data.lines.reduce((sum, l) => sum + l.debitAmount, 0);
+  const totalCredit = data.lines.reduce((sum, l) => sum + l.creditAmount, 0);
+
+  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    throw new Error(
+      `Journal entry must be balanced. Debit: ${totalDebit}, Credit: ${totalCredit}`,
+    );
+  }
+
+  // Check period not closed
+  let periodId = data.periodId ?? existing.periodId;
+  if (periodId) {
+    const period = await prisma.accountingPeriod.findUnique({
+      where: { id: periodId },
+    });
+    if (period?.isClosed)
+      throw new Error("Cannot modify entries in a closed period");
+  }
+
+  // Update header
+  const updated = await prisma.journalEntry.update({
+    where: { id },
+    data: {
+      date: data.date,
+      description: data.description,
+      reference: data.reference,
+      referenceType: data.referenceType,
+      referenceId: data.referenceId,
+      periodId,
+      currencyId: data.currencyId,
+      exchangeRate: data.exchangeRate || 1,
+      notes: data.notes,
+      totalDebit,
+      totalCredit,
+      updatedAt: new Date(),
+    },
+    include: { lines: true, period: true, currency: true },
+  });
+
+  // Replace lines: delete existing then create new ones
+  await prisma.journalEntryLine.deleteMany({ where: { journalEntryId: id } });
+  for (let i = 0; i < data.lines.length; i++) {
+    const l = data.lines[i];
+    await prisma.journalEntryLine.create({
+      data: {
+        journalEntryId: id,
+        accountId: l.accountId,
+        description: l.description,
+        debitAmount: l.debitAmount,
+        creditAmount: l.creditAmount,
+        lineOrder: i,
+      },
+    });
+  }
+
+  const refreshed = await getJournalEntry(id);
+
+  return refreshed as JournalEntry;
+}
+
 export async function approveJournalEntry(
   id: string,
-  approvedById: string
+  approvedById: string,
 ): Promise<JournalEntry> {
   const entry = await prisma.journalEntry.findUnique({
     where: { id },
@@ -725,7 +798,7 @@ export async function approveJournalEntry(
     await updateAccountBalance(
       line.accountId,
       toNumber(line.debitAmount),
-      toNumber(line.creditAmount)
+      toNumber(line.creditAmount),
     );
   }
 
@@ -745,7 +818,7 @@ export async function approveJournalEntry(
 export async function reverseJournalEntry(
   id: string,
   createdById: string,
-  reason?: string
+  reason?: string,
 ): Promise<JournalEntry> {
   const original = await getJournalEntry(id);
   if (!original) throw new Error("Journal entry not found");
@@ -777,7 +850,7 @@ export async function reverseJournalEntry(
       })),
     },
     createdById,
-    true // Auto-approve reversals
+    true, // Auto-approve reversals
   );
 
   // Mark original as reversed
@@ -805,7 +878,7 @@ export async function reverseJournalEntry(
 export async function getPayments(
   filters?: PaymentFilters,
   page = 1,
-  limit = 20
+  limit = 20,
 ) {
   const where: Record<string, unknown> = {};
 
@@ -858,7 +931,7 @@ export async function getPayments(
 
 export async function recordPayment(
   data: InvoicePaymentFormData,
-  createdById: string
+  createdById: string,
 ): Promise<{ payment: unknown; journalEntry?: JournalEntry }> {
   const settings = await prisma.accountingSettings.findFirst();
 
@@ -867,7 +940,7 @@ export async function recordPayment(
   const paymentNumber = await generateSequentialNumber(
     prefix,
     "invoice_payments",
-    "paymentNumber"
+    "paymentNumber",
   );
 
   // Get exchange rate
@@ -987,7 +1060,7 @@ export async function recordPayment(
                 ],
         },
         createdById,
-        true // Auto-approve
+        true, // Auto-approve
       );
 
       // Link journal entry to payment
@@ -1015,7 +1088,7 @@ export async function recordPayment(
 
 export async function getAccountLedger(
   accountId: string,
-  params?: ReportParams
+  params?: ReportParams,
 ): Promise<AccountLedger> {
   const account = await getAccount(accountId);
   if (!account) throw new Error("Account not found");
@@ -1101,7 +1174,7 @@ export async function getAccountLedger(
 }
 
 export async function generateTrialBalance(
-  asOfDate?: Date
+  asOfDate?: Date,
 ): Promise<TrialBalance> {
   const date = asOfDate || new Date();
 
@@ -1171,7 +1244,7 @@ export async function generateTrialBalance(
 
 export async function generateIncomeStatement(
   startDate: Date,
-  endDate: Date
+  endDate: Date,
 ): Promise<IncomeStatement> {
   // Get revenue accounts
   const revenueAccounts = await prisma.chartOfAccount.findMany({
@@ -1277,14 +1350,14 @@ export async function generateIncomeStatement(
 }
 
 export async function generateBalanceSheet(
-  asOfDate?: Date
+  asOfDate?: Date,
 ): Promise<BalanceSheet> {
   const date = asOfDate || new Date();
 
   // Helper to get account balances
   async function getAccountBalance(
     accountId: string,
-    normalBalance: string
+    normalBalance: string,
   ): Promise<number> {
     const account = await prisma.chartOfAccount.findUnique({
       where: { id: accountId },
@@ -1430,7 +1503,7 @@ export async function generateBalanceSheet(
   // Calculate retained earnings (Revenue - Expenses up to date)
   const incomeStatement = await generateIncomeStatement(
     new Date(0), // From beginning
-    date
+    date,
   );
   equity.retainedEarnings = incomeStatement.netIncome;
   equity.total += equity.retainedEarnings;
@@ -1493,7 +1566,7 @@ export async function getAccountingSummary(): Promise<AccountingSummary> {
   const unpaidInvoicesCount = unpaidInvoices.length;
   const unpaidInvoicesAmount = unpaidInvoices.reduce(
     (sum, inv) => sum + toNumber(inv.totalAmount) - toNumber(inv.paidAmount),
-    0
+    0,
   );
 
   // Get pending payments
