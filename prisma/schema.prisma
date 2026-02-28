@@ -936,6 +936,8 @@ model PayrollPeriod {
   name        String    // e.g., "January 2026 Payroll"
   month       Int       // 1-12
   year        Int
+  // default payment calculation mode for this period: per_line | fixed_monthly
+  paymentType String    @default("per_line") @map("payment_type")
   startDate   DateTime  @map("start_date") @db.Date
   endDate     DateTime  @map("end_date") @db.Date
   status      String    @default("draft") // draft, processing, approved, paid
