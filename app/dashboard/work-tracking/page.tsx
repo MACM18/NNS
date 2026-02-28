@@ -12,17 +12,6 @@ import {
   startOfWeek,
 } from "date-fns";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -43,13 +32,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import {
-  Loader2,
-  Plus,
-  Users as UsersIcon,
-  Trash2,
-  UserPlus,
-} from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
 import { ManageWorkersModal } from "@/components/modals/manage-workers-modal";
 import { WorkTrackingHeader } from "@/components/work-tracking/work-tracking-header";
 import type {
@@ -453,9 +436,10 @@ export default function WorkTrackingCalendarPage() {
                 {linesForActiveDay.map((line) => (
                   <div
                     key={line.id}
+                    onClick={() => setActiveLineId(line.id)}
                     className={cn(
-                      "rounded border border-border p-3",
-                      activeLineId === line.id && "border-primary",
+                      "rounded border border-border p-3 cursor-pointer transition hover:bg-muted/50",
+                      activeLineId === line.id && "border-primary bg-primary/5",
                     )}
                   >
                     <div className='flex items-start justify-between gap-2'>
@@ -475,66 +459,29 @@ export default function WorkTrackingCalendarPage() {
                       {/* make the whole block clickable, remove separate manage button */}
                     </div>
 
-                    <div className='mt-3 space-y-2'>
-                      <p className='text-xs font-medium text-muted-foreground'>
-                        Assigned workers
-                      </p>
+                    <div className='mt-3 space-y-3'>
+                      {/* Show assigned workers as circles */}
+                      {line.assignments.length > 0 && (
+                        <div className='flex flex-wrap gap-2'>
+                          {line.assignments.map((assignment) => (
+                            <div
+                              key={assignment.id}
+                              className='w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold relative cursor-pointer hover:shadow-md transition-shadow group'
+                              title={assignment.worker_name}
+                            >
+                              {assignment.worker_name?.[0] || "?"}
+                              <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10'>
+                                {assignment.worker_name}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {line.assignments.length === 0 && (
-                        <p className='text-xs text-muted-foreground'>
-                          No workers assigned yet.
+                        <p className='text-xs text-muted-foreground italic'>
+                          No workers assigned
                         </p>
                       )}
-                      {line.assignments.map((assignment) => (
-                        <div
-                          key={assignment.id}
-                          className='flex items-center justify-between rounded border border-border px-2 py-1 text-xs'
-                        >
-                          <div className='flex items-center gap-2'>
-                            <UsersIcon className='h-3 w-3 text-muted-foreground' />
-                            <span>{assignment.worker_name}</span>
-                            {assignment.worker_role && (
-                              <Badge
-                                variant='secondary'
-                                className='text-[10px] uppercase'
-                              >
-                                {assignment.worker_role}
-                              </Badge>
-                            )}
-                          </div>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant='ghost' size='icon'>
-                                <Trash2 className='h-4 w-4 text-destructive' />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Remove worker?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will detach {assignment.worker_name} from
-                                  this line on{" "}
-                                  {format(
-                                    new Date(assignment.assigned_date),
-                                    "MMMM d, yyyy",
-                                  )}
-                                  . This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleRemove(assignment.id)}
-                                  className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                                >
-                                  Remove
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 ))}
@@ -543,13 +490,12 @@ export default function WorkTrackingCalendarPage() {
 
             <div className='h-[420px] rounded border border-dashed border-border p-4 flex flex-col gap-4'>
               <div>
-                <h3 className='text-sm font-semibold'>Assign worker</h3>
+                <h3 className='text-sm font-semibold'>Team Assignment</h3>
                 <p className='text-xs text-muted-foreground'>
-                  Select a line and click a technician to add/remove them.
+                  Click any technician card to toggle assignment
                 </p>
                 {activeLineId && (
-                  <p className='text-xs font-medium mt-1'>
-                    Line:{" "}
+                  <p className='text-xs font-medium mt-2 text-primary'>
                     {linesForActiveDay.find((l) => l.id === activeLineId)
                       ?.telephone_no ||
                       linesForActiveDay.find((l) => l.id === activeLineId)
@@ -559,70 +505,74 @@ export default function WorkTrackingCalendarPage() {
                 )}
               </div>
 
-              {/* show currently assigned people as circles */}
-              <div className='flex flex-wrap gap-2'>
-                {(() => {
-                  const assigned =
-                    (activeLineId &&
+              {/* Beautiful worker cards with full name, position, and centered tick */}
+              <div className='grid grid-cols-1 gap-3 overflow-auto'>
+                {workers.length === 0 ? (
+                  <div className='text-xs text-muted-foreground italic text-center py-8'>
+                    No technicians available
+                  </div>
+                ) : (
+                  workers.map((worker) => {
+                    const assigned =
+                      activeLineId &&
                       linesForActiveDay
                         .find((l) => l.id === activeLineId)
-                        ?.assignments.map((a) => a.worker_id)) ||
-                    [];
-                  return workers
-                    .filter((w) => assigned.includes(w.id))
-                    .map((w) => (
-                      <div
-                        key={w.id}
-                        className='w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs'
-                        title={w.full_name ?? ""}
+                        ?.assignments.some((a) => a.worker_id === worker.id);
+                    return (
+                      <button
+                        key={worker.id}
+                        onClick={() => toggleWorkerAssignment(worker.id)}
+                        disabled={assignLoading || !activeLineId}
+                        className={cn(
+                          "relative p-3 rounded-lg border-2 transition-all flex items-center justify-between group",
+                          assigned
+                            ? "bg-primary/10 border-primary shadow-md"
+                            : "bg-background border-border hover:border-primary/50 hover:shadow-sm",
+                          assignLoading && "opacity-50 cursor-wait",
+                        )}
                       >
-                        {w.full_name?.[0] || "?"}
-                      </div>
-                    ));
-                })()}
-              </div>
+                        <div className='flex-1 text-left'>
+                          <p className='text-sm font-semibold text-foreground'>
+                            {worker.full_name || "Unnamed"}
+                          </p>
+                          {worker.role && (
+                            <p className='text-xs text-muted-foreground capitalize'>
+                              {worker.role}
+                            </p>
+                          )}
+                        </div>
 
-              {/* worker grid for toggling assignments */}
-              <div className='grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-auto'>
-                {workers.map((worker) => {
-                  const assigned =
-                    activeLineId &&
-                    linesForActiveDay
-                      .find((l) => l.id === activeLineId)
-                      ?.assignments.some((a) => a.worker_id === worker.id);
-                  return (
-                    <button
-                      key={worker.id}
-                      onClick={() => toggleWorkerAssignment(worker.id)}
-                      disabled={assignLoading || !activeLineId}
-                      className={cn(
-                        "relative p-2 rounded-lg border text-xs flex items-center justify-center",
-                        assigned
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background border-border",
-                        assignLoading && "opacity-50 cursor-wait",
-                      )}
-                    >
-                      {worker.full_name?.[0] || ""}
-                      {assigned && (
-                        <svg
-                          xmlns='http://www.w3.org/2000/svg'
-                          className='absolute top-1 right-1 h-3 w-3'
-                          fill='none'
-                          viewBox='0 0 24 24'
-                          stroke='currentColor'
+                        {/* Centered tick on the right */}
+                        <div
+                          className='w-6 h-6 rounded-full flex items-center justify-center ml-2 flex-shrink-0'
+                          style={{
+                            backgroundColor: assigned
+                              ? "currentColor"
+                              : "transparent",
+                            color: assigned ? "white" : "transparent",
+                          }}
                         >
-                          <path
-                            strokeLinecap='round'
-                            strokeLinejoin='round'
-                            strokeWidth={2}
-                            d='M5 13l4 4L19 7'
-                          />
-                        </svg>
-                      )}
-                    </button>
-                  );
-                })}
+                          {assigned && (
+                            <svg
+                              xmlns='http://www.w3.org/2000/svg'
+                              className='h-4 w-4'
+                              fill='none'
+                              viewBox='0 0 24 24'
+                              stroke='currentColor'
+                            >
+                              <path
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                                strokeWidth={3}
+                                d='M5 13l4 4L19 7'
+                              />
+                            </svg>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
