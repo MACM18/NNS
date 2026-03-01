@@ -42,7 +42,7 @@ export function AccountLedger({ accountId, onBack }: AccountLedgerProps) {
     try {
       setLoading(true);
       const response = await fetch(
-        `/api/accounting/accounts/${accountId}/ledger`
+        `/api/accounting/accounts/${accountId}/ledger`,
       );
       if (!response.ok) throw new Error("Failed to fetch ledger");
 
@@ -79,7 +79,9 @@ export function AccountLedger({ accountId, onBack }: AccountLedgerProps) {
   const filteredEntries = entries.filter(
     (entry) =>
       entry.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.journalEntryNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+      entry.journalEntryNumber
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()),
   );
 
   const handleExport = () => {
@@ -112,7 +114,7 @@ export function AccountLedger({ accountId, onBack }: AccountLedgerProps) {
     a.href = url;
     a.download = `ledger-${account?.code}-${format(
       new Date(),
-      "yyyyMMdd"
+      "yyyyMMdd",
     )}.csv`;
     document.body.appendChild(a);
     a.click();
@@ -223,104 +225,106 @@ export function AccountLedger({ accountId, onBack }: AccountLedgerProps) {
           <CardTitle className='text-lg'>Transaction History</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Entry #</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead className='text-right'>Debit</TableHead>
-                <TableHead className='text-right'>Credit</TableHead>
-                <TableHead className='text-right'>Balance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {/* Opening Balance Row */}
-              <TableRow className='bg-muted/30'>
-                <TableCell colSpan={3} className='font-medium'>
-                  Opening Balance
-                </TableCell>
-                <TableCell className='text-right'>-</TableCell>
-                <TableCell className='text-right'>-</TableCell>
-                <TableCell className='text-right font-mono font-medium'>
-                  {entries.length > 0
-                    ? formatCurrency(
-                        entries[0].runningBalance -
-                          entries[0].debit +
-                          entries[0].credit
-                      )
-                    : formatCurrency(0)}
-                </TableCell>
-              </TableRow>
-
-              {filteredEntries.length === 0 ? (
+          <div className='overflow-x-auto'>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className='text-center text-muted-foreground'
-                  >
-                    No transactions found
+                  <TableHead>Date</TableHead>
+                  <TableHead>Entry #</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className='text-right'>Debit</TableHead>
+                  <TableHead className='text-right'>Credit</TableHead>
+                  <TableHead className='text-right'>Balance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {/* Opening Balance Row */}
+                <TableRow className='bg-muted/30'>
+                  <TableCell colSpan={3} className='font-medium'>
+                    Opening Balance
+                  </TableCell>
+                  <TableCell className='text-right'>-</TableCell>
+                  <TableCell className='text-right'>-</TableCell>
+                  <TableCell className='text-right font-mono font-medium'>
+                    {entries.length > 0
+                      ? formatCurrency(
+                          entries[0].runningBalance -
+                            entries[0].debit +
+                            entries[0].credit,
+                        )
+                      : formatCurrency(0)}
                   </TableCell>
                 </TableRow>
-              ) : (
-                filteredEntries.map((entry, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      {format(new Date(entry.date), "MMM d, yyyy")}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant='outline' className='font-mono'>
-                        {entry.journalEntryNumber}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className='max-w-[200px]'>
-                      <p className='truncate'>{entry.description}</p>
-                      {entry.reference && (
-                        <p className='text-xs text-muted-foreground truncate'>
-                          Ref: {entry.reference}
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell className='text-right font-mono'>
-                      {entry.debit > 0 ? (
-                        <span className='text-green-600'>
-                          {formatCurrency(entry.debit)}
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell className='text-right font-mono'>
-                      {entry.credit > 0 ? (
-                        <span className='text-red-600'>
-                          {formatCurrency(entry.credit)}
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell className='text-right font-mono font-medium'>
-                      {formatCurrency(entry.runningBalance)}
+
+                {filteredEntries.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className='text-center text-muted-foreground'
+                    >
+                      No transactions found
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                ) : (
+                  filteredEntries.map((entry, index) => (
+                    <TableRow key={index}>
+                      <TableCell>
+                        {format(new Date(entry.date), "MMM d, yyyy")}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant='outline' className='font-mono'>
+                          {entry.journalEntryNumber}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className='max-w-[200px]'>
+                        <p className='truncate'>{entry.description}</p>
+                        {entry.reference && (
+                          <p className='text-xs text-muted-foreground truncate'>
+                            Ref: {entry.reference}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell className='text-right font-mono'>
+                        {entry.debit > 0 ? (
+                          <span className='text-green-600'>
+                            {formatCurrency(entry.debit)}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                      <TableCell className='text-right font-mono'>
+                        {entry.credit > 0 ? (
+                          <span className='text-red-600'>
+                            {formatCurrency(entry.credit)}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                      <TableCell className='text-right font-mono font-medium'>
+                        {formatCurrency(entry.runningBalance)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
 
-              {/* Closing Balance Row */}
-              <TableRow className='bg-muted/50 font-semibold'>
-                <TableCell colSpan={3}>Closing Balance</TableCell>
-                <TableCell className='text-right font-mono text-green-600'>
-                  {formatCurrency(summary.totalDebits)}
-                </TableCell>
-                <TableCell className='text-right font-mono text-red-600'>
-                  {formatCurrency(summary.totalCredits)}
-                </TableCell>
-                <TableCell className='text-right font-mono'>
-                  {formatCurrency(summary.balance)}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+                {/* Closing Balance Row */}
+                <TableRow className='bg-muted/50 font-semibold'>
+                  <TableCell colSpan={3}>Closing Balance</TableCell>
+                  <TableCell className='text-right font-mono text-green-600'>
+                    {formatCurrency(summary.totalDebits)}
+                  </TableCell>
+                  <TableCell className='text-right font-mono text-red-600'>
+                    {formatCurrency(summary.totalCredits)}
+                  </TableCell>
+                  <TableCell className='text-right font-mono'>
+                    {formatCurrency(summary.balance)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 

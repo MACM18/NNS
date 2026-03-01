@@ -478,7 +478,7 @@ export function CompanySettingsModal({
             </CardContent>
           </Card>
 
-          {/* Bank Details */}
+          {/* Bank Details moved to Bank Accounts management page */}
           <Card>
             <CardHeader>
               <CardTitle className='flex items-center gap-2'>
@@ -486,95 +486,27 @@ export function CompanySettingsModal({
                 Bank Details
               </CardTitle>
             </CardHeader>
-            <CardContent className='space-y-4'>
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                <div>
-                  <div className='flex items-center justify-between'>
-                    <Label htmlFor='bank_account'>Linked Ledger Account</Label>
-                    <Button
-                      variant='outline'
-                      size='icon'
-                      title='Add account'
-                      onClick={() =>
-                        router.push("/dashboard/accounting/accounts")
-                      }
-                    >
-                      <Plus className='h-4 w-4' />
-                    </Button>
-                  </div>
-                  <Select
-                    value={formData.bank_details.accountId}
-                    onValueChange={(val) =>
-                      handleBankDetailsChange("accountId", val)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder='Select account' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accounts.map((acct) => (
-                        <SelectItem key={acct.id} value={acct.id}>
-                          {acct.code} - {acct.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor='bank_name'>Bank Name</Label>
-                  <Input
-                    id='bank_name'
-                    value={formData.bank_details.bank_name}
-                    onChange={(e) =>
-                      handleBankDetailsChange("bank_name", e.target.value)
-                    }
-                    placeholder='e.g., Sampath Bank PLC'
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='account_title'>Account Title</Label>
-                  <Input
-                    id='account_title'
-                    value={formData.bank_details.account_title}
-                    onChange={(e) =>
-                      handleBankDetailsChange("account_title", e.target.value)
-                    }
-                    placeholder='Account holder name'
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='account_number'>Account Number</Label>
-                  <Input
-                    id='account_number'
-                    value={formData.bank_details.account_number}
-                    onChange={(e) =>
-                      handleBankDetailsChange("account_number", e.target.value)
-                    }
-                    placeholder='Bank account number'
-                  />
-                </div>
-                <div>
-                  <Label htmlFor='branch_code'>Branch Code</Label>
-                  <Input
-                    id='branch_code'
-                    value={formData.bank_details.branch_code}
-                    onChange={(e) =>
-                      handleBankDetailsChange("branch_code", e.target.value)
-                    }
-                    placeholder='Branch code'
-                  />
-                </div>
-                <div className='md:col-span-2'>
-                  <Label htmlFor='iban'>IBAN</Label>
-                  <Input
-                    id='iban'
-                    value={formData.bank_details.iban}
-                    onChange={(e) =>
-                      handleBankDetailsChange("iban", e.target.value)
-                    }
-                    placeholder='PK36SCBL0000001123456702'
-                  />
-                </div>
+            <CardContent>
+              <p className='text-sm text-muted-foreground mb-2'>
+                Bank account details and ledger linking are managed in the
+                Accounting → Bank Accounts page. Use that page to create or link
+                a ledger account and mark the active bank account for the
+                company.
+              </p>
+              <div className='flex gap-2'>
+                <Button
+                  onClick={() =>
+                    router.push("/dashboard/accounting/bank-accounts")
+                  }
+                >
+                  Manage Bank Accounts
+                </Button>
+                <Button
+                  variant='outline'
+                  onClick={() => router.push("/dashboard/accounting/accounts")}
+                >
+                  Manage Chart of Accounts
+                </Button>
               </div>
             </CardContent>
           </Card>

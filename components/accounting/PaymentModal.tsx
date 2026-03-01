@@ -358,7 +358,9 @@ export function PaymentModal({
                   variant='outline'
                   size='icon'
                   title='Add account'
-                  onClick={() => router.push("/dashboard/accounting/accounts")}
+                  onClick={() =>
+                    router.push("/dashboard/accounting/bank-accounts")
+                  }
                 >
                   <Plus className='h-4 w-4' />
                 </Button>
