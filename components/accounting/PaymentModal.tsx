@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { CreditCard, DollarSign, FileText } from "lucide-react";
+import { CreditCard, DollarSign, FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useNotification } from "@/contexts/notification-context";
+import { useRouter } from "next/navigation";
 
 interface PaymentModalProps {
   open: boolean;
@@ -68,6 +69,7 @@ export function PaymentModal({
   });
 
   const { addNotification } = useNotification();
+  const router = useRouter();
 
   useEffect(() => {
     // Reset form when modal opens
@@ -84,16 +86,39 @@ export function PaymentModal({
     try {
       // Fetch cash/bank accounts (asset accounts)
       const response = await fetch(
-        "/api/accounting/accounts?isActive=true&category=ASSET"
+        "/api/accounting/accounts?isActive=true&category=ASSET",
       );
       if (!response.ok) throw new Error("Failed to fetch accounts");
       const result = await response.json();
       setAccounts(result.data || []);
 
+      // check company settings for default bank account
+      try {
+        const settingsRes = await fetch("/api/settings/company");
+        if (settingsRes.ok) {
+          const { data } = await settingsRes.json();
+          if (
+            data?.bank_details &&
+            data.bank_details.accountId &&
+            (result.data || []).find(
+              (a: any) => a.id === data.bank_details.accountId,
+            )
+          ) {
+            setFormData((prev) => ({
+              ...prev,
+              paymentAccountId: data.bank_details.accountId,
+            }));
+            return; // done, don't override with first account
+          }
+        }
+      } catch (e) {
+        console.error("failed to load company settings", e);
+      }
+
       // Auto-select first cash/bank account if available
       const cashBankAccounts = (result.data || []).filter(
         (a: { code: string }) =>
-          a.code.startsWith("1010") || a.code.startsWith("1020")
+          a.code.startsWith("1010") || a.code.startsWith("1020"),
       );
       if (cashBankAccounts.length > 0 && !formData.paymentAccountId) {
         setFormData((prev) => ({
@@ -174,7 +199,7 @@ export function PaymentModal({
       addNotification({
         title: "Success",
         message: `Payment of ${formatCurrency(
-          formData.amount
+          formData.amount,
         )} recorded successfully`,
         type: "success",
         category: "accounting",
@@ -211,7 +236,7 @@ export function PaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[500px]'>
+      <DialogContent className='max-w-full sm:max-w-lg'>
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             <CreditCard className='h-5 w-5' />
@@ -223,7 +248,6 @@ export function PaymentModal({
               : "Record a payment for this invoice"}
           </DialogDescription>
         </DialogHeader>
-
         <div className='space-y-4 py-4'>
           {/* Invoice Summary */}
           <div className='bg-muted/50 rounded-lg p-4 space-y-2'>
@@ -251,138 +275,150 @@ export function PaymentModal({
                 </>
               )}
           </div>
-
           {/* Payment Amount */}
-          <div className='space-y-2'>
-            <Label htmlFor='amount'>Payment Amount *</Label>
-            <div className='relative'>
-              <DollarSign className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='amount'>Payment Amount *</Label>
+              <div className='relative'>
+                <DollarSign className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+                <Input
+                  id='amount'
+                  type='number'
+                  step='0.01'
+                  value={formData.amount}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      amount: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className='pl-10'
+                />
+              </div>
+              {isPartialPayment && (
+                <p className='text-sm text-yellow-600'>
+                  This is a partial payment. Remaining after:{" "}
+                  {formatCurrency(effectiveRemaining - formData.amount)}
+                </p>
+              )}
+              {isOverpayment && (
+                <p className='text-sm text-red-600'>
+                  Amount exceeds remaining balance by{" "}
+                  {formatCurrency(formData.amount - effectiveRemaining)}
+                </p>
+              )}
+            </div>
+
+            {/* Payment Date */}
+            <div className='space-y-2'>
+              <Label>Payment Date *</Label>
               <Input
-                id='amount'
-                type='number'
-                step='0.01'
-                value={formData.amount}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    amount: parseFloat(e.target.value) || 0,
-                  })
+                type='date'
+                value={
+                  formData.paymentDate
+                    ? format(formData.paymentDate, "yyyy-MM-dd")
+                    : ""
                 }
-                className='pl-10'
+                onChange={(e) => {
+                  const date = e.target.value
+                    ? new Date(e.target.value + "T00:00:00")
+                    : new Date();
+                  setFormData({ ...formData, paymentDate: date });
+                }}
               />
             </div>
-            {isPartialPayment && (
-              <p className='text-sm text-yellow-600'>
-                This is a partial payment. Remaining after:{" "}
-                {formatCurrency(effectiveRemaining - formData.amount)}
-              </p>
-            )}
-            {isOverpayment && (
-              <p className='text-sm text-red-600'>
-                Amount exceeds remaining balance by{" "}
-                {formatCurrency(formData.amount - effectiveRemaining)}
-              </p>
-            )}
-          </div>
 
-          {/* Payment Date */}
-          <div className='space-y-2'>
-            <Label>Payment Date *</Label>
-            <Input
-              type='date'
-              value={
-                formData.paymentDate
-                  ? format(formData.paymentDate, "yyyy-MM-dd")
-                  : ""
-              }
-              onChange={(e) => {
-                const date = e.target.value
-                  ? new Date(e.target.value + "T00:00:00")
-                  : new Date();
-                setFormData({ ...formData, paymentDate: date });
-              }}
-            />
-          </div>
-
-          {/* Payment Method */}
-          <div className='space-y-2'>
-            <Label>Payment Method *</Label>
-            <Select
-              value={formData.paymentMethod}
-              onValueChange={(value) =>
-                setFormData({ ...formData, paymentMethod: value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder='Select method' />
-              </SelectTrigger>
-              <SelectContent>
-                {PAYMENT_METHODS.map((method) => (
-                  <SelectItem key={method.value} value={method.value}>
-                    {method.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Payment Account */}
-          <div className='space-y-2'>
-            <Label>Payment Account *</Label>
-            <Select
-              value={formData.paymentAccountId}
-              onValueChange={(value) =>
-                setFormData({ ...formData, paymentAccountId: value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder='Select account' />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.code} - {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className='text-xs text-muted-foreground'>
-              This is the cash/bank account receiving the payment
-            </p>
-          </div>
-
-          {/* Reference */}
-          <div className='space-y-2'>
-            <Label htmlFor='reference'>Reference Number</Label>
-            <div className='relative'>
-              <FileText className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
-              <Input
-                id='reference'
-                value={formData.reference}
-                onChange={(e) =>
-                  setFormData({ ...formData, reference: e.target.value })
+            {/* Payment Method */}
+            <div className='space-y-2'>
+              <Label>Payment Method *</Label>
+              <Select
+                value={formData.paymentMethod}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, paymentMethod: value })
                 }
-                placeholder='Check #, Transaction ID, etc.'
-                className='pl-10'
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder='Select method' />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((method) => (
+                    <SelectItem key={method.value} value={method.value}>
+                      {method.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Payment Account */}
+            <div className='space-y-2'>
+              <div className='flex items-center justify-between'>
+                <Label>Payment Account *</Label>
+                <Button
+                  variant='outline'
+                  size='icon'
+                  title='Add account'
+                  onClick={() => router.push("/dashboard/accounting/accounts")}
+                >
+                  <Plus className='h-4 w-4' />
+                </Button>
+              </div>
+              <Select
+                value={formData.paymentAccountId}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, paymentAccountId: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder='Select account' />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.code} - {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className='text-xs text-muted-foreground'>
+                This is the cash/bank account receiving the payment
+              </p>
+            </div>
+
+            {/* Reference */}
+            <div className='space-y-2'>
+              <Label htmlFor='reference'>Reference Number</Label>
+              <div className='relative'>
+                <FileText className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+                <Input
+                  id='reference'
+                  value={formData.reference}
+                  onChange={(e) =>
+                    setFormData({ ...formData, reference: e.target.value })
+                  }
+                  placeholder='Check #, Transaction ID, etc.'
+                  className='pl-10'
+                />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className='space-y-2'>
+              <Label htmlFor='notes'>Notes</Label>
+              <Textarea
+                id='notes'
+                value={formData.notes}
+                onChange={(e) =>
+                  setFormData({ ...formData, notes: e.target.value })
+                }
+                placeholder='Additional notes (optional)'
+                rows={2}
               />
             </div>
-          </div>
-
-          {/* Notes */}
-          <div className='space-y-2'>
-            <Label htmlFor='notes'>Notes</Label>
-            <Textarea
-              id='notes'
-              value={formData.notes}
-              onChange={(e) =>
-                setFormData({ ...formData, notes: e.target.value })
-              }
-              placeholder='Additional notes (optional)'
-              rows={2}
-            />
-          </div>
-        </div>
-
+          </div>{" "}
+          {/* close grid */}
+        </div>{" "}
+        {/* close content */}
         <DialogFooter>
           <Button
             variant='outline'
