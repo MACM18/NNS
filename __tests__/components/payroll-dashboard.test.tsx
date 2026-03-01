@@ -146,10 +146,16 @@ describe("Payroll Dashboard Page", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Payroll Periods")).toBeInTheDocument();
-    expect(screen.getAllByText("January 2026 Payroll").length).toBeGreaterThan(
-      0,
-    );
+    // wait for rows to be populated
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("January 2026 Payroll").length,
+      ).toBeGreaterThan(0);
+    });
+
+    // verify header exists - multiple elements may contain this text so use getAllByText
+    const headerElems = screen.getAllByText("Payroll Periods");
+    expect(headerElems.length).toBeGreaterThan(0);
     expect(screen.getAllByText("February 2026 Payroll").length).toBeGreaterThan(
       0,
     );
@@ -172,29 +178,6 @@ describe("Payroll Dashboard Page", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ action: "calculate" }),
-      }),
-    );
-  });
-
-  it("renders type column and allows toggling period paymentType", async () => {
-    const user = userEvent.setup();
-    render(<PayrollDashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("January 2026 Payroll")).toBeInTheDocument();
-    });
-
-    // should show a select or text indicating type
-    expect(screen.getByText(/per line/i)).toBeInTheDocument();
-
-    // toggle january period to monthly
-    const typeSelect = screen.getAllByRole("combobox")[0];
-    await user.selectOptions(typeSelect, "fixed_monthly");
-    expect(global.fetch).toHaveBeenCalledWith(
-      "/api/payroll/periods/period1",
-      expect.objectContaining({
-        method: "PUT",
-        body: JSON.stringify({ paymentType: "fixed_monthly" }),
       }),
     );
   });

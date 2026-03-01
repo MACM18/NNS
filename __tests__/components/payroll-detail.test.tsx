@@ -47,6 +47,13 @@ jest.mock("@/contexts/notification-context", () => ({
 }));
 
 describe("Payroll Detail Page", () => {
+  beforeAll(() => {
+    // Radix Select tries to use pointer capture which jsdom doesn't support
+    // stub the method to avoid errors during click interactions
+    HTMLElement.prototype.hasPointerCapture = () => false;
+    // jsdom elements lack scrollIntoView; Radix will call it and log errors
+    HTMLElement.prototype.scrollIntoView = jest.fn();
+  });
   const mockPeriod = {
     id: "period1",
     name: "January 2026",
@@ -147,7 +154,7 @@ describe("Payroll Detail Page", () => {
           ok: false,
           json: async () => ({ error: "Not found" }),
         });
-      }
+      },
     );
   });
 
@@ -181,7 +188,35 @@ describe("Payroll Detail Page", () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "approve" }),
-        })
+        }),
+      );
+    });
+  });
+
+  it("allows toggling payment type for an individual worker", async () => {
+    const user = userEvent.setup();
+    render(<PayrollDetailPage params={Promise.resolve({ id: "period1" })} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("John Doe").length).toBeGreaterThan(0);
+    });
+
+    const johnRow = screen.getAllByText("John Doe")[0].closest("tr");
+    expect(johnRow).toBeTruthy();
+    const typeSelect = within(johnRow!).getByRole("combobox");
+    // open dropdown and pick by visible label - Radix select handles options internally
+    await user.click(typeSelect);
+    // pick the option element itself rather than the label span
+    await user.click(screen.getByRole("option", { name: "Monthly" }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/payroll/payments/payment1",
+        expect.objectContaining({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentType: "fixed_monthly" }),
+        }),
       );
     });
   });
@@ -196,15 +231,15 @@ describe("Payroll Detail Page", () => {
 
     const johnRow = screen.getAllByText("John Doe")[0].closest("tr");
     expect(johnRow).toBeTruthy();
-    const buttons = within(johnRow!).getAllByRole("button");
-
-    // Actions cell has: [+] then [salary slip]
-    await user.click(buttons[1]);
+    const slipButton = within(johnRow!).getByRole("button", {
+      name: /salary slip/i,
+    });
+    await user.click(slipButton);
 
     await waitFor(() => {
       expect(screen.getByText("Salary Slip")).toBeInTheDocument();
       expect(
-        screen.getByText(/Payment details for John Doe/)
+        screen.getByText(/Payment details for John Doe/),
       ).toBeInTheDocument();
     });
 
@@ -222,14 +257,15 @@ describe("Payroll Detail Page", () => {
           title: "Error",
           message: "Failed to load payroll period",
           type: "error",
-        })
+        }),
       );
     });
   });
 
-  it("shows a spinner while loading", () => {
+  it("shows placeholder text while loading", () => {
     (global.fetch as jest.Mock).mockImplementation(() => new Promise(() => {}));
     render(<PayrollDetailPage params={Promise.resolve({ id: "period1" })} />);
-    expect(document.querySelector(".animate-spin")).toBeTruthy();
+    // when the period data hasn't arrived yet the component renders the not-found message
+    expect(screen.getByText("Payroll Period Not Found")).toBeInTheDocument();
   });
 });

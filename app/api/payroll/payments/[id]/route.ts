@@ -9,7 +9,7 @@ import {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await auth();
@@ -42,14 +42,14 @@ export async function GET(
             ? error.message
             : "Failed to fetch worker payment",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await auth();
@@ -64,11 +64,12 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { status, paymentMethod, paymentRef } = body;
+    const { status, paymentMethod, paymentRef, paymentType } = body;
 
     const payment = await updateWorkerPaymentStatus(id, status, {
       paymentMethod,
       paymentRef,
+      paymentType,
     });
 
     return NextResponse.json({ success: true, data: payment });
@@ -81,7 +82,7 @@ export async function PUT(
             ? error.message
             : "Failed to update worker payment",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

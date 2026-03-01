@@ -54,6 +54,7 @@ jest.mock("@/lib/prisma", () => ({
       findMany: jest.fn(),
       findUnique: jest.fn(),
       delete: jest.fn(),
+      deleteMany: jest.fn(),
     },
     worker: {
       findMany: jest.fn(),
@@ -62,12 +63,73 @@ jest.mock("@/lib/prisma", () => ({
     workAssignment: {
       count: jest.fn(),
     },
+    profile: {
+      findUnique: jest.fn(),
+    },
+    payrollRule: {
+      findMany: jest.fn(),
+    },
   },
 }));
 
 describe("Accounting & Payroll Integration Tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // return a default profile for any userId
+    (prisma.profile.findUnique as jest.Mock).mockResolvedValue({
+      id: "profile1",
+      userId: "admin1",
+      fullName: "Admin User",
+    });
+    // avoid undefined in createPayrollPeriod when fetching workers
+    (prisma.worker.findMany as jest.Mock).mockResolvedValue([]);
+    // default payroll rules list
+    (prisma.payrollRule.findMany as jest.Mock).mockResolvedValue([]);
+
+    // in-memory store to mimic payments table
+    const paymentStore: Record<string, any> = {};
+
+    (prisma.workerPayment.create as jest.Mock).mockImplementation(
+      async ({ data }: any) => {
+        const id = data.id || `pay_${Object.keys(paymentStore).length + 1}`;
+        const record = { ...data, id, adjustments: [] };
+        paymentStore[id] = record;
+        return record;
+      },
+    );
+
+    (prisma.workerPayment.findUnique as jest.Mock).mockImplementation(
+      async ({ where }: any) => {
+        if (where.id) {
+          return paymentStore[where.id] || null;
+        }
+        if (where.payrollPeriodId_workerId) {
+          return (
+            Object.values(paymentStore).find(
+              (p: any) =>
+                p.payrollPeriodId === where.payrollPeriodId &&
+                p.workerId === where.workerId,
+            ) || null
+          );
+        }
+        return null;
+      },
+    );
+
+    (prisma.workerPayment.update as jest.Mock).mockImplementation(
+      async ({ where, data }: any) => {
+        const existing = paymentStore[where.id];
+        if (!existing) return null;
+        const updated = { ...existing, ...data };
+        paymentStore[where.id] = updated;
+        return updated;
+      },
+    );
+
+    // simple stubs for the remaining methods that may be called
+    (prisma.workerPayment.updateMany as jest.Mock).mockResolvedValue({});
+    (prisma.payrollAdjustment.deleteMany as jest.Mock).mockResolvedValue({});
+    (prisma.payrollAdjustment.findMany as jest.Mock).mockResolvedValue([]);
   });
 
   describe("Complete Payroll Workflow", () => {
@@ -127,37 +189,7 @@ describe("Accounting & Payroll Integration Tests", () => {
       });
       (prisma.worker.findMany as jest.Mock).mockResolvedValue(mockWorkers);
       (prisma.workAssignment.count as jest.Mock).mockResolvedValue(10);
-      (prisma.workerPayment.findUnique as jest.Mock).mockResolvedValue(null);
-      (prisma.workerPayment.create as jest.Mock)
-        .mockResolvedValueOnce({
-          id: "payment1",
-          paymentType: "per_line",
-          linesCompleted: 10,
-          perLineRate: new Decimal(500),
-          baseAmount: new Decimal(5000),
-          bonusAmount: new Decimal(0),
-          deductionAmount: new Decimal(0),
-          netAmount: new Decimal(5000),
-          status: "calculated",
-          worker: mockWorkers[0],
-          adjustments: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .mockResolvedValueOnce({
-          id: "payment2",
-          paymentType: "fixed_monthly",
-          linesCompleted: 0,
-          baseAmount: new Decimal(50000),
-          bonusAmount: new Decimal(0),
-          deductionAmount: new Decimal(0),
-          netAmount: new Decimal(50000),
-          status: "calculated",
-          worker: mockWorkers[1],
-          adjustments: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
+      // store implementation will handle create/findUnique/update automatically
       (prisma.payrollPeriod.update as jest.Mock).mockResolvedValue({});
 
       const payments = await calculatePayrollForPeriod("period1", "admin1");
@@ -189,10 +221,10 @@ describe("Accounting & Payroll Integration Tests", () => {
       };
 
       (prisma.workerPayment.findUnique as jest.Mock).mockResolvedValue(
-        mockPayment
+        mockPayment,
       );
       (prisma.payrollAdjustment.create as jest.Mock).mockResolvedValue(
-        mockAdjustment
+        mockAdjustment,
       );
       (prisma.payrollAdjustment.findMany as jest.Mock).mockResolvedValue([
         mockAdjustment,
@@ -207,7 +239,7 @@ describe("Accounting & Payroll Integration Tests", () => {
           description: "Good work",
           amount: 1000,
         },
-        "admin1"
+        "admin1",
       );
       expect(adjustment.type).toBe("bonus");
 
@@ -254,7 +286,7 @@ describe("Accounting & Payroll Integration Tests", () => {
       });
 
       await expect(approvePayrollPeriod("period1")).rejects.toThrow(
-        "Can only approve processing payroll periods"
+        "Can only approve processing payroll periods",
       );
 
       // Cannot pay draft period
@@ -264,14 +296,18 @@ describe("Accounting & Payroll Integration Tests", () => {
       });
 
       await expect(markPayrollAsPaid("period1")).rejects.toThrow(
-        "Can only mark approved payroll periods as paid"
+        "Can only mark approved payroll periods as paid",
       );
 
       // Cannot add adjustments to paid payments
-      (prisma.workerPayment.findUnique as jest.Mock).mockResolvedValue({
-        id: "payment1",
-        status: "paid",
-      });
+      (prisma.workerPayment.findUnique as jest.Mock).mockImplementation(
+        ({ where }: any) => {
+          if (where.id === "payment1") {
+            return Promise.resolve({ id: "payment1", status: "paid" });
+          }
+          return Promise.resolve(null);
+        },
+      );
 
       await expect(
         addAdjustment(
@@ -282,8 +318,8 @@ describe("Accounting & Payroll Integration Tests", () => {
             description: "Test",
             amount: 1000,
           },
-          "admin1"
-        )
+          "admin1",
+        ),
       ).rejects.toThrow("Cannot add adjustments to a paid payment");
     });
   });
@@ -323,39 +359,12 @@ describe("Accounting & Payroll Integration Tests", () => {
       (prisma.worker.findMany as jest.Mock).mockResolvedValue(mockWorkers);
       (prisma.workAssignment.count as jest.Mock)
         .mockResolvedValueOnce(10) // w1
+        // w2 is fixed monthly but count still executes
+        .mockResolvedValueOnce(15) // w2 (ignored for fixed pay)
         .mockResolvedValueOnce(15); // w3
-      (prisma.workerPayment.findUnique as jest.Mock).mockResolvedValue(null);
-      (prisma.workerPayment.create as jest.Mock)
-        .mockResolvedValueOnce({
-          id: "p1",
-          baseAmount: new Decimal(5000),
-          netAmount: new Decimal(5000),
-          worker: mockWorkers[0],
-          status: "calculated",
-          paymentType: "per_line",
-          linesCompleted: 10,
-          adjustments: [],
-        })
-        .mockResolvedValueOnce({
-          id: "p2",
-          baseAmount: new Decimal(50000),
-          netAmount: new Decimal(50000),
-          worker: mockWorkers[1],
-          status: "calculated",
-          paymentType: "fixed_monthly",
-          linesCompleted: 0,
-          adjustments: [],
-        })
-        .mockResolvedValueOnce({
-          id: "p3",
-          baseAmount: new Decimal(9000),
-          netAmount: new Decimal(9000),
-          worker: mockWorkers[2],
-          status: "calculated",
-          paymentType: "per_line",
-          linesCompleted: 15,
-          adjustments: [],
-        });
+      // let the in‑memory payment store handle creation and lookups instead of overriding
+      // this keeps `findUnique` from returning null during the final fetch above
+      // (previous mocks were causing `finalPayment` to be undefined)
       (prisma.payrollPeriod.update as jest.Mock).mockResolvedValue({});
 
       const payments = await calculatePayrollForPeriod("period1", "admin1");

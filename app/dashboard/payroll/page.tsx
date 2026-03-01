@@ -100,7 +100,6 @@ const COLUMNS = [
   { id: "name", label: "Period" },
   { id: "date_range", label: "Date Range" },
   { id: "status", label: "Status" },
-  { id: "type", label: "Type" },
   { id: "workers", label: "Workers" },
   { id: "total_amount", label: "Total Amount" },
   { id: "actions", label: "Actions" },

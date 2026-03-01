@@ -601,10 +601,26 @@ export async function getWorkerPaymentById(
 
 export async function updateWorkerPaymentStatus(
   id: string,
-  status: PaymentStatus,
-  paymentDetails?: { paymentMethod?: string; paymentRef?: string },
+  status: PaymentStatus | undefined,
+  paymentDetails?: {
+    paymentMethod?: string;
+    paymentRef?: string;
+    paymentType?: PaymentType;
+  },
 ): Promise<WorkerPayment> {
-  const updateData: Prisma.WorkerPaymentUpdateInput = { status };
+  // fetch existing payment to use for recalculations
+  const existing = await prisma.workerPayment.findUnique({
+    where: { id },
+    include: { worker: true },
+  });
+  if (!existing) {
+    throw new Error("Payment not found");
+  }
+
+  const updateData: Prisma.WorkerPaymentUpdateInput = {};
+  if (status !== undefined) {
+    updateData.status = status;
+  }
 
   if (status === "paid") {
     updateData.paidAt = new Date();
@@ -613,6 +629,23 @@ export async function updateWorkerPaymentStatus(
     }
     if (paymentDetails?.paymentRef) {
       updateData.paymentRef = paymentDetails.paymentRef;
+    }
+  }
+
+  if (paymentDetails?.paymentType) {
+    if (existing.status === "paid") {
+      throw new Error("Cannot change payment type of a paid payment");
+    }
+    updateData.paymentType = paymentDetails.paymentType;
+    // recalc base amount based on new type
+    if (paymentDetails.paymentType === "per_line") {
+      const rate =
+        decimalToNumber(existing.perLineRate) ||
+        decimalToNumber(existing.worker.perLineRate) ||
+        0;
+      updateData.baseAmount = existing.linesCompleted * rate;
+    } else if (paymentDetails.paymentType === "fixed_monthly") {
+      updateData.baseAmount = decimalToNumber(existing.worker.monthlyRate) || 0;
     }
   }
 

@@ -62,6 +62,7 @@ import type {
   WorkerPayment,
   AdjustmentCategory,
   AdjustmentType,
+  PaymentType,
 } from "@/types/payroll";
 import Link from "next/link";
 import { generateSalarySlipPDF } from "@/lib/salary-slip-pdf";
@@ -102,11 +103,14 @@ export default function PayrollPeriodDetailPage({
   const [payments, setPayments] = useState<WorkerPayment[]>([]);
   const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<WorkerPayment | null>(
-    null
+    null,
   );
   const [salarySlipPayment, setSalarySlipPayment] =
     useState<WorkerPayment | null>(null);
   const [processingAction, setProcessingAction] = useState(false);
+  const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(
+    null,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [payWorkerModalOpen, setPayWorkerModalOpen] = useState(false);
   const [payWorkerForm, setPayWorkerForm] = useState({
@@ -130,32 +134,35 @@ export default function PayrollPeriodDetailPage({
   const { role } = useAuth();
   const canManage = role === "admin" || role === "moderator";
 
-  const fetchData = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
+  const fetchData = useCallback(
+    async (isRefresh = false) => {
+      try {
+        if (isRefresh) setRefreshing(true);
+        else setLoading(true);
 
-      const response = await fetch(`/api/payroll/periods/${id}`);
+        const response = await fetch(`/api/payroll/periods/${id}`);
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch period");
+        if (!response.ok) {
+          throw new Error("Failed to fetch period");
+        }
+
+        const data = await response.json();
+        setPeriod(data.data);
+        setPayments(data.data?.payments || []);
+      } catch (error) {
+        addNotification({
+          title: "Error",
+          message: "Failed to load payroll period",
+          type: "error",
+          category: "system",
+        });
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      const data = await response.json();
-      setPeriod(data.data);
-      setPayments(data.data?.payments || []);
-    } catch (error) {
-      addNotification({
-        title: "Error",
-        message: "Failed to load payroll period",
-        type: "error",
-        category: "system",
-      });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [id, addNotification]);
+    },
+    [id, addNotification],
+  );
 
   useEffect(() => {
     fetchData();
@@ -258,7 +265,7 @@ export default function PayrollPeriodDetailPage({
         `/api/payroll/adjustments?id=${adjustmentId}`,
         {
           method: "DELETE",
-        }
+        },
       );
 
       if (!response.ok) {
@@ -325,6 +332,40 @@ export default function PayrollPeriodDetailPage({
       });
     } finally {
       setProcessingAction(false);
+    }
+  };
+
+  const handleUpdatePaymentType = async (
+    paymentId: string,
+    newType: PaymentType,
+  ) => {
+    try {
+      setUpdatingPaymentId(paymentId);
+      const response = await fetch(`/api/payroll/payments/${paymentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentType: newType }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Failed to update payment type");
+      }
+      addNotification({
+        title: "Success",
+        message: "Payment type updated",
+        type: "success",
+        category: "system",
+      });
+      fetchData(true);
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message: error instanceof Error ? error.message : "Update failed",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setUpdatingPaymentId(null);
     }
   };
 
@@ -447,48 +488,56 @@ export default function PayrollPeriodDetailPage({
         </div>
         <div className='flex items-center gap-2'>
           <Button
-            variant="outline"
+            variant='outline'
             disabled={loading || refreshing || !period || payments.length === 0}
-            onClick={() => period && payments.length > 0 && generatePayrollSummaryPDF({ period, payments })}
+            onClick={() =>
+              period &&
+              payments.length > 0 &&
+              generatePayrollSummaryPDF({ period, payments })
+            }
           >
-            <FileDown className="h-4 w-4 mr-2" />
+            <FileDown className='h-4 w-4 mr-2' />
             Download PDF
           </Button>
           <Button
-            variant="outline"
+            variant='outline'
             disabled={loading || refreshing}
             onClick={() => fetchData(true)}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+            />
             Refresh
           </Button>
-          {canManage && (period.status === "draft" || period.status === "processing") && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                fetchAllWorkers();
-                setAddWorkerModalOpen(true);
-              }}
-              disabled={processingAction}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Worker
-            </Button>
-          )}
+          {canManage &&
+            (period.status === "draft" || period.status === "processing") && (
+              <Button
+                variant='outline'
+                onClick={() => {
+                  fetchAllWorkers();
+                  setAddWorkerModalOpen(true);
+                }}
+                disabled={processingAction}
+              >
+                <Plus className='h-4 w-4 mr-2' />
+                Add Worker
+              </Button>
+            )}
           {getStatusBadge(period.status)}
-          {canManage && (period.status === "draft" || period.status === "processing") && (
-            <Button
-              onClick={() => handleAction("calculate")}
-              disabled={processingAction}
-            >
-              {processingAction ? (
-                <Loader2 className='h-4 w-4 animate-spin mr-2' />
-              ) : (
-                <Calculator className='h-4 w-4 mr-2' />
-              )}
-              Calculate Payroll
-            </Button>
-          )}
+          {canManage &&
+            (period.status === "draft" || period.status === "processing") && (
+              <Button
+                onClick={() => handleAction("calculate")}
+                disabled={processingAction}
+              >
+                {processingAction ? (
+                  <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                ) : (
+                  <Calculator className='h-4 w-4 mr-2' />
+                )}
+                Calculate Payroll
+              </Button>
+            )}
           {canManage && period.status === "processing" && (
             <Button
               onClick={() => handleAction("approve")}
@@ -593,7 +642,9 @@ export default function PayrollPeriodDetailPage({
               <TableHeader>
                 <TableRow>
                   <TableHead className='min-w-[150px]'>Worker</TableHead>
-                  <TableHead className='min-w-[100px] hidden md:table-cell'>Type</TableHead>
+                  <TableHead className='min-w-[100px] hidden md:table-cell'>
+                    Type
+                  </TableHead>
                   <TableHead className='min-w-[80px] text-right hidden sm:table-cell'>
                     Lines
                   </TableHead>
@@ -629,12 +680,37 @@ export default function PayrollPeriodDetailPage({
                       <TableCell className='font-medium'>
                         {payment.worker?.fullName || "Unknown"}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <Badge variant='outline'>
-                          {payment.paymentType === "per_line"
-                            ? "Per Line"
-                            : "Monthly"}
-                        </Badge>
+                      <TableCell className='hidden md:table-cell'>
+                        {canManage &&
+                        period.status !== "paid" &&
+                        payment.status !== "paid" ? (
+                          <Select
+                            value={payment.paymentType}
+                            onValueChange={(val) =>
+                              handleUpdatePaymentType(
+                                payment.id,
+                                val as PaymentType,
+                              )
+                            }
+                            disabled={updatingPaymentId === payment.id}
+                          >
+                            <SelectTrigger className='w-[120px]'>
+                              <SelectValue placeholder='Type' />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value='per_line'>Per Line</SelectItem>
+                              <SelectItem value='fixed_monthly'>
+                                Monthly
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant='outline'>
+                            {payment.paymentType === "per_line"
+                              ? "Per Line"
+                              : "Monthly"}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className='text-right font-mono hidden sm:table-cell'>
                         {payment.linesCompleted}
@@ -673,12 +749,12 @@ export default function PayrollPeriodDetailPage({
                             <Button
                               size='sm'
                               variant='outline'
-                              className="text-green-600 border-green-200 hover:bg-green-50"
+                              className='text-green-600 border-green-200 hover:bg-green-50'
                               onClick={() => {
                                 setSelectedPayment(payment);
                                 setPayWorkerModalOpen(true);
                               }}
-                              title="Mark as Paid"
+                              title='Mark as Paid'
                             >
                               <CreditCard className='h-4 w-4' />
                             </Button>
@@ -687,6 +763,7 @@ export default function PayrollPeriodDetailPage({
                             size='sm'
                             variant='ghost'
                             onClick={() => setSalarySlipPayment(payment)}
+                            aria-label='Salary Slip'
                           >
                             <FileText className='h-4 w-4' />
                           </Button>
@@ -730,7 +807,7 @@ export default function PayrollPeriodDetailPage({
                         ...a,
                         workerName: p.worker?.fullName || "Unknown",
                         paymentStatus: p.status,
-                      }))
+                      })),
                     )
                     .map((adjustment) => (
                       <TableRow key={adjustment.id}>
@@ -753,10 +830,11 @@ export default function PayrollPeriodDetailPage({
                         </TableCell>
                         <TableCell>{adjustment.description}</TableCell>
                         <TableCell
-                          className={`text-right font-mono ${adjustment.type === "bonus"
-                            ? "text-green-600"
-                            : "text-red-600"
-                            }`}
+                          className={`text-right font-mono ${
+                            adjustment.type === "bonus"
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }`}
                         >
                           {adjustment.type === "bonus" ? "+" : "-"}
                           {formatCurrency(adjustment.amount)}
@@ -832,16 +910,16 @@ export default function PayrollPeriodDetailPage({
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
                       </SelectItem>
-                    )
+                    ),
                   )}
                 </SelectContent>
               </Select>
             </div>
 
             <div className='space-y-2'>
-              <Label htmlFor="adj-amount">Amount (LKR)</Label>
+              <Label htmlFor='adj-amount'>Amount (LKR)</Label>
               <Input
-                id="adj-amount"
+                id='adj-amount'
                 type='number'
                 min='0'
                 step='0.01'
@@ -856,14 +934,16 @@ export default function PayrollPeriodDetailPage({
                 className={adjustmentError ? "border-destructive" : ""}
               />
               {adjustmentError && (
-                <p className="text-xs text-destructive mt-1">{adjustmentError}</p>
+                <p className='text-xs text-destructive mt-1'>
+                  {adjustmentError}
+                </p>
               )}
             </div>
 
             <div className='space-y-2'>
-              <Label htmlFor="adj-desc">Description (Optional)</Label>
+              <Label htmlFor='adj-desc'>Description (Optional)</Label>
               <Textarea
-                id="adj-desc"
+                id='adj-desc'
                 value={adjustmentForm.description}
                 onChange={(e) =>
                   setAdjustmentForm({
@@ -872,7 +952,7 @@ export default function PayrollPeriodDetailPage({
                   })
                 }
                 placeholder='Reason for adjustment...'
-                className="resize-none"
+                className='resize-none'
               />
             </div>
           </div>
@@ -956,9 +1036,10 @@ export default function PayrollPeriodDetailPage({
                     <span>
                       Base Pay{" "}
                       {salarySlipPayment.paymentType === "per_line" &&
-                        `(${salarySlipPayment.linesCompleted
+                        `(${
+                          salarySlipPayment.linesCompleted
                         } lines × ${formatCurrency(
-                          salarySlipPayment.perLineRate || 0
+                          salarySlipPayment.perLineRate || 0,
                         )})`}
                     </span>
                     <span className='font-mono'>
@@ -983,27 +1064,27 @@ export default function PayrollPeriodDetailPage({
 
               {/* Deductions */}
               {salarySlipPayment.adjustments?.some(
-                (a) => a.type === "deduction"
+                (a) => a.type === "deduction",
               ) && (
-                  <div>
-                    <h4 className='font-semibold mb-2'>Deductions</h4>
-                    <div className='space-y-1 text-sm'>
-                      {salarySlipPayment.adjustments
-                        ?.filter((a) => a.type === "deduction")
-                        .map((deduction) => (
-                          <div
-                            key={deduction.id}
-                            className='flex justify-between text-red-600'
-                          >
-                            <span>{deduction.description}</span>
-                            <span className='font-mono'>
-                              -{formatCurrency(deduction.amount)}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
+                <div>
+                  <h4 className='font-semibold mb-2'>Deductions</h4>
+                  <div className='space-y-1 text-sm'>
+                    {salarySlipPayment.adjustments
+                      ?.filter((a) => a.type === "deduction")
+                      .map((deduction) => (
+                        <div
+                          key={deduction.id}
+                          className='flex justify-between text-red-600'
+                        >
+                          <span>{deduction.description}</span>
+                          <span className='font-mono'>
+                            -{formatCurrency(deduction.amount)}
+                          </span>
+                        </div>
+                      ))}
                   </div>
-                )}
+                </div>
+              )}
 
               <Separator />
 
@@ -1014,7 +1095,7 @@ export default function PayrollPeriodDetailPage({
                   <span className='font-mono'>
                     {formatCurrency(
                       salarySlipPayment.baseAmount +
-                      salarySlipPayment.bonusAmount
+                        salarySlipPayment.bonusAmount,
                     )}
                   </span>
                 </div>
@@ -1093,7 +1174,8 @@ export default function PayrollPeriodDetailPage({
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
-              Mark payment as paid for {selectedPayment?.worker?.fullName} and create accounting entry.
+              Mark payment as paid for {selectedPayment?.worker?.fullName} and
+              create accounting entry.
             </DialogDescription>
           </DialogHeader>
           <div className='space-y-4 py-4'>
@@ -1130,10 +1212,12 @@ export default function PayrollPeriodDetailPage({
               />
             </div>
 
-            <div className="bg-muted p-3 rounded-md">
-              <div className="flex justify-between text-sm">
+            <div className='bg-muted p-3 rounded-md'>
+              <div className='flex justify-between text-sm'>
                 <span>Net Amount:</span>
-                <span className="font-bold">{selectedPayment && formatCurrency(selectedPayment.netAmount)}</span>
+                <span className='font-bold'>
+                  {selectedPayment && formatCurrency(selectedPayment.netAmount)}
+                </span>
               </div>
             </div>
           </div>
@@ -1146,10 +1230,14 @@ export default function PayrollPeriodDetailPage({
               Cancel
             </Button>
             <Button
-              onClick={() => selectedPayment && handlePayWorker(selectedPayment.id)}
+              onClick={() =>
+                selectedPayment && handlePayWorker(selectedPayment.id)
+              }
               disabled={processingAction}
             >
-              {processingAction && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {processingAction && (
+                <Loader2 className='h-4 w-4 animate-spin mr-2' />
+              )}
               Confirm Payment
             </Button>
           </DialogFooter>
@@ -1175,9 +1263,12 @@ export default function PayrollPeriodDetailPage({
             </div>
             <div className='flex-1 overflow-y-auto space-y-1 border rounded-md p-2'>
               {allWorkers
-                .filter(w =>
-                  !payments.some(p => p.workerId === w.id) &&
-                  w.full_name?.toLowerCase().includes(searchWorker.toLowerCase())
+                .filter(
+                  (w) =>
+                    !payments.some((p) => p.workerId === w.id) &&
+                    w.full_name
+                      ?.toLowerCase()
+                      .includes(searchWorker.toLowerCase()),
                 )
                 .map((worker) => (
                   <div
@@ -1187,20 +1278,37 @@ export default function PayrollPeriodDetailPage({
                   >
                     <div>
                       <p className='text-sm font-medium'>{worker.full_name}</p>
-                      <p className='text-xs text-muted-foreground capitalize'>{worker.role}</p>
+                      <p className='text-xs text-muted-foreground capitalize'>
+                        {worker.role}
+                      </p>
                     </div>
-                    <Button size='sm' variant='ghost' className="opacity-0 group-hover:opacity-100">
+                    <Button
+                      size='sm'
+                      variant='ghost'
+                      className='opacity-0 group-hover:opacity-100'
+                    >
                       Add
                     </Button>
                   </div>
                 ))}
-              {allWorkers.filter(w => !payments.some(p => p.workerId === w.id) && w.full_name?.toLowerCase().includes(searchWorker.toLowerCase())).length === 0 && (
-                <p className='text-center py-4 text-sm text-muted-foreground'>No workers available to add</p>
+              {allWorkers.filter(
+                (w) =>
+                  !payments.some((p) => p.workerId === w.id) &&
+                  w.full_name
+                    ?.toLowerCase()
+                    .includes(searchWorker.toLowerCase()),
+              ).length === 0 && (
+                <p className='text-center py-4 text-sm text-muted-foreground'>
+                  No workers available to add
+                </p>
               )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant='outline' onClick={() => setAddWorkerModalOpen(false)}>
+            <Button
+              variant='outline'
+              onClick={() => setAddWorkerModalOpen(false)}
+            >
               Cancel
             </Button>
           </DialogFooter>
