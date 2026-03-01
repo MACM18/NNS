@@ -508,7 +508,8 @@ export function JournalEntryTable({
                         <Eye className='h-4 w-4' />
                       </Button>
                       {(entry.status === "draft" ||
-                        entry.status === "pending") && (
+                        entry.status === "pending" ||
+                        entry.status === "approved") && (
                         <Button
                           variant='ghost'
                           size='icon'
