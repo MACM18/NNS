@@ -31,7 +31,7 @@ function getEncryptionKey(): Buffer {
 
   // Derive a consistent 32-byte key using PBKDF2
   return crypto.pbkdf2Sync(
-    key,
+    key as any,
     "nns-encryption-salt",
     100000,
     KEY_LENGTH,
@@ -49,7 +49,7 @@ export function encrypt(plaintext: string): string {
   const key = getEncryptionKey();
   const iv = crypto.randomBytes(IV_LENGTH);
 
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, key as any, iv as any);
 
   let encrypted = cipher.update(plaintext, "utf8", "base64");
   encrypted += cipher.final("base64");
@@ -78,8 +78,8 @@ export function decrypt(encryptedData: string): string {
   const iv = Buffer.from(ivBase64, "base64");
   const authTag = Buffer.from(authTagBase64, "base64");
 
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(authTag);
+  const decipher = crypto.createDecipheriv(ALGORITHM, key as any, iv as any);
+  decipher.setAuthTag(authTag as any);
 
   let decrypted = decipher.update(encrypted, "base64", "utf8");
   decrypted += decipher.final("utf8");
@@ -93,7 +93,7 @@ export function decrypt(encryptedData: string): string {
  */
 export function hashBackupCode(code: string): string {
   const salt = crypto.randomBytes(SALT_LENGTH);
-  const hash = crypto.pbkdf2Sync(code, salt, 100000, 64, "sha512");
+  const hash = crypto.pbkdf2Sync(code, salt as any, 100000, 64, "sha512");
   return `${salt.toString("base64")}:${hash.toString("base64")}`;
 }
 
@@ -107,7 +107,7 @@ export function verifyBackupCode(code: string, storedHash: string): boolean {
   const [saltBase64, hashBase64] = parts;
   const salt = Buffer.from(saltBase64, "base64");
 
-  const hash = crypto.pbkdf2Sync(code, salt, 100000, 64, "sha512");
+  const hash = crypto.pbkdf2Sync(code, salt as any, 100000, 64, "sha512");
   return hash.toString("base64") === hashBase64;
 }
 
