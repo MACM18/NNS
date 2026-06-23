@@ -473,12 +473,18 @@ export async function syncConnection(
             const target = pickLatest(arr);
 
             const updateData: any = {};
-            if (r.dw_dp) updateData.dp = r.dw_dp;
+            if (r.dw_dp && isValidDP(r.dw_dp)) {
+              updateData.dp = r.dw_dp;
+            }
             if (typeof r.dw_c_hook === "number" && r.dw_c_hook > 0) {
               updateData.cHook = r.dw_c_hook;
             }
-            if (r.dw_cus) updateData.name = r.dw_cus;
-            if (r.drum_number) updateData.drumNumber = r.drum_number;
+            if (r.dw_cus && isValidName(r.dw_cus)) {
+              updateData.name = r.dw_cus;
+            }
+            if (r.drum_number) {
+              updateData.drumNumber = r.drum_number;
+            }
 
             if (Object.keys(updateData).length > 0) {
               await prisma.lineDetails.update({
@@ -1225,3 +1231,32 @@ function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
   row[idx.drum_number] = l.drumNumber ?? l.drumNumberNew ?? "";
   return row;
 }
+
+function isValidName(val: string): boolean {
+  const clean = val.trim();
+  if (!clean) return false;
+  // Must contain at least one letter (a-z, A-Z)
+  if (!/[a-zA-Z]/.test(clean)) return false;
+  // Must not look like a phone number (e.g. contains 7+ digits)
+  const digitCount = clean.replace(/\D/g, "").length;
+  if (digitCount >= 7) return false;
+  // Must not be a placeholder
+  const lower = clean.toLowerCase();
+  if (["n/a", "na", "none", "null", "undefined", "no", "yes", "-"].includes(lower)) return false;
+  return true;
+}
+
+function isValidDP(val: string): boolean {
+  const clean = val.trim();
+  if (!clean) return false;
+  // Must contain at least one letter (DPs are like DP-xx, HR-PKJ-xxx etc.)
+  if (!/[a-zA-Z]/.test(clean)) return false;
+  // Must not look like a phone number
+  const digitCount = clean.replace(/\D/g, "").length;
+  if (digitCount >= 7) return false;
+  // Must not be a placeholder
+  const lower = clean.toLowerCase();
+  if (["n/a", "na", "none", "null", "undefined", "-"].includes(lower)) return false;
+  return true;
+}
+
