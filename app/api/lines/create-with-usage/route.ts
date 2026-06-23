@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { isRecord } from "@/lib/error-utils";
+import { recalculateDrumWithHistory } from "@/lib/drum-tracking-service";
 
 function toNumber(value: unknown): number | undefined {
   if (typeof value === "number")
@@ -239,7 +240,7 @@ export async function POST(req: NextRequest) {
           const totalDeduction = totalCable + finalWastage;
           const newQty = Math.max(0, currentQty - totalDeduction);
           const newStatus =
-            newQty <= 0 ? "empty" : newQty <= 10 ? "inactive" : "active";
+            newQty <= 0 ? "empty" : newQty < 100 ? "inactive" : "active";
           await tx.drumTracking.update({
             where: { id: selectedDrumId },
             data: {
@@ -276,6 +277,11 @@ export async function POST(req: NextRequest) {
         return createdLine;
       }
     );
+
+    // Run full recalculation on affected drum to update with smart wastage logic
+    if (selectedDrumId) {
+      await recalculateDrumWithHistory(selectedDrumId);
+    }
 
     return NextResponse.json({ data: { line: result, wastage: finalWastage } });
   } catch (error) {

@@ -27,6 +27,7 @@ interface DrumsTabProps {
   setDrumToDelete: (drum: DrumTracking | null) => void;
   setDeleteDrumConfirmOpen: (open: boolean) => void;
   getStatusBadge: (status: string) => React.ReactNode;
+  onDrumUpdate?: () => void;
 }
 
 export function DrumsTab({
@@ -44,6 +45,7 @@ export function DrumsTab({
   setDrumToDelete,
   setDeleteDrumConfirmOpen,
   getStatusBadge,
+  onDrumUpdate,
 }: DrumsTabProps) {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [detailsDrumModalOpen, setDetailsDrumModalOpen] = useState(false);
@@ -258,6 +260,7 @@ export function DrumsTab({
         open={detailsDrumModalOpen}
         onOpenChange={setDetailsDrumModalOpen}
         getStatusBadge={getStatusBadge}
+        onDrumUpdate={onDrumUpdate}
       />
     </Card>
   );

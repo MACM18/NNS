@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recalculateDrumWithHistory } from "@/lib/drum-tracking-service";
 
 // PUT /api/lines/[id]/update-with-usage
 // Update a line's drum usage: restore prior usage (if any), then apply new usage
@@ -20,6 +21,7 @@ export async function PUT(
     const cableUsed: number = Number(body.cable_used || 0);
 
     let updated: any = null;
+    const drumIdsToRecalculate = new Set<string>();
 
     await prisma.$transaction(async (tx: any) => {
       // Locate existing usage for this line
@@ -30,6 +32,9 @@ export async function PUT(
 
       // If there is existing usage, restore stock/quantity and remove the record
       if (existingUsage) {
+        if (existingUsage.drumId) {
+          drumIdsToRecalculate.add(existingUsage.drumId);
+        }
         const originalDrum = await tx.drumTracking.findUnique({
           where: { id: existingUsage.drumId },
         });
@@ -47,7 +52,7 @@ export async function PUT(
               status:
                 restoredQty <= 0
                   ? "empty"
-                  : restoredQty <= 10
+                  : restoredQty < 100
                   ? "inactive"
                   : "active",
             },
@@ -71,10 +76,19 @@ export async function PUT(
 
       // Apply new usage if a drum is provided and cableUsed > 0
       if (newDrumId && cableUsed > 0) {
+        drumIdsToRecalculate.add(newDrumId);
         const targetDrum = await tx.drumTracking.findUnique({
           where: { id: newDrumId },
         });
         if (!targetDrum) throw new Error("Selected drum not found");
+
+        // Fetch line's cable range if available
+        const lineData = await tx.lineDetails.findUnique({
+          where: { id },
+          select: { cableStart: true, cableEnd: true }
+        });
+        const cableStart = lineData ? Number(lineData.cableStart) : 0;
+        const cableEnd = lineData ? Number(lineData.cableEnd) : 0;
 
         // Simple wastage heuristic (5%) as the edit modal doesn't provide cable points
         const wastage = Math.round(cableUsed * 0.05);
@@ -93,8 +107,8 @@ export async function PUT(
             lineDetailsId: id,
             quantityUsed: cableUsed,
             usageDate: new Date(),
-            cableStartPoint: null,
-            cableEndPoint: null,
+            cableStartPoint: cableStart,
+            cableEndPoint: cableEnd,
             wastageCalculated: wastage,
           },
         });
@@ -105,7 +119,7 @@ export async function PUT(
           data: {
             currentQuantity: newQty,
             status:
-              newQty <= 0 ? "empty" : newQty <= 10 ? "inactive" : "active",
+              newQty <= 0 ? "empty" : newQty < 100 ? "inactive" : "active",
           },
         });
 
@@ -139,6 +153,11 @@ export async function PUT(
 
       updated = await tx.lineDetails.findUnique({ where: { id } });
     });
+
+    // Run full recalculation on affected drums to update with smart wastage logic
+    for (const drumId of drumIdsToRecalculate) {
+      await recalculateDrumWithHistory(drumId);
+    }
 
     return NextResponse.json({ data: updated });
   } catch (error: any) {

@@ -159,7 +159,7 @@ export default function InventoryPage() {
   const [stockSearchQuery, setStockSearchQuery] = useState("");
   const [stockStatusFilter, setStockStatusFilter] = useState("all");
   const [searchDrumQuery, setSearchDrumQuery] = useState("");
-  const [drumStatusFilter, setDrumStatusFilter] = useState("all");
+  const [drumStatusFilter, setDrumStatusFilter] = useState("active");
 
   const { addNotification } = useNotification();
 
@@ -557,6 +557,7 @@ export default function InventoryPage() {
             setDrumToDelete={setDrumToDelete}
             setDeleteDrumConfirmOpen={setDeleteDrumConfirmOpen}
             getStatusBadge={getStatusBadge}
+            onDrumUpdate={handleSuccess}
           />
         </TabsContent>
 

@@ -43,6 +43,10 @@ export async function GET(
             telephoneNo: true,
             name: true,
             dp: true,
+            address: true,
+            cableStart: true,
+            cableMiddle: true,
+            cableEnd: true,
           },
         },
       },
@@ -61,6 +65,7 @@ export async function GET(
 
     const formattedUsage = usageRecords.map((u) => ({
       id: u.id,
+      line_details_id: u.lineDetailsId,
       quantity_used: Number(u.quantityUsed),
       usage_date: u.usageDate ? u.usageDate.toISOString() : null,
       cable_start_point: Number(u.cableStartPoint ?? 0),
@@ -70,6 +75,7 @@ export async function GET(
         telephone_no: u.lineDetails?.telephoneNo ?? "",
         name: u.lineDetails?.name ?? "",
         dp: u.lineDetails?.dp ?? "",
+        address: u.lineDetails?.address ?? "",
       },
     }));
 
