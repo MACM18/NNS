@@ -142,6 +142,8 @@ model CompanySettings {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("company_settings")
+  // default mode for payment calculation on this period (per-line vs fixed monthly)
+  paymentType String    @default("per_line") @map("payment_type") // per_line | fixed_monthly
 }
 
 // ==========================================

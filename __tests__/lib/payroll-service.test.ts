@@ -199,7 +199,8 @@ describe("Payroll Service", () => {
 
       const mockPeriod = {
         id: "period1",
-        status: "draft",
+          status: "draft",
+          paymentType: "per_line",
         startDate: new Date("2026-01-01"),
         endDate: new Date("2026-01-31"),
       };
@@ -257,7 +258,8 @@ describe("Payroll Service", () => {
       );
       (prisma.worker.findMany as jest.Mock).mockResolvedValue(mockWorkers);
       (prisma.workerPayment.findUnique as jest.Mock).mockResolvedValue(null);
-      (prisma.workerPayment.create as jest.Mock).mockResolvedValue({
+          status: "draft",
+          paymentType: "fixed_monthly",
         id: "payment2",
         paymentType: "fixed_monthly",
         linesCompleted: 0,
@@ -265,6 +267,65 @@ describe("Payroll Service", () => {
         bonusAmount: new Decimal(0),
         deductionAmount: new Decimal(0),
         netAmount: new Decimal(50000),
+      it("allows recalculation when period is processing", async () => {
+        const mockWorkers = [
+          {
+            id: "worker1",
+            fullName: "John Doe",
+            paymentType: "per_line",
+            perLineRate: new Decimal(500),
+            status: "active",
+          },
+        ];
+
+        const mockPeriod = {
+          id: "period1",
+          status: "processing",
+          paymentType: "per_line",
+          startDate: new Date("2026-01-01"),
+          endDate: new Date("2026-01-31"),
+        };
+
+        (prisma.payrollPeriod.findUnique as jest.Mock).mockResolvedValue(
+          mockPeriod
+        );
+        (prisma.worker.findMany as jest.Mock).mockResolvedValue(mockWorkers);
+        (prisma.workAssignment.count as jest.Mock).mockResolvedValue(5);
+        (prisma.workerPayment.findUnique as jest.Mock).mockResolvedValue(null);
+        (prisma.workerPayment.create as jest.Mock).mockResolvedValue({
+          id: "payment1",
+          paymentType: "per_line",
+          linesCompleted: 5,
+          perLineRate: new Decimal(500),
+          baseAmount: new Decimal(2500),
+          bonusAmount: new Decimal(0),
+          deductionAmount: new Decimal(0),
+          netAmount: new Decimal(2500),
+          worker: mockWorkers[0],
+          adjustments: [],
+          status: "calculated",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        (prisma.payrollPeriod.update as jest.Mock).mockResolvedValue({});
+
+        const payments = await calculatePayrollForPeriod("period1", "user1");
+        expect(payments[0].baseAmount).toBe(2500);
+      });
+
+      it("throws when trying to calculate on approved period", async () => {
+        const mockPeriod = {
+          id: "period1",
+          status: "approved",
+          paymentType: "per_line",
+          startDate: new Date("2026-01-01"),
+          endDate: new Date("2026-01-31"),
+        };
+        (prisma.payrollPeriod.findUnique as jest.Mock).mockResolvedValue(mockPeriod);
+        await expect(calculatePayrollForPeriod("period1", "user1")).rejects.toThrow(
+          /approved or paid periods/
+        );
+      });
         worker: mockWorkers[0],
         adjustments: [],
         status: "calculated",
