@@ -117,6 +117,33 @@ export default function WorkTrackingCalendarPage() {
   const activeDay = activeDate ? dayMap.get(activeDate) : null;
   const linesForActiveDay = useMemo(() => activeDay?.lines ?? [], [activeDay]);
 
+  // data loading helper (moved up so effects can safely reference it)
+  async function fetchData(month: number, year: number) {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/work-assignments?month=${month}&year=${year}`,
+      );
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 401 || res.status === 403) {
+        handleUnauthorized(res.status, json.error);
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to load work assignments");
+      }
+      setData(json);
+    } catch (error: any) {
+      toast({
+        title: "Unable to load assignments",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // Check authorization and redirect if needed
   useEffect(() => {
     if (!authLoading) {
@@ -156,7 +183,7 @@ export default function WorkTrackingCalendarPage() {
   const isAdmin = normalizedRole === "admin";
   const canManageWorkers = ["admin", "moderator"].includes(normalizedRole);
 
-  const handleUnauthorized = (status: number, message?: string) => {
+  function handleUnauthorized(status: number, message?: string) {
     const description =
       message ||
       (status === 403
@@ -178,33 +205,7 @@ export default function WorkTrackingCalendarPage() {
       const redirect = encodeURIComponent("/dashboard/work-tracking");
       router.replace(`/login?redirect=${redirect}`);
     }
-  };
-
-  const fetchData = async (month: number, year: number) => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/work-assignments?month=${month}&year=${year}`
-      );
-      const json = await res.json().catch(() => ({}));
-      if (res.status === 401 || res.status === 403) {
-        handleUnauthorized(res.status, json.error);
-        return;
-      }
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to load work assignments");
-      }
-      setData(json);
-    } catch (error: any) {
-      toast({
-        title: "Unable to load assignments",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }
 
   const handleOpenDay = (date: Date, lineId?: string) => {
     const key = format(date, "yyyy-MM-dd");
@@ -369,7 +370,7 @@ export default function WorkTrackingCalendarPage() {
           const dayLines = dayMap.get(key)?.lines ?? [];
           const isCurrentMonth = isSameMonth(
             day,
-            new Date(selectedYear, selectedMonth - 1)
+            new Date(selectedYear, selectedMonth - 1),
           );
           return (
             <div
@@ -377,7 +378,7 @@ export default function WorkTrackingCalendarPage() {
               className={cn(
                 "min-h-[120px] bg-background p-2 border-border border-t",
                 !isCurrentMonth && "bg-muted/40 text-muted-foreground",
-                "cursor-pointer transition hover:bg-muted"
+                "cursor-pointer transition hover:bg-muted",
               )}
               onClick={() => handleOpenDay(day)}
             >
@@ -451,7 +452,7 @@ export default function WorkTrackingCalendarPage() {
                     key={line.id}
                     className={cn(
                       "rounded border border-border p-3",
-                      activeLineId === line.id && "border-primary"
+                      activeLineId === line.id && "border-primary",
                     )}
                   >
                     <div className='flex items-start justify-between gap-2'>
@@ -521,7 +522,7 @@ export default function WorkTrackingCalendarPage() {
                                   this line on{" "}
                                   {format(
                                     new Date(assignment.assigned_date),
-                                    "MMMM d, yyyy"
+                                    "MMMM d, yyyy",
                                   )}
                                   . This action cannot be undone.
                                 </AlertDialogDescription>
