@@ -508,15 +508,12 @@ export function JournalEntryTable({
                         <Eye className='h-4 w-4' />
                       </Button>
                       {(entry.status === "draft" ||
-                        entry.status === "pending" ||
-                        entry.status === "approved") && (
+                        entry.status === "pending") && (
                         <Button
                           variant='ghost'
                           size='icon'
                           onClick={() => {
-                            // open edit modal with prefilled data
                             setSelectedEntry(entry);
-                            // populate formData
                             setFormData({
                               date: new Date(entry.date),
                               description: entry.description || "",
@@ -548,17 +545,57 @@ export function JournalEntryTable({
                         </Button>
                       )}
                       {entry.status === "approved" && !entry.isReversed && (
-                        <Button
-                          variant='ghost'
-                          size='icon'
-                          onClick={() => {
-                            setSelectedEntry(entry);
-                            setReverseModalOpen(true);
-                          }}
-                          title='Reverse'
-                        >
-                          <RotateCcw className='h-4 w-4 text-orange-600' />
-                        </Button>
+                        <>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            onClick={async () => {
+                              try {
+                                const response = await fetch(
+                                  `/api/accounting/journal-entries/${entry.id}/unapprove`,
+                                  { method: "POST" },
+                                );
+                                if (!response.ok) {
+                                  const error = await response.json();
+                                  throw new Error(
+                                    error.error || "Failed to unapprove",
+                                  );
+                                }
+                                addNotification({
+                                  title: "Success",
+                                  message: "Entry returned to pending",
+                                  type: "success",
+                                  category: "accounting",
+                                });
+                                fetchEntries();
+                              } catch (error) {
+                                addNotification({
+                                  title: "Error",
+                                  message:
+                                    error instanceof Error
+                                      ? error.message
+                                      : "Failed to toggle approval",
+                                  type: "error",
+                                  category: "accounting",
+                                });
+                              }
+                            }}
+                            title='Return to Pending'
+                          >
+                            <Check className='h-4 w-4 text-blue-600' />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            onClick={() => {
+                              setSelectedEntry(entry);
+                              setReverseModalOpen(true);
+                            }}
+                            title='Reverse'
+                          >
+                            <RotateCcw className='h-4 w-4 text-orange-600' />
+                          </Button>
+                        </>
                       )}
                     </div>
                   </TableCell>
@@ -687,7 +724,7 @@ export function JournalEntryTable({
                               handleLineChange(index, "accountId", value)
                             }
                           >
-                            <SelectTrigger className='w-[200px]'>
+                            <SelectTrigger>
                               <SelectValue placeholder='Select account' />
                             </SelectTrigger>
                             <SelectContent>
@@ -699,7 +736,7 @@ export function JournalEntryTable({
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className='min-w-[130px]'>
                           <Input
                             value={line.description}
                             onChange={(e) =>
@@ -710,10 +747,9 @@ export function JournalEntryTable({
                               )
                             }
                             placeholder='Line description'
-                            className='w-[150px]'
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className='min-w-[100px]'>
                           <Input
                             type='number'
                             value={line.debitAmount || ""}
@@ -724,10 +760,10 @@ export function JournalEntryTable({
                                 parseFloat(e.target.value) || 0,
                               )
                             }
-                            className='w-[100px] text-right'
+                            className='text-right'
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className='min-w-[100px]'>
                           <Input
                             type='number'
                             value={line.creditAmount || ""}
@@ -738,7 +774,7 @@ export function JournalEntryTable({
                                 parseFloat(e.target.value) || 0,
                               )
                             }
-                            className='w-[100px] text-right'
+                            className='text-right'
                           />
                         </TableCell>
                         <TableCell>
@@ -931,16 +967,16 @@ export function JournalEntryTable({
 
       {/* Edit Entry Modal */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className='sm:max-w-[700px] max-h-[90vh] overflow-y-auto'>
-          <DialogHeader>
+        <DialogContent className='sm:max-w-2xl max-h-[85vh] overflow-y-auto p-4 sm:p-6'>
+          <DialogHeader className='sticky top-0 bg-background z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 pb-4 mb-4 border-b'>
             <DialogTitle>Edit Journal Entry</DialogTitle>
             <DialogDescription>
               Modify the selected journal entry. You will be asked to confirm.
             </DialogDescription>
           </DialogHeader>
-          <div className='space-y-4 py-4'>
+          <div className='space-y-4 px-0'>
             {/* reuse same form fields as create modal */}
-            <div className='grid grid-cols-2 gap-4'>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
               <div>
                 <Label>Date *</Label>
                 <Input
@@ -994,29 +1030,35 @@ export function JournalEntryTable({
                   Add Line
                 </Button>
               </div>
-              <div className='border rounded-lg overflow-hidden'>
+              <div className='border rounded-lg overflow-x-auto -mx-4 sm:mx-0'>
                 {/* lines table reused from create modal */}
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Account</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className='text-right'>Debit</TableHead>
-                      <TableHead className='text-right'>Credit</TableHead>
+                      <TableHead className='min-w-[150px]'>Account</TableHead>
+                      <TableHead className='min-w-[130px]'>
+                        Description
+                      </TableHead>
+                      <TableHead className='min-w-[100px] text-right'>
+                        Debit
+                      </TableHead>
+                      <TableHead className='min-w-[100px] text-right'>
+                        Credit
+                      </TableHead>
                       <TableHead className='w-[50px]'></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {formData.lines.map((line, index) => (
                       <TableRow key={index}>
-                        <TableCell>
+                        <TableCell className='min-w-[150px]'>
                           <Select
                             value={line.accountId}
                             onValueChange={(value) =>
                               handleLineChange(index, "accountId", value)
                             }
                           >
-                            <SelectTrigger className='w-[200px]'>
+                            <SelectTrigger>
                               <SelectValue placeholder='Select account' />
                             </SelectTrigger>
                             <SelectContent>
@@ -1028,7 +1070,7 @@ export function JournalEntryTable({
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className='min-w-[130px]'>
                           <Input
                             value={line.description}
                             onChange={(e) =>
@@ -1039,10 +1081,9 @@ export function JournalEntryTable({
                               )
                             }
                             placeholder='Line description'
-                            className='w-[150px]'
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className='min-w-[100px]'>
                           <Input
                             type='number'
                             value={line.debitAmount || ""}
@@ -1053,10 +1094,10 @@ export function JournalEntryTable({
                                 parseFloat(e.target.value) || 0,
                               )
                             }
-                            className='w-[100px] text-right'
+                            className='text-right'
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className='min-w-[100px]'>
                           <Input
                             type='number'
                             value={line.creditAmount || ""}
@@ -1067,7 +1108,7 @@ export function JournalEntryTable({
                                 parseFloat(e.target.value) || 0,
                               )
                             }
-                            className='w-[100px] text-right'
+                            className='text-right'
                           />
                         </TableCell>
                         <TableCell>

@@ -819,6 +819,53 @@ export async function approveJournalEntry(
   } as unknown as JournalEntry;
 }
 
+export async function unapproveJournalEntry(id: string): Promise<JournalEntry> {
+  const entry = await prisma.journalEntry.findUnique({
+    where: { id },
+    include: { lines: true },
+  });
+
+  if (!entry) throw new Error("Journal entry not found");
+  if (entry.status !== "approved") {
+    throw new Error("Entry is not approved");
+  }
+
+  // Reverse the account balance updates
+  for (const line of entry.lines) {
+    await updateAccountBalance(
+      line.accountId,
+      -toNumber(line.debitAmount), // Negate to reverse
+      -toNumber(line.creditAmount), // Negate to reverse
+    );
+  }
+
+  const updated = await prisma.journalEntry.update({
+    where: { id },
+    data: {
+      status: "pending",
+      approvedById: null,
+      approvedAt: null,
+    },
+    include: {
+      lines: { include: { account: true } },
+      period: true,
+      currency: true,
+    },
+  });
+
+  return {
+    ...updated,
+    exchangeRate: toNumber(updated.exchangeRate),
+    totalDebit: toNumber(updated.totalDebit),
+    totalCredit: toNumber(updated.totalCredit),
+    lines: updated.lines.map((l) => ({
+      ...l,
+      debitAmount: toNumber(l.debitAmount),
+      creditAmount: toNumber(l.creditAmount),
+    })),
+  } as unknown as JournalEntry;
+}
+
 export async function reverseJournalEntry(
   id: string,
   createdById: string,
