@@ -9,6 +9,7 @@ import {
   ensureDrumsExistWithHistory,
   recalculateDrumWithHistory,
 } from "@/lib/drum-tracking-service";
+import { checkStockLevelsAndNotify, notifyAllAdmins } from "@/lib/notification-service-server";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -522,6 +523,26 @@ export async function syncConnection(
       },
     });
 
+    // Check stock levels and trigger alerts
+    try {
+      await checkStockLevelsAndNotify();
+    } catch (stockErr) {
+      console.error("[syncConnection] Stock check failed:", stockErr);
+    }
+
+    // Notify admins of successful sync
+    try {
+      await notifyAllAdmins({
+        title: "Google Sheets Sync Successful",
+        message: `Google Sheets sync completed for ${conn.month}/${conn.year}. Appended ${insertedCount} new rows, updated ${updatedCount} rows, and updated ${hardwareUpdated} inventory items.`,
+        type: "success",
+        category: "system",
+        actionUrl: "/dashboard/integrations",
+      });
+    } catch (notifyErr) {
+      console.error("[syncConnection] Success notification failed:", notifyErr);
+    }
+
     return {
       success: true,
       upserted: updatedCount,
@@ -547,6 +568,21 @@ export async function syncConnection(
         "[syncConnection] Failed to update error status:",
         statusError
       );
+    }
+
+    // Notify admins of sync error
+    try {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await notifyAllAdmins({
+        title: "Google Sheets Sync Failed",
+        message: `Sync failed with error: ${errorMsg}`,
+        type: "error",
+        category: "system",
+        actionUrl: "/dashboard/integrations",
+        sendEmailAlert: true,
+      });
+    } catch (notifyErr) {
+      console.error("[syncConnection] Error notification failed:", notifyErr);
     }
 
     throw error instanceof Error

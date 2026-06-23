@@ -332,18 +332,25 @@ export default function InventoryPage() {
   };
 
   const getStockStatus = (currentStock: number, reorderLevel: number) => {
+    const ratio = reorderLevel > 0 ? (currentStock / reorderLevel) * 100 : 150;
     if (currentStock <= 0) {
       return <Badge variant='destructive'>Out of Stock</Badge>;
-    } else if (currentStock <= reorderLevel) {
+    } else if (ratio <= 100) {
       return (
-        <Badge variant='outline' className='bg-orange-100 text-orange-800'>
+        <Badge variant='destructive'>
+          Critical
+        </Badge>
+      );
+    } else if (ratio < 150) {
+      return (
+        <Badge variant='outline' className='bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900'>
           Low Stock
         </Badge>
       );
     } else {
       return (
-        <Badge variant='default' className='bg-green-100 text-green-800'>
-          In Stock
+        <Badge variant='default' className='bg-green-100 text-green-800 border-green-200 hover:bg-green-100 dark:bg-green-950 dark:text-green-300 dark:border-green-900'>
+          Normal
         </Badge>
       );
     }
@@ -826,10 +833,42 @@ export default function InventoryPage() {
                               <TableCell>{item.unit}</TableCell>
                               <TableCell>{item.reorder_level || 0}</TableCell>
                               <TableCell>
-                                {getStockStatus(
-                                  item.current_stock,
-                                  item.reorder_level || 0
-                                )}
+                                <div className="flex flex-col gap-1.5 min-w-[120px]">
+                                  <div className="flex items-center justify-between gap-2">
+                                    {getStockStatus(
+                                      item.current_stock,
+                                      item.reorder_level || 0
+                                    )}
+                                    <span className="text-[10px] text-muted-foreground font-mono font-medium">
+                                      {item.reorder_level && item.reorder_level > 0
+                                        ? `${Math.round((item.current_stock / item.reorder_level) * 100)}%`
+                                        : "—"}
+                                    </span>
+                                  </div>
+                                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full transition-all duration-500 ${
+                                        (item.reorder_level && item.reorder_level > 0
+                                          ? (item.current_stock / item.reorder_level) * 100
+                                          : 150) >= 150
+                                          ? "bg-green-500"
+                                          : (item.reorder_level && item.reorder_level > 0
+                                              ? (item.current_stock / item.reorder_level) * 100
+                                              : 150) >= 100
+                                            ? "bg-yellow-500"
+                                            : "bg-red-500"
+                                      }`}
+                                      style={{
+                                        width: `${Math.min(
+                                          (item.current_stock /
+                                            ((item.reorder_level || 1) * 1.5)) *
+                                            100,
+                                          100
+                                        )}%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
                               </TableCell>
                               <TableCell>
                                 {item.last_updated

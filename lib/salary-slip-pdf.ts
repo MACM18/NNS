@@ -21,7 +21,7 @@ const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
-export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
+export function generateSalarySlipPDF(options: SalarySlipPDFOptions): jsPDF {
   const {
     payment,
     period,
@@ -325,7 +325,10 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
 
   // ========== SAVE PDF ==========
   const fileName = `Payslip_${payment.worker?.fullName?.replace(/\s+/g, "_")}_${period.name.replace(/\s+/g, "_")}.pdf`;
-  doc.save(fileName);
+  if (typeof window !== "undefined") {
+    doc.save(fileName);
+  }
+  return doc;
 }
 
 export default generateSalarySlipPDF;

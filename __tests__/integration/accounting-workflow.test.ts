@@ -65,6 +65,10 @@ jest.mock("@/lib/prisma", () => ({
     },
     profile: {
       findUnique: jest.fn(),
+      findMany: jest.fn(() => Promise.resolve([])),
+    },
+    notification: {
+      create: jest.fn(() => Promise.resolve({ id: "notif1" })),
     },
     payrollRule: {
       findMany: jest.fn(),

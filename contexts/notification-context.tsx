@@ -150,16 +150,52 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // Poll for new notifications every 30 seconds (replacement for real-time subscription)
+  // Listen for real-time notifications via Server-Sent Events (SSE)
   useEffect(() => {
     if (!user) return;
 
-    const pollInterval = setInterval(() => {
-      fetchNotifications();
-    }, 30000); // 30 seconds
+    let eventSource: EventSource;
+
+    const connectSSE = () => {
+      eventSource = new EventSource("/api/notifications/sse");
+
+      eventSource.onmessage = (event) => {
+        try {
+          const newNotification = JSON.parse(event.data);
+          setNotifications((prev) => {
+            if (prev.some((n) => n.id === newNotification.id)) return prev;
+            return [newNotification, ...prev];
+          });
+
+          // Show interactive sonner toast
+          toast(newNotification.title, {
+            description: newNotification.message,
+            action: newNotification.action_url ? {
+              label: "View",
+              onClick: () => {
+                window.location.href = newNotification.action_url;
+              },
+            } : undefined,
+          });
+        } catch (err) {
+          console.error("Error parsing SSE message:", err);
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        console.error("SSE connection error, closing EventSource:", err);
+        eventSource.close();
+        // Retry connection after 5 seconds
+        setTimeout(connectSSE, 5000);
+      };
+    };
+
+    connectSSE();
 
     return () => {
-      clearInterval(pollInterval);
+      if (eventSource) {
+        eventSource.close();
+      }
     };
   }, [user]);
 

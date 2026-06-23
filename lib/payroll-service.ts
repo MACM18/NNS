@@ -18,6 +18,9 @@ import type {
   PaymentMethod,
 } from "@/types/payroll";
 import { Prisma } from "@prisma/client";
+import { notifyAllAdmins } from "@/lib/notification-service-server";
+import { sendEmail } from "@/lib/email-service";
+import { generateSalarySlipPDF } from "@/lib/salary-slip-pdf";
 
 // Helper to convert Decimal to number
 function decimalToNumber(value: Prisma.Decimal | null | undefined): number {
@@ -997,6 +1000,88 @@ export async function approvePayrollPeriod(id: string): Promise<PayrollPeriod> {
     include: { createdBy: { select: { id: true, fullName: true } } },
   });
 
+  // Notify admins of payroll approval
+  try {
+    await notifyAllAdmins({
+      title: "Payroll Period Approved",
+      message: `Payroll period "${updated.name}" has been approved. Total amount LKR ${decimalToNumber(updated.totalAmount).toLocaleString()}.`,
+      type: "info",
+      category: "report_ready",
+      actionUrl: "/dashboard/payroll",
+    });
+  } catch (notifyErr) {
+    console.error("[approvePayrollPeriod] Failed to send admin notification:", notifyErr);
+  }
+
+  // Generate payslip PDFs and email to workers
+  try {
+    const payments = await prisma.workerPayment.findMany({
+      where: { payrollPeriodId: id },
+      include: { worker: true, adjustments: true },
+    });
+
+    const typedPeriod = {
+      ...updated,
+      status: updated.status as PayrollStatus,
+      paymentType: (updated as any).paymentType as PaymentType,
+      totalAmount: decimalToNumber(updated.totalAmount),
+    };
+
+    for (const payment of payments) {
+      if (payment.worker?.email) {
+        // Convert Prisma payment to the format required by generateSalarySlipPDF
+        const formattedPayment = {
+          ...payment,
+          worker: payment.worker as any,
+          adjustments: payment.adjustments as any,
+          baseAmount: decimalToNumber(payment.baseAmount),
+          bonusAmount: decimalToNumber(payment.bonusAmount),
+          deductionAmount: decimalToNumber(payment.deductionAmount),
+          netAmount: decimalToNumber(payment.netAmount),
+        };
+
+        const doc = generateSalarySlipPDF({
+          payment: formattedPayment as any,
+          period: typedPeriod as any,
+        });
+
+        const pdfArrayBuffer = doc.output("arraybuffer");
+
+        await sendEmail({
+          to: payment.worker.email,
+          subject: `Salary Payslip for ${typedPeriod.name}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; border: 1px solid #e5e7eb; border-radius: 8px;">
+              <h2 style="color: #2563eb; margin-top: 0;">Salary Payslip</h2>
+              <p style="font-size: 16px; color: #374151;">Hello <strong>${payment.worker.fullName}</strong>,</p>
+              <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">
+                Your payslip for the payroll period <strong>${typedPeriod.name}</strong> is now ready.
+                A detailed PDF breakdown of your earnings and adjustments has been attached to this email.
+              </p>
+              <div style="background: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 14px; color: #374151;"><strong>Net Take Home Pay:</strong> LKR ${decimalToNumber(payment.netAmount).toLocaleString()}</p>
+              </div>
+              <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e5e7eb;" />
+              <p style="font-size: 12px; color: #9ca3af; margin-bottom: 0;">
+                This is a secure system-generated email from NNS Enterprise.
+              </p>
+            </div>
+          `,
+          text: `Hello ${payment.worker.fullName},\n\nYour payslip for the payroll period ${typedPeriod.name} is ready.\n\nNet Amount: LKR ${decimalToNumber(payment.netAmount).toLocaleString()}\n\nPlease view the attached payslip PDF.`,
+          attachments: [
+            {
+              filename: `Payslip_${payment.worker.fullName.replace(/\s+/g, "_")}_${typedPeriod.name.replace(/\s+/g, "_")}.pdf`,
+              content: Buffer.from(pdfArrayBuffer),
+              contentType: "application/pdf",
+            },
+          ],
+        });
+      }
+    }
+  } catch (emailErr) {
+    console.error("[approvePayrollPeriod] Payslip generation/email failed:", emailErr);
+  }
+
   return {
     ...updated,
     status: updated.status as PayrollStatus,
@@ -1038,6 +1123,19 @@ export async function markPayrollAsPaid(
     },
     include: { createdBy: { select: { id: true, fullName: true } } },
   });
+
+  // Notify admins of payroll paid
+  try {
+    await notifyAllAdmins({
+      title: "Payroll Period Paid",
+      message: `Payroll period "${updated.name}" has been marked as paid.`,
+      type: "success",
+      category: "report_ready",
+      actionUrl: "/dashboard/payroll",
+    });
+  } catch (notifyErr) {
+    console.error("[markPayrollAsPaid] Failed to send admin notification:", notifyErr);
+  }
 
   return {
     ...updated,

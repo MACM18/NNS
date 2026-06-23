@@ -9,12 +9,19 @@ import type { Transporter } from "nodemailer";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/encryption";
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export interface EmailOptions {
   to: string | string[];
   subject: string;
   html: string;
   text?: string;
   replyTo?: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface EmailResult {
@@ -124,6 +131,7 @@ async function sendViaResend(
       html: options.html,
       text: options.text,
       replyTo: options.replyTo,
+      attachments: options.attachments,
     });
 
     if (error) {
@@ -168,6 +176,7 @@ async function sendViaSMTP(
       html: options.html,
       text: options.text,
       replyTo: options.replyTo,
+      attachments: options.attachments,
     });
 
     return { success: true, messageId: info.messageId };
