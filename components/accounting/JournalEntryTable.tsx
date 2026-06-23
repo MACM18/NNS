@@ -451,168 +451,170 @@ export function JournalEntryTable({
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Entry #</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Reference</TableHead>
-              <TableHead className='text-right'>Debit</TableHead>
-              <TableHead className='text-right'>Credit</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.length === 0 ? (
+        <div className='overflow-x-auto'>
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className='text-center text-muted-foreground'
-                >
-                  No journal entries found
-                </TableCell>
+                <TableHead>Entry #</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead className='text-right'>Debit</TableHead>
+                <TableHead className='text-right'>Credit</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ) : (
-              entries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell className='font-mono'>
-                    {entry.entryNumber}
+            </TableHeader>
+            <TableBody>
+              {entries.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className='text-center text-muted-foreground'
+                  >
+                    No journal entries found
                   </TableCell>
-                  <TableCell>
-                    {format(new Date(entry.date), "MMM d, yyyy")}
-                  </TableCell>
-                  <TableCell className='max-w-[200px] truncate'>
-                    {entry.description}
-                  </TableCell>
-                  <TableCell>{entry.reference || "-"}</TableCell>
-                  <TableCell className='text-right font-mono'>
-                    {formatCurrency(entry.totalDebit)}
-                  </TableCell>
-                  <TableCell className='text-right font-mono'>
-                    {formatCurrency(entry.totalCredit)}
-                  </TableCell>
-                  <TableCell>
-                    <div className='flex items-center gap-2'>
-                      {getStatusBadge(entry.status)}
-                      {entry.isReversed && (
-                        <Badge variant='outline' className='text-xs'>
-                          Reversed
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className='flex gap-1'>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        onClick={() => {
-                          setSelectedEntry(entry);
-                          setViewModalOpen(true);
-                        }}
-                        title='View Details'
-                      >
-                        <Eye className='h-4 w-4' />
-                      </Button>
-                      {(entry.status === "draft" ||
-                        entry.status === "pending") && (
+                </TableRow>
+              ) : (
+                entries.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className='font-mono'>
+                      {entry.entryNumber}
+                    </TableCell>
+                    <TableCell>
+                      {format(new Date(entry.date), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell className='max-w-[200px] truncate'>
+                      {entry.description}
+                    </TableCell>
+                    <TableCell>{entry.reference || "-"}</TableCell>
+                    <TableCell className='text-right font-mono'>
+                      {formatCurrency(entry.totalDebit)}
+                    </TableCell>
+                    <TableCell className='text-right font-mono'>
+                      {formatCurrency(entry.totalCredit)}
+                    </TableCell>
+                    <TableCell>
+                      <div className='flex items-center gap-2'>
+                        {getStatusBadge(entry.status)}
+                        {entry.isReversed && (
+                          <Badge variant='outline' className='text-xs'>
+                            Reversed
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className='flex gap-1'>
                         <Button
                           variant='ghost'
                           size='icon'
                           onClick={() => {
                             setSelectedEntry(entry);
-                            setFormData({
-                              date: new Date(entry.date),
-                              description: entry.description || "",
-                              reference: entry.reference || "",
-                              notes: entry.notes || "",
-                              lines: (entry.lines || []).map((l) => ({
-                                accountId: l.account?.id || "",
-                                description: l.description || "",
-                                debitAmount: l.debitAmount || 0,
-                                creditAmount: l.creditAmount || 0,
-                              })),
-                            });
-                            setEditModalOpen(true);
+                            setViewModalOpen(true);
                           }}
-                          title='Edit Entry'
+                          title='View Details'
                         >
-                          <Pencil className='h-4 w-4 text-muted-foreground' />
+                          <Eye className='h-4 w-4' />
                         </Button>
-                      )}
-                      {(entry.status === "pending" ||
-                        entry.status === "draft") && (
-                        <Button
-                          variant='ghost'
-                          size='icon'
-                          onClick={() => handleApprove(entry)}
-                          title='Approve'
-                        >
-                          <Check className='h-4 w-4 text-green-600' />
-                        </Button>
-                      )}
-                      {entry.status === "approved" && !entry.isReversed && (
-                        <>
-                          <Button
-                            variant='ghost'
-                            size='icon'
-                            onClick={async () => {
-                              try {
-                                const response = await fetch(
-                                  `/api/accounting/journal-entries/${entry.id}/unapprove`,
-                                  { method: "POST" },
-                                );
-                                if (!response.ok) {
-                                  const error = await response.json();
-                                  throw new Error(
-                                    error.error || "Failed to unapprove",
-                                  );
-                                }
-                                addNotification({
-                                  title: "Success",
-                                  message: "Entry returned to pending",
-                                  type: "success",
-                                  category: "accounting",
-                                });
-                                fetchEntries();
-                              } catch (error) {
-                                addNotification({
-                                  title: "Error",
-                                  message:
-                                    error instanceof Error
-                                      ? error.message
-                                      : "Failed to toggle approval",
-                                  type: "error",
-                                  category: "accounting",
-                                });
-                              }
-                            }}
-                            title='Return to Pending'
-                          >
-                            <Undo className='h-4 w-4 text-blue-600' />
-                          </Button>
+                        {(entry.status === "draft" ||
+                          entry.status === "pending") && (
                           <Button
                             variant='ghost'
                             size='icon'
                             onClick={() => {
                               setSelectedEntry(entry);
-                              setReverseModalOpen(true);
+                              setFormData({
+                                date: new Date(entry.date),
+                                description: entry.description || "",
+                                reference: entry.reference || "",
+                                notes: entry.notes || "",
+                                lines: (entry.lines || []).map((l) => ({
+                                  accountId: l.account?.id || "",
+                                  description: l.description || "",
+                                  debitAmount: l.debitAmount || 0,
+                                  creditAmount: l.creditAmount || 0,
+                                })),
+                              });
+                              setEditModalOpen(true);
                             }}
-                            title='Reverse'
+                            title='Edit Entry'
                           >
-                            <RotateCcw className='h-4 w-4 text-orange-600' />
+                            <Pencil className='h-4 w-4 text-muted-foreground' />
                           </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                        )}
+                        {(entry.status === "pending" ||
+                          entry.status === "draft") && (
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            onClick={() => handleApprove(entry)}
+                            title='Approve'
+                          >
+                            <Check className='h-4 w-4 text-green-600' />
+                          </Button>
+                        )}
+                        {entry.status === "approved" && !entry.isReversed && (
+                          <>
+                            <Button
+                              variant='ghost'
+                              size='icon'
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(
+                                    `/api/accounting/journal-entries/${entry.id}/unapprove`,
+                                    { method: "POST" },
+                                  );
+                                  if (!response.ok) {
+                                    const error = await response.json();
+                                    throw new Error(
+                                      error.error || "Failed to unapprove",
+                                    );
+                                  }
+                                  addNotification({
+                                    title: "Success",
+                                    message: "Entry returned to pending",
+                                    type: "success",
+                                    category: "accounting",
+                                  });
+                                  fetchEntries();
+                                } catch (error) {
+                                  addNotification({
+                                    title: "Error",
+                                    message:
+                                      error instanceof Error
+                                        ? error.message
+                                        : "Failed to toggle approval",
+                                    type: "error",
+                                    category: "accounting",
+                                  });
+                                }
+                              }}
+                              title='Return to Pending'
+                            >
+                              <Undo className='h-4 w-4 text-blue-600' />
+                            </Button>
+                            <Button
+                              variant='ghost'
+                              size='icon'
+                              onClick={() => {
+                                setSelectedEntry(entry);
+                                setReverseModalOpen(true);
+                              }}
+                              title='Reverse'
+                            >
+                              <RotateCcw className='h-4 w-4 text-orange-600' />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
 
         {/* Pagination */}
         {pagination.totalPages > 1 && (

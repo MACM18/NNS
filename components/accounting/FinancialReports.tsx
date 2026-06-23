@@ -71,7 +71,7 @@ export function FinancialReports({
         setPeriods(result.data || []);
         // Auto-select current open period
         const openPeriod = (result.data || []).find(
-          (p: AccountingPeriod) => !p.isClosed
+          (p: AccountingPeriod) => !p.isClosed,
         );
         if (openPeriod) {
           setSelectedPeriod(openPeriod.id);
@@ -149,25 +149,25 @@ export function FinancialReports({
           .map(
             (row) =>
               `${row.accountCode},${row.accountName},${row.debitBalance.toFixed(
-                2
-              )},${row.creditBalance.toFixed(2)}`
+                2,
+              )},${row.creditBalance.toFixed(2)}`,
           )
           .join("\n") +
         `\nTotals,,${trialBalance.totalDebits.toFixed(
-          2
+          2,
         )},${trialBalance.totalCredits.toFixed(2)}`;
     } else if (activeReport === "income-statement" && incomeStatement) {
       csvContent =
         "Section,Account,Amount\n" +
         incomeStatement.revenue.items
           .map(
-            (item) => `Revenue,${item.accountName},${item.amount.toFixed(2)}`
+            (item) => `Revenue,${item.accountName},${item.amount.toFixed(2)}`,
           )
           .join("\n") +
         `\nTotal Revenue,,${incomeStatement.revenue.total.toFixed(2)}\n` +
         incomeStatement.expenses.items
           .map(
-            (item) => `Expenses,${item.accountName},${item.amount.toFixed(2)}`
+            (item) => `Expenses,${item.accountName},${item.amount.toFixed(2)}`,
           )
           .join("\n") +
         `\nTotal Expenses,,${incomeStatement.expenses.total.toFixed(2)}\n` +
@@ -191,7 +191,7 @@ export function FinancialReports({
         allLiabilities
           .map(
             (item) =>
-              `Liabilities,${item.accountName},${item.amount.toFixed(2)}`
+              `Liabilities,${item.accountName},${item.amount.toFixed(2)}`,
           )
           .join("\n") +
         `\nTotal Liabilities,,${balanceSheet.liabilities.total.toFixed(2)}\n` +
@@ -358,8 +358,8 @@ export function FinancialReports({
                     ✗ Trial Balance is out of balance by{" "}
                     {formatCurrency(
                       Math.abs(
-                        trialBalance.totalDebits - trialBalance.totalCredits
-                      )
+                        trialBalance.totalDebits - trialBalance.totalCredits,
+                      ),
                     )}
                   </p>
                 )}
@@ -446,7 +446,7 @@ export function FinancialReports({
                         "font-mono",
                         incomeStatement.netIncome >= 0
                           ? "text-green-600"
-                          : "text-red-600"
+                          : "text-red-600",
                       )}
                     >
                       {formatCurrency(incomeStatement.netIncome)}
@@ -639,7 +639,7 @@ export function FinancialReports({
                             </TableCell>
                             <TableCell className='text-right font-mono'>
                               {formatCurrency(
-                                balanceSheet.equity.retainedEarnings
+                                balanceSheet.equity.retainedEarnings,
                               )}
                             </TableCell>
                           </TableRow>
@@ -655,7 +655,7 @@ export function FinancialReports({
                           <TableCell className='text-right font-mono'>
                             {formatCurrency(
                               balanceSheet.liabilities.total +
-                                balanceSheet.equity.total
+                                balanceSheet.equity.total,
                             )}
                           </TableCell>
                         </TableRow>
@@ -677,8 +677,8 @@ export function FinancialReports({
                         Math.abs(
                           balanceSheet.assets.total -
                             (balanceSheet.liabilities.total +
-                              balanceSheet.equity.total)
-                        )
+                              balanceSheet.equity.total),
+                        ),
                       )}
                     </p>
                   )}

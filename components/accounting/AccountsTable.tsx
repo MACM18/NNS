@@ -59,13 +59,13 @@ export function AccountsTable({
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(Object.values(AccountCategory))
+    new Set(Object.values(AccountCategory)),
   );
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<ChartOfAccount | null>(
-    null
+    null,
   );
   const { addNotification } = useNotification();
 
@@ -112,7 +112,7 @@ export function AccountsTable({
       filtered = accounts.filter(
         (a) =>
           a.code.toLowerCase().includes(term) ||
-          a.name.toLowerCase().includes(term)
+          a.name.toLowerCase().includes(term),
       );
     }
 
@@ -232,7 +232,7 @@ export function AccountsTable({
             description: formData.description,
             subCategory: formData.subCategory,
           }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -268,7 +268,7 @@ export function AccountsTable({
         `/api/accounting/accounts/${selectedAccount.id}`,
         {
           method: "DELETE",
-        }
+        },
       );
 
       if (!response.ok) {
@@ -379,7 +379,7 @@ export function AccountsTable({
                 <button
                   onClick={() => toggleCategory(category)}
                   className={`w-full flex items-center justify-between p-3 ${getCategoryColor(
-                    category
+                    category,
                   )} hover:opacity-90 transition-opacity`}
                 >
                   <div className='flex items-center gap-2'>
@@ -396,92 +396,94 @@ export function AccountsTable({
                     {formatCurrency(
                       categoryAccounts.reduce(
                         (sum, a) => sum + a.currentBalance,
-                        0
-                      )
+                        0,
+                      ),
                     )}
                   </span>
                 </button>
                 {expandedCategories.has(category) && (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className='w-[100px]'>Code</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Sub-Category</TableHead>
-                        <TableHead className='text-right'>Balance</TableHead>
-                        <TableHead className='w-[120px]'>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categoryAccounts.map((account) => (
-                        <TableRow key={account.id}>
-                          <TableCell className='font-mono'>
-                            {account.code}
-                          </TableCell>
-                          <TableCell>
-                            <div className='flex items-center gap-2'>
-                              <span>{account.name}</span>
-                              {account.isSystemAccount && (
-                                <Badge variant='outline' className='text-xs'>
-                                  System
-                                </Badge>
-                              )}
-                              {!account.isActive && (
-                                <Badge
-                                  variant='destructive'
-                                  className='text-xs'
-                                >
-                                  Inactive
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{account.subCategory || "-"}</TableCell>
-                          <TableCell className='text-right font-mono'>
-                            {formatCurrency(account.currentBalance)}
-                          </TableCell>
-                          <TableCell>
-                            <div className='flex gap-1'>
-                              {onViewLedger && (
-                                <Button
-                                  variant='ghost'
-                                  size='icon'
-                                  onClick={() => onViewLedger(account)}
-                                  title='View Ledger'
-                                >
-                                  <BookOpen className='h-4 w-4' />
-                                </Button>
-                              )}
-                              <Button
-                                variant='ghost'
-                                size='icon'
-                                onClick={() => openEditModal(account)}
-                                title='Edit'
-                              >
-                                <Edit className='h-4 w-4' />
-                              </Button>
-                              {!account.isSystemAccount && (
-                                <Button
-                                  variant='ghost'
-                                  size='icon'
-                                  onClick={() => {
-                                    setSelectedAccount(account);
-                                    setDeleteModalOpen(true);
-                                  }}
-                                  title='Delete'
-                                >
-                                  <Trash2 className='h-4 w-4 text-destructive' />
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
+                  <div className='overflow-x-auto'>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className='w-[100px]'>Code</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Sub-Category</TableHead>
+                          <TableHead className='text-right'>Balance</TableHead>
+                          <TableHead className='w-[120px]'>Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {categoryAccounts.map((account) => (
+                          <TableRow key={account.id}>
+                            <TableCell className='font-mono'>
+                              {account.code}
+                            </TableCell>
+                            <TableCell>
+                              <div className='flex items-center gap-2'>
+                                <span>{account.name}</span>
+                                {account.isSystemAccount && (
+                                  <Badge variant='outline' className='text-xs'>
+                                    System
+                                  </Badge>
+                                )}
+                                {!account.isActive && (
+                                  <Badge
+                                    variant='destructive'
+                                    className='text-xs'
+                                  >
+                                    Inactive
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{account.subCategory || "-"}</TableCell>
+                            <TableCell className='text-right font-mono'>
+                              {formatCurrency(account.currentBalance)}
+                            </TableCell>
+                            <TableCell>
+                              <div className='flex gap-1'>
+                                {onViewLedger && (
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    onClick={() => onViewLedger(account)}
+                                    title='View Ledger'
+                                  >
+                                    <BookOpen className='h-4 w-4' />
+                                  </Button>
+                                )}
+                                <Button
+                                  variant='ghost'
+                                  size='icon'
+                                  onClick={() => openEditModal(account)}
+                                  title='Edit'
+                                >
+                                  <Edit className='h-4 w-4' />
+                                </Button>
+                                {!account.isSystemAccount && (
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    onClick={() => {
+                                      setSelectedAccount(account);
+                                      setDeleteModalOpen(true);
+                                    }}
+                                    title='Delete'
+                                  >
+                                    <Trash2 className='h-4 w-4 text-destructive' />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </div>
-            )
+            ),
           )}
         </div>
       </CardContent>

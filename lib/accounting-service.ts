@@ -380,6 +380,42 @@ export async function createAccount(data: {
   } as ChartOfAccount;
 }
 
+export async function createBankAccount(data: {
+  code: string;
+  name: string;
+  bankName?: string;
+  accountTitle?: string;
+  accountNumber?: string;
+  branchCode?: string;
+  iban?: string;
+  currencyId?: string;
+  openingBalance?: number;
+}): Promise<{ account: ChartOfAccount; bankAccount: any }> {
+  // Create chart of account for the bank account
+  const account = await createAccount({
+    code: data.code,
+    name: data.name,
+    category: "ASSET",
+    subCategory: "Bank",
+    currencyId: data.currencyId,
+    openingBalance: data.openingBalance || 0,
+  });
+
+  // Persist bank metadata
+  const bankAccount = await prisma.bankAccount.create({
+    data: {
+      chartAccountId: account.id,
+      bankName: data.bankName || null,
+      accountTitle: data.accountTitle || null,
+      accountNumber: data.accountNumber || null,
+      branchCode: data.branchCode || null,
+      iban: data.iban || null,
+    },
+  });
+
+  return { account, bankAccount };
+}
+
 export async function updateAccount(
   id: string,
   data: {

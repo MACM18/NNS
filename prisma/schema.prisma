@@ -762,6 +762,9 @@ model ChartOfAccount {
   defaultForRevenue     AccountingSettings[] @relation("DefaultRevenueAccount")
   defaultForExpense     AccountingSettings[] @relation("DefaultExpenseAccount")
 
+  // Bank accounts metadata relation
+  bankAccounts BankAccount[] @relation("ChartBank")
+
   @@index([category])
   @@index([parentId])
   @@map("chart_of_accounts")
@@ -786,6 +789,24 @@ model AccountingPeriod {
 
   @@unique([periodType, startDate, endDate])
   @@map("accounting_periods")
+}
+
+// Bank accounts metadata linked to chart of accounts
+model BankAccount {
+  id            String   @id @default(uuid())
+  chartAccountId String  @map("chart_account_id")
+  bankName      String?
+  accountTitle  String?
+  accountNumber String?
+  branchCode    String?
+  iban          String?
+  createdById   String?  @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  chartAccount ChartOfAccount @relation(fields: [chartAccountId], references: [id], onDelete: Cascade, name: "ChartBank")
+
+  @@map("bank_accounts")
 }
 
 // Journal Entry Header
