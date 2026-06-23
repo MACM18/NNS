@@ -9,6 +9,7 @@ import { DrumTracking } from "@/app/dashboard/inventory/page";
 
 interface DrumGaugeCardProps {
   drum: DrumTracking;
+  onClick?: () => void;
   onEdit: (drum: DrumTracking) => void;
   onDelete: (drum: DrumTracking) => void;
   isAdminOrManager: boolean;
@@ -16,6 +17,7 @@ interface DrumGaugeCardProps {
 
 export function DrumGaugeCard({
   drum,
+  onClick,
   onEdit,
   onDelete,
   isAdminOrManager,
@@ -43,7 +45,10 @@ export function DrumGaugeCard({
   const offset = circumference - (percentRemaining / 100) * circumference;
 
   return (
-    <Card className="glass-card hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 overflow-hidden border-border/40">
+    <Card 
+      className={`glass-card hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 overflow-hidden border-border/40 ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <CardContent className="p-4 sm:p-5 flex items-center justify-between gap-4">
         {/* Left Info Section */}
         <div className="flex-1 min-w-0 space-y-1.5">
@@ -76,7 +81,7 @@ export function DrumGaugeCard({
 
           {/* Render admin options */}
           {isAdminOrManager && (
-            <div className="flex items-center gap-1 mt-2.5 pt-2 border-t border-border/30">
+            <div className="flex items-center gap-1 mt-2.5 pt-2 border-t border-border/30" onClick={(e) => e.stopPropagation()}>
               <Button
                 variant="ghost"
                 size="icon"

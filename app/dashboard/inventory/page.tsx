@@ -74,6 +74,7 @@ export interface DrumTracking {
   id: string;
   drum_number: string;
   item_id: string;
+  cable_type?: string;
   initial_quantity: number;
   current_quantity: number;
   received_date: string;

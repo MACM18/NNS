@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ interface EditDrumModalProps {
   drum: {
     id: string;
     drum_number: string;
+    cable_type?: string;
     initial_quantity: number;
     current_quantity: number;
     received_date: string;
@@ -36,6 +37,24 @@ export function EditDrumModal({
   onSuccess,
   addNotification,
 }: EditDrumModalProps) {
+  const [existingCableTypes, setExistingCableTypes] = useState<string[]>(["Fiber"]);
+
+  useEffect(() => {
+    if (open) {
+      fetch("/api/drums?all=true")
+        .then((res) => res.json())
+        .then((json) => {
+          const drums = json.data || [];
+          const types = new Set<string>(["Fiber"]);
+          drums.forEach((d: any) => {
+            if (d.cable_type) types.add(d.cable_type);
+          });
+          setExistingCableTypes(Array.from(types));
+        })
+        .catch(console.error);
+    }
+  }, [open]);
+
   if (!drum) return null;
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -50,6 +69,9 @@ export function EditDrumModal({
               const form = e.target as HTMLFormElement;
               const drum_number = (
                 form.elements.namedItem("drum_number") as HTMLInputElement
+              ).value;
+              const cable_type = (
+                form.elements.namedItem("cable_type") as HTMLInputElement
               ).value;
               const initial_quantity = Number(
                 (
@@ -77,6 +99,7 @@ export function EditDrumModal({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   drum_number,
+                  cable_type,
                   initial_quantity,
                   current_quantity,
                   received_date,
@@ -116,6 +139,24 @@ export function EditDrumModal({
               className='w-full border rounded px-2 py-1'
               required
             />
+          </div>
+          <div>
+            <label className='block text-sm font-medium mb-1'>
+              Cable Type
+            </label>
+            <input
+              name='cable_type'
+              type='text'
+              list='edit_cable_types'
+              defaultValue={drum.cable_type || "Fiber"}
+              className='w-full border rounded px-2 py-1'
+              required
+            />
+            <datalist id='edit_cable_types'>
+              {existingCableTypes.map((type) => (
+                <option key={type} value={type} />
+              ))}
+            </datalist>
           </div>
           <div className='flex gap-2'>
             <div className='flex-1'>

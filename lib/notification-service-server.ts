@@ -42,6 +42,7 @@ export async function createSystemNotification(params: {
 export async function notifyAllAdmins(params: {
   title: string;
   message: string;
+  html?: string;
   type?: NotificationType;
   category?: NotificationCategory;
   actionUrl?: string;
@@ -74,7 +75,7 @@ export async function notifyAllAdmins(params: {
         await sendEmail({
           to: admin.email,
           subject: params.title,
-          html: `
+          html: params.html || `
             <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; border: 1px solid #e5e7eb; border-radius: 8px;">
               <h2 style="color: ${params.type === 'error' ? '#dc2626' : params.type === 'warning' ? '#d97706' : '#2563eb'}; margin-top: 0;">
                 ${params.title}
@@ -107,35 +108,101 @@ export async function notifyAllAdmins(params: {
 
 export async function checkStockLevelsAndNotify() {
   const items = await prisma.inventoryItem.findMany();
-  const warningThreshold = 24 * 60 * 60 * 1000; // 24 hours rate-limit
+  const lowItems = [];
 
   for (const item of items) {
     const currentStock = Number(item.currentStock);
     const reorderLevel = Number(item.reorderLevel || 0);
 
     if (reorderLevel > 0 && currentStock <= reorderLevel) {
-      // Check if low stock notification was already created for this item in last 24h
-      const recentNotification = await prisma.notification.findFirst({
-        where: {
-          category: "inventory_low",
-          title: { contains: item.name },
-          createdAt: {
-            gte: new Date(Date.now() - warningThreshold),
-          },
-        },
+      lowItems.push({
+        id: item.id,
+        name: item.name,
+        currentStock,
+        reorderLevel,
+        unit: item.unit,
       });
-
-      if (!recentNotification) {
-        await notifyAllAdmins({
-          title: `Low Stock Alert: ${item.name}`,
-          message: `The item "${item.name}" has dropped to ${currentStock} ${item.unit} (Reorder level: ${reorderLevel} ${item.unit}). Please reorder soon.`,
-          type: "warning",
-          category: "inventory_low",
-          actionUrl: "/dashboard/inventory",
-          metadata: { itemId: item.id, currentStock, reorderLevel },
-          sendEmailAlert: true,
-        });
-      }
     }
   }
+
+  // If no items are low, no notification is needed
+  if (lowItems.length === 0) return;
+
+  // Rate-limit check: Max 2 emails/notifications of category "inventory_low" in the last 24 hours
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const recentAlertsCount = await prisma.notification.count({
+    where: {
+      category: "inventory_low",
+      createdAt: {
+        gte: twentyFourHoursAgo,
+      },
+    },
+  });
+
+  if (recentAlertsCount >= 2) {
+    console.log(`[checkStockLevelsAndNotify] Suppression: Rate limit reached (${recentAlertsCount} low stock alerts sent in the last 24 hours).`);
+    return;
+  }
+
+  const title = `Low Stock Alert: ${lowItems.length} Item(s) Need Attention`;
+  
+  // HTML summary table for the email body
+  let htmlMessage = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; border: 1px solid #e5e7eb; border-radius: 8px;">
+      <h2 style="color: #dc2626; margin-top: 0; font-size: 20px;">${title}</h2>
+      <p style="font-size: 15px; color: #374151; line-height: 1.5;">
+        The following items have dropped below their designated reorder thresholds. Please review and place an order soon:
+      </p>
+      <table style="width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 20px; font-size: 14px;">
+        <thead>
+          <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; color: #4b5563;">
+            <th style="padding: 8px; font-weight: 600;">Item Name</th>
+            <th style="padding: 8px; font-weight: 600; text-align: right;">Current Stock</th>
+            <th style="padding: 8px; font-weight: 600; text-align: right;">Reorder Level</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  for (const item of lowItems) {
+    htmlMessage += `
+      <tr style="border-bottom: 1px solid #f3f4f6;">
+        <td style="padding: 8px; color: #111827;">${item.name}</td>
+        <td style="padding: 8px; color: #dc2626; font-weight: 600; text-align: right;">${item.currentStock} ${item.unit}</td>
+        <td style="padding: 8px; color: #4b5563; text-align: right;">${item.reorderLevel} ${item.unit}</td>
+      </tr>
+    `;
+  }
+
+  htmlMessage += `
+        </tbody>
+      </table>
+      <div style="margin-top: 25px;">
+        <a href="${process.env.NEXTAUTH_URL || 'https://nns.lk'}/dashboard/inventory" 
+           style="background: #2563eb; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 500; display: inline-block;">
+          Open Inventory Dashboard
+        </a>
+      </div>
+      <hr style="margin: 25px 0; border: 0; border-top: 1px solid #e5e7eb;" />
+      <p style="font-size: 11px; color: #9ca3af; margin-bottom: 0;">
+        This is an automated system notification from NNS Enterprise.
+      </p>
+    </div>
+  `;
+
+  // Raw text fallback
+  const textMessage = `The following items are low in stock:\n\n` + 
+    lowItems.map(item => `- ${item.name}: ${item.currentStock} ${item.unit} (Reorder level: ${item.reorderLevel} ${item.unit})`).join("\n") +
+    `\n\nView details: ${process.env.NEXTAUTH_URL || 'https://nns.lk'}/dashboard/inventory`;
+
+  await notifyAllAdmins({
+    title,
+    message: textMessage,
+    html: htmlMessage,
+    type: "warning",
+    category: "inventory_low",
+    actionUrl: "/dashboard/inventory",
+    metadata: { items: lowItems },
+    sendEmailAlert: true,
+  });
 }

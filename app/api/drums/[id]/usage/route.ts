@@ -23,6 +23,7 @@ export async function GET(
         initialQuantity: true,
         currentQuantity: true,
         drumNumber: true,
+        cableType: true,
         status: true,
         receivedDate: true,
       },
@@ -53,6 +54,7 @@ export async function GET(
       initial_quantity: Number(drum.initialQuantity),
       current_quantity: Number(drum.currentQuantity),
       drum_number: drum.drumNumber,
+      cable_type: drum.cableType || "Fiber",
       status: drum.status,
       manual_wastage_override: null,
     };

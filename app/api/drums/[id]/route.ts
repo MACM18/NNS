@@ -26,6 +26,7 @@ export async function GET(
       id: drum.id,
       drum_number: drum.drumNumber,
       item_id: drum.itemId ?? null,
+      cable_type: drum.cableType || "Fiber",
       initial_quantity: Number(drum.initialQuantity),
       current_quantity: Number(drum.currentQuantity),
       status: drum.status,
@@ -60,6 +61,8 @@ export async function PUT(
     const updateData: Record<string, unknown> = {};
     if (body.drum_number !== undefined || body.drumNumber !== undefined)
       updateData.drumNumber = body.drum_number ?? body.drumNumber;
+    if (body.cable_type !== undefined || body.cableType !== undefined)
+      updateData.cableType = body.cable_type ?? body.cableType;
     if (
       body.initial_quantity !== undefined ||
       body.initialQuantity !== undefined
@@ -89,6 +92,7 @@ export async function PUT(
       id: drum.id,
       drum_number: drum.drumNumber,
       item_id: drum.itemId ?? null,
+      cable_type: drum.cableType || "Fiber",
       initial_quantity: Number(drum.initialQuantity),
       current_quantity: Number(drum.currentQuantity),
       status: drum.status,

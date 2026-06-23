@@ -7,6 +7,7 @@ import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
 export async function upsertDrumWithHistory(params: {
   drumNumber: string;
   initialQuantity?: number;
+  cableType?: string;
   itemId?: string;
   syncConnectionId?: string;
   action: "created" | "usage_added" | "quantity_adjusted" | "status_changed";
@@ -15,6 +16,7 @@ export async function upsertDrumWithHistory(params: {
   const {
     drumNumber,
     initialQuantity,
+    cableType,
     itemId,
     syncConnectionId,
     action,
@@ -30,6 +32,7 @@ export async function upsertDrumWithHistory(params: {
       status: true,
       itemId: true,
       initialQuantity: true,
+      cableType: true,
     },
   });
 
@@ -43,6 +46,7 @@ export async function upsertDrumWithHistory(params: {
 
   // Create new drum with default values
   const drumSize = initialQuantity || 2000;
+  const defaultCableType = cableType || "Fiber";
 
   // Try to find Drop Wire Cable item for default
   let defaultItemId = itemId;
@@ -58,6 +62,7 @@ export async function upsertDrumWithHistory(params: {
     data: {
       drumNumber,
       itemId: defaultItemId,
+      cableType: defaultCableType,
       initialQuantity: drumSize,
       currentQuantity: drumSize,
       status: "active",
