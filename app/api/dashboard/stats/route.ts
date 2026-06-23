@@ -191,6 +191,84 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    // Revenue trend: calculate revenue for the past 6 months
+    const revenueTrend = [];
+    for (let i = 5; i >= 0; i--) {
+      const trendMonth = month - i;
+      const trendYear = trendMonth <= 0 ? year - 1 : year;
+      const actualMonth = trendMonth <= 0 ? trendMonth + 12 : trendMonth;
+      const trendStart = new Date(trendYear, actualMonth - 1, 1);
+      const trendEnd = new Date(trendYear, actualMonth, 0, 23, 59, 59, 999);
+
+      const trendLines = await prisma.lineDetails.findMany({
+        where: {
+          date: { gte: trendStart, lte: trendEnd },
+          OR: [
+            { completedDate: { not: null } },
+            { status: "completed" },
+          ],
+        },
+        select: {
+          cableStart: true,
+          cableMiddle: true,
+          cableEnd: true,
+        },
+      });
+
+      let monthRevenue = 0;
+      for (const line of trendLines) {
+        const { totalCable } = computeCableMeasurements(
+          Number(line.cableStart || 0),
+          Number(line.cableMiddle || 0),
+          Number(line.cableEnd || 0),
+        );
+        monthRevenue += calculateRate(totalCable);
+      }
+
+      const monthName = new Date(trendYear, actualMonth - 1).toLocaleString("default", { month: "short" });
+      revenueTrend.push({
+        month: monthName,
+        revenue: Math.round(monthRevenue * 0.9),
+      });
+    }
+
+    // Top workers: get workers with most completed lines this month
+    const topWorkersRaw = await prisma.workAssignment.findMany({
+      where: {
+        line: {
+          date: {
+            gte: currentMonthStartDate,
+            lte: currentMonthEndDate,
+          },
+          OR: [
+            { completedDate: { not: null } },
+            { status: "completed" },
+          ],
+        },
+      },
+      select: {
+        worker: {
+          select: {
+            id: true,
+            fullName: true,
+          },
+        },
+      },
+    });
+
+    // Count lines per worker
+    const workerCounts: Record<string, { name: string; lines: number }> = {};
+    for (const assignment of topWorkersRaw) {
+      const wId = assignment.worker.id;
+      if (!workerCounts[wId]) {
+        workerCounts[wId] = { name: assignment.worker.fullName, lines: 0 };
+      }
+      workerCounts[wId].lines += 1;
+    }
+    const topWorkers = Object.values(workerCounts)
+      .sort((a, b) => b.lines - a.lines)
+      .slice(0, 5);
+
     // Calculate stats from the summaries
     const totalLines = currentSummary.count;
     const completed = currentSummary.completed;
@@ -239,6 +317,8 @@ export async function GET(req: NextRequest) {
           inProgressChange,
           pendingChange,
           revenueChange,
+          revenueTrend,
+          topWorkers,
         },
         activities,
       },

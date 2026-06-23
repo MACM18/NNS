@@ -4,29 +4,28 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { usePageVisibility } from "@/hooks/use-page-visibility";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Plus,
+  RefreshCw,
   Cable,
   CheckCircle,
-  AlertCircle,
-  TrendingUp,
-  Plus,
-  ArrowRight,
-  RefreshCw,
   Clock,
+  TrendingUp,
+  AlertTriangle,
 } from "lucide-react";
 import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { useDataCache } from "@/contexts/data-cache-context";
 import { DashboardSkeleton } from "@/components/skeletons/dashboard-skeleton";
+
+// Import new premium dashboard components
+import { KpiCard } from "@/components/dashboard/kpi-card";
+import { RevenueChart } from "@/components/dashboard/revenue-chart";
+import { StatusDonut } from "@/components/dashboard/status-donut";
+import { TopWorkersChart } from "@/components/dashboard/top-workers-chart";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { QuickActions } from "@/components/dashboard/quick-actions";
 
 interface DashboardStats {
   totalLines: number;
@@ -39,11 +38,8 @@ interface DashboardStats {
   inProgressChange?: number;
   pendingChange?: number;
   revenueChange: number;
-  // legacy fields (kept for backward compatibility)
-  activeTasks?: number;
-  pendingReviews?: number;
-  taskChange?: number;
-  reviewChange?: number;
+  revenueTrend?: { month: string; revenue: number }[];
+  topWorkers?: { name: string; lines: number }[];
 }
 
 interface RecentActivity {
@@ -65,21 +61,31 @@ export default function Dashboard() {
 
   const stats: DashboardStats = cache.dashboard?.stats || {
     totalLines: 0,
-    activeTasks: 0, // kept for type compatibility but not shown
-    pendingReviews: 0, // kept for compatibility
+    completed: 0,
+    inProgress: 0,
+    pending: 0,
     monthlyRevenue: 0,
     lineChange: 0,
-    taskChange: 0,
-    reviewChange: 0,
+    completedChange: 0,
+    inProgressChange: 0,
+    pendingChange: 0,
     revenueChange: 0,
+    revenueTrend: [],
+    topWorkers: [],
   };
 
-  // If backend provides new keys, prefer them
-  const totalLines = cache.dashboard?.stats?.totalLines ?? stats.totalLines;
-  const completedLines = cache.dashboard?.stats?.completed ?? 0;
-  const inProgressLines = cache.dashboard?.stats?.inProgress ?? 0;
-  const pendingLines = cache.dashboard?.stats?.pending ?? 0;
-  const monthlyRevenueValue = cache.dashboard?.stats?.monthlyRevenue ?? 0;
+  const totalLines = stats.totalLines ?? 0;
+  const completedLines = stats.completed ?? 0;
+  const inProgressLines = stats.inProgress ?? 0;
+  const pendingLines = stats.pending ?? 0;
+  const monthlyRevenueValue = stats.monthlyRevenue ?? 0;
+  const revenueTrend = stats.revenueTrend || [];
+  const topWorkers = stats.topWorkers || [];
+  const statusBreakdown = {
+    completed: completedLines,
+    inProgress: inProgressLines,
+    pending: pendingLines,
+  };
 
   const recentActivities: RecentActivity[] = cache.dashboard?.activities || [];
 
@@ -89,8 +95,6 @@ export default function Dashboard() {
       router.push("/auth");
     }
   }, [user, loading, router]);
-
-  // Note: Avoid early return before hooks; we'll return null after hooks below
 
   // Fetch when month changes or cache invalid
   useEffect(() => {
@@ -109,7 +113,6 @@ export default function Dashboard() {
     if (cachedMonth !== selectedMonthKey) {
       fetchDashboardData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, selectedDate]);
 
   // Refresh when page becomes visible again
@@ -117,7 +120,7 @@ export default function Dashboard() {
     if (user) fetchDashboardData();
   }, [user]);
 
-  // Early return during redirect (placed after hooks to satisfy rules-of-hooks)
+  // Early return during redirect
   if (!user && !loading) return null;
 
   const fetchDashboardData = async () => {
@@ -177,252 +180,137 @@ export default function Dashboard() {
     }).format(amount);
   };
 
-  const formatChange = (change: number) => {
-    const sign = change >= 0 ? "+" : "";
-    return `${sign}${change.toFixed(1)}%`;
-  };
-
   const completionRate =
     totalLines > 0 ? Math.round((completedLines / totalLines) * 100) : 0;
 
-  const dashboardStats = [
-    {
-      title: "Total Lines",
-      value: totalLines.toLocaleString(),
-      change: formatChange(cache.dashboard?.stats?.lineChange ?? 0),
-      icon: Cable,
-      color: "text-blue-600",
-      subtitle: `${selectedDate.toLocaleString(undefined, { month: "long" })} ${selectedDate.getFullYear()}`,
-    },
-    {
-      title: "Completed",
-      value: completedLines.toString(),
-      change: formatChange(cache.dashboard?.stats?.completedChange ?? 0),
-      icon: CheckCircle,
-      color: "text-green-600",
-      subtitle: `${completionRate}% completion rate`,
-    },
-    {
-      title: "In Progress",
-      value: inProgressLines.toString(),
-      change: formatChange(cache.dashboard?.stats?.inProgressChange ?? 0),
-      icon: Clock,
-      color: "text-blue-600",
-      subtitle: "Currently being worked on",
-    },
-    {
-      title: "Monthly Revenue",
-      value: formatCurrency(monthlyRevenueValue),
-      change: formatChange(cache.dashboard?.stats?.revenueChange ?? 0),
-      icon: TrendingUp,
-      color: "text-purple-600",
-      subtitle: "Based on 90% invoice A calculation",
-    },
-  ];
-
   return (
-    <div className='space-y-6'>
+    <div className="space-y-6">
       {loading ? (
         <DashboardSkeleton />
       ) : (
         <>
-          <div className='flex flex-col gap-4'>
-            <h2 className='text-2xl sm:text-3xl font-bold tracking-tight'>
-              Dashboard
-            </h2>
-            <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-2'>
+          {/* Header section with Picker and actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground">
+                Dashboard
+              </h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Overview and statistics for NNS Telecom operations
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <MonthYearPicker
                 date={selectedDate}
                 onDateChange={setSelectedDate}
               />
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={fetchDashboardData}
-                disabled={isRefreshing}
-                className='w-full sm:w-auto'
-              >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${
-                    isRefreshing ? "animate-spin" : ""
-                  }`}
-                />
-                Refresh
-              </Button>
-              <Button
-                onClick={() => setOpenTelephoneLineModal(true)}
-                className='w-full sm:w-auto'
-              >
-                <Plus className='mr-2 h-4 w-4' />
-                Add Line
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchDashboardData}
+                  disabled={isRefreshing}
+                  className="flex-1 sm:flex-none h-9"
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${
+                      isRefreshing ? "animate-spin" : ""
+                    }`}
+                  />
+                  Refresh
+                </Button>
+                <Button
+                  onClick={() => setOpenTelephoneLineModal(true)}
+                  className="flex-1 sm:flex-none h-9 glass-button"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Line
+                </Button>
+              </div>
             </div>
           </div>
 
-          <div className='grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
-            {dashboardStats.map((stat, index) => (
-              <Card key={index} className='glass-card hover:-translate-y-0.5 hover:shadow-md transition-all duration-300 relative overflow-hidden group'>
-                <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                  <CardTitle className='text-sm font-medium'>
-                    {stat.title}
-                  </CardTitle>
-                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                </CardHeader>
-                <CardContent className='relative z-10'>
-                  <div className='text-2xl font-bold'>
-                    {isRefreshing ? (
-                      <div className='h-8 w-20 bg-gray-200 animate-pulse rounded'></div>
-                    ) : (
-                      stat.value
-                    )}
-                  </div>
-
-                  {stat.subtitle && (
-                    <p className='text-xs text-muted-foreground mb-1'>
-                      {stat.subtitle}
-                    </p>
-                  )}
-
-                  <p className='text-xs text-muted-foreground'>
-                    <span
-                      className={
-                        stat.change.startsWith("+")
-                          ? "text-green-600"
-                          : stat.change.startsWith("-")
-                            ? "text-red-600"
-                            : "text-gray-600"
-                      }
-                    >
-                      {isRefreshing ? "..." : stat.change}
-                    </span>{" "}
-                    from last month
-                  </p>
-
-                  {/* Sparkline Visual */}
-                  <div className='absolute right-2 bottom-2 w-20 h-8 opacity-25 group-hover:opacity-45 transition-opacity duration-300 pointer-events-none'>
-                    <svg viewBox='0 0 100 40' className='w-full h-full'>
-                      <path
-                        d={
-                          index === 0 ? "M0 30 Q25 25, 50 15 T100 10" :
-                          index === 1 ? "M0 35 L20 30 L40 20 L60 25 L80 10 L100 5" :
-                          index === 2 ? "M0 20 Q20 35, 40 20 T80 20 T100 15" :
-                          "M0 38 Q30 35, 60 20 T100 8"
-                        }
-                        fill='none'
-                        stroke='currentColor'
-                        strokeWidth='3.5'
-                        className={stat.color}
-                      />
-                    </svg>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          {/* Premium KPI Cards Row (5 Cards) */}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+            <KpiCard
+              title="Total Lines"
+              value={totalLines.toLocaleString()}
+              change={stats.lineChange}
+              icon={Cable}
+              color="blue"
+              subtitle={`${selectedDate.toLocaleString(undefined, { month: "long" })} ${selectedDate.getFullYear()}`}
+              isLoading={isRefreshing}
+              delay={0}
+            />
+            <KpiCard
+              title="Completed"
+              value={completedLines.toLocaleString()}
+              change={stats.completedChange}
+              icon={CheckCircle}
+              color="green"
+              ringValue={completionRate}
+              subtitle="Fiber lines done"
+              isLoading={isRefreshing}
+              delay={100}
+            />
+            <KpiCard
+              title="In Progress"
+              value={inProgressLines.toLocaleString()}
+              change={stats.inProgressChange}
+              icon={Clock}
+              color="amber"
+              subtitle="Active assignments"
+              isLoading={isRefreshing}
+              delay={200}
+            />
+            <KpiCard
+              title="Pending"
+              value={pendingLines.toLocaleString()}
+              change={stats.pendingChange}
+              icon={AlertTriangle}
+              color="red"
+              subtitle="Awaiting allocation"
+              isLoading={isRefreshing}
+              delay={300}
+            />
+            <KpiCard
+              title="Monthly Revenue"
+              value={formatCurrency(monthlyRevenueValue)}
+              change={stats.revenueChange}
+              icon={TrendingUp}
+              color="purple"
+              subtitle="90% invoice A projection"
+              isLoading={isRefreshing}
+              delay={400}
+            />
           </div>
 
-          <div className='grid gap-4 grid-cols-1 lg:grid-cols-7'>
-            <Card className='lg:col-span-4 glass-card hover:shadow-md transition-shadow duration-300'>
-              <CardHeader>
-                <CardTitle>Recent Activities</CardTitle>
-                <CardDescription>
-                  Latest updates from your telecom operations
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className='space-y-4'>
-                  {isRefreshing ? (
-                    Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className='flex items-center space-x-4'>
-                        <div className='flex-1 space-y-2'>
-                          <div className='h-4 bg-gray-200 animate-pulse rounded w-3/4'></div>
-                          <div className='h-3 bg-gray-200 animate-pulse rounded w-1/2'></div>
-                        </div>
-                        <div className='h-6 w-16 bg-gray-200 animate-pulse rounded'></div>
-                      </div>
-                    ))
-                  ) : recentActivities.length > 0 ? (
-                    recentActivities.map((activity) => (
-                      <div
-                        key={activity.id}
-                        className='flex items-center space-x-4'
-                      >
-                        <div className='flex-1 space-y-1'>
-                          <p className='text-sm font-medium leading-none'>
-                            {activity.action}
-                          </p>
-                          <p className='text-sm text-muted-foreground'>
-                            {activity.location}
-                          </p>
-                        </div>
-                        <div className='flex items-center space-x-2'>
-                          <Badge
-                            variant={
-                              activity.status === "completed"
-                                ? "default"
-                                : activity.status === "in_progress"
-                                  ? "secondary"
-                                  : activity.status === "pending"
-                                    ? "destructive"
-                                    : "outline"
-                            }
-                          >
-                            {activity.status}
-                          </Badge>
-                          <span className='text-xs text-muted-foreground'>
-                            {activity.time}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className='text-sm text-muted-foreground text-center py-4'>
-                      No recent activities found
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+          {/* Bento Grid layout for charts & logs */}
+          <div className="grid gap-6 grid-cols-1 lg:grid-cols-12">
+            {/* Revenue Trend - Span 8 */}
+            <div className="lg:col-span-8 animate-fade-in-up" style={{ animationDelay: "200ms" }}>
+              <RevenueChart data={revenueTrend} isLoading={isRefreshing} />
+            </div>
 
-            <Card className='lg:col-span-3 glass-card hover:shadow-md transition-shadow duration-300'>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-                <CardDescription>Common tasks and shortcuts</CardDescription>
-              </CardHeader>
-              <CardContent className='space-y-4'>
-                <Button
-                  className='w-full justify-between'
-                  variant='outline'
-                  onClick={() => router.push("/dashboard/lines")}
-                >
-                  Add New Line Details
-                  <ArrowRight className='h-4 w-4' />
-                </Button>
-                <Button
-                  className='w-full justify-between'
-                  variant='outline'
-                  onClick={() => router.push("/dashboard/reports")}
-                >
-                  Generate Monthly Report
-                  <ArrowRight className='h-4 w-4' />
-                </Button>
-                <Button
-                  className='w-full justify-between'
-                  variant='outline'
-                  onClick={() => router.push("/dashboard/inventory")}
-                >
-                  Update Inventory
-                  <ArrowRight className='h-4 w-4' />
-                </Button>
-                <Button
-                  className='w-full justify-between'
-                  variant='outline'
-                  onClick={() => router.push("/dashboard/tasks")}
-                >
-                  Review Pending Tasks
-                  <ArrowRight className='h-4 w-4' />
-                </Button>
-              </CardContent>
-            </Card>
+            {/* Status Donut - Span 4 */}
+            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
+              <StatusDonut data={statusBreakdown} isLoading={isRefreshing} />
+            </div>
+
+            {/* Top Workers - Span 4 */}
+            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "400ms" }}>
+              <TopWorkersChart data={topWorkers} isLoading={isRefreshing} />
+            </div>
+
+            {/* Activity Feed - Span 5 */}
+            <div className="lg:col-span-5 animate-fade-in-up" style={{ animationDelay: "500ms" }}>
+              <ActivityFeed activities={recentActivities} isLoading={isRefreshing} />
+            </div>
+
+            {/* Quick Actions - Span 3 */}
+            <div className="lg:col-span-3 animate-fade-in-up" style={{ animationDelay: "600ms" }}>
+              <QuickActions />
+            </div>
           </div>
         </>
       )}
