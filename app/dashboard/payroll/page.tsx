@@ -853,6 +853,7 @@ export default function PayrollPage() {
                                     >
                                       <Button size='sm' variant='ghost'>
                                         View
+                                        <ChevronRight className='h-4 w-4 ml-1' />
                                       </Button>
                                     </Link>
                                     {canManage && period.status === "draft" && (
@@ -898,14 +899,6 @@ export default function PayrollPage() {
                                           )}
                                         </Button>
                                       )}
-                                    <Button size='sm' variant='ghost' asChild>
-                                      <Link
-                                        href={`/dashboard/payroll/${period.id}`}
-                                      >
-                                        View
-                                        <ChevronRight className='h-4 w-4 ml-1' />
-                                      </Link>
-                                    </Button>
                                     {canManage && (
                                       <Button
                                         size='sm'
