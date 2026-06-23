@@ -126,12 +126,17 @@ export async function updateDrumQuantityWithHistory(params: {
   const previousQuantity = Number(drum.currentQuantity);
   const quantityChange = newQuantity - previousQuantity;
 
+  // Auto-mark inactive if remaining quantity < 100m
+  const effectiveStatus = newQuantity < 100 && (!newStatus || newStatus === "active")
+    ? "inactive"
+    : (newStatus || drum.status);
+
   // Update drum
   await prisma.drumTracking.update({
     where: { id: drumId },
     data: {
       currentQuantity: newQuantity,
-      status: newStatus || drum.status,
+      status: effectiveStatus,
     },
   });
 
@@ -144,7 +149,7 @@ export async function updateDrumQuantityWithHistory(params: {
       newQuantity,
       quantityChange,
       previousStatus: drum.status,
-      newStatus: newStatus || drum.status,
+      newStatus: effectiveStatus,
       lineDetailsId,
       syncConnectionId,
       notes,
@@ -203,26 +208,34 @@ export async function recalculateDrumWithHistory(
   const newQuantity = result.calculatedCurrentQuantity;
   const quantityChange = newQuantity - previousQuantity;
 
+  // Auto-mark inactive if remaining quantity < 100m
+  const autoInactiveStatus = newQuantity < 100 && drum.status === "active"
+    ? "inactive"
+    : drum.status;
+
   // Only update if there's a significant change (more than 0.01)
-  if (Math.abs(quantityChange) > 0.01) {
+  if (Math.abs(quantityChange) > 0.01 || autoInactiveStatus !== drum.status) {
     await prisma.drumTracking.update({
       where: { id: drumId },
-      data: { currentQuantity: newQuantity },
+      data: {
+        currentQuantity: newQuantity,
+        status: autoInactiveStatus,
+      },
     });
 
     await prisma.drumTrackingHistory.create({
       data: {
         drumId,
-        action: "quantity_adjusted",
+        action: autoInactiveStatus !== drum.status ? "status_changed" : "quantity_adjusted",
         previousQuantity,
         newQuantity,
         quantityChange,
         previousStatus: drum.status,
-        newStatus: drum.status,
+        newStatus: autoInactiveStatus,
         syncConnectionId,
-        notes: `Recalculated using smart wastage: ${
-          usages.length
-        } usages, ${result.totalWastage.toFixed(2)}m wastage`,
+        notes: autoInactiveStatus !== drum.status
+          ? `Auto-marked inactive: ${newQuantity.toFixed(2)}m remaining (< 100m threshold)`
+          : `Recalculated using smart wastage: ${usages.length} usages, ${result.totalWastage.toFixed(2)}m wastage`,
       },
     });
   }

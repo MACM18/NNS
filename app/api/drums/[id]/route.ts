@@ -83,6 +83,22 @@ export async function PUT(
         : new Date(body.receivedDate);
     if (body.status !== undefined) updateData.status = body.status;
 
+    // Auto-mark inactive if remaining quantity drops below 100m
+    // Only auto-set if user didn't explicitly set a status
+    if (body.status === undefined && updateData.currentQuantity !== undefined) {
+      const qty = Number(updateData.currentQuantity);
+      if (qty < 100) {
+        // Check current status first
+        const currentDrum = await prisma.drumTracking.findUnique({
+          where: { id },
+          select: { status: true },
+        });
+        if (currentDrum?.status === "active") {
+          updateData.status = "inactive";
+        }
+      }
+    }
+
     const drum = await prisma.drumTracking.update({
       where: { id },
       data: updateData,

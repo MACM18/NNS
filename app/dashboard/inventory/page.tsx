@@ -557,6 +557,7 @@ export default function InventoryPage() {
             setDrumToDelete={setDrumToDelete}
             setDeleteDrumConfirmOpen={setDeleteDrumConfirmOpen}
             getStatusBadge={getStatusBadge}
+            onDrumUpdate={handleSuccess}
           />
         </TabsContent>
 

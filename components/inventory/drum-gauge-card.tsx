@@ -71,7 +71,7 @@ export function DrumGaugeCard({
           </div>
 
           <h4 className="text-sm font-bold text-foreground truncate mt-1">
-            {drum.item_name || "Unknown Cable Type"}
+            {drum.cable_type || "Fiber"}
           </h4>
 
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
