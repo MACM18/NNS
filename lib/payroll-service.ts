@@ -89,12 +89,12 @@ export async function getPayrollPeriodById(
   return {
     ...period,
     status: period.status as PayrollStatus,
-    paymentType: period.paymentType as PaymentType,
+    paymentType: (period as any).paymentType as PaymentType,
     totalAmount: decimalToNumber(period.totalAmount),
     payments: period.payments.map((p) => ({
       ...p,
       status: p.status as PaymentStatus,
-      paymentType: p.paymentType as PaymentType,
+      paymentType: (p as any).paymentType as PaymentType,
       paymentMethod: p.paymentMethod as PaymentMethod | null,
       baseAmount: decimalToNumber(p.baseAmount),
       bonusAmount: decimalToNumber(p.bonusAmount),
@@ -104,7 +104,7 @@ export async function getPayrollPeriodById(
       worker: p.worker
         ? {
             ...p.worker,
-            paymentType: p.worker.paymentType as PaymentType,
+            paymentType: (p.worker as any).paymentType as PaymentType,
             perLineRate: decimalToNumber(p.worker.perLineRate),
             monthlyRate: decimalToNumber(p.worker.monthlyRate),
           }
@@ -188,6 +188,7 @@ export async function createPayrollPeriod(
   return {
     ...period,
     status: period.status as PayrollStatus,
+    paymentType: (period as any).paymentType as PaymentType,
     totalAmount: decimalToNumber(period.totalAmount),
   };
 }
@@ -584,6 +585,8 @@ export async function getWorkerPaymentById(
       ? {
           ...payment.payrollPeriod,
           status: payment.payrollPeriod.status as PayrollStatus,
+          paymentType: (payment.payrollPeriod as any)
+            .paymentType as PaymentType,
           totalAmount: decimalToNumber(payment.payrollPeriod.totalAmount),
         }
       : undefined,
@@ -819,6 +822,7 @@ export async function getPayrollSummary(): Promise<PayrollSummary> {
       ? {
           ...currentPeriod,
           status: currentPeriod.status as PayrollStatus,
+          paymentType: (currentPeriod as any).paymentType as PaymentType,
           totalAmount: decimalToNumber(currentPeriod.totalAmount),
         }
       : undefined,
@@ -960,6 +964,7 @@ export async function approvePayrollPeriod(id: string): Promise<PayrollPeriod> {
   return {
     ...updated,
     status: updated.status as PayrollStatus,
+    paymentType: (updated as any).paymentType as PaymentType,
     totalAmount: decimalToNumber(updated.totalAmount),
   };
 }
@@ -1001,6 +1006,7 @@ export async function markPayrollAsPaid(
   return {
     ...updated,
     status: updated.status as PayrollStatus,
+    paymentType: (updated as any).paymentType as PaymentType,
     totalAmount: decimalToNumber(updated.totalAmount),
   };
 }

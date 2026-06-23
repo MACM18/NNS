@@ -521,7 +521,7 @@ export function JournalEntryTable({
                               description: entry.description || "",
                               reference: entry.reference || "",
                               notes: entry.notes || "",
-                              lines: entry.lines.map((l) => ({
+                              lines: (entry.lines || []).map((l) => ({
                                 accountId: l.account?.id || "",
                                 description: l.description || "",
                                 debitAmount: l.debitAmount || 0,
