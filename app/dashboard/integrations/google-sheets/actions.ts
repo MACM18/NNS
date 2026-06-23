@@ -282,7 +282,7 @@ export async function syncConnection(
 
     // Read sheet data
     progress("Reading sheet data");
-    const primaryRange = `${sheetTab}!B1:AZ`;
+    const primaryRange = `'${sheetTab}'!A1:AZ`;
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: primaryRange,
@@ -400,6 +400,124 @@ export async function syncConnection(
         hardwareError
       );
       progress("Warning: Some hardware inventory updates failed");
+    }
+
+    // Sync the "Drum Number" sheet tab if it exists
+    let drumProcessed = 0;
+    let drumAppended = 0;
+    try {
+      const drumTab = "Drum Number";
+      if (availableTabs.includes(drumTab)) {
+        progress("Syncing Drum Number sheet tab");
+        const drumRange = `'${drumTab}'!A1:AZ`; // Safe quote for sheet tab with spaces and include column A
+        const drumRes = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: drumRange,
+          valueRenderOption: "UNFORMATTED_VALUE",
+          dateTimeRenderOption: "FORMATTED_STRING",
+        });
+
+        const drumValues = drumRes.data.values || [];
+        if (drumValues.length > 0) {
+          const drumHeaders = (drumValues[0] || []).map((h: any) =>
+            (h ?? "").toString().trim()
+          );
+          validateDrumHeaders(drumHeaders);
+          const dIdx = headerIndexDrum(drumHeaders);
+          const drumRows = drumValues
+            .slice(1)
+            .filter((r: any[]) => r[dIdx.tp] !== undefined && normalizeTelephoneCanonical(r[dIdx.tp]))
+            .map((r: any[]) => mapDrumRow(r, dIdx));
+
+          // Fetch all lines for this month (to map by telephone number)
+          const syncMonthStart = new Date(Date.UTC(year, month - 1, 1));
+          const syncMonthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+          const currentMonthLines = await prisma.lineDetails.findMany({
+            where: {
+              date: {
+                gte: syncMonthStart,
+                lte: syncMonthEnd,
+              },
+            },
+            select: {
+              id: true,
+              telephoneNo: true,
+              date: true,
+              dp: true,
+              cHook: true,
+              name: true,
+              drumNumber: true,
+              drumNumberNew: true,
+            },
+          });
+
+          // Group lines by telephone number
+          const linesByPhone = new Map<string, typeof currentMonthLines>();
+          for (const l of currentMonthLines) {
+            if (!l.telephoneNo) continue;
+            const arr = linesByPhone.get(l.telephoneNo) || [];
+            arr.push(l);
+            linesByPhone.set(l.telephoneNo, arr);
+          }
+
+          const pickLatest = (arr: typeof currentMonthLines) => {
+            return [...arr].sort(
+              (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+            )[0];
+          };
+
+          // Update lines in the DB based on the Drum Number sheet rows
+          for (const r of drumRows) {
+            const arr = linesByPhone.get(r.tp);
+            if (!arr || arr.length === 0) continue;
+            const target = pickLatest(arr);
+
+            const updateData: any = {};
+            if (r.dw_dp) updateData.dp = r.dw_dp;
+            if (typeof r.dw_c_hook === "number" && r.dw_c_hook > 0) {
+              updateData.cHook = r.dw_c_hook;
+            }
+            if (r.dw_cus) updateData.name = r.dw_cus;
+            if (r.drum_number) updateData.drumNumber = r.drum_number;
+
+            if (Object.keys(updateData).length > 0) {
+              await prisma.lineDetails.update({
+                where: { id: target.id },
+                data: updateData,
+              });
+              drumProcessed++;
+            }
+          }
+
+          // Bidirectional: append lines from DB that are missing in the Drum Number sheet
+          const drumTPs = new Set(
+            drumRows.map((r) => r.tp).filter(Boolean)
+          );
+          const missingInDrum = currentMonthLines.filter(
+            (l) => l.telephoneNo && !drumTPs.has(l.telephoneNo)
+          );
+
+          if (missingInDrum.length > 0) {
+            const drumAppendRows = missingInDrum.map((l) =>
+              buildDrumSheetRowFromLine(l, drumHeaders)
+            );
+            await sheets.spreadsheets.values.append({
+              spreadsheetId,
+              range: `'${drumTab}'!A1`,
+              valueInputOption: "USER_ENTERED",
+              insertDataOption: "INSERT_ROWS",
+              requestBody: { values: drumAppendRows },
+            });
+            drumAppended = drumAppendRows.length;
+          }
+        }
+      }
+    } catch (drumSheetError) {
+      console.error(
+        "[syncConnection] Drum Number tab sync error:",
+        drumSheetError
+      );
+      progress("Warning: Drum Number tab sync failed");
     }
 
     // Process drum tracking and inventory management with enhanced tracking
@@ -553,6 +671,8 @@ export async function syncConnection(
       hardwareUpdated,
       hardwareCreated,
       usageRecordsUpdated,
+      drumSheetProcessed: drumProcessed,
+      drumSheetAppended: drumAppended,
     };
   } catch (error) {
     console.error("[syncConnection] Error:", error);
@@ -668,11 +788,14 @@ function requiredHeaders(): string[] {
 }
 
 function validateHeaders(headers: string[]) {
-  const lower = headers.map((h) => h.toLowerCase());
+  const lower = headers.map((h) =>
+    (h ?? "").toString().toLowerCase().replace(/\s+/g, " ").trim()
+  );
   const req = requiredHeaders();
   for (const h of req) {
-    const alt = h === "Address" ? ["Addras", "Address"] : [h];
-    const ok = alt.some((a) => lower.includes(a.toLowerCase()));
+    const cleanReq = h.toLowerCase().replace(/\s+/g, " ").trim();
+    const alt = h === "Address" ? ["addras", "address"] : [cleanReq];
+    const ok = alt.some((a) => lower.includes(a));
     if (!ok) {
       throw new Error(`Missing required column '${h}' in sheet header`);
     }
@@ -681,12 +804,16 @@ function validateHeaders(headers: string[]) {
 
 function headerIndex(headers: string[]) {
   const mapLower: Record<string, number> = {};
-  headers.forEach((h, i) => (mapLower[h.toLowerCase()] = i));
+  headers.forEach((h, i) => {
+    const clean = (h ?? "").toString().toLowerCase().replace(/\s+/g, " ").trim();
+    mapLower[clean] = i;
+  });
 
   const pick = (name: string, alts: string[] = []) => {
     const candidates = [name, ...alts];
     for (const c of candidates) {
-      const idx = mapLower[c.toLowerCase()];
+      const clean = c.toLowerCase().replace(/\s+/g, " ").trim();
+      const idx = mapLower[clean];
       if (typeof idx === "number") return idx;
     }
     return -1;
@@ -736,7 +863,7 @@ function headerIndex(headers: string[]) {
     rj12: pick("RJ 12"),
     nut_bolt: pick("Nut&Bolt", ["Nut Bolt"]),
     screw_nail: pick("Screw Nail", ["Screw Nail 1 1/2"]),
-    drum_number: pick("Drum Number", ["Drum No", "Drum", "Drum #"]),
+    drum_number: pick("Drum Number", ["Drum No", "Drum", "Drum #", "DRUM NUMBER"]),
   } as const;
 }
 
@@ -1028,4 +1155,73 @@ export async function recalculateAllDrumQuantities() {
       ? error
       : new Error("Unknown error occurred while recalculating drum quantities");
   }
+}
+
+// ==========================================
+// DRUM SHEET TAB HELPER FUNCTIONS
+// ==========================================
+
+function requiredDrumHeaders(): string[] {
+  return [
+    "NO",
+    "TP",
+    "DW DP",
+    "DW C HOOK",
+    "DW CUS",
+    "DRUM NUMBER",
+  ];
+}
+
+function validateDrumHeaders(headers: string[]) {
+  const lower = headers.map((h) =>
+    (h ?? "").toString().toLowerCase().replace(/\s+/g, " ").trim()
+  );
+  for (const h of requiredDrumHeaders()) {
+    const clean = h.toLowerCase().replace(/\s+/g, " ").trim();
+    if (!lower.includes(clean)) {
+      throw new Error(`Missing required column '${h}' in Drum Number header`);
+    }
+  }
+}
+
+function headerIndexDrum(headers: string[]) {
+  const mapLower: Record<string, number> = {};
+  headers.forEach((h, i) => {
+    const clean = (h ?? "").toString().toLowerCase().replace(/\s+/g, " ").trim();
+    mapLower[clean] = i;
+  });
+  const pick = (name: string) => {
+    const clean = name.toLowerCase().replace(/\s+/g, " ").trim();
+    return mapLower[clean] ?? -1;
+  };
+  return {
+    no: pick("NO"),
+    tp: pick("TP"),
+    dw_dp: pick("DW DP"),
+    dw_c_hook: pick("DW C HOOK"),
+    dw_cus: pick("DW CUS"),
+    drum_number: pick("DRUM NUMBER"),
+  } as const;
+}
+
+function mapDrumRow(row: any[], idx: ReturnType<typeof headerIndexDrum>) {
+  return {
+    no: (row[idx.no] ?? "").toString().trim(),
+    tp: normalizeTelephoneCanonical(row[idx.tp]),
+    dw_dp: (row[idx.dw_dp] ?? "").toString().trim(),
+    dw_c_hook: toNumber(row[idx.dw_c_hook]),
+    dw_cus: (row[idx.dw_cus] ?? "").toString().trim(),
+    drum_number: (row[idx.drum_number] ?? "").toString().trim(),
+  };
+}
+
+function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
+  const idx = headerIndexDrum(headers);
+  const row = new Array(headers.length);
+  row[idx.tp] = l.telephoneNo;
+  row[idx.dw_dp] = l.dp;
+  row[idx.dw_c_hook] = l.cHook ?? 1;
+  row[idx.dw_cus] = l.name;
+  row[idx.drum_number] = l.drumNumber ?? l.drumNumberNew ?? "";
+  return row;
 }
