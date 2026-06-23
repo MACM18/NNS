@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Eye, RotateCcw, Check, Filter } from "lucide-react";
+import { Search, Plus, Eye, RotateCcw, Check, Filter, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -530,7 +530,7 @@ export function JournalEntryTable({
                           }}
                           title='Edit Entry'
                         >
-                          <RotateCcw className='h-4 w-4 text-muted-foreground' />
+                          <Pencil className='h-4 w-4 text-muted-foreground' />
                         </Button>
                       )}
                       {(entry.status === "pending" ||
