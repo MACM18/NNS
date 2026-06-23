@@ -38,10 +38,12 @@ export function AddDrumModal({ isOpen, onClose, onSuccess }: AddDrumModalProps) 
     const [formData, setFormData] = useState({
         drum_number: "",
         item_id: "",
-        initial_quantity: "",
+        cable_type: "Fiber",
+        initial_quantity: "2000",
         received_date: new Date().toISOString().split("T")[0],
         status: "active",
     });
+    const [existingCableTypes, setExistingCableTypes] = useState<string[]>(["Fiber"]);
 
     useEffect(() => {
         if (isOpen) {
@@ -51,12 +53,27 @@ export function AddDrumModal({ isOpen, onClose, onSuccess }: AddDrumModalProps) 
 
     const fetchItems = async () => {
         try {
-            const res = await fetch("/api/inventory?all=true");
-            if (!res.ok) throw new Error("Failed to fetch inventory items");
-            const json = await res.json();
-            setItems(json.data || []);
+            const [itemsRes, drumsRes] = await Promise.all([
+                fetch("/api/inventory?all=true"),
+                fetch("/api/drums?all=true")
+            ]);
+            
+            if (itemsRes.ok) {
+                const json = await itemsRes.json();
+                setItems(json.data || []);
+            }
+            
+            if (drumsRes.ok) {
+                const json = await drumsRes.json();
+                const drums = json.data || [];
+                const types = new Set<string>(["Fiber"]);
+                drums.forEach((d: any) => {
+                    if (d.cable_type) types.add(d.cable_type);
+                });
+                setExistingCableTypes(Array.from(types));
+            }
         } catch (error) {
-            console.error("Error fetching items:", error);
+            console.error("Error fetching data:", error);
         }
     };
 
@@ -70,7 +87,8 @@ export function AddDrumModal({ isOpen, onClose, onSuccess }: AddDrumModalProps) 
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     drum_number: formData.drum_number,
-                    item_id: formData.item_id,
+                    item_id: formData.item_id || undefined,
+                    cable_type: formData.cable_type,
                     initial_quantity: Number(formData.initial_quantity),
                     received_date: formData.received_date,
                     status: formData.status,
@@ -91,7 +109,8 @@ export function AddDrumModal({ isOpen, onClose, onSuccess }: AddDrumModalProps) 
             setFormData({
                 drum_number: "",
                 item_id: "",
-                initial_quantity: "",
+                cable_type: "Fiber",
+                initial_quantity: "2000",
                 received_date: new Date().toISOString().split("T")[0],
                 status: "active",
             });
@@ -127,14 +146,13 @@ export function AddDrumModal({ isOpen, onClose, onSuccess }: AddDrumModalProps) 
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="item_id">Cable Type</Label>
+                        <Label htmlFor="item_id">Item (Optional)</Label>
                         <Select
                             value={formData.item_id}
                             onValueChange={(val) => setFormData({ ...formData, item_id: val })}
-                            required
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="Select cable type" />
+                                <SelectValue placeholder="Select inventory item" />
                             </SelectTrigger>
                             <SelectContent>
                                 {items.map((item) => (
@@ -144,6 +162,24 @@ export function AddDrumModal({ isOpen, onClose, onSuccess }: AddDrumModalProps) 
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="cable_type">Cable Type</Label>
+                        <Input
+                            id="cable_type"
+                            list="cable_types"
+                            value={formData.cable_type}
+                            onChange={(e) =>
+                                setFormData({ ...formData, cable_type: e.target.value })
+                            }
+                            placeholder="e.g., Fiber"
+                            required
+                        />
+                        <datalist id="cable_types">
+                            {existingCableTypes.map(type => (
+                                <option key={type} value={type} />
+                            ))}
+                        </datalist>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="initial_quantity">Initial Quantity (meters)</Label>

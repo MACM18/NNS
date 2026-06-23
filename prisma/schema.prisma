@@ -295,6 +295,7 @@ model DrumTracking {
   id              String   @id @default(uuid())
   drumNumber      String   @map("drum_number")
   itemId          String?  @map("item_id")
+  cableType       String?  @default("Fiber") @map("cable_type")
   initialQuantity Decimal  @map("initial_quantity")
   currentQuantity Decimal  @map("current_quantity")
   status          String   @default("active")

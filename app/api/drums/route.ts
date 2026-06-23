@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
         drum_number: drum.drumNumber,
         item_id: drum.itemId ?? null,
         item_name: drum.item?.name || "",
+        cable_type: drum.cableType || "Fiber",
         initial_quantity: Number(drum.initialQuantity),
         current_quantity: Number(drum.currentQuantity),
         status: drum.status,
@@ -111,6 +112,7 @@ export async function GET(req: NextRequest) {
       drum_number: drum.drumNumber,
       item_id: drum.itemId ?? null,
       item_name: drum.item?.name || "",
+      cable_type: drum.cableType || "Fiber",
       initial_quantity: Number(drum.initialQuantity),
       current_quantity: Number(drum.currentQuantity),
       status: drum.status,
@@ -149,6 +151,7 @@ export async function POST(req: NextRequest) {
     // Accept snake_case or camelCase inputs
     const drumNumber = body.drum_number ?? body.drumNumber;
     const itemId = body.item_id ?? body.itemId ?? null;
+    const cableType = body.cable_type ?? body.cableType ?? "Fiber";
     const initialQuantity = Number(
       body.initial_quantity ?? body.initialQuantity ?? 0
     );
@@ -162,6 +165,7 @@ export async function POST(req: NextRequest) {
       data: {
         drumNumber,
         itemId,
+        cableType,
         initialQuantity: initialQuantity,
         currentQuantity: currentQuantity,
         receivedDate: receivedDate ? new Date(receivedDate) : undefined,
@@ -173,6 +177,7 @@ export async function POST(req: NextRequest) {
       id: drum.id,
       drum_number: drum.drumNumber,
       item_id: drum.itemId ?? null,
+      cable_type: drum.cableType || "Fiber",
       initial_quantity: Number(drum.initialQuantity),
       current_quantity: Number(drum.currentQuantity),
       status: drum.status,

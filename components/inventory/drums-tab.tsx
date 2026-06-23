@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import { DrumTracking } from "@/app/dashboard/inventory/page";
 import { DrumGaugeCard } from "./drum-gauge-card";
+import { DrumDetailsDialog } from "./drum-details-dialog";
 
 interface DrumsTabProps {
   drums: DrumTracking[];
@@ -45,6 +46,8 @@ export function DrumsTab({
   getStatusBadge,
 }: DrumsTabProps) {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [detailsDrumModalOpen, setDetailsDrumModalOpen] = useState(false);
+  const [drumForDetails, setDrumForDetails] = useState<DrumTracking | null>(null);
 
   const filteredDrums = drums.filter((drum) => {
     const matchesSearch =
@@ -133,6 +136,10 @@ export function DrumsTab({
                 <DrumGaugeCard
                   key={drum.id}
                   drum={drum}
+                  onClick={() => {
+                    setDrumForDetails(drum);
+                    setDetailsDrumModalOpen(true);
+                  }}
                   onEdit={(d) => {
                     setSelectedDrum(d);
                     setEditDrumModalOpen(true);
@@ -163,8 +170,15 @@ export function DrumsTab({
                     </TableHeader>
                     <TableBody>
                       {filteredDrums.map((drum) => (
-                        <TableRow key={drum.id} className="hover:bg-muted/30 transition-colors">
-                          <TableCell className="font-mono font-semibold">
+                        <TableRow 
+                          key={drum.id} 
+                          className="hover:bg-muted/30 transition-colors cursor-pointer"
+                          onClick={() => {
+                            setDrumForDetails(drum);
+                            setDetailsDrumModalOpen(true);
+                          }}
+                        >
+                          <TableCell className="font-mono font-semibold text-primary hover:underline">
                             {drum.drum_number}
                           </TableCell>
                           <TableCell className="font-medium">{drum.item_name || "-"}</TableCell>
@@ -172,7 +186,7 @@ export function DrumsTab({
                           <TableCell className="tabular-nums font-bold">{drum.current_quantity}m</TableCell>
                           <TableCell>{getStatusBadge(drum.status)}</TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-1.5">
+                            <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -238,6 +252,13 @@ export function DrumsTab({
           </div>
         )}
       </CardContent>
+
+      <DrumDetailsDialog
+        drum={drumForDetails}
+        open={detailsDrumModalOpen}
+        onOpenChange={setDetailsDrumModalOpen}
+        getStatusBadge={getStatusBadge}
+      />
     </Card>
   );
 }
