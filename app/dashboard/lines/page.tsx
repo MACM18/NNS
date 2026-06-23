@@ -58,10 +58,9 @@ export default function LineDetailsPage() {
   const { addNotification } = useNotification();
 
   useEffect(() => {
-    if (!cache.lines.lastUpdated) {
-      fetchLineStats();
-    }
-  }, []);
+    fetchLineStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth, selectedYear]);
 
   const fetchLineStats = async () => {
     setIsRefreshing(true);

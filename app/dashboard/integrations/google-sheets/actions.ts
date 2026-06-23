@@ -877,12 +877,12 @@ function sheetToLinePayload(r: any): any | null {
 
   const date = r.date ? new Date(r.date) : new Date();
 
-  // Calculate F1, G1, and total
+  // Calculate F1, G1, and total (using absolute differences)
   const cableStart = Number(r.cable_start || 0);
   const cableMiddle = Number(r.cable_middle || 0);
   const cableEnd = Number(r.cable_end || 0);
-  const f1 = cableMiddle - cableStart;
-  const g1 = cableEnd - cableMiddle;
+  const f1 = Math.abs(cableMiddle - cableStart);
+  const g1 = Math.abs(cableEnd - cableMiddle);
   const totalCable = f1 + g1;
 
   // Calculate wastage (20% of total as default if not specified)
@@ -951,15 +951,15 @@ function computeQuantityUsed(l: any): number {
     Number.isFinite(start) &&
     Number.isFinite(end)
   ) {
-    const f1 = middle - start;
-    const g1 = end - middle;
+    const f1 = Math.abs(middle - start);
+    const g1 = Math.abs(end - middle);
     const total = f1 + g1;
     if (Number.isFinite(total) && total > 0) return total;
   }
 
-  // If middle is missing but start and end exist, use end - start as a fallback
-  if (Number.isFinite(end) && Number.isFinite(start) && end > start) {
-    const fallback = end - start;
+  // If middle is missing but start and end exist, use absolute difference as fallback
+  if (Number.isFinite(end) && Number.isFinite(start)) {
+    const fallback = Math.abs(end - start);
     if (fallback > 0) return fallback;
   }
 

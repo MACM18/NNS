@@ -637,16 +637,19 @@ export async function updateWorkerPaymentStatus(
       throw new Error("Cannot change payment type of a paid payment");
     }
     updateData.paymentType = paymentDetails.paymentType;
+    let newBaseAmount = 0;
     // recalc base amount based on new type
     if (paymentDetails.paymentType === "per_line") {
       const rate =
         decimalToNumber(existing.perLineRate) ||
         decimalToNumber(existing.worker.perLineRate) ||
         0;
-      updateData.baseAmount = existing.linesCompleted * rate;
+      newBaseAmount = existing.linesCompleted * rate;
     } else if (paymentDetails.paymentType === "fixed_monthly") {
-      updateData.baseAmount = decimalToNumber(existing.worker.monthlyRate) || 0;
+      newBaseAmount = decimalToNumber(existing.worker.monthlyRate) || 0;
     }
+    updateData.baseAmount = newBaseAmount;
+    updateData.netAmount = newBaseAmount + decimalToNumber(existing.bonusAmount) - decimalToNumber(existing.deductionAmount);
   }
 
   const payment = await prisma.workerPayment.update({

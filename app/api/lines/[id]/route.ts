@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { computeCableMeasurements } from "@/lib/db";
 
 export async function GET(
   req: NextRequest,
@@ -33,6 +34,13 @@ export async function GET(
       .map((a: any) => a.user)
       .filter(Boolean);
 
+    // Compute derived cable measurements (f1, g1, totalCable)
+    const { f1, g1, totalCable } = computeCableMeasurements(
+      Number(line.cableStart || 0),
+      Number(line.cableMiddle || 0),
+      Number(line.cableEnd || 0)
+    );
+
     const formatted = {
       id: line.id,
       name: line.name,
@@ -47,10 +55,7 @@ export async function GET(
       cable_start: Number(line.cableStart || 0),
       cable_middle: Number(line.cableMiddle || 0),
       cable_end: Number(line.cableEnd || 0),
-      total_cable:
-        Number(line.cableStart || 0) +
-        Number(line.cableMiddle || 0) +
-        Number(line.cableEnd || 0),
+      total_cable: totalCable,
       wastage: Number(line.wastage || 0),
       internal_wire: Number(line.internalWire || 0),
       casing: Number(line.casing || 0),
@@ -64,8 +69,8 @@ export async function GET(
       pole_67: Number(line.pole67 || 0),
       top_bolt: Number(line.topBolt || 0),
       // Compute segment lengths and totals
-      f1: Number(line.cableStart || 0),
-      g1: Number(line.cableMiddle || 0),
+      f1: f1 || 0,
+      g1: g1 || 0,
       c_hook: Number(line.cHook || 0),
       l_hook: Number(line.lHook || 0),
       retainers: Number(line.retainers || 0),

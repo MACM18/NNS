@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       where.OR = [
-        { telephone_no: { contains: search, mode: "insensitive" } },
+        { telephoneNo: { contains: search, mode: "insensitive" } },
         { name: { contains: search, mode: "insensitive" } },
         { address: { contains: search, mode: "insensitive" } },
         { dp: { contains: search, mode: "insensitive" } },

@@ -114,6 +114,7 @@ describe("Salary Slip PDF Generator", () => {
       name: "January 2026",
       month: 1,
       year: 2026,
+      paymentType: "per_line",
       startDate: new Date("2026-01-01").toISOString(),
       endDate: new Date("2026-01-31").toISOString(),
       status: "approved",
