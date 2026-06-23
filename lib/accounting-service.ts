@@ -188,6 +188,10 @@ export async function initializeAccounting(): Promise<{
     const expenseAccount = await prisma.chartOfAccount.findFirst({
       where: { code: "5000" },
     });
+    // Prefer wages & salaries (6100) as the default expense account when present
+    const wagesAccount = await prisma.chartOfAccount.findFirst({
+      where: { code: "6100" },
+    });
 
     await prisma.accountingSettings.create({
       data: {
@@ -197,7 +201,7 @@ export async function initializeAccounting(): Promise<{
         defaultPayablesAccountId: payablesAccount?.id,
         defaultCashAccountId: cashAccount?.id,
         defaultRevenueAccountId: revenueAccount?.id,
-        defaultExpenseAccountId: expenseAccount?.id,
+        defaultExpenseAccountId: wagesAccount?.id || expenseAccount?.id,
         autoGenerateJournalEntries: true,
         requireApproval: false,
         allowBackdatedEntries: true,
