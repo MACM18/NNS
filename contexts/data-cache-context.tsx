@@ -20,6 +20,27 @@ export interface DashboardStats {
   pendingReviews?: number;
   taskChange?: number;
   reviewChange?: number;
+  // new modules statistics
+  drumStats?: {
+    activeDrumsCount: number;
+    totalRemainingCable: number;
+    lowStockDrumsCount: number;
+  };
+  taskStats?: {
+    pendingTasksCount: number;
+    activeTasksCount: number;
+    completedTasksThisMonth: number;
+  };
+  invoiceStats?: {
+    unpaidInvoicesCount: number;
+  };
+  activeDrums?: {
+    id: string;
+    drum_number: string;
+    cable_type: string;
+    initial_quantity: number;
+    current_quantity: number;
+  }[];
 }
 
 export interface RecentActivity {
