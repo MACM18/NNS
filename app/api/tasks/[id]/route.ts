@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import { recalculateDrumWithHistory } from "@/lib/drum-tracking-service";
 
 export async function GET(
   req: NextRequest,
@@ -166,7 +167,9 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Use a transaction to safely delete task and handle related records
+    const drumIdsToRecalculate = new Set<string>();
+
+    // Use a transaction to handle cascading deletes
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Find the task first
       const task = await tx.task.findUnique({
@@ -200,6 +203,15 @@ export async function DELETE(
 
       // If there are related line_details, handle drum_usage and clear task references
       if (uniqueLineDetailsIds.length > 0) {
+        // Find drum usages that will be deleted to recalculate after transaction
+        const usagesToDelete = await tx.drumUsage.findMany({
+          where: { lineDetailsId: { in: uniqueLineDetailsIds } },
+          select: { drumId: true },
+        });
+        usagesToDelete.forEach((u: any) => {
+          if (u.drumId) drumIdsToRecalculate.add(u.drumId);
+        });
+
         // Delete drum_usage records for these line_details
         await tx.drumUsage.deleteMany({
           where: { lineDetailsId: { in: uniqueLineDetailsIds } },
@@ -217,6 +229,11 @@ export async function DELETE(
         where: { id },
       });
     });
+
+    // Run full recalculation on affected drums to update with smart wastage logic
+    for (const drumId of drumIdsToRecalculate) {
+      await recalculateDrumWithHistory(drumId);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

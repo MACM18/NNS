@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { computeCableMeasurements } from "@/lib/db";
+import { recalculateDrumWithHistory } from "@/lib/drum-tracking-service";
 
 export async function GET(
   req: NextRequest,
@@ -212,6 +213,13 @@ export async function DELETE(
 
     const { id } = await params;
 
+    // Find drums used by the line before deleting
+    const usages = await prisma.drumUsage.findMany({
+      where: { lineDetailsId: id },
+      select: { drumId: true },
+    });
+    const drumIds = Array.from(new Set(usages.map(u => u.drumId).filter(Boolean))) as string[];
+
     // Use a transaction to handle cascading deletes
     await prisma.$transaction(async (tx: any) => {
       // Remove dependent drum usage records (use Prisma field names)
@@ -235,6 +243,11 @@ export async function DELETE(
         where: { id },
       });
     });
+
+    // Run full recalculation on affected drums to update with smart wastage logic
+    for (const drumId of drumIds) {
+      await recalculateDrumWithHistory(drumId);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

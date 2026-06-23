@@ -31,6 +31,61 @@ export interface DrumUsage {
 }
 
 /**
+ * Preprocesses usages to allocate sequential segments for unmapped records
+ * (where cable_start_point and cable_end_point are both 0 or null, but quantity_used > 0)
+ */
+export function preprocessUsages(usages: DrumUsage[]): DrumUsage[] {
+  const mapped: DrumUsage[] = []
+  const unmapped: DrumUsage[] = []
+
+  for (const usage of usages) {
+    const start = Math.min(usage.cable_start_point || 0, usage.cable_end_point || 0)
+    const end = Math.max(usage.cable_start_point || 0, usage.cable_end_point || 0)
+    const length = end - start
+    const qty = Number(usage.quantity_used || 0)
+
+    if (length > 0) {
+      mapped.push(usage)
+    } else if (qty > 0) {
+      unmapped.push(usage)
+    }
+  }
+
+  // Sort mapped segments to find their layout
+  const mappedSegments = mapped.map(usage => {
+    const start = Math.min(usage.cable_start_point || 0, usage.cable_end_point || 0)
+    const end = Math.max(usage.cable_start_point || 0, usage.cable_end_point || 0)
+    return { start, end }
+  })
+
+  // Sort unmapped usages chronologically to allocate in order
+  unmapped.sort((a, b) => new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime())
+
+  const processed: DrumUsage[] = [...mapped]
+  const currentSegments = [...mappedSegments]
+
+  for (const usage of unmapped) {
+    const qty = Number(usage.quantity_used || 0)
+    const currentHighest = currentSegments.length > 0
+      ? Math.max(...currentSegments.map(seg => seg.end))
+      : 0
+    
+    processed.push({
+      ...usage,
+      cable_start_point: currentHighest,
+      cable_end_point: currentHighest + qty,
+    })
+
+    currentSegments.push({
+      start: currentHighest,
+      end: currentHighest + qty
+    })
+  }
+
+  return processed
+}
+
+/**
  * Smart segment-based wastage calculation
  * This method tracks actual used segments and calculates waste as truly unused portions
  * Now includes remaining cable calculation from highest usage point to drum end
@@ -59,8 +114,11 @@ export function calculateSmartWastage(
     }
   }
 
+  // Preprocess usages to allocate sequential segments for unmapped records
+  const preprocessed = preprocessUsages(usages)
+
   // Convert usages to segments (normalize start/end points)
-  const usageSegments: UsageSegment[] = usages.map(usage => {
+  const usageSegments: UsageSegment[] = preprocessed.map(usage => {
     const start = Math.min(usage.cable_start_point || 0, usage.cable_end_point || 0)
     const end = Math.max(usage.cable_start_point || 0, usage.cable_end_point || 0)
     return {
@@ -104,19 +162,26 @@ export function calculateSmartWastage(
     }
   }
 
-  // Calculate wasted segments (gaps and unused ends)
-  const wastedSegments = calculateWastedSegments(mergedSegments, drumCapacity)
+  // Calculate wasted segments — ONLY gaps between consecutive used segments
+  // Beginning (0 → first usage) and end (last usage → capacity) are remaining cable, NOT waste
+  const wastedSegments = calculateGapSegments(mergedSegments)
   let totalWastage = wastedSegments.reduce((sum, seg) => sum + seg.length, 0)
 
-  // For inactive drums, add remaining cable to wastage
-  if (drumStatus === 'inactive' && remainingCable > 0) {
-    totalWastage += remainingCable
-    // Add remaining cable as a wasted segment
-    wastedSegments.push({
-      start: highestUsagePoint,
-      end: drumCapacity,
-      length: remainingCable
-    })
+  // For inactive drums, ALL remaining cable (beginning + end + gaps) is waste
+  if (drumStatus === 'inactive') {
+    const lowestUsagePoint = mergedSegments.length > 0
+      ? Math.min(...mergedSegments.map(seg => seg.start))
+      : 0
+    // Add beginning portion as waste
+    if (lowestUsagePoint > 0) {
+      totalWastage += lowestUsagePoint
+      wastedSegments.push({ start: 0, end: lowestUsagePoint, length: lowestUsagePoint })
+    }
+    // Add end portion as waste
+    if (remainingCable > 0) {
+      totalWastage += remainingCable
+      wastedSegments.push({ start: highestUsagePoint, end: drumCapacity, length: remainingCable })
+    }
   }
 
   return {
@@ -155,8 +220,11 @@ export function calculateLegacyWastage(
     }
   }
 
+  // Preprocess usages to allocate sequential segments for unmapped records
+  const preprocessed = preprocessUsages(usages)
+
   // Sort usages by date to process chronologically
-  const sortedUsages = [...usages].sort(
+  const sortedUsages = [...preprocessed].sort(
     (a, b) => new Date(a.usage_date).getTime() - new Date(b.usage_date).getTime()
   )
 
@@ -268,7 +336,41 @@ function mergeOverlappingSegments(segments: UsageSegment[]): UsageSegment[] {
 }
 
 /**
- * Calculate wasted segments based on used segments and drum capacity
+ * Calculate gap segments between consecutive used segments
+ * Only gaps BETWEEN used segments are true waste.
+ * The beginning (0 → first usage) and end (last usage → capacity) are
+ * remaining available cable, NOT waste, for active drums.
+ */
+function calculateGapSegments(
+  usedSegments: UsageSegment[]
+): Array<{ start: number; end: number; length: number }> {
+  
+  const gapSegments: Array<{ start: number; end: number; length: number }> = []
+
+  if (usedSegments.length <= 1) {
+    return []
+  }
+
+  // Only check for gaps between consecutive used segments
+  for (let i = 0; i < usedSegments.length - 1; i++) {
+    const currentEnd = usedSegments[i].end
+    const nextStart = usedSegments[i + 1].start
+
+    if (nextStart > currentEnd) {
+      gapSegments.push({
+        start: currentEnd,
+        end: nextStart,
+        length: nextStart - currentEnd
+      })
+    }
+  }
+
+  return gapSegments
+}
+
+/**
+ * Legacy: Calculate wasted segments including beginning and end
+ * Kept for backward compatibility with legacy calculation method
  */
 function calculateWastedSegments(
   usedSegments: UsageSegment[], 
@@ -278,7 +380,6 @@ function calculateWastedSegments(
   const wastedSegments: Array<{ start: number; end: number; length: number }> = []
 
   if (usedSegments.length === 0) {
-    // Entire drum is wasted if no usage
     return []
   }
 
