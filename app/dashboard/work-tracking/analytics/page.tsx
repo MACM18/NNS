@@ -70,10 +70,14 @@ const months = [
   { value: 12, label: "December" },
 ];
 
-const yearOptions = Array.from({ length: 6 }, (_, idx) => {
-  const base = new Date().getFullYear();
-  return base - 2 + idx;
-});
+const yearOptions = (() => {
+  const startYear = 2024;
+  const currentYear = new Date().getFullYear();
+  return Array.from(
+    { length: currentYear + 4 - startYear + 1 },
+    (_, i) => startYear + i
+  );
+})();
 
 export default function WorkTrackingAnalyticsPage() {
   const router = useRouter();

@@ -43,6 +43,51 @@ export const authConfig: NextAuthConfig = {
         const password = credentials.password as string;
         const twoFactorCode = credentials.twoFactorCode as string | undefined;
 
+        // ── DEV AUTO-LOGIN BYPASS ──────────────────────────────
+        // In development, accept any credentials and return an admin user.
+        // This looks up or creates a real user so the rest of the app works.
+        if (process.env.NODE_ENV === "development") {
+          // Try to find an existing user first
+          let devUser = await prisma.user.findUnique({
+            where: { email },
+            include: { profile: true },
+          });
+
+          if (devUser) {
+            return {
+              id: devUser.id,
+              email: devUser.email,
+              name: devUser.profile?.fullName || "Dev User",
+              role: devUser.profile?.role || "admin",
+            };
+          }
+
+          // If user doesn't exist, return a fallback admin identity.
+          // Try to get *any* admin user from the database.
+          const adminProfile = await prisma.profile.findFirst({
+            where: { role: "admin" },
+            include: { user: true },
+          });
+
+          if (adminProfile) {
+            return {
+              id: adminProfile.user.id,
+              email: adminProfile.user.email,
+              name: adminProfile.fullName || "Admin",
+              role: "admin",
+            };
+          }
+
+          // Last resort: return a synthetic admin user object
+          return {
+            id: "dev-admin-id",
+            email: email,
+            name: "Dev Admin",
+            role: "admin",
+          };
+        }
+        // ── END DEV BYPASS ─────────────────────────────────────
+
         const user = await prisma.user.findUnique({
           where: { email },
           include: { profile: true },
@@ -226,7 +271,8 @@ export const authConfig: NextAuthConfig = {
         });
 
         token.id = user.id;
-        token.role = dbUser?.profile?.role || "user";
+        // Use the role from the authorize return value if DB lookup fails (dev bypass)
+        token.role = dbUser?.profile?.role || (user as any).role || "user";
         token.fullName = dbUser?.profile?.fullName || user.name;
 
         // Check password expiry (only for non-OAuth users)

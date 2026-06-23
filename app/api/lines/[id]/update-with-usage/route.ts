@@ -23,56 +23,55 @@ export async function PUT(
 
     await prisma.$transaction(async (tx: any) => {
       // Locate existing usage for this line
-      const existingUsage = await tx.drum_usage.findFirst({
-        where: { line_details_id: id },
-        orderBy: { usage_date: "desc" },
+      const existingUsage = await tx.drumUsage.findFirst({
+        where: { lineDetailsId: id },
+        orderBy: { usageDate: "desc" },
       });
 
       // If there is existing usage, restore stock/quantity and remove the record
       if (existingUsage) {
-        const originalDrum = await tx.drum_tracking.findUnique({
-          where: { id: existingUsage.drum_id },
+        const originalDrum = await tx.drumTracking.findUnique({
+          where: { id: existingUsage.drumId },
         });
         if (originalDrum) {
           const restoreAmount =
-            Number(existingUsage.quantity_used || 0) +
-            Number(existingUsage.wastage_calculated || 0);
+            Number(existingUsage.quantityUsed || 0) +
+            Number(existingUsage.wastageCalculated || 0);
 
           const restoredQty =
-            Number(originalDrum.current_quantity || 0) + restoreAmount;
-          await tx.drum_tracking.update({
+            Number(originalDrum.currentQuantity || 0) + restoreAmount;
+          await tx.drumTracking.update({
             where: { id: originalDrum.id },
             data: {
-              current_quantity: restoredQty,
+              currentQuantity: restoredQty,
               status:
                 restoredQty <= 0
                   ? "empty"
                   : restoredQty <= 10
                   ? "inactive"
                   : "active",
-              updated_at: new Date(),
             },
           });
 
-          const dropWire = await tx.inventory_items.findFirst({
+          const dropWire = await tx.inventoryItem.findFirst({
             where: { name: { equals: "Drop Wire Cable", mode: "insensitive" } },
           });
           if (dropWire) {
             const restoredStock =
-              Number(dropWire.current_stock || 0) + restoreAmount;
-            await tx.inventory_items.update({
+              Number(dropWire.currentStock || 0) + restoreAmount;
+            await tx.inventoryItem.update({
               where: { id: dropWire.id },
-              data: { current_stock: restoredStock, updated_at: new Date() },
+              data: { currentStock: restoredStock },
             });
           }
         }
 
-        await tx.drum_usage.delete({ where: { id: existingUsage.id } });
+        await tx.drumUsage.delete({ where: { id: existingUsage.id } });
       }
 
       // Apply new usage if a drum is provided and cableUsed > 0
       if (newDrumId && cableUsed > 0) {
-        const targetDrum = await tx.drum_tracking.findUnique({
+        const targetDrum = await tx.drumTracking.findUnique({
           where: { id: newDrumId },
         });
         if (!targetDrum) throw new Error("Selected drum not found");
@@ -81,67 +80,64 @@ export async function PUT(
         const wastage = Math.round(cableUsed * 0.05);
         const deduction = cableUsed + wastage;
 
-        const currentQty = Number(targetDrum.current_quantity || 0);
+        const currentQty = Number(targetDrum.currentQuantity || 0);
         if (currentQty < deduction) {
           throw new Error(
             `Not enough cable available. Available: ${currentQty}m, Required: ${deduction}m`
           );
         }
 
-        await tx.drum_usage.create({
+        await tx.drumUsage.create({
           data: {
-            drum_id: newDrumId,
-            line_details_id: id,
-            quantity_used: cableUsed,
-            usage_date: new Date(),
-            cable_start_point: null,
-            cable_end_point: null,
-            wastage_calculated: wastage,
+            drumId: newDrumId,
+            lineDetailsId: id,
+            quantityUsed: cableUsed,
+            usageDate: new Date(),
+            cableStartPoint: null,
+            cableEndPoint: null,
+            wastageCalculated: wastage,
           },
         });
 
         const newQty = currentQty - deduction;
-        await tx.drum_tracking.update({
+        await tx.drumTracking.update({
           where: { id: newDrumId },
           data: {
-            current_quantity: newQty,
+            currentQuantity: newQty,
             status:
               newQty <= 0 ? "empty" : newQty <= 10 ? "inactive" : "active",
-            updated_at: new Date(),
           },
         });
 
-        const dropWire = await tx.inventory_items.findFirst({
+        const dropWire = await tx.inventoryItem.findFirst({
           where: { name: { equals: "Drop Wire Cable", mode: "insensitive" } },
         });
         if (dropWire) {
-          const currentStock = Number(dropWire.current_stock || 0);
-          await tx.inventory_items.update({
+          const currentStock = Number(dropWire.currentStock || 0);
+          await tx.inventoryItem.update({
             where: { id: dropWire.id },
             data: {
-              current_stock: Math.max(0, currentStock - deduction),
-              updated_at: new Date(),
+              currentStock: Math.max(0, currentStock - deduction),
             },
           });
         }
 
         // Update line's drum_number for reference
-        await tx.line_details.update({
+        await tx.lineDetails.update({
           where: { id },
           data: {
-            drum_number: targetDrum.drum_number,
-            updated_at: new Date(),
+            drumNumber: targetDrum.drumNumber,
           },
         });
       } else {
         // If cleared drum selection or zero cable, ensure line has no drum_number
-        await tx.line_details.update({
+        await tx.lineDetails.update({
           where: { id },
-          data: { drum_number: null, updated_at: new Date() },
+          data: { drumNumber: null },
         });
       }
 
-      updated = await tx.line_details.findUnique({ where: { id } });
+      updated = await tx.lineDetails.findUnique({ where: { id } });
     });
 
     return NextResponse.json({ data: updated });

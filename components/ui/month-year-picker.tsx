@@ -35,8 +35,12 @@ export function MonthYearPicker({ date, onDateChange, className }: MonthYearPick
     "December",
   ]
 
+  const startYear = 2024
   const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i)
+  const years = Array.from(
+    { length: currentYear + 4 - startYear + 1 },
+    (_, i) => startYear + i
+  )
 
   const handleApply = () => {
     const newDate = new Date(selectedYear, selectedMonth, 1)

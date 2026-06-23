@@ -37,6 +37,30 @@ body {
   .bg-noise {
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
   }
+
+  /* Colored glass card variants */
+  .glass-card-blue {
+    @apply glass-card border-l-4 border-l-blue-500/70;
+  }
+  .glass-card-green {
+    @apply glass-card border-l-4 border-l-green-500/70;
+  }
+  .glass-card-amber {
+    @apply glass-card border-l-4 border-l-amber-500/70;
+  }
+  .glass-card-red {
+    @apply glass-card border-l-4 border-l-red-500/70;
+  }
+  .glass-card-purple {
+    @apply glass-card border-l-4 border-l-purple-500/70;
+  }
+
+  /* Glow shadows */
+  .glow-blue { box-shadow: 0 0 20px 2px hsl(199 89% 48% / 0.15); }
+  .glow-green { box-shadow: 0 0 20px 2px hsl(160 84% 39% / 0.15); }
+  .glow-amber { box-shadow: 0 0 20px 2px hsl(32 95% 60% / 0.15); }
+  .glow-red { box-shadow: 0 0 20px 2px hsl(0 84% 60% / 0.15); }
+  .glow-purple { box-shadow: 0 0 20px 2px hsl(280 65% 60% / 0.15); }
 }
 
 @layer base {

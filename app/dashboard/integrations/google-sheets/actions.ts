@@ -9,6 +9,7 @@ import {
   ensureDrumsExistWithHistory,
   recalculateDrumWithHistory,
 } from "@/lib/drum-tracking-service";
+import { checkStockLevelsAndNotify, notifyAllAdmins } from "@/lib/notification-service-server";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -522,6 +523,26 @@ export async function syncConnection(
       },
     });
 
+    // Check stock levels and trigger alerts
+    try {
+      await checkStockLevelsAndNotify();
+    } catch (stockErr) {
+      console.error("[syncConnection] Stock check failed:", stockErr);
+    }
+
+    // Notify admins of successful sync
+    try {
+      await notifyAllAdmins({
+        title: "Google Sheets Sync Successful",
+        message: `Google Sheets sync completed for ${conn.month}/${conn.year}. Appended ${insertedCount} new rows, updated ${updatedCount} rows, and updated ${hardwareUpdated} inventory items.`,
+        type: "success",
+        category: "system",
+        actionUrl: "/dashboard/integrations",
+      });
+    } catch (notifyErr) {
+      console.error("[syncConnection] Success notification failed:", notifyErr);
+    }
+
     return {
       success: true,
       upserted: updatedCount,
@@ -547,6 +568,21 @@ export async function syncConnection(
         "[syncConnection] Failed to update error status:",
         statusError
       );
+    }
+
+    // Notify admins of sync error
+    try {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await notifyAllAdmins({
+        title: "Google Sheets Sync Failed",
+        message: `Sync failed with error: ${errorMsg}`,
+        type: "error",
+        category: "system",
+        actionUrl: "/dashboard/integrations",
+        sendEmailAlert: true,
+      });
+    } catch (notifyErr) {
+      console.error("[syncConnection] Error notification failed:", notifyErr);
     }
 
     throw error instanceof Error
@@ -877,12 +913,12 @@ function sheetToLinePayload(r: any): any | null {
 
   const date = r.date ? new Date(r.date) : new Date();
 
-  // Calculate F1, G1, and total
+  // Calculate F1, G1, and total (using absolute differences)
   const cableStart = Number(r.cable_start || 0);
   const cableMiddle = Number(r.cable_middle || 0);
   const cableEnd = Number(r.cable_end || 0);
-  const f1 = cableMiddle - cableStart;
-  const g1 = cableEnd - cableMiddle;
+  const f1 = Math.abs(cableMiddle - cableStart);
+  const g1 = Math.abs(cableEnd - cableMiddle);
   const totalCable = f1 + g1;
 
   // Calculate wastage (20% of total as default if not specified)
@@ -951,15 +987,15 @@ function computeQuantityUsed(l: any): number {
     Number.isFinite(start) &&
     Number.isFinite(end)
   ) {
-    const f1 = middle - start;
-    const g1 = end - middle;
+    const f1 = Math.abs(middle - start);
+    const g1 = Math.abs(end - middle);
     const total = f1 + g1;
     if (Number.isFinite(total) && total > 0) return total;
   }
 
-  // If middle is missing but start and end exist, use end - start as a fallback
-  if (Number.isFinite(end) && Number.isFinite(start) && end > start) {
-    const fallback = end - start;
+  // If middle is missing but start and end exist, use absolute difference as fallback
+  if (Number.isFinite(end) && Number.isFinite(start)) {
+    const fallback = Math.abs(end - start);
     if (fallback > 0) return fallback;
   }
 
