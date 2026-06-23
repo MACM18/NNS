@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Search, Pencil, ToggleRight, ToggleLeft, LayoutGrid, List, Package } from "lucide-react";
+import { Plus, Search, Pencil, ToggleRight, ToggleLeft, LayoutGrid, List, Package, RefreshCw, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import { DrumTracking } from "@/app/dashboard/inventory/page";
 import { DrumGaugeCard } from "./drum-gauge-card";
 import { DrumDetailsDialog } from "./drum-details-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface DrumsTabProps {
   drums: DrumTracking[];
@@ -50,6 +51,39 @@ export function DrumsTab({
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [detailsDrumModalOpen, setDetailsDrumModalOpen] = useState(false);
   const [drumForDetails, setDrumForDetails] = useState<DrumTracking | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
+  const { toast } = useToast();
+
+  const handleRecalculateActiveDrums = async () => {
+    setRecalculating(true);
+    try {
+      const res = await fetch("/api/drums/recalculate", {
+        method: "POST",
+      });
+      if (res.ok) {
+        onDrumUpdate?.();
+        toast({
+          title: "Recalculation Complete",
+          description: "All active drums have been recalculated based on current usage records.",
+        });
+      } else {
+        toast({
+          title: "Recalculation Failed",
+          description: "Could not recalculate active drums.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error recalculating active drums:", error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while recalculating.",
+        variant: "destructive",
+      });
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
   const filteredDrums = drums.filter((drum) => {
     const matchesSearch =
@@ -81,7 +115,22 @@ export function DrumsTab({
               <Plus className="h-4 w-4" />
               <span>New Drum</span>
             </Button>
-            
+
+            <Button
+              onClick={handleRecalculateActiveDrums}
+              size="sm"
+              variant="outline"
+              disabled={recalculating}
+              className="h-9 gap-1 bg-background/50 border-border/40 hover:bg-muted/50 text-muted-foreground hover:text-foreground shrink-0"
+            >
+              {recalculating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              <span>Recalculate Usage</span>
+            </Button>
+
             {/* View Mode Toggle */}
             <div className="flex items-center border border-border/50 rounded-lg p-0.5 bg-muted/40 shrink-0 h-9">
               <Button
@@ -172,8 +221,8 @@ export function DrumsTab({
                     </TableHeader>
                     <TableBody>
                       {filteredDrums.map((drum) => (
-                        <TableRow 
-                          key={drum.id} 
+                        <TableRow
+                          key={drum.id}
                           className="hover:bg-muted/30 transition-colors cursor-pointer"
                           onClick={() => {
                             setDrumForDetails(drum);
