@@ -26,6 +26,8 @@ import { StatusDonut } from "@/components/dashboard/status-donut";
 import { TopWorkersChart } from "@/components/dashboard/top-workers-chart";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { QuickActions } from "@/components/dashboard/quick-actions";
+import { ActiveDrums } from "@/components/dashboard/active-drums";
+import { SystemAlerts } from "@/components/dashboard/system-alerts";
 
 interface DashboardStats {
   totalLines: number;
@@ -38,8 +40,28 @@ interface DashboardStats {
   inProgressChange?: number;
   pendingChange?: number;
   revenueChange: number;
-  revenueTrend?: { month: string; revenue: number }[];
+  revenueTrend?: { month: string; revenue: number; cable_used?: number }[];
   topWorkers?: { name: string; lines: number }[];
+  drumStats?: {
+    activeDrumsCount: number;
+    totalRemainingCable: number;
+    lowStockDrumsCount: number;
+  };
+  taskStats?: {
+    pendingTasksCount: number;
+    activeTasksCount: number;
+    completedTasksThisMonth: number;
+  };
+  invoiceStats?: {
+    unpaidInvoicesCount: number;
+  };
+  activeDrums?: {
+    id: string;
+    drum_number: string;
+    cable_type: string;
+    initial_quantity: number;
+    current_quantity: number;
+  }[];
 }
 
 interface RecentActivity {
@@ -81,6 +103,12 @@ export default function Dashboard() {
   const monthlyRevenueValue = stats.monthlyRevenue ?? 0;
   const revenueTrend = stats.revenueTrend || [];
   const topWorkers = stats.topWorkers || [];
+  
+  const activeDrumsList = stats.activeDrums || [];
+  const drumStats = stats.drumStats || { activeDrumsCount: 0, totalRemainingCable: 0, lowStockDrumsCount: 0 };
+  const taskStats = stats.taskStats || { pendingTasksCount: 0, activeTasksCount: 0, completedTasksThisMonth: 0 };
+  const invoiceStats = stats.invoiceStats || { unpaidInvoicesCount: 0 };
+
   const statusBreakdown = {
     completed: completedLines,
     inProgress: inProgressLines,
@@ -233,43 +261,39 @@ export default function Dashboard() {
           {/* Premium KPI Cards Row (5 Cards) */}
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
             <KpiCard
-              title="Total Lines"
-              value={totalLines.toLocaleString()}
-              change={stats.lineChange}
-              icon={Cable}
-              color="blue"
-              subtitle={`${selectedDate.toLocaleString(undefined, { month: "long" })} ${selectedDate.getFullYear()}`}
-              isLoading={isRefreshing}
-              delay={0}
-            />
-            <KpiCard
               title="Completed"
               value={completedLines.toLocaleString()}
-              change={stats.completedChange}
               icon={CheckCircle}
               color="green"
               ringValue={completionRate}
               subtitle="Fiber lines done"
               isLoading={isRefreshing}
+              delay={0}
+            />
+            <KpiCard
+              title="Installations Queue"
+              value={(pendingLines + inProgressLines).toLocaleString()}
+              icon={Clock}
+              color="amber"
+              subtitle={`${pendingLines} Pending • ${inProgressLines} In-Progress`}
+              isLoading={isRefreshing}
               delay={100}
             />
             <KpiCard
-              title="In Progress"
-              value={inProgressLines.toLocaleString()}
-              change={stats.inProgressChange}
-              icon={Clock}
-              color="amber"
-              subtitle="Active assignments"
+              title="Cable Inventory"
+              value={`${Math.round(drumStats.totalRemainingCable).toLocaleString()}m`}
+              icon={Cable}
+              color="blue"
+              subtitle={`${drumStats.activeDrumsCount} Active Drums`}
               isLoading={isRefreshing}
               delay={200}
             />
             <KpiCard
-              title="Pending"
-              value={pendingLines.toLocaleString()}
-              change={stats.pendingChange}
+              title="Assigned Tasks"
+              value={(taskStats.activeTasksCount + taskStats.pendingTasksCount).toLocaleString()}
               icon={AlertTriangle}
-              color="red"
-              subtitle="Awaiting allocation"
+              color="purple"
+              subtitle={`${taskStats.pendingTasksCount} Pending • ${taskStats.activeTasksCount} Active`}
               isLoading={isRefreshing}
               delay={300}
             />
@@ -287,28 +311,39 @@ export default function Dashboard() {
 
           {/* Bento Grid layout for charts & logs */}
           <div className="grid gap-6 grid-cols-1 lg:grid-cols-12">
-            {/* Revenue Trend - Span 8 */}
+            {/* Row 1: Interactive Charts */}
             <div className="lg:col-span-8 animate-fade-in-up" style={{ animationDelay: "200ms" }}>
               <RevenueChart data={revenueTrend} isLoading={isRefreshing} />
             </div>
 
-            {/* Status Donut - Span 4 */}
             <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
               <StatusDonut data={statusBreakdown} isLoading={isRefreshing} />
             </div>
 
-            {/* Top Workers - Span 4 */}
-            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "400ms" }}>
-              <TopWorkersChart data={topWorkers} isLoading={isRefreshing} />
+            {/* Row 2: Active Inventory & Activity Feed */}
+            <div className="lg:col-span-6 animate-fade-in-up" style={{ animationDelay: "400ms" }}>
+              <ActiveDrums data={activeDrumsList} isLoading={isRefreshing} />
             </div>
 
-            {/* Activity Feed - Span 5 */}
-            <div className="lg:col-span-5 animate-fade-in-up" style={{ animationDelay: "500ms" }}>
+            <div className="lg:col-span-6 animate-fade-in-up" style={{ animationDelay: "500ms" }}>
               <ActivityFeed activities={recentActivities} isLoading={isRefreshing} />
             </div>
 
-            {/* Quick Actions - Span 3 */}
-            <div className="lg:col-span-3 animate-fade-in-up" style={{ animationDelay: "600ms" }}>
+            {/* Row 3: Top Workers, System Alerts & Quick Actions */}
+            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "600ms" }}>
+              <TopWorkersChart data={topWorkers} isLoading={isRefreshing} />
+            </div>
+
+            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "700ms" }}>
+              <SystemAlerts
+                drumStats={drumStats}
+                taskStats={taskStats}
+                invoiceStats={invoiceStats}
+                isLoading={isRefreshing}
+              />
+            </div>
+
+            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "800ms" }}>
               <QuickActions />
             </div>
           </div>

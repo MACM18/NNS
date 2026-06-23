@@ -216,6 +216,7 @@ export async function GET(req: NextRequest) {
       });
 
       let monthRevenue = 0;
+      let monthCableUsed = 0;
       for (const line of trendLines) {
         const { totalCable } = computeCableMeasurements(
           Number(line.cableStart || 0),
@@ -223,12 +224,14 @@ export async function GET(req: NextRequest) {
           Number(line.cableEnd || 0),
         );
         monthRevenue += calculateRate(totalCable);
+        monthCableUsed += totalCable;
       }
 
       const monthName = new Date(trendYear, actualMonth - 1).toLocaleString("default", { month: "short" });
       revenueTrend.push({
         month: monthName,
         revenue: Math.round(monthRevenue * 0.9),
+        cable_used: Math.round(monthCableUsed),
       });
     }
 
@@ -304,6 +307,52 @@ export async function GET(req: NextRequest) {
       created_at: task.createdAt,
     }));
 
+    // Fetch drum stats
+    const activeDrums = await prisma.drumTracking.findMany({
+      where: { status: "active" },
+      select: { id: true, drumNumber: true, cableType: true, initialQuantity: true, currentQuantity: true },
+    });
+    
+    const activeDrumsCount = activeDrums.length;
+    const totalRemainingCable = activeDrums.reduce((sum, d) => sum + Number(d.currentQuantity), 0);
+    
+    const lowStockDrumsCount = await prisma.drumTracking.count({
+      where: {
+        status: "active",
+        currentQuantity: { lt: 300 },
+      },
+    });
+
+    const activeDrumsTransformed = activeDrums.map(drum => ({
+      id: drum.id,
+      drum_number: drum.drumNumber,
+      cable_type: drum.cableType || "Fiber",
+      initial_quantity: Number(drum.initialQuantity),
+      current_quantity: Number(drum.currentQuantity),
+    })).slice(0, 5); // Top 5 active drums for dashboard panel
+
+    // Fetch task stats
+    const [pendingTasksCount, activeTasksCount, completedTasksThisMonth] = await Promise.all([
+      prisma.task.count({ where: { status: "pending" } }),
+      prisma.task.count({ where: { status: { in: ["assigned", "in_progress"] } } }),
+      prisma.task.count({
+        where: {
+          status: "completed",
+          completedAt: {
+            gte: currentMonthStartDate,
+            lte: currentMonthEndDate,
+          },
+        },
+      }),
+    ]);
+
+    // Fetch unpaid inventory invoices count
+    const unpaidInvoicesCount = await prisma.inventoryInvoice.count({
+      where: {
+        paymentStatus: { in: ["unpaid", "partial"] },
+      },
+    });
+
     return NextResponse.json({
       data: {
         stats: {
@@ -319,6 +368,20 @@ export async function GET(req: NextRequest) {
           revenueChange,
           revenueTrend,
           topWorkers,
+          drumStats: {
+            activeDrumsCount,
+            totalRemainingCable,
+            lowStockDrumsCount,
+          },
+          taskStats: {
+            pendingTasksCount,
+            activeTasksCount,
+            completedTasksThisMonth,
+          },
+          invoiceStats: {
+            unpaidInvoicesCount,
+          },
+          activeDrums: activeDrumsTransformed,
         },
         activities,
       },
