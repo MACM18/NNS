@@ -261,14 +261,14 @@ export default function Dashboard() {
 
           <div className='grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
             {dashboardStats.map((stat, index) => (
-              <Card key={index}>
+              <Card key={index} className='glass-card hover:-translate-y-0.5 hover:shadow-md transition-all duration-300 relative overflow-hidden group'>
                 <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
                   <CardTitle className='text-sm font-medium'>
                     {stat.title}
                   </CardTitle>
                   <stat.icon className={`h-4 w-4 ${stat.color}`} />
                 </CardHeader>
-                <CardContent>
+                <CardContent className='relative z-10'>
                   <div className='text-2xl font-bold'>
                     {isRefreshing ? (
                       <div className='h-8 w-20 bg-gray-200 animate-pulse rounded'></div>
@@ -297,13 +297,31 @@ export default function Dashboard() {
                     </span>{" "}
                     from last month
                   </p>
+
+                  {/* Sparkline Visual */}
+                  <div className='absolute right-2 bottom-2 w-20 h-8 opacity-25 group-hover:opacity-45 transition-opacity duration-300 pointer-events-none'>
+                    <svg viewBox='0 0 100 40' className='w-full h-full'>
+                      <path
+                        d={
+                          index === 0 ? "M0 30 Q25 25, 50 15 T100 10" :
+                          index === 1 ? "M0 35 L20 30 L40 20 L60 25 L80 10 L100 5" :
+                          index === 2 ? "M0 20 Q20 35, 40 20 T80 20 T100 15" :
+                          "M0 38 Q30 35, 60 20 T100 8"
+                        }
+                        fill='none'
+                        stroke='currentColor'
+                        strokeWidth='3.5'
+                        className={stat.color}
+                      />
+                    </svg>
+                  </div>
                 </CardContent>
               </Card>
             ))}
           </div>
 
           <div className='grid gap-4 grid-cols-1 lg:grid-cols-7'>
-            <Card className='lg:col-span-4'>
+            <Card className='lg:col-span-4 glass-card hover:shadow-md transition-shadow duration-300'>
               <CardHeader>
                 <CardTitle>Recent Activities</CardTitle>
                 <CardDescription>
@@ -365,7 +383,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card className='lg:col-span-3'>
+            <Card className='lg:col-span-3 glass-card hover:shadow-md transition-shadow duration-300'>
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
                 <CardDescription>Common tasks and shortcuts</CardDescription>

@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import type { TaskRecord } from "@/types/tasks";
 import { AddTaskModal } from "../modals/add-task-modal";
 import { AddTelephoneLineModal } from "../modals/add-telephone-line-modal";
+import { CommandMenu } from "@/components/navigation/command-menu";
 
 interface SearchResult {
   id: string;
@@ -289,121 +290,20 @@ export function Header() {
         className='hidden max-w-md flex-1 sm:max-w-lg md:block'
         ref={searchRef}
       >
-        <form onSubmit={createSearchSubmitHandler()} className='relative'>
+        <div 
+          className='relative cursor-pointer' 
+          onClick={() => window.dispatchEvent(new CustomEvent("trigger-command-menu"))}
+        >
           <Search className='absolute left-2 top-2.5 h-4 w-4 text-muted-foreground' />
           <Input
-            placeholder='Search lines, tasks, invoices...'
-            className='pl-8 pr-24'
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            onFocus={() => searchQuery && setShowSearchResults(true)}
+            placeholder='Press ⌘K to search or run command...'
+            className='pl-8 pr-24 cursor-pointer bg-background'
+            readOnly
           />
-          <div className='absolute right-1 top-1 flex gap-1'>
-            {searchQuery && (
-              <Button
-                type='button'
-                variant='ghost'
-                size='sm'
-                className='h-8 w-8 p-0'
-                onClick={() => clearSearch()}
-              >
-                <X className='h-4 w-4' />
-              </Button>
-            )}
-            <Button
-              type='button'
-              variant='ghost'
-              size='sm'
-              className='h-8 w-8 p-0'
-              onClick={() => openAdvancedSearch()}
-            >
-              <Filter className='h-4 w-4' />
-            </Button>
-            <Button type='submit' size='sm' className='h-8'>
-              Search
-            </Button>
-          </div>
-        </form>
-
-        {showSearchResults && (
-          <div className='absolute top-full left-0 right-0 z-50 mt-1 hidden max-h-96 overflow-hidden rounded-md border bg-background shadow-lg md:block'>
-            {isSearching ? (
-              <div className='p-4 text-center text-sm text-muted-foreground'>
-                Searching...
-              </div>
-            ) : searchResults.length > 0 ? (
-              <ScrollArea className='max-h-96'>
-                <div className='p-2'>
-                  <div className='mb-2 flex items-center justify-between px-2 text-xs font-medium text-muted-foreground'>
-                    <span>Quick Results ({searchResults.length})</span>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      className='h-6 px-2'
-                      onClick={() => openAdvancedSearch()}
-                    >
-                      <Filter className='mr-1 h-3 w-3' />
-                      Advanced
-                    </Button>
-                  </div>
-                  {searchResults.map((result) => (
-                    <div
-                      key={`${result.type}-${result.id}`}
-                      className='flex cursor-pointer items-center gap-3 rounded-md p-2 hover:bg-muted'
-                      onClick={() => handleSearchResultClick(result)}
-                    >
-                      <div className='flex-shrink-0'>
-                        {getResultIcon(result.type)}
-                      </div>
-                      <div className='min-w-0 flex-1'>
-                        <div className='flex items-center gap-2'>
-                          <span className='truncate text-sm font-medium'>
-                            {result.title}
-                          </span>
-                          <Badge
-                            className={cn(
-                              "text-xs",
-                              getResultBadgeColor(result.type)
-                            )}
-                          >
-                            {result.type}
-                          </Badge>
-                        </div>
-                        <p className='truncate text-xs text-muted-foreground'>
-                          {result.subtitle}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  <div className='mt-2 border-t pt-2'>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      className='w-full text-xs'
-                      onClick={() => openAdvancedSearch()}
-                    >
-                      <Filter className='mr-1 h-3 w-3' />
-                      View all results with advanced filters
-                    </Button>
-                  </div>
-                </div>
-              </ScrollArea>
-            ) : searchQuery ? (
-              <div className='p-4 text-center text-sm text-muted-foreground'>
-                <div>No quick results found for “{searchQuery}”.</div>
-                <Button
-                  variant='ghost'
-                  size='sm'
-                  className='mt-2 text-xs'
-                  onClick={() => openAdvancedSearch()}
-                >
-                  <Filter className='mr-1 h-3 w-3' />
-                  Try advanced search
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        )}
+          <kbd className="pointer-events-none absolute right-2.5 top-2.5 hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 sm:flex">
+            <span className="text-xs">⌘</span>K
+          </kbd>
+        </div>
       </div>
 
       <div className='ml-auto flex items-center gap-2'>
@@ -740,6 +640,11 @@ export function Header() {
             onSuccess={() => setOpenAddTelephoneLineModal(false)}
           />
         )}
+
+        <CommandMenu
+          onAddLine={() => setOpenAddTelephoneLineModal(true)}
+          onAddTask={() => setOpenAddTaskModal(true)}
+        />
       </div>
     </header>
   );
