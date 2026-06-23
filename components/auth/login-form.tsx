@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
 import { signIn } from "next-auth/react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 interface LoginFormProps {
@@ -48,22 +48,12 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
         );
       }
 
-      toast({
-        title: "Success",
-        description: "Logged in successfully",
-        variant: "default",
-        duration: 3000,
-      });
+      toast.success("Logged in successfully");
       // Redirect or perform any additional actions after successful login
       router.push("/dashboard");
       router.refresh();
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-        duration: 4000,
-      });
+      toast.error(error.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -76,12 +66,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
         callbackUrl: "/dashboard",
       });
     } catch (error: any) {
-      toast({
-        title: "Google Sign-In failed",
-        description: error.message ?? "Please try again.",
-        variant: "destructive",
-        duration: 4000,
-      });
+      toast.error(error.message ?? "Google Sign-In failed. Please try again.");
       setOauthLoading(false);
     }
   };
