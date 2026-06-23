@@ -86,9 +86,11 @@ export function GenerateMonthlyInvoicesModal({
     { value: "12", label: "December" },
   ];
 
+  const startYear = 2024;
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) =>
-    (currentYear - 2 + i).toString()
+  const years = Array.from(
+    { length: currentYear + 4 - startYear + 1 },
+    (_, i) => (startYear + i).toString()
   );
 
   useEffect(() => {

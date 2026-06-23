@@ -39,9 +39,14 @@ const months = [
   { value: "12", label: "December" },
 ];
 
-const years = Array.from({ length: 6 }, (_, i) =>
-  String(new Date().getFullYear() - i)
-);
+const years = (() => {
+  const startYear = 2024;
+  const currentYear = new Date().getFullYear();
+  return Array.from(
+    { length: currentYear + 4 - startYear + 1 },
+    (_, i) => String(startYear + i)
+  );
+})();
 
 export default function AddConnectionForm(_: Props) {
   const router = useRouter();

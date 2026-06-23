@@ -1316,14 +1316,18 @@ export default function PayrollPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[...Array(8)].map((_, i) => {
-                      const year = new Date().getFullYear() - 5 + i;
-                      return (
+                    {(() => {
+                      const startYear = 2024;
+                      const currentYear = new Date().getFullYear();
+                      return Array.from(
+                        { length: currentYear + 4 - startYear + 1 },
+                        (_, i) => startYear + i
+                      ).map((year) => (
                         <SelectItem key={year} value={year.toString()}>
                           {year}
                         </SelectItem>
-                      );
-                    })}
+                      ));
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
