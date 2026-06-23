@@ -66,10 +66,12 @@ export function JournalEntryTable({
 
   // Modal states
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [reverseModalOpen, setReverseModalOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [reverseReason, setReverseReason] = useState("");
+  const [confirmEditOpen, setConfirmEditOpen] = useState(false);
 
   // Form state for new entry
   const [formData, setFormData] = useState({
@@ -185,7 +187,7 @@ export function JournalEntryTable({
   const handleLineChange = (
     index: number,
     field: string,
-    value: string | number
+    value: string | number,
   ) => {
     const newLines = [...formData.lines];
     newLines[index] = { ...newLines[index], [field]: value };
@@ -194,11 +196,11 @@ export function JournalEntryTable({
 
   const totalDebit = formData.lines.reduce(
     (sum, l) => sum + (l.debitAmount || 0),
-    0
+    0,
   );
   const totalCredit = formData.lines.reduce(
     (sum, l) => sum + (l.creditAmount || 0),
-    0
+    0,
   );
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
 
@@ -245,11 +247,60 @@ export function JournalEntryTable({
     }
   };
 
+  const handleSaveEdit = async () => {
+    if (!selectedEntry) return;
+    if (!isBalanced) {
+      addNotification({
+        title: "Error",
+        message: "Journal entry must be balanced",
+        type: "error",
+        category: "accounting",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/accounting/journal-entries/${selectedEntry.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        },
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update entry");
+      }
+
+      addNotification({
+        title: "Success",
+        message: "Journal entry updated",
+        type: "success",
+        category: "accounting",
+      });
+      setConfirmEditOpen(false);
+      setEditModalOpen(false);
+      setSelectedEntry(null);
+      resetForm();
+      fetchEntries();
+    } catch (error) {
+      addNotification({
+        title: "Error",
+        message:
+          error instanceof Error ? error.message : "Failed to update entry",
+        type: "error",
+        category: "accounting",
+      });
+    }
+  };
+
   const handleApprove = async (entry: JournalEntry) => {
     try {
       const response = await fetch(
         `/api/accounting/journal-entries/${entry.id}/approve`,
-        { method: "POST" }
+        { method: "POST" },
       );
 
       if (!response.ok) {
@@ -285,7 +336,7 @@ export function JournalEntryTable({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason: reverseReason }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -456,6 +507,34 @@ export function JournalEntryTable({
                       >
                         <Eye className='h-4 w-4' />
                       </Button>
+                      {(entry.status === "draft" ||
+                        entry.status === "pending") && (
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          onClick={() => {
+                            // open edit modal with prefilled data
+                            setSelectedEntry(entry);
+                            // populate formData
+                            setFormData({
+                              date: new Date(entry.date),
+                              description: entry.description || "",
+                              reference: entry.reference || "",
+                              notes: entry.notes || "",
+                              lines: entry.lines.map((l) => ({
+                                accountId: l.account?.id || "",
+                                description: l.description || "",
+                                debitAmount: l.debitAmount || 0,
+                                creditAmount: l.creditAmount || 0,
+                              })),
+                            });
+                            setEditModalOpen(true);
+                          }}
+                          title='Edit Entry'
+                        >
+                          <RotateCcw className='h-4 w-4 text-muted-foreground' />
+                        </Button>
+                      )}
                       {(entry.status === "pending" ||
                         entry.status === "draft") && (
                         <Button
@@ -626,7 +705,7 @@ export function JournalEntryTable({
                               handleLineChange(
                                 index,
                                 "description",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             placeholder='Line description'
@@ -641,7 +720,7 @@ export function JournalEntryTable({
                               handleLineChange(
                                 index,
                                 "debitAmount",
-                                parseFloat(e.target.value) || 0
+                                parseFloat(e.target.value) || 0,
                               )
                             }
                             className='w-[100px] text-right'
@@ -655,7 +734,7 @@ export function JournalEntryTable({
                               handleLineChange(
                                 index,
                                 "creditAmount",
-                                parseFloat(e.target.value) || 0
+                                parseFloat(e.target.value) || 0,
                               )
                             }
                             className='w-[100px] text-right'
@@ -844,6 +923,221 @@ export function JournalEntryTable({
             </Button>
             <Button variant='destructive' onClick={handleReverse}>
               Reverse Entry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Entry Modal */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className='sm:max-w-[700px] max-h-[90vh] overflow-y-auto'>
+          <DialogHeader>
+            <DialogTitle>Edit Journal Entry</DialogTitle>
+            <DialogDescription>
+              Modify the selected journal entry. You will be asked to confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            {/* reuse same form fields as create modal */}
+            <div className='grid grid-cols-2 gap-4'>
+              <div>
+                <Label>Date *</Label>
+                <Input
+                  type='date'
+                  value={
+                    formData.date ? format(formData.date, "yyyy-MM-dd") : ""
+                  }
+                  onChange={(e) => {
+                    const date = e.target.value
+                      ? new Date(e.target.value + "T00:00:00")
+                      : new Date();
+                    setFormData({ ...formData, date });
+                  }}
+                />
+              </div>
+              <div>
+                <Label htmlFor='reference'>Reference</Label>
+                <Input
+                  id='reference'
+                  value={formData.reference}
+                  onChange={(e) =>
+                    setFormData({ ...formData, reference: e.target.value })
+                  }
+                  placeholder='Invoice #, etc.'
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor='description'>Description *</Label>
+              <Input
+                id='description'
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                placeholder='Entry description'
+              />
+            </div>
+
+            {/* Entry lines (reuse) */}
+            <div className='space-y-2'>
+              <div className='flex justify-between items-center'>
+                <Label>Entry Lines</Label>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={handleAddLine}
+                >
+                  <Plus className='h-4 w-4 mr-1' />
+                  Add Line
+                </Button>
+              </div>
+              <div className='border rounded-lg overflow-hidden'>
+                {/* lines table reused from create modal */}
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Account</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className='text-right'>Debit</TableHead>
+                      <TableHead className='text-right'>Credit</TableHead>
+                      <TableHead className='w-[50px]'></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {formData.lines.map((line, index) => (
+                      <TableRow key={index}>
+                        <TableCell>
+                          <Select
+                            value={line.accountId}
+                            onValueChange={(value) =>
+                              handleLineChange(index, "accountId", value)
+                            }
+                          >
+                            <SelectTrigger className='w-[200px]'>
+                              <SelectValue placeholder='Select account' />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {accounts.map((account) => (
+                                <SelectItem key={account.id} value={account.id}>
+                                  {account.code} - {account.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={line.description}
+                            onChange={(e) =>
+                              handleLineChange(
+                                index,
+                                "description",
+                                e.target.value,
+                              )
+                            }
+                            placeholder='Line description'
+                            className='w-[150px]'
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type='number'
+                            value={line.debitAmount || ""}
+                            onChange={(e) =>
+                              handleLineChange(
+                                index,
+                                "debitAmount",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            className='w-[100px] text-right'
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type='number'
+                            value={line.creditAmount || ""}
+                            onChange={(e) =>
+                              handleLineChange(
+                                index,
+                                "creditAmount",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            className='w-[100px] text-right'
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {formData.lines.length > 2 && (
+                            <Button
+                              type='button'
+                              variant='ghost'
+                              size='icon'
+                              onClick={() => handleRemoveLine(index)}
+                            >
+                              ×
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor='notes'>Notes</Label>
+              <Textarea
+                id='notes'
+                value={formData.notes}
+                onChange={(e) =>
+                  setFormData({ ...formData, notes: e.target.value })
+                }
+                placeholder='Additional notes (optional)'
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant='outline'
+              onClick={() => {
+                setEditModalOpen(false);
+                setSelectedEntry(null);
+                resetForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => setConfirmEditOpen(true)}
+              disabled={
+                !formData.description || !isBalanced || totalDebit === 0
+              }
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Edit Dialog */}
+      <Dialog open={confirmEditOpen} onOpenChange={setConfirmEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Update</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to update this journal entry?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setConfirmEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant='default' onClick={handleSaveEdit}>
+              Confirm Update
             </Button>
           </DialogFooter>
         </DialogContent>

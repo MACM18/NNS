@@ -11,13 +11,14 @@ import { prisma } from "@/lib/prisma";
 import {
   approveJournalEntry,
   getJournalEntry,
+  updateJournalEntry,
   hasAccountingAccess,
   reverseJournalEntry,
 } from "@/lib/accounting-service";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await auth();
@@ -33,7 +34,7 @@ export async function GET(
     if (!hasAccountingAccess(profile?.role)) {
       return NextResponse.json(
         { error: "Access denied. Moderator or admin role required." },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -43,7 +44,7 @@ export async function GET(
     if (!entry) {
       return NextResponse.json(
         { error: "Journal entry not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -52,7 +53,44 @@ export async function GET(
     console.error("Error fetching journal entry:", error);
     return NextResponse.json(
       { error: "Failed to fetch journal entry" },
-      { status: 500 }
+      { status: 500 },
+    );
+  }
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true, role: true },
+    });
+
+    if (!hasAccountingAccess(profile?.role)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    const { id } = await params;
+    const body = await req.json();
+
+    const updated = await updateJournalEntry(id, body, profile!.id);
+
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error) {
+    console.error("Error updating journal entry:", error);
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to update entry",
+      },
+      { status: 500 },
     );
   }
 }
