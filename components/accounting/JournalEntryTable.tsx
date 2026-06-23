@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Eye, RotateCcw, Check, Filter, Pencil } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Eye,
+  RotateCcw,
+  Check,
+  Filter,
+  Pencil,
+  Undo,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -582,7 +591,7 @@ export function JournalEntryTable({
                             }}
                             title='Return to Pending'
                           >
-                            <Check className='h-4 w-4 text-blue-600' />
+                            <Undo className='h-4 w-4 text-blue-600' />
                           </Button>
                           <Button
                             variant='ghost'

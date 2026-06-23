@@ -1122,6 +1122,17 @@ export async function recordPayment(
     }
   }
 
+  // If automatic journal entries are disabled, still adjust the cash/bank account balance
+  if (!settings?.autoGenerateJournalEntries && data.bankAccountId) {
+    // payments for generated invoices are cash receipts (increase bank account)
+    if (data.invoiceType === "generated") {
+      await updateAccountBalance(data.bankAccountId, amountInBase, 0);
+    } else {
+      // for inventory/payable invoices it's a cash outflow
+      await updateAccountBalance(data.bankAccountId, 0, amountInBase);
+    }
+  }
+
   return {
     payment: {
       ...payment,

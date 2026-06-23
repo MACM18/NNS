@@ -17,7 +17,15 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Trash2, Building, CreditCard } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useNotification } from "@/contexts/notification-context";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CompanySettingsModalProps {
   open: boolean;
@@ -37,6 +45,10 @@ export function CompanySettingsModal({
   onSuccess,
 }: CompanySettingsModalProps) {
   const [loading, setLoading] = useState(false);
+  const [accounts, setAccounts] = useState<
+    Array<{ id: string; code: string; name: string }>
+  >([]);
+
   const [formData, setFormData] = useState({
     company_name: "NNS Enterprise",
     address: "",
@@ -52,6 +64,7 @@ export function CompanySettingsModal({
       { min_length: 501, max_length: 999999, rate: 8400 },
     ] as PricingTier[],
     bank_details: {
+      accountId: "",
       bank_name: "",
       account_title: "",
       account_number: "",
@@ -61,6 +74,7 @@ export function CompanySettingsModal({
   });
 
   const { addNotification } = useNotification();
+  const router = useRouter();
 
   useEffect(() => {
     if (open) {
@@ -136,15 +150,16 @@ export function CompanySettingsModal({
           "branch_code" in data.bank_details &&
           "iban" in data.bank_details
             ? {
+                accountId: String((data.bank_details as any).accountId ?? ""),
                 bank_name: String((data.bank_details as any).bank_name ?? ""),
                 account_title: String(
-                  (data.bank_details as any).account_title ?? ""
+                  (data.bank_details as any).account_title ?? "",
                 ),
                 account_number: String(
-                  (data.bank_details as any).account_number ?? ""
+                  (data.bank_details as any).account_number ?? "",
                 ),
                 branch_code: String(
-                  (data.bank_details as any).branch_code ?? ""
+                  (data.bank_details as any).branch_code ?? "",
                 ),
                 iban: String((data.bank_details as any).iban ?? ""),
               }
@@ -169,12 +184,12 @@ export function CompanySettingsModal({
   const handlePricingTierChange = (
     index: number,
     field: string,
-    value: number
+    value: number,
   ) => {
     setFormData((prev) => ({
       ...prev,
       pricing_tiers: prev.pricing_tiers.map((tier, i) =>
-        i === index ? { ...tier, [field]: value } : tier
+        i === index ? { ...tier, [field]: value } : tier,
       ),
     }));
   };
@@ -199,7 +214,7 @@ export function CompanySettingsModal({
     setFormData((prev) => ({
       ...prev,
       contact_numbers: prev.contact_numbers.map((num, i) =>
-        i === index ? value : num
+        i === index ? value : num,
       ),
     }));
   };
@@ -246,6 +261,7 @@ export function CompanySettingsModal({
         registered_number: String(formData.registered_number || ""),
         pricing_tiers,
         bank_details: {
+          accountId: String(formData.bank_details.accountId || ""),
           bank_name: String(formData.bank_details.bank_name || ""),
           account_title: String(formData.bank_details.account_title || ""),
           account_number: String(formData.bank_details.account_number || ""),
@@ -413,7 +429,7 @@ export function CompanySettingsModal({
                           handlePricingTierChange(
                             index,
                             "min_length",
-                            Number.parseInt(e.target.value) || 0
+                            Number.parseInt(e.target.value) || 0,
                           )
                         }
                       />
@@ -431,7 +447,7 @@ export function CompanySettingsModal({
                             "max_length",
                             e.target.value
                               ? Number.parseInt(e.target.value)
-                              : 999999
+                              : 999999,
                           )
                         }
                         placeholder='500+ (leave empty)'
@@ -446,7 +462,7 @@ export function CompanySettingsModal({
                           handlePricingTierChange(
                             index,
                             "rate",
-                            Number.parseInt(e.target.value) || 0
+                            Number.parseInt(e.target.value) || 0,
                           )
                         }
                       />
@@ -472,6 +488,38 @@ export function CompanySettingsModal({
             </CardHeader>
             <CardContent className='space-y-4'>
               <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                <div>
+                  <div className='flex items-center justify-between'>
+                    <Label htmlFor='bank_account'>Linked Ledger Account</Label>
+                    <Button
+                      variant='outline'
+                      size='icon'
+                      title='Add account'
+                      onClick={() =>
+                        router.push("/dashboard/accounting/accounts")
+                      }
+                    >
+                      <Plus className='h-4 w-4' />
+                    </Button>
+                  </div>
+                  <Select
+                    value={formData.bank_details.accountId}
+                    onValueChange={(val) =>
+                      handleBankDetailsChange("accountId", val)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder='Select account' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((acct) => (
+                        <SelectItem key={acct.id} value={acct.id}>
+                          {acct.code} - {acct.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div>
                   <Label htmlFor='bank_name'>Bank Name</Label>
                   <Input
