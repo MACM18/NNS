@@ -105,7 +105,10 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
   doc.setTextColor(...mutedColor);
   doc.text("Employee No:", col2X, y);
   doc.setTextColor(...textColor);
-  const employeeNo = payment.worker?.employeeNo || payment.worker?.id.slice(-8).toUpperCase() || "N/A";
+  const employeeNo =
+    payment.worker?.employeeNo ||
+    payment.worker?.id.slice(-8).toUpperCase() ||
+    "N/A";
   doc.text(employeeNo, col2X + 25, y);
 
   y += 6;
@@ -115,16 +118,30 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
   doc.text(
     `${format(new Date(period.startDate), "dd MMM")} - ${format(
       new Date(period.endDate),
-      "dd MMM yyyy"
+      "dd MMM yyyy",
     )}`,
     col1X + 20,
-    y
+    y,
   );
 
   doc.setTextColor(...mutedColor);
   doc.text("Designation:", col2X, y);
   doc.setTextColor(...textColor);
   doc.text(payment.worker?.role || "Technician", col2X + 25, y);
+
+  // optional bank information
+  if (payment.worker?.bankName) {
+    y += 8;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...textColor);
+    doc.text(payment.worker.bankName, col1X, y);
+
+    if (payment.worker.accountNumber) {
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      doc.text(payment.worker.accountNumber, col1X, y);
+    }
+  }
 
   y += 15;
 
@@ -153,9 +170,14 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
   y += 8;
   doc.setFont("helvetica", "bold");
   doc.text("Basic Salary", margin + 5, y);
-  doc.text(formatCurrency(payment.baseAmount).replace("LKR", ""), pageWidth - margin - 5, y, {
-    align: "right",
-  });
+  doc.text(
+    formatCurrency(payment.baseAmount).replace("LKR", ""),
+    pageWidth - margin - 5,
+    y,
+    {
+      align: "right",
+    },
+  );
 
   // Bonuses
   const bonuses = payment.adjustments?.filter((a) => a.type === "bonus") || [];
@@ -163,9 +185,14 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
     y += 8;
     doc.setFont("helvetica", "bold");
     doc.text(bonus.category.replace(/_/g, " ").toUpperCase(), margin + 5, y);
-    doc.text(formatCurrency(bonus.amount).replace("LKR", ""), pageWidth - margin - 5, y, {
-      align: "right",
-    });
+    doc.text(
+      formatCurrency(bonus.amount).replace("LKR", ""),
+      pageWidth - margin - 5,
+      y,
+      {
+        align: "right",
+      },
+    );
 
     if (bonus.description) {
       y += 4;
@@ -181,7 +208,8 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
   y += 10;
 
   // ========== DEDUCTIONS SECTION ==========
-  const deductions = payment.adjustments?.filter((a) => a.type === "deduction") || [];
+  const deductions =
+    payment.adjustments?.filter((a) => a.type === "deduction") || [];
 
   if (deductions.length > 0) {
     doc.setDrawColor(...redColor);
@@ -207,10 +235,19 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
     deductions.forEach((deduction) => {
       y += 8;
       doc.setFont("helvetica", "bold");
-      doc.text(deduction.category.replace(/_/g, " ").toUpperCase(), margin + 5, y);
-      doc.text(`(${formatCurrency(deduction.amount).replace("LKR", "").trim()})`, pageWidth - margin - 5, y, {
-        align: "right",
-      });
+      doc.text(
+        deduction.category.replace(/_/g, " ").toUpperCase(),
+        margin + 5,
+        y,
+      );
+      doc.text(
+        `(${formatCurrency(deduction.amount).replace("LKR", "").trim()})`,
+        pageWidth - margin - 5,
+        y,
+        {
+          align: "right",
+        },
+      );
 
       if (deduction.description) {
         y += 4;
@@ -238,11 +275,21 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.text("Gross Earnings:", margin + 5, y);
-  doc.text(formatCurrency(payment.baseAmount + payment.bonusAmount), pageWidth - margin - 5, y, { align: "right" });
+  doc.text(
+    formatCurrency(payment.baseAmount + payment.bonusAmount),
+    pageWidth - margin - 5,
+    y,
+    { align: "right" },
+  );
 
   y += 6;
   doc.text("Total Deductions:", margin + 5, y);
-  doc.text(`(${formatCurrency(payment.deductionAmount)})`, pageWidth - margin - 5, y, { align: "right" });
+  doc.text(
+    `(${formatCurrency(payment.deductionAmount)})`,
+    pageWidth - margin - 5,
+    y,
+    { align: "right" },
+  );
 
   y += 8;
   doc.setDrawColor(209, 213, 219);
@@ -253,7 +300,9 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...primaryColor);
   doc.text("NET TAKE HOME PAY", margin + 5, y);
-  doc.text(formatCurrency(payment.netAmount), pageWidth - margin - 5, y, { align: "right" });
+  doc.text(formatCurrency(payment.netAmount), pageWidth - margin - 5, y, {
+    align: "right",
+  });
 
   // ========== FOOTER ==========
   const footerY = doc.internal.pageSize.getHeight() - 20;
@@ -264,14 +313,14 @@ export function generateSalarySlipPDF(options: SalarySlipPDFOptions): void {
     "This is a system-generated document and does not require a physical signature.",
     pageWidth / 2,
     footerY,
-    { align: "center" }
+    { align: "center" },
   );
 
   doc.text(
     `Reference: ${payment.id.toUpperCase()}`,
     pageWidth / 2,
     footerY + 4,
-    { align: "center" }
+    { align: "center" },
   );
 
   // ========== SAVE PDF ==========

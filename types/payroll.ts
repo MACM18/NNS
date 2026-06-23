@@ -133,6 +133,7 @@ export interface UpdateWorkerPaymentInput {
   deductionAmount?: number;
   netAmount?: number;
   status?: PaymentStatus;
+  paymentType?: PaymentType;
   paymentMethod?: PaymentMethod;
   paymentRef?: string;
   notes?: string;

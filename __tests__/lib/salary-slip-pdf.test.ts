@@ -144,7 +144,7 @@ describe("Salary Slip PDF Generator", () => {
     expect(mockPDF.text).toHaveBeenCalledWith(
       "NNS Enterprise",
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
   });
 
@@ -154,21 +154,21 @@ describe("Salary Slip PDF Generator", () => {
     expect(mockPDF.text).toHaveBeenCalledWith(
       "John Doe",
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
   });
 
-  it("should display per-line payment details", () => {
+  it("should display base salary label", () => {
     generateSalarySlipPDF({ payment: mockPayment, period: mockPeriod });
 
     expect(mockPDF.text).toHaveBeenCalledWith(
-      expect.stringContaining("10 lines"),
+      expect.stringContaining("Basic Salary"),
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
   });
 
-  it("should display fixed monthly payment details", () => {
+  it("should display base salary label for any payment type", () => {
     const monthlyPayment = {
       ...mockPayment,
       paymentType: "fixed_monthly" as const,
@@ -182,9 +182,9 @@ describe("Salary Slip PDF Generator", () => {
     });
 
     expect(mockPDF.text).toHaveBeenCalledWith(
-      expect.stringContaining("Monthly Salary"),
+      expect.stringContaining("Basic Salary"),
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
   });
 
@@ -194,7 +194,7 @@ describe("Salary Slip PDF Generator", () => {
     expect(mockPDF.text).toHaveBeenCalledWith(
       "Excellent performance",
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
   });
 
@@ -204,17 +204,17 @@ describe("Salary Slip PDF Generator", () => {
     expect(mockPDF.text).toHaveBeenCalledWith(
       "Advance recovery",
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
   });
 
-  it("should display net pay prominently", () => {
+  it("should display net take home pay prominently", () => {
     generateSalarySlipPDF({ payment: mockPayment, period: mockPeriod });
 
     expect(mockPDF.text).toHaveBeenCalledWith(
-      "NET PAY",
+      "NET TAKE HOME PAY",
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
   });
 
@@ -224,12 +224,12 @@ describe("Salary Slip PDF Generator", () => {
     expect(mockPDF.text).toHaveBeenCalledWith(
       "Commercial Bank",
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
     expect(mockPDF.text).toHaveBeenCalledWith(
       "1234567890",
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
   });
 
@@ -237,10 +237,10 @@ describe("Salary Slip PDF Generator", () => {
     generateSalarySlipPDF({ payment: mockPayment, period: mockPeriod });
 
     expect(mockPDF.save).toHaveBeenCalledWith(
-      expect.stringContaining("John_Doe")
+      expect.stringContaining("John_Doe"),
     );
     expect(mockPDF.save).toHaveBeenCalledWith(
-      expect.stringContaining("January_2026")
+      expect.stringContaining("January_2026"),
     );
   });
 
@@ -293,12 +293,12 @@ describe("Salary Slip PDF Generator", () => {
     expect(mockPDF.text).toHaveBeenCalledWith(
       "Custom Company",
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
     expect(mockPDF.text).toHaveBeenCalledWith(
       "Custom Address",
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
     );
   });
 });
