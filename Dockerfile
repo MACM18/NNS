@@ -42,5 +42,5 @@ COPY --from=builder /app ./
 # Expose Next.js port
 EXPOSE 3000
 
-# Run prisma db push to sync schema at startup, then start the server
-CMD ["sh", "-c", "npx prisma db push && npm run start"]
+# Run prisma db push to sync schema at startup (with retry loop), then start the server
+CMD ["sh", "-c", "for i in $(seq 1 5); do npx prisma db push && break || { echo 'Database not ready, retrying in 3s... ($i/5)'; sleep 3; }; done && npm run start"]
