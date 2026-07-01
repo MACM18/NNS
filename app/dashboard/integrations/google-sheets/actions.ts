@@ -386,11 +386,21 @@ export async function syncConnection(
         const finalDate =
           existingDate.getTime() > newDate.getTime() ? existingDate : newDate;
 
-        // Update existing record with payload but keep the latest date
+        // Resolve Name: use the non-blank one. If both are non-blank, prefer the new one (latest).
+        const resolvedName = payload.name?.trim() 
+          ? payload.name 
+          : (existing.name || payload.name);
+
+        // Resolve DP: use the highest DP string
+        const resolvedDP = getHighestDP(existing.dp, payload.dp);
+
+        // Update existing record with payload but keep the latest date and resolved name/DP
         await prisma.lineDetails.update({
           where: { id: existing.id },
           data: {
             ...payload,
+            name: resolvedName,
+            dp: resolvedDP,
             date: finalDate,
           },
         });
@@ -1381,5 +1391,28 @@ function isValidDP(val: string): boolean {
   const lower = clean.toLowerCase();
   if (["n/a", "na", "none", "null", "undefined", "-"].includes(lower)) return false;
   return true;
+}
+
+function getHighestDP(dp1: string | null | undefined, dp2: string | null | undefined): string {
+  const clean1 = (dp1 || "").toString().trim();
+  const clean2 = (dp2 || "").toString().trim();
+  
+  if (!clean1) return clean2;
+  if (!clean2) return clean1;
+
+  // Extract trailing/embedded numbers to compare numerically if possible
+  const num1 = parseInt(clean1.replace(/\D/g, ""), 10);
+  const num2 = parseInt(clean2.replace(/\D/g, ""), 10);
+
+  if (!isNaN(num1) && !isNaN(num2)) {
+    if (num1 !== num2) {
+      return num1 > num2 ? clean1 : clean2;
+    }
+  }
+
+  // Fallback to natural/locale lexicographical comparison
+  return clean1.localeCompare(clean2, undefined, { numeric: true, sensitivity: 'base' }) > 0 
+    ? clean1 
+    : clean2;
 }
 
