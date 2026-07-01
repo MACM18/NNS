@@ -11,7 +11,7 @@ COPY package.json pnpm-lock.yaml* package-lock.json* ./
 
 # Install all dependencies (including devDependencies)
 RUN \
-  if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
+  if [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm i --frozen-lockfile; \
   elif [ -f package-lock.json ]; then npm ci; \
   else npm install; \
   fi
@@ -24,7 +24,7 @@ RUN npx prisma generate
 
 # Build Next.js app
 RUN \
-  if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run build; \
+  if [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm run build; \
   else npm run build; \
   fi
 
