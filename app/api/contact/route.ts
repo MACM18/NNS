@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 // Zod schema for contact form validation
 const contactFormSchema = z.object({
   name: z
@@ -29,6 +27,7 @@ const contactFormSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy");
     const body = await request.json();
 
     // Validate the request body using Zod
