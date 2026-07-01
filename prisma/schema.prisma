@@ -699,9 +699,25 @@ model GoogleSheetConnection {
 
   // Relations
   createdBy Profile? @relation(fields: [createdById], references: [id])
+  syncLogs  GoogleSheetSyncLog[]
 
   @@index([year, month])
   @@map("google_sheet_connections")
+}
+
+model GoogleSheetSyncLog {
+  id           String                @id @default(uuid())
+  connectionId String                @map("connection_id")
+  syncDate     DateTime              @default(now()) @map("sync_date")
+  status       String                // success, warning, failed
+  message      String                @db.Text
+  details      Json                  @default("{}") // contains metrics
+  skippedRows  Json                  @default("[]") // list of skipped/updated rows details
+  connection   GoogleSheetConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@index([syncDate])
+  @@map("google_sheet_sync_logs")
 }
 
 // ==========================================

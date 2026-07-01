@@ -220,9 +220,6 @@ export function LineDetailsTable({
     selectedMonth,
     selectedYear,
     refreshTrigger,
-    statusFilter,
-    sortField,
-    sortDirection,
   ]);
 
   const fetchData = async () => {
@@ -251,17 +248,49 @@ export function LineDetailsTable({
     }
   };
 
-  const filteredData = data
-    .filter(
-      (item) =>
-        item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.telephone_no?.includes(searchTerm) ||
-        item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.dp?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .filter((item) =>
-      statusFilter === "all" ? true : item.status === statusFilter
-    );
+  const filteredData = useMemo(() => {
+    const filtered = data
+      .filter(
+        (item) =>
+          item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.telephone_no?.includes(searchTerm) ||
+          item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.dp?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .filter((item) =>
+        statusFilter === "all" ? true : item.status === statusFilter
+      );
+
+    return [...filtered].sort((a, b) => {
+      if (sortField === "actions") return 0;
+
+      if (sortField === "assignees") {
+        const aCount = a.assignees?.length ?? 0;
+        const bCount = b.assignees?.length ?? 0;
+        return sortDirection === "asc" ? aCount - bCount : bCount - aCount;
+      }
+
+      const aVal = a[sortField as keyof LineDetail];
+      const bVal = b[sortField as keyof LineDetail];
+
+      if (aVal === undefined || aVal === null) return 1;
+      if (bVal === undefined || bVal === null) return -1;
+
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        return sortDirection === "asc"
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      }
+
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
+      }
+
+      return sortDirection === "asc"
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal));
+    });
+  }, [data, searchTerm, statusFilter, sortField, sortDirection]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {

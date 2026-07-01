@@ -198,6 +198,7 @@ export async function syncConnection(
   connectionId: string,
   onProgress?: (message: string) => void
 ) {
+  const skippedRows: any[] = [];
   try {
     const progress = (m: string) => {
       try {
@@ -303,10 +304,41 @@ export async function syncConnection(
 
     // Map sheet rows to line details
     progress("Processing sheet rows");
-    const sheetRows = values
-      .slice(1)
-      .map((r: any[]) => mapSheetRow(r, idx, month, year))
-      .filter((r: any) => r.telephone_no);
+    
+    const parsedRows: any[] = [];
+    for (let i = 0; i < values.slice(1).length; i++) {
+      const r = values[i + 1];
+      const rowNum = i + 2;
+      const rawNumber = r[idx.number];
+      const normalizedPhone = normalizeTelephoneCanonical(rawNumber);
+
+      if (!rawNumber || !rawNumber.toString().trim()) {
+        skippedRows.push({
+          rowNum,
+          telephoneNo: "",
+          name: (r[idx.name] ?? "").toString().trim(),
+          status: "skipped",
+          reason: "Telephone number cell is empty"
+        });
+        continue;
+      }
+
+      if (!normalizedPhone) {
+        skippedRows.push({
+          rowNum: rowNum,
+          telephoneNo: rawNumber.toString().trim(),
+          name: (r[idx.name] ?? "").toString().trim(),
+          status: "skipped",
+          reason: `Invalid telephone number format (raw: "${rawNumber}")`
+        });
+        continue;
+      }
+
+      const mapped = mapSheetRow(r, idx, month, year);
+      parsedRows.push({ rowNum, mapped });
+    }
+
+    const sheetRows = parsedRows.map((p) => p.mapped);
 
     if (!sheetRows.length) {
       throw new Error("No valid rows with telephone numbers found");
@@ -322,9 +354,18 @@ export async function syncConnection(
     const syncMonthStart = new Date(Date.UTC(year, month - 1, 1));
     const syncMonthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
-    for (const row of sheetRows) {
-      const payload = sheetToLinePayload(row);
-      if (!payload) continue;
+    for (const { rowNum, mapped } of parsedRows) {
+      const payload = sheetToLinePayload(mapped);
+      if (!payload) {
+        skippedRows.push({
+          rowNum,
+          telephoneNo: mapped.telephone_no,
+          name: mapped.name,
+          status: "skipped",
+          reason: "Failed to build line payload (unknown validation error)"
+        });
+        continue;
+      }
 
       // Check if line exists for this phone within the current month
       const existing = await prisma.lineDetails.findFirst({
@@ -335,7 +376,7 @@ export async function syncConnection(
             lte: syncMonthEnd,
           },
         },
-        select: { id: true, date: true },
+        select: { id: true, date: true, name: true, dp: true },
       });
 
       if (existing) {
@@ -355,6 +396,14 @@ export async function syncConnection(
         });
         lineIds.push(existing.id);
         updatedCount++;
+
+        skippedRows.push({
+          rowNum,
+          telephoneNo: payload.telephoneNo,
+          name: payload.name,
+          status: "updated",
+          reason: `Telephone number already existed in this month. Updated existing record instead of inserting.`
+        });
       } else {
         // Create new record
         const created = await prisma.lineDetails.create({
@@ -424,10 +473,28 @@ export async function syncConnection(
           );
           validateDrumHeaders(drumHeaders);
           const dIdx = headerIndexDrum(drumHeaders);
-          const drumRows = drumValues
-            .slice(1)
-            .filter((r: any[]) => r[dIdx.tp] !== undefined && normalizeTelephoneCanonical(r[dIdx.tp]))
-            .map((r: any[]) => mapDrumRow(r, dIdx));
+
+          const drumRowsRawIndexMap = new Map<any, number>();
+          const drumRows: any[] = [];
+
+          for (let i = 0; i < drumValues.slice(1).length; i++) {
+            const r = drumValues[i + 1];
+            const rowNum = i + 2;
+            const tp = normalizeTelephoneCanonical(r[dIdx.tp]);
+            if (r[dIdx.tp] !== undefined && tp) {
+              const mapped = mapDrumRow(r, dIdx);
+              drumRows.push(mapped);
+              drumRowsRawIndexMap.set(mapped, rowNum);
+            } else {
+              skippedRows.push({
+                rowNum,
+                telephoneNo: (r[dIdx.tp] ?? "").toString().trim(),
+                name: (r[dIdx.dw_cus] ?? "").toString().trim(),
+                status: "skipped",
+                reason: "Drum sheet row: telephone number TP is empty or invalid"
+              });
+            }
+          }
 
           // Fetch all lines for this month (to map by telephone number)
           const syncMonthStart = new Date(Date.UTC(year, month - 1, 1));
@@ -473,14 +540,34 @@ export async function syncConnection(
             const target = pickLatest(arr);
 
             const updateData: any = {};
-            if (r.dw_dp && isValidDP(r.dw_dp)) {
-              updateData.dp = r.dw_dp;
+            if (r.dw_dp) {
+              if (isValidDP(r.dw_dp)) {
+                updateData.dp = r.dw_dp;
+              } else {
+                skippedRows.push({
+                  rowNum: drumRowsRawIndexMap.get(r) ?? 0,
+                  telephoneNo: r.tp,
+                  name: r.dw_cus,
+                  status: "warning",
+                  reason: `Ignored invalid DP format from Drum sheet: "${r.dw_dp}"`
+                });
+              }
             }
             if (typeof r.dw_c_hook === "number" && r.dw_c_hook > 0) {
               updateData.cHook = r.dw_c_hook;
             }
-            if (r.dw_cus && isValidName(r.dw_cus)) {
-              updateData.name = r.dw_cus;
+            if (r.dw_cus) {
+              if (isValidName(r.dw_cus)) {
+                updateData.name = r.dw_cus;
+              } else {
+                skippedRows.push({
+                  rowNum: drumRowsRawIndexMap.get(r) ?? 0,
+                  telephoneNo: r.tp,
+                  name: r.dw_cus,
+                  status: "warning",
+                  reason: `Ignored invalid Customer Name format from Drum sheet: "${r.dw_cus}"`
+                });
+              }
             }
             if (r.drum_number) {
               updateData.drumNumber = r.drum_number;
@@ -666,6 +753,32 @@ export async function syncConnection(
     } catch (notifyErr) {
       console.error("[syncConnection] Success notification failed:", notifyErr);
     }
+    // Write log to DB
+    try {
+      await prisma.googleSheetSyncLog.create({
+        data: {
+          connectionId,
+          status: skippedRows.some((r) => r.status === "warning") ? "warning" : "success",
+          message: `Successfully synced Google Sheet connection for ${conn.month}/${conn.year}.`,
+          details: {
+            totalParsedRows: parsedRows.length,
+            insertedCount,
+            updatedCount,
+            drumUsageProcessed,
+            drumsCreated,
+            drumUpdated,
+            hardwareUpdated,
+            hardwareCreated,
+            usageRecordsUpdated,
+            drumSheetProcessed: drumProcessed,
+            drumSheetAppended: drumAppended,
+          },
+          skippedRows,
+        },
+      });
+    } catch (logErr) {
+      console.error("[syncConnection] Failed to save sync log:", logErr);
+    }
 
     return {
       success: true,
@@ -683,15 +796,25 @@ export async function syncConnection(
   } catch (error) {
     console.error("[syncConnection] Error:", error);
 
-    // Try to update connection status to error state
+    // Try to update connection status to error state and log failure
     try {
       await prisma.googleSheetConnection.update({
         where: { id: connectionId },
         data: { status: "error", lastSynced: new Date() },
       });
+
+      await prisma.googleSheetSyncLog.create({
+        data: {
+          connectionId,
+          status: "failed",
+          message: error instanceof Error ? error.message : String(error),
+          details: {},
+          skippedRows,
+        },
+      });
     } catch (statusError) {
       console.error(
-        "[syncConnection] Failed to update error status:",
+        "[syncConnection] Failed to update error status or log sync failure:",
         statusError
       );
     }
