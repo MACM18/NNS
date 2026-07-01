@@ -20,12 +20,12 @@ RUN \
 COPY . .
 
 # Generate Prisma Client
-RUN npx prisma generate
+RUN DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npx prisma generate
 
 # Build Next.js app
 RUN \
-  if [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm run build; \
-  else npm run build; \
+  if [ -f pnpm-lock.yaml ]; then npm install -g pnpm && DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy pnpm run build; \
+  else DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npm run build; \
   fi
 
 # Runner image
