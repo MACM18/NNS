@@ -14,9 +14,8 @@ import {
   Clock,
   ArrowUpRight,
   Database,
-  ChevronDown,
-  ChevronUp,
   RefreshCw,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   Card,
@@ -90,9 +89,12 @@ export default function ConnectionLogsPage() {
   const [logs, setLogs] = useState<SyncLog[]>([]);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   
-  // Search and filters for skipped rows within the expanded log
+  // Sidebar run filters
+  const [runStatusFilter, setRunStatusFilter] = useState<"all" | "success" | "warning" | "failed">("all");
+  
+  // Table search and filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "skipped" | "updated" | "warning">("all");
+  const [tableStatusFilter, setTableStatusFilter] = useState<"all" | "skipped" | "updated" | "warning">("all");
 
   const fetchLogs = async (showProgress = false) => {
     if (showProgress) setRefreshing(true);
@@ -105,7 +107,7 @@ export default function ConnectionLogsPage() {
       setConnection(data.connection);
       setLogs(data.logs);
       
-      // Auto-expand the first log if none expanded
+      // Auto-expand the first matched log if none expanded
       if (data.logs.length > 0 && !expandedLogId) {
         setExpandedLogId(data.logs[0].id);
       }
@@ -131,8 +133,8 @@ export default function ConnectionLogsPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6 space-y-6">
-        <div className="h-8 w-48 bg-muted animate-pulse rounded"></div>
+      <div className="container mx-auto p-4 md:p-6 space-y-4">
+        <div className="h-6 w-32 bg-muted animate-pulse rounded"></div>
         <TableSkeleton />
       </div>
     );
@@ -153,116 +155,158 @@ export default function ConnectionLogsPage() {
 
   const monthLabel = MONTHS[connection.month - 1] || connection.month;
 
+  const getStatusIcon = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "success":
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case "warning":
+        return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+      case "failed":
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
       case "success":
         return (
-          <Badge className="bg-green-500 hover:bg-green-600 text-white flex items-center gap-1 w-fit">
-            <CheckCircle2 className="h-3 w-3" /> Success
+          <Badge variant="outline" className="bg-green-50/50 text-green-700 border-green-200/60 text-[10px] px-1.5 py-0">
+            Success
           </Badge>
         );
       case "warning":
         return (
-          <Badge className="bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 w-fit">
-            <AlertTriangle className="h-3 w-3" /> Warning
+          <Badge variant="outline" className="bg-amber-50/50 text-amber-700 border-amber-200/60 text-[10px] px-1.5 py-0">
+            Warning
           </Badge>
         );
       case "failed":
         return (
-          <Badge className="bg-red-500 hover:bg-red-600 text-white flex items-center gap-1 w-fit">
-            <XCircle className="h-3 w-3" /> Failed
+          <Badge variant="outline" className="bg-red-50/50 text-red-700 border-red-200/60 text-[10px] px-1.5 py-0">
+            Failed
           </Badge>
         );
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="text-[10px] px-1.5 py-0">{status}</Badge>;
     }
   };
 
   const getSkippedRowBadge = (status: string) => {
     switch (status.toLowerCase()) {
       case "skipped":
-        return <Badge variant="destructive" className="text-xs">Skipped</Badge>;
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-none text-[10px] px-1.5 py-0">Skipped</Badge>;
       case "updated":
-        return <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 border-blue-200">Updated</Badge>;
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none text-[10px] px-1.5 py-0">Updated</Badge>;
       case "warning":
-        return <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">Warning</Badge>;
+        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none text-[10px] px-1.5 py-0">Warning</Badge>;
       default:
-        return <Badge variant="outline" className="text-xs">{status}</Badge>;
+        return <Badge variant="outline" className="text-[10px] px-1.5 py-0">{status}</Badge>;
     }
   };
 
+  // Filtered logs list for the sidebar
+  const filteredLogs = logs.filter((log) => {
+    if (runStatusFilter === "all") return true;
+    return log.status.toLowerCase() === runStatusFilter.toLowerCase();
+  });
+
   const expandedLog = logs.find((l) => l.id === expandedLogId);
 
-  // Filtered rows for the expanded log's details table
+  // Filtered rows for the selected log's details table
   const filteredSkippedRows = expandedLog
     ? expandedLog.skippedRows.filter((row) => {
         const matchesSearch =
           (row.telephoneNo || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
           (row.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
           (row.reason || "").toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = statusFilter === "all" || row.status === statusFilter;
+        const matchesStatus = tableStatusFilter === "all" || row.status === tableStatusFilter;
         return matchesSearch && matchesStatus;
       })
     : [];
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6">
-      {/* Breadcrumbs & Header */}
-      <div className="space-y-2">
-        <Link
-          href="/dashboard/integrations/google-sheets"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back to Connections</span>
-        </Link>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
-              <FileSpreadsheet className="h-7 w-7 text-green-600" />
-              Sync Execution Logs
-            </h1>
-            <p className="text-muted-foreground text-sm md:text-base mt-1">
-              Google Sheets connection for <span className="font-semibold text-foreground">{monthLabel} {connection.year}</span>
-            </p>
-          </div>
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchLogs(true)}
-              disabled={refreshing}
-              className="gap-2 w-full md:w-auto"
+    <div className="container mx-auto p-3 md:p-5 space-y-4 max-w-7xl">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard/integrations/google-sheets"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
             >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              Refresh Logs
-            </Button>
-            <Button asChild size="sm" className="w-full md:w-auto">
-              <a href={connection.sheetUrl} target="_blank" rel="noopener noreferrer" className="gap-2">
-                Open Google Sheet
-                <ArrowUpRight className="h-4 w-4" />
-              </a>
-            </Button>
+              <ArrowLeft className="h-3 w-3" /> Sheets
+            </Link>
+            <span className="text-muted-foreground/40 text-xs">/</span>
+            <span className="text-xs font-semibold">{monthLabel} {connection.year} Logs</span>
           </div>
+          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5 text-green-600" />
+            Sync Logs Dashboard
+          </h1>
+        </div>
+        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchLogs(true)}
+            disabled={refreshing}
+            className="h-8 px-2.5 text-xs gap-1.5"
+          >
+            <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          <Button asChild size="sm" className="h-8 px-2.5 text-xs bg-green-600 hover:bg-green-700">
+            <a href={connection.sheetUrl} target="_blank" rel="noopener noreferrer" className="gap-1.5">
+              Sheet
+              <ArrowUpRight className="h-3 w-3" />
+            </a>
+          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Side: Sync History List */}
-        <div className="lg:col-span-1 space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Sync Runs History</CardTitle>
-              <CardDescription>Select a run to view detailed breakdown</CardDescription>
+      {/* Main Split Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* Left Side: Sync Runs Sidebar */}
+        <div className="lg:col-span-1 space-y-3">
+          <Card className="shadow-sm border-muted/80 overflow-hidden">
+            <CardHeader className="p-3 border-b bg-muted/20">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
+                  Sync History
+                </CardTitle>
+                <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground/60" />
+              </div>
             </CardHeader>
             <CardContent className="p-0">
-              {logs.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground text-sm">
-                  No sync logs recorded yet. Run a sync to see execution logs.
+              {/* Quick Status Filter Tabs */}
+              <div className="grid grid-cols-4 gap-1 p-2 bg-muted/10 border-b text-[10px]">
+                {(["all", "success", "warning", "failed"] as const).map((status) => {
+                  const count = status === "all" ? logs.length : logs.filter(l => l.status === status).length;
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => setRunStatusFilter(status)}
+                      className={`py-1 rounded text-center font-medium transition-colors ${
+                        runStatusFilter === status
+                          ? "bg-white shadow-xs text-foreground font-semibold"
+                          : "text-muted-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      <span className="capitalize">{status}</span> ({count})
+                    </button>
+                  );
+                })}
+              </div>
+
+              {filteredLogs.length === 0 ? (
+                <div className="text-center py-8 text-xs text-muted-foreground">
+                  No sync runs found.
                 </div>
               ) : (
-                <div className="divide-y max-h-[600px] overflow-y-auto">
-                  {logs.map((log) => {
+                <div className="divide-y max-h-[460px] overflow-y-auto">
+                  {filteredLogs.map((log) => {
                     const isExpanded = log.id === expandedLogId;
                     const date = new Date(log.syncDate);
                     return (
@@ -271,15 +315,15 @@ export default function ConnectionLogsPage() {
                         onClick={() => {
                           setExpandedLogId(log.id);
                           setSearchQuery("");
-                          setStatusFilter("all");
+                          setTableStatusFilter("all");
                         }}
-                        className={`w-full text-left p-4 hover:bg-muted/50 transition-colors flex flex-col gap-2 ${
-                          isExpanded ? "bg-muted border-l-4 border-primary" : ""
+                        className={`w-full text-left p-2.5 hover:bg-muted/30 transition-colors flex flex-col gap-1.5 ${
+                          isExpanded ? "bg-muted/50 border-l-3 border-green-600" : ""
                         }`}
                       >
                         <div className="flex justify-between items-center w-full">
-                          <span className="font-medium text-sm flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                            {getStatusIcon(log.status)}
                             {date.toLocaleTimeString("en-US", {
                               hour: "2-digit",
                               minute: "2-digit",
@@ -287,22 +331,19 @@ export default function ConnectionLogsPage() {
                           </span>
                           {getStatusBadge(log.status)}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {date.toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
+                        <div className="flex justify-between items-center text-[10px] text-muted-foreground w-full">
+                          <span>
+                            {date.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                          {log.status !== "failed" && (
+                            <span className="font-medium text-foreground/80">
+                              +{log.details.insertedCount || 0} • ~{log.details.updatedCount || 0}
+                            </span>
+                          )}
                         </div>
-                        {log.status === "failed" ? (
-                          <span className="text-xs text-red-600 truncate max-w-[200px]">
-                            {log.message}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            Parsed: {log.details.totalParsedRows || 0} • Appended: {log.details.insertedCount || 0} • Updated: {log.details.updatedCount || 0}
-                          </span>
-                        )}
                       </button>
                     );
                   })}
@@ -313,184 +354,158 @@ export default function ConnectionLogsPage() {
         </div>
 
         {/* Right Side: Detailed Breakdown of Selected Run */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-3 space-y-4">
           {expandedLog ? (
             <>
-              {/* Summary Card */}
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-start gap-4">
+              {/* Consolidated Metrics Bar & Details */}
+              <Card className="shadow-sm border-muted/80">
+                <CardHeader className="p-3.5 pb-2 border-b bg-muted/10">
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                     <div>
-                      <CardTitle className="text-xl flex items-center gap-2">
-                        Run Details & Breakdown
+                      <CardTitle className="text-sm font-bold flex items-center gap-2">
+                        {getStatusIcon(expandedLog.status)}
+                        Run Details & Metrics
                       </CardTitle>
-                      <CardDescription>
+                      <CardDescription className="text-[11px] mt-0.5">
                         Executed on {new Date(expandedLog.syncDate).toLocaleString()}
                       </CardDescription>
                     </div>
                     {getStatusBadge(expandedLog.status)}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Status Message */}
-                  <div className={`p-4 rounded-lg text-sm border ${
+                <CardContent className="p-3.5 space-y-3.5">
+                  {/* Status Banner */}
+                  <div className={`p-2.5 rounded border text-xs ${
                     expandedLog.status === "failed"
-                      ? "bg-red-50 border-red-200 text-red-800"
+                      ? "bg-red-50/50 border-red-200/50 text-red-900"
                       : expandedLog.status === "warning"
-                      ? "bg-amber-50 border-amber-200 text-amber-800"
-                      : "bg-green-50 border-green-200 text-green-800"
+                      ? "bg-amber-50/50 border-amber-200/50 text-amber-900"
+                      : "bg-green-50/50 border-green-200/50 text-green-900"
                   }`}>
-                    <span className="font-semibold">Log Message:</span> {expandedLog.message}
+                    <span className="font-semibold">Log Result:</span> {expandedLog.message}
                   </div>
 
                   {expandedLog.status !== "failed" && (
-                    <>
-                      {/* Grid Stats */}
-                      <h4 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
-                        Sync Summary Statistics
-                      </h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div className="border rounded-lg p-3 bg-card text-center">
-                          <div className="text-2xl font-bold text-foreground">
-                            {expandedLog.details.totalParsedRows || 0}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Total Parsed Rows</div>
-                        </div>
-                        <div className="border rounded-lg p-3 bg-card text-center">
-                          <div className="text-2xl font-bold text-green-600">
-                            {expandedLog.details.insertedCount || 0}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Appended (New)</div>
-                        </div>
-                        <div className="border rounded-lg p-3 bg-card text-center">
-                          <div className="text-2xl font-bold text-blue-600">
-                            {expandedLog.details.updatedCount || 0}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Updated (Duplicates)</div>
-                        </div>
-                        <div className="border rounded-lg p-3 bg-card text-center">
-                          <div className="text-2xl font-bold text-amber-600">
-                            {expandedLog.skippedRows.filter(r => r.status === "skipped").length}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Skipped Rows</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-1 text-center">
+                      <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
+                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wide text-[9px]">Parsed</div>
+                        <div className="text-lg font-bold text-foreground mt-0.5">{expandedLog.details.totalParsedRows || 0}</div>
+                      </div>
+                      <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
+                        <div className="text-xs font-bold text-green-700 uppercase tracking-wide text-[9px]">Appended</div>
+                        <div className="text-lg font-bold text-green-600 mt-0.5">+{expandedLog.details.insertedCount || 0}</div>
+                      </div>
+                      <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
+                        <div className="text-xs font-bold text-blue-700 uppercase tracking-wide text-[9px]">Updated</div>
+                        <div className="text-lg font-bold text-blue-600 mt-0.5">~{expandedLog.details.updatedCount || 0}</div>
+                      </div>
+                      <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
+                        <div className="text-xs font-bold text-amber-700 uppercase tracking-wide text-[9px]">Skipped</div>
+                        <div className="text-lg font-bold text-amber-600 mt-0.5">
+                          {expandedLog.skippedRows.filter(r => r.status === "skipped").length}
                         </div>
                       </div>
-
-                      {/* Drum & Hardware Sync Statistics */}
-                      <h4 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground pt-2">
-                        Inventory & Drums Sync
-                      </h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className="border rounded-lg p-3 bg-card flex flex-col justify-center">
-                          <span className="text-xs text-muted-foreground">Drum Usages Recorded</span>
-                          <span className="text-lg font-bold mt-1 text-purple-700">
-                            {expandedLog.details.drumUsageProcessed || 0}
-                          </span>
-                        </div>
-                        <div className="border rounded-lg p-3 bg-card flex flex-col justify-center">
-                          <span className="text-xs text-muted-foreground">Drum Records Updated</span>
-                          <span className="text-lg font-bold mt-1 text-purple-700">
-                            {expandedLog.details.drumUpdated || 0}
-                          </span>
-                        </div>
-                        <div className="border rounded-lg p-3 bg-card flex flex-col justify-center">
-                          <span className="text-xs text-muted-foreground">Hardware Items Updated</span>
-                          <span className="text-lg font-bold mt-1 text-purple-700">
-                            {expandedLog.details.hardwareUpdated || 0}
-                          </span>
+                      <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
+                        <div className="text-xs font-bold text-purple-700 uppercase tracking-wide text-[9px]">Drums Sync</div>
+                        <div className="text-lg font-bold text-purple-600 mt-0.5">
+                          {expandedLog.details.drumUpdated || 0}
                         </div>
                       </div>
-                    </>
+                      <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
+                        <div className="text-xs font-bold text-purple-700 uppercase tracking-wide text-[9px]">Stock Sync</div>
+                        <div className="text-lg font-bold text-purple-600 mt-0.5">
+                          {expandedLog.details.hardwareUpdated || 0}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>
 
               {/* Warnings / Skipped Rows Table */}
               {expandedLog.status !== "failed" && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Database className="h-5 w-5 text-muted-foreground" />
+                <Card className="shadow-sm border-muted/80">
+                  <CardHeader className="p-3.5 pb-2 border-b bg-muted/10">
+                    <CardTitle className="text-sm font-bold flex items-center gap-2">
+                      <Database className="h-4.5 w-4.5 text-muted-foreground" />
                       Skipped & Updated Rows Breakdown ({expandedLog.skippedRows.length})
                     </CardTitle>
-                    <CardDescription>
-                      Details of rows that were skipped due to formatting or updated due to duplicate numbers.
-                    </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Filters and Search Bar */}
-                    <div className="flex flex-col sm:flex-row gap-3">
+                  <CardContent className="p-3.5 space-y-3">
+                    {/* Compact Filter Options */}
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <div className="relative flex-1">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground/60" />
                         <Input
-                          placeholder="Search rows by phone, customer, or reason..."
+                          placeholder="Search phone, customer, or reason..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-9"
+                          className="pl-8 h-8.5 text-xs"
                         />
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1.5 overflow-x-auto pb-1 sm:pb-0">
                         <Button
-                          variant={statusFilter === "all" ? "default" : "outline"}
+                          variant={tableStatusFilter === "all" ? "default" : "outline"}
                           size="sm"
-                          onClick={() => setStatusFilter("all")}
+                          onClick={() => setTableStatusFilter("all")}
+                          className="h-8.5 text-[10px] px-2.5"
                         >
                           All ({expandedLog.skippedRows.length})
                         </Button>
                         <Button
-                          variant={statusFilter === "skipped" ? "default" : "outline"}
+                          variant={tableStatusFilter === "skipped" ? "default" : "outline"}
                           size="sm"
-                          onClick={() => setStatusFilter("skipped")}
-                          className="text-red-600 hover:text-red-700"
+                          onClick={() => setTableStatusFilter("skipped")}
+                          className="h-8.5 text-[10px] px-2.5 text-red-600 hover:text-red-700"
                         >
                           Skipped ({expandedLog.skippedRows.filter(r => r.status === "skipped").length})
                         </Button>
                         <Button
-                          variant={statusFilter === "updated" ? "default" : "outline"}
+                          variant={tableStatusFilter === "updated" ? "default" : "outline"}
                           size="sm"
-                          onClick={() => setStatusFilter("updated")}
-                          className="text-blue-600 hover:text-blue-700"
+                          onClick={() => setTableStatusFilter("updated")}
+                          className="h-8.5 text-[10px] px-2.5 text-blue-600 hover:text-blue-700"
                         >
                           Updated ({expandedLog.skippedRows.filter(r => r.status === "updated").length})
                         </Button>
                       </div>
                     </div>
 
-                    {/* Skipped Rows Table */}
+                    {/* Compact Table */}
                     {filteredSkippedRows.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground text-sm border rounded-lg">
+                      <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-lg bg-muted/5">
                         {expandedLog.skippedRows.length === 0
-                          ? "Perfect sync! No rows skipped or updated."
-                          : "No results matching the filter criteria."}
+                          ? "Clean sync run! No warnings or skipped rows reported."
+                          : "No matches found."}
                       </div>
                     ) : (
-                      <div className="border rounded-md overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-[80px]">Row No.</TableHead>
-                              <TableHead className="w-[120px]">Telephone</TableHead>
-                              <TableHead className="w-[140px]">Customer</TableHead>
-                              <TableHead className="w-[100px]">Type</TableHead>
-                              <TableHead>Details / Reason</TableHead>
+                      <div className="border rounded-md overflow-hidden bg-card">
+                        <Table className="text-xs">
+                          <TableHeader className="bg-muted/10">
+                            <TableRow className="h-8">
+                              <TableHead className="w-[60px] py-1.5 font-bold">Row</TableHead>
+                              <TableHead className="w-[110px] py-1.5 font-bold">Telephone</TableHead>
+                              <TableHead className="w-[130px] py-1.5 font-bold">Customer</TableHead>
+                              <TableHead className="w-[80px] py-1.5 font-bold">Status</TableHead>
+                              <TableHead className="py-1.5 font-bold">Reason / Details</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {filteredSkippedRows.map((row, idx) => (
-                              <TableRow key={idx}>
-                                <TableCell className="font-semibold">
+                              <TableRow key={idx} className="hover:bg-muted/5 h-8">
+                                <TableCell className="font-semibold py-1">
                                   #{row.rowNum}
                                 </TableCell>
-                                <TableCell className="font-mono text-xs">
+                                <TableCell className="font-mono text-[11px] py-1">
                                   {row.telephoneNo || "-"}
                                 </TableCell>
-                                <TableCell className="truncate max-w-[120px]">
+                                <TableCell className="truncate max-w-[120px] py-1">
                                   {row.name || "-"}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="py-1">
                                   {getSkippedRowBadge(row.status)}
                                 </TableCell>
-                                <TableCell className="text-xs text-muted-foreground">
+                                <TableCell className="text-muted-foreground text-[11px] py-1 leading-relaxed">
                                   {row.reason}
                                 </TableCell>
                               </TableRow>
@@ -504,7 +519,7 @@ export default function ConnectionLogsPage() {
               )}
             </>
           ) : (
-            <div className="h-64 flex items-center justify-center border rounded-lg text-muted-foreground">
+            <div className="h-48 flex items-center justify-center border rounded-lg text-muted-foreground text-xs bg-muted/5">
               Select a run log from the left history to view detailed execution reports.
             </div>
           )}

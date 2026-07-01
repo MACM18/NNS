@@ -338,7 +338,26 @@ export async function syncConnection(
       parsedRows.push({ rowNum, mapped });
     }
 
-    const sheetRows = parsedRows.map((p) => p.mapped);
+    // Group and merge duplicate phone rows inside the sheet first
+    const groupedRows = new Map<string, Array<{ rowNum: number; mapped: any }>>();
+    for (const item of parsedRows) {
+      const phone = item.mapped.telephone_no;
+      const list = groupedRows.get(phone) || [];
+      list.push(item);
+      groupedRows.set(phone, list);
+    }
+
+    const mergedParsedRows: any[] = [];
+    for (const [phone, items] of groupedRows.entries()) {
+      if (items.length === 1) {
+        mergedParsedRows.push(items[0]);
+      } else {
+        const { primaryRowNum, merged } = mergeGroupedMappedRows(items, skippedRows);
+        mergedParsedRows.push({ rowNum: primaryRowNum, mapped: merged });
+      }
+    }
+
+    const sheetRows = mergedParsedRows.map((p) => p.mapped);
 
     if (!sheetRows.length) {
       throw new Error("No valid rows with telephone numbers found");
@@ -354,7 +373,7 @@ export async function syncConnection(
     const syncMonthStart = new Date(Date.UTC(year, month - 1, 1));
     const syncMonthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
-    for (const { rowNum, mapped } of parsedRows) {
+    for (const { rowNum, mapped } of mergedParsedRows) {
       const payload = sheetToLinePayload(mapped);
       if (!payload) {
         skippedRows.push({
@@ -376,7 +395,6 @@ export async function syncConnection(
             lte: syncMonthEnd,
           },
         },
-        select: { id: true, date: true, name: true, dp: true },
       });
 
       if (existing) {
@@ -386,23 +404,36 @@ export async function syncConnection(
         const finalDate =
           existingDate.getTime() > newDate.getTime() ? existingDate : newDate;
 
-        // Resolve Name: use the non-blank one. If both are non-blank, prefer the new one (latest).
+        // Resolve Name: use the non-blank one.
         const resolvedName = payload.name?.trim() 
           ? payload.name 
-          : (existing.name || payload.name);
+          : ((existing.name as string) || payload.name);
 
         // Resolve DP: use the highest DP string
-        const resolvedDP = getHighestDP(existing.dp, payload.dp);
+        const resolvedDP = getHighestDP(existing.dp as string, payload.dp);
 
-        // Update existing record with payload but keep the latest date and resolved name/DP
+        // Resolve other fields: keep database value if payload is empty/0
+        const mergedData: any = { 
+          ...payload, 
+          name: resolvedName, 
+          dp: resolvedDP, 
+          date: finalDate 
+        };
+
+        const existingAny = existing as any;
+        for (const key of Object.keys(payload)) {
+          if (payload[key] === 0 && existingAny[key] !== undefined && existingAny[key] !== 0) {
+            mergedData[key] = existingAny[key];
+          }
+          if ((payload[key] === null || payload[key] === "") && existingAny[key] !== undefined) {
+            mergedData[key] = existingAny[key];
+          }
+        }
+
+        // Update existing record with merged data
         await prisma.lineDetails.update({
           where: { id: existing.id },
-          data: {
-            ...payload,
-            name: resolvedName,
-            dp: resolvedDP,
-            date: finalDate,
-          },
+          data: mergedData,
         });
         lineIds.push(existing.id);
         updatedCount++;
@@ -412,7 +443,7 @@ export async function syncConnection(
           telephoneNo: payload.telephoneNo,
           name: payload.name,
           status: "updated",
-          reason: `Telephone number already existed in this month. Updated existing record instead of inserting.`
+          reason: `Telephone number already existed in database. Merged details and updated existing record.`
         });
       } else {
         // Create new record
@@ -786,6 +817,8 @@ export async function syncConnection(
           skippedRows,
         },
       });
+      // Prune old logs if they exceed threshold
+      pruneOldSyncLogs().catch((err) => console.error("[syncConnection] Error pruning logs:", err));
     } catch (logErr) {
       console.error("[syncConnection] Failed to save sync log:", logErr);
     }
@@ -822,6 +855,8 @@ export async function syncConnection(
           skippedRows,
         },
       });
+      // Prune old logs if they exceed threshold
+      pruneOldSyncLogs().catch((err) => console.error("[syncConnection] Error pruning logs:", err));
     } catch (statusError) {
       console.error(
         "[syncConnection] Failed to update error status or log sync failure:",
@@ -1414,5 +1449,116 @@ function getHighestDP(dp1: string | null | undefined, dp2: string | null | undef
   return clean1.localeCompare(clean2, undefined, { numeric: true, sensitivity: 'base' }) > 0 
     ? clean1 
     : clean2;
+}
+
+function calculateDataDensity(mapped: any): number {
+  let score = 0;
+  if (mapped.name && mapped.name.trim()) score += 5;
+  if (mapped.address && mapped.address.trim()) score += 5;
+  if (mapped.dp && mapped.dp.trim() && !["n/a", "na", "-"].includes(mapped.dp.toLowerCase())) score += 5;
+  
+  // Count non-zero numbers
+  const numericKeys = [
+    "cable_start", "cable_middle", "cable_end", "power_dp", "power_inbox",
+    "retainers", "l_hook", "top_bolt", "c_hook", "fiber_rosette",
+    "internal_wire", "s_rosette", "fac", "casing", "c_tie", "c_clip",
+    "conduit", "tag_tie", "flexible", "rj45", "cat5", "pole_67", "pole",
+    "concrete_nail", "roll_plug", "u_clip", "socket", "bend", "rj11",
+    "rj12", "nut_bolt", "screw_nail"
+  ];
+  
+  for (const key of numericKeys) {
+    if (mapped[key] && mapped[key] !== 0) {
+      score += 1;
+    }
+  }
+
+  if (mapped.drum_number && mapped.drum_number.trim()) score += 2;
+  
+  return score;
+}
+
+function mergeGroupedMappedRows(
+  items: Array<{ rowNum: number; mapped: any }>,
+  skippedRows: any[]
+): { primaryRowNum: number; merged: any } {
+  // Sort items by density descending
+  const sorted = [...items].sort((a, b) => calculateDataDensity(b.mapped) - calculateDataDensity(a.mapped));
+  
+  const primary = sorted[0];
+  const merged = { ...primary.mapped };
+
+  for (let i = 1; i < sorted.length; i++) {
+    const duplicate = sorted[i];
+    
+    // Record duplicate as updated/skipped in logs
+    skippedRows.push({
+      rowNum: duplicate.rowNum,
+      telephoneNo: duplicate.mapped.telephone_no,
+      name: duplicate.mapped.name,
+      status: "updated",
+      reason: `Duplicate row for phone number. Merged its data with row #${primary.rowNum}.`
+    });
+
+    // Merge string fields if primary is empty
+    const stringKeys = ["name", "address", "ont", "voice_test_no", "stb", "drum_number"];
+    for (const key of stringKeys) {
+      if ((!merged[key] || !merged[key].toString().trim()) && duplicate.mapped[key] && duplicate.mapped[key].toString().trim()) {
+        merged[key] = duplicate.mapped[key];
+      }
+    }
+
+    // Resolve DP: use highest DP
+    merged.dp = getHighestDP(merged.dp, duplicate.mapped.dp);
+
+    // Merge numeric fields if primary is 0/falsy
+    const numericKeys = [
+      "cable_start", "cable_middle", "cable_end", "power_dp", "power_inbox",
+      "retainers", "l_hook", "top_bolt", "c_hook", "fiber_rosette",
+      "internal_wire", "s_rosette", "fac", "casing", "c_tie", "c_clip",
+      "conduit", "tag_tie", "flexible", "rj45", "cat5", "pole_67", "pole",
+      "concrete_nail", "roll_plug", "u_clip", "socket", "bend", "rj11",
+      "rj12", "nut_bolt", "screw_nail"
+    ];
+    for (const key of numericKeys) {
+      if (!merged[key] && duplicate.mapped[key]) {
+        merged[key] = duplicate.mapped[key];
+      }
+    }
+  }
+
+  return {
+    primaryRowNum: primary.rowNum,
+    merged
+  };
+}
+
+async function pruneOldSyncLogs() {
+  try {
+    const threshold = 10000;
+    const logCount = await prisma.googleSheetSyncLog.count();
+    
+    if (logCount > threshold) {
+      const thresholdLog = await prisma.googleSheetSyncLog.findMany({
+        orderBy: { syncDate: "desc" },
+        skip: threshold - 1,
+        take: 1,
+        select: { syncDate: true }
+      });
+      
+      if (thresholdLog.length > 0) {
+        const deleteResult = await prisma.googleSheetSyncLog.deleteMany({
+          where: {
+            syncDate: {
+              lt: thresholdLog[0].syncDate
+            }
+          }
+        });
+        console.log(`[pruneOldSyncLogs] Pruned ${deleteResult.count} old sync logs.`);
+      }
+    }
+  } catch (error) {
+    console.error("[pruneOldSyncLogs] Error pruning old sync logs:", error);
+  }
 }
 
