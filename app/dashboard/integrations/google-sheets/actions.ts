@@ -582,33 +582,15 @@ export async function syncConnection(
 
             const updateData: any = {};
             if (r.dw_dp) {
-              if (isValidDP(r.dw_dp)) {
-                updateData.dp = r.dw_dp;
-              } else {
-                skippedRows.push({
-                  rowNum: drumRowsRawIndexMap.get(r) ?? 0,
-                  telephoneNo: r.tp,
-                  name: r.dw_cus,
-                  status: "warning",
-                  reason: `Ignored invalid DP format from Drum sheet: "${r.dw_dp}"`
-                });
-              }
+              // DW DP in the drum sheet is a cable measurement number — store it directly
+              updateData.dp = r.dw_dp;
             }
             if (typeof r.dw_c_hook === "number" && r.dw_c_hook > 0) {
               updateData.cHook = r.dw_c_hook;
             }
-            if (r.dw_cus) {
-              if (isValidName(r.dw_cus)) {
-                updateData.name = r.dw_cus;
-              } else {
-                skippedRows.push({
-                  rowNum: drumRowsRawIndexMap.get(r) ?? 0,
-                  telephoneNo: r.tp,
-                  name: r.dw_cus,
-                  status: "warning",
-                  reason: `Ignored invalid Customer Name format from Drum sheet: "${r.dw_cus}"`
-                });
-              }
+            if (r.dw_cus && r.dw_cus.trim()) {
+              // DW CUS is the customer name — store directly without letter-only check
+              updateData.name = r.dw_cus;
             }
             if (r.drum_number) {
               updateData.drumNumber = r.drum_number;
