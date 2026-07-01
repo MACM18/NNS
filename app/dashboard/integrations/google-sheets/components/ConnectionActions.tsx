@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useNotification } from "@/contexts/notification-context";
 import {
@@ -70,6 +71,18 @@ export default function ConnectionActions({ connectionId }: Props) {
         connectionId={connectionId}
         onSyncComplete={handleSyncComplete}
       />
+
+      <Button
+        type='button'
+        variant='outline'
+        size='sm'
+        asChild
+        className='w-full sm:w-auto'
+      >
+        <Link href={`/dashboard/integrations/google-sheets/${connectionId}/logs`}>
+          View Logs
+        </Link>
+      </Button>
 
       <Button
         type='button'
