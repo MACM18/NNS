@@ -6,10 +6,11 @@
     "node": "22.12"
   },
   "scripts": {
-    "build": "DATABASE_URL=${DATABASE_URL:-postgresql://dummy:dummy@localhost:5432/dummy} prisma generate && DATABASE_URL=${DATABASE_URL:-postgresql://dummy:dummy@localhost:5432/dummy} next build",
+    "build": "prisma generate && next build",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
+    "db:push": "prisma db push",
     "test": "jest --watch",
     "test:ci": "jest --ci",
     "test:coverage": "jest --coverage"
