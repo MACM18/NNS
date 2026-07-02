@@ -581,23 +581,17 @@ export async function syncConnection(
             const target = pickLatest(arr);
 
             const updateData: any = {};
-            // NOTE: DW DP is the cable start reading (numeric), NOT the DP code.
-            // The DP code comes from the ALL sheet. Do not overwrite lineDetails.dp here.
-            if (r.dw_dp) {
-              const dwDpNum = Number(r.dw_dp);
-              if (!isNaN(dwDpNum) && dwDpNum > 0) {
-                updateData.cableStart = dwDpNum;
-              }
-            }
-            if (typeof r.dw_c_hook === "number" && r.dw_c_hook > 0) {
-              updateData.cHook = r.dw_c_hook;
-            }
-            if (r.dw_cus && r.dw_cus.trim()) {
-              // DW CUS is the customer name
-              updateData.name = r.dw_cus;
-            }
+            // From the Drum Number sheet we only take DRUM NUMBER and DW WASTAGE.
+            // All other fields (cable start/middle/end, name, dp, cHook) come
+            // exclusively from the ALL sheet and must not be overwritten here.
             if (r.drum_number) {
               updateData.drumNumber = r.drum_number;
+            }
+            if (r.dw_wastage) {
+              const wastageNum = Number(r.dw_wastage);
+              if (!isNaN(wastageNum) && wastageNum >= 0) {
+                updateData.wastage = wastageNum;
+              }
             }
 
             if (Object.keys(updateData).length > 0) {
@@ -1361,6 +1355,7 @@ function headerIndexDrum(headers: string[]) {
     dw_c_hook: pick("DW C HOOK"),
     dw_cus: pick("DW CUS"),
     drum_number: pick("DRUM NUMBER"),
+    dw_wastage: pick("DW WASTAGE"),
   } as const;
 }
 
@@ -1368,10 +1363,11 @@ function mapDrumRow(row: any[], idx: ReturnType<typeof headerIndexDrum>) {
   return {
     no: (row[idx.no] ?? "").toString().trim(),
     tp: normalizeTelephoneCanonical(row[idx.tp]),
-    dw_dp: (row[idx.dw_dp] ?? "").toString().trim(),
-    dw_c_hook: toNumber(row[idx.dw_c_hook]),
-    dw_cus: (row[idx.dw_cus] ?? "").toString().trim(),
+    dw_dp: (row[idx.dw_dp] ?? "").toString().trim(),       // cable start (numeric)
+    dw_c_hook: toNumber(row[idx.dw_c_hook]),               // cable middle (numeric)
+    dw_cus: (row[idx.dw_cus] ?? "").toString().trim(),     // cable end (numeric)
     drum_number: (row[idx.drum_number] ?? "").toString().trim(),
+    dw_wastage: (row[idx.dw_wastage] ?? "").toString().trim(),
   };
 }
 
@@ -1379,11 +1375,11 @@ function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
   const idx = headerIndexDrum(headers);
   const row = new Array(headers.length);
   row[idx.tp] = l.telephoneNo;
-  // DW DP = cable start reading (numeric), not the DP code
-  row[idx.dw_dp] = l.cableStart ?? "";
-  row[idx.dw_c_hook] = l.cHook ?? 1;
-  row[idx.dw_cus] = l.name;
+  row[idx.dw_dp] = l.cableStart ?? "";       // DW DP = Cable Start (numeric)
+  row[idx.dw_c_hook] = l.cableMiddle ?? "";  // DW C HOOK = Cable Middle (numeric)
+  row[idx.dw_cus] = l.cableEnd ?? "";        // DW CUS = Cable End (numeric)
   row[idx.drum_number] = l.drumNumber ?? l.drumNumberNew ?? "";
+  row[idx.dw_wastage] = l.wastage ?? "";
   return row;
 }
 
