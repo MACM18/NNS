@@ -657,7 +657,7 @@ export function LineDetailsTable({
   return (
     <div className='space-y-4'>
       {/* Search and Filter Controls */}
-      <div className='flex flex-col gap-4 sm:flex-row'>
+      <div className='flex flex-col gap-4 sm:flex-row pt-1 pl-1'>
         <div className='relative flex-1'>
           <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
           <Input
