@@ -581,15 +581,19 @@ export async function syncConnection(
             const target = pickLatest(arr);
 
             const updateData: any = {};
+            // NOTE: DW DP is the cable start reading (numeric), NOT the DP code.
+            // The DP code comes from the ALL sheet. Do not overwrite lineDetails.dp here.
             if (r.dw_dp) {
-              // DW DP in the drum sheet is a cable measurement number — store it directly
-              updateData.dp = r.dw_dp;
+              const dwDpNum = Number(r.dw_dp);
+              if (!isNaN(dwDpNum) && dwDpNum > 0) {
+                updateData.cableStart = dwDpNum;
+              }
             }
             if (typeof r.dw_c_hook === "number" && r.dw_c_hook > 0) {
               updateData.cHook = r.dw_c_hook;
             }
             if (r.dw_cus && r.dw_cus.trim()) {
-              // DW CUS is the customer name — store directly without letter-only check
+              // DW CUS is the customer name
               updateData.name = r.dw_cus;
             }
             if (r.drum_number) {
@@ -1375,7 +1379,8 @@ function buildDrumSheetRowFromLine(l: any, headers: string[]): any[] {
   const idx = headerIndexDrum(headers);
   const row = new Array(headers.length);
   row[idx.tp] = l.telephoneNo;
-  row[idx.dw_dp] = l.dp;
+  // DW DP = cable start reading (numeric), not the DP code
+  row[idx.dw_dp] = l.cableStart ?? "";
   row[idx.dw_c_hook] = l.cHook ?? 1;
   row[idx.dw_cus] = l.name;
   row[idx.drum_number] = l.drumNumber ?? l.drumNumberNew ?? "";
