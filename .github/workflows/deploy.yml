@@ -56,7 +56,6 @@ jobs:
             python-version: '3.x'
 
       - name: Trigger Dokploy Deployment
-        if: success() && secrets.DOKPLOY_WEBHOOK_URL != ''
-        run: python .github/scripts/trigger_dokploy.py "${{ secrets.DOKPLOY_WEBHOOK_URL }}"
+        run: python3 .github/scripts/trigger_dokploy.py "${{ secrets.DOKPLOY_WEBHOOK_URL }}"
 
 
