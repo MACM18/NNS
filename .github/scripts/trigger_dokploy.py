@@ -1,31 +1,52 @@
-import os
+#!/usr/bin/env python3
+"""Send a simple POST request to a deployment webhook."""
+
+from __future__ import annotations
+
+import argparse
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 
-def trigger_webhook():
-    webhook_url = os.environ.get("DOKPLOY_WEBHOOK_URL")
-    if not webhook_url:
-        print("DOKPLOY_WEBHOOK_URL secret is not set, skipping redeploy trigger.")
-        sys.exit(0)
 
-    print("Triggering Dokploy redeploy via Python...")
-    req = urllib.request.Request(webhook_url, method="POST")
-    
+def trigger_webhook(url: str, timeout: int = 30) -> int:
+    request = urllib.request.Request(
+        url,
+        data=b"",
+        method="POST",
+        headers={
+            "User-Agent": "resume-ci-webhook/1.0",
+            "Accept": "application/json, text/plain, */*",
+        },
+    )
+
     try:
-        with urllib.request.urlopen(req) as response:
-            print(f"Status Code: {response.status}")
-            print(f"Response: {response.read().decode('utf-8')}")
-            print("Successfully triggered Dokploy deployment.")
-    except urllib.error.HTTPError as e:
-        print(f"HTTP Error occurred: {e.code} - {e.reason}", file=sys.stderr)
-        sys.exit(1)
-    except urllib.error.URLError as e:
-        print(f"URL Error occurred: {e.reason}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}", file=sys.stderr)
-        sys.exit(1)
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            sys.stdout.write(f"Webhook triggered successfully: {response.status}\n")
+            return 0
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        sys.stderr.write(f"Webhook request failed: HTTP {exc.code}\n")
+        if body:
+            sys.stderr.write(body + "\n")
+        return 1
+    except urllib.error.URLError as exc:
+        sys.stderr.write(f"Webhook request failed: {exc.reason}\n")
+        return 1
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("url", help="Deployment webhook URL")
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=30,
+        help="Request timeout in seconds (default: 30)",
+    )
+    args = parser.parse_args()
+    return trigger_webhook(args.url, timeout=args.timeout)
+
 
 if __name__ == "__main__":
-    trigger_webhook()
+    raise SystemExit(main())
