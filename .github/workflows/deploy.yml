@@ -49,12 +49,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Set up Python
+        if: success()
+        uses: actions/setup-python@v5
+        with:
+            python-version: '3.x'
+
       - name: Trigger Dokploy Deployment
         if: success()
-        run: |
-          if [ -n "${{ secrets.DOKPLOY_WEBHOOK_URL }}" ]; then
-            echo "Triggering Dokploy redeploy..."
-            curl -X POST "${{ secrets.DOKPLOY_WEBHOOK_URL }}"
-          else
-            echo "DOKPLOY_WEBHOOK_URL secret is not set, skipping redeploy trigger."
-          fi
+        env:
+          DOKPLOY_WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_URL }}
+        run: python .github/scripts/trigger_dokploy.py
+
