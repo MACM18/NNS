@@ -22,6 +22,8 @@ interface InvoiceData {
     address: string;
     total_cable: number;
     date: string;
+    baseRate?: number | null;
+    invoiceAmount?: number | null;
   }>;
   totalAmount: number;
   companySettings: {
@@ -38,7 +40,7 @@ interface InvoiceData {
       iban: string;
     };
   };
-  pricingTiers: Array<{
+  pricingTiers?: Array<{
     min_length: number;
     max_length: number;
     rate: number;
@@ -50,13 +52,6 @@ interface InvoicePDFTemplateProps {
 }
 
 export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
-  const calculateRate = (cableLength: number): number => {
-    const tier = data.pricingTiers.find(
-      (t) => cableLength >= t.min_length && cableLength <= t.max_length
-    );
-    return tier ? tier.rate : 8400;
-  };
-
   const formatCurrency = (amount: number): string => {
     return `LKR ${Number(amount || 0).toLocaleString()}`;
   };
@@ -154,7 +149,7 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
           </TableHeader>
           <TableBody>
             {data.lines.map((line, index) => {
-              const rate = calculateRate(line.total_cable);
+              const rate = line.baseRate;
               return (
                 <TableRow key={line.id}>
                   <TableCell>{index + 1}</TableCell>
@@ -167,10 +162,10 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
                     {Number(line.total_cable || 0).toFixed(2)}
                   </TableCell>
                   <TableCell className='text-right'>
-                    {Number(rate || 0).toLocaleString()}
+                    {rate == null ? "—" : Number(rate).toLocaleString()}
                   </TableCell>
                   <TableCell className='text-right'>
-                    {Number(rate || 0).toLocaleString()}
+                    {line.invoiceAmount == null ? "—" : Number(line.invoiceAmount).toLocaleString()}
                   </TableCell>
                 </TableRow>
               );
@@ -191,7 +186,7 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
       </div>
 
       {/* Pricing Tiers Reference */}
-      <div className='mb-8'>
+      {data.pricingTiers && data.pricingTiers.length > 0 && <div className='mb-8'>
         <h3 className='font-semibold mb-4'>Pricing Structure</h3>
         <div className='grid grid-cols-2 md:grid-cols-3 gap-4'>
           {data.pricingTiers.map((tier, index) => (
@@ -206,7 +201,7 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* Bank Details */}
       <div className='mb-8'>

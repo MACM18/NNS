@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Mail, Phone, MapPin, Calendar, Edit, Save, X } from "lucide-react";
 import {
   Card,
@@ -30,13 +30,21 @@ export default function ProfilePage() {
     address: profile?.address || "",
     bio: profile?.bio || "",
   });
+  const [isSaving, setIsSaving] = useState(false);
   const route = useRouter();
+
+  useEffect(() => {
+    setFormData({
+      full_name: profile?.full_name || "",
+      phone: profile?.phone || "",
+      address: profile?.address || "",
+      bio: profile?.bio || "",
+    });
+  }, [profile]);
 
   if (!user && !loading) {
     return <AuthWrapper />;
   }
-
-  const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
     if (!user?.id) return;
@@ -119,23 +127,23 @@ export default function ProfilePage() {
                 Manage your account settings and preferences
               </p>
             </div>
-            {/* {!isEditing ? ( */}
-            <Button onClick={() => route.push("/dashboard/settings")}>
-              <Edit className='h-4 w-4 mr-2' />
-              Edit Profile
-            </Button>
-            {/* ) : (
+            {!isEditing ? (
+              <Button onClick={() => setIsEditing(true)}>
+                <Edit className='h-4 w-4 mr-2' />
+                Edit Profile
+              </Button>
+            ) : (
               <div className='flex gap-2'>
-                <Button onClick={handleSave}>
+                <Button onClick={handleSave} disabled={isSaving}>
                   <Save className='h-4 w-4 mr-2' />
-                  Save
+                  {isSaving ? "Saving…" : "Save"}
                 </Button>
-                <Button variant='outline' onClick={handleCancel}>
+                <Button variant='outline' onClick={handleCancel} disabled={isSaving}>
                   <X className='h-4 w-4 mr-2' />
                   Cancel
                 </Button>
               </div>
-            )} */}
+            )}
           </div>
 
           <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
@@ -303,7 +311,7 @@ export default function ProfilePage() {
                     Receive notifications about your account activity
                   </p>
                 </div>
-                <Button variant='outline' size='sm'>
+                <Button variant='outline' size='sm' onClick={() => route.push("/dashboard/settings?tab=notifications")}>
                   Configure
                 </Button>
               </div>
@@ -315,7 +323,7 @@ export default function ProfilePage() {
                     Update your account password
                   </p>
                 </div>
-                <Button variant='outline' size='sm'>
+                <Button variant='outline' size='sm' onClick={() => route.push("/dashboard/settings?tab=security")}>
                   Change
                 </Button>
               </div>
@@ -327,7 +335,7 @@ export default function ProfilePage() {
                     Add an extra layer of security to your account
                   </p>
                 </div>
-                <Button variant='outline' size='sm'>
+                <Button variant='outline' size='sm' onClick={() => route.push("/dashboard/settings?tab=security")}>
                   Enable
                 </Button>
               </div>

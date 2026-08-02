@@ -157,6 +157,44 @@ export interface VoucherMetadata {
   payeeNic?: string | null;
 }
 
+export interface PricingTier {
+  id?: string;
+  minLength: number;
+  maxLength?: number | null;
+  rate: number;
+}
+
+export interface PricingSchedule {
+  id: string;
+  name: string;
+  effectiveFrom: Date | string;
+  status: string;
+  lockedAt?: Date | string | null;
+  createdAt?: Date | string;
+  tiers: PricingTier[];
+}
+
+export interface InvoiceLineSnapshot {
+  lineId: string;
+  customerName: string;
+  telephoneNo: string;
+  address: string;
+  serviceDate: string;
+  cableLength: number;
+  baseRate: number;
+  invoiceAmount: number;
+  pricingScheduleId: string;
+  pricingScheduleName: string;
+}
+
+export interface EmailChangeRequest {
+  id: string;
+  newEmail: string;
+  expiresAt: Date | string;
+  consumedAt?: Date | string | null;
+  createdAt?: Date | string;
+}
+
 export interface TaxClassification {
   code: string;
   label: string;

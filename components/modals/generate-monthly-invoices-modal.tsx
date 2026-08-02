@@ -52,6 +52,7 @@ interface InvoicePreview {
   lines: LineDetail[];
   totalAmount: number;
   invoiceNumber: string;
+  linePricing: Record<string, { baseRate: number; invoiceAmount: number }>;
 }
 
 export function GenerateMonthlyInvoicesModal({
@@ -95,7 +96,6 @@ export function GenerateMonthlyInvoicesModal({
 
   useEffect(() => {
     if (open) {
-      fetchCompanySettings();
       // Set default to current month
       const currentMonth = new Date().getMonth() + 1;
       setSelectedMonth(currentMonth.toString().padStart(2, "0"));
@@ -180,8 +180,9 @@ export function GenerateMonthlyInvoicesModal({
 
       const { data } = await response.json();
 
-      setLineDetails((data as unknown as LineDetail[]) || []);
-      generateInvoicePreviews((data as unknown as LineDetail[]) || []);
+      const nextLines = (data as unknown as LineDetail[]) || [];
+      setLineDetails(nextLines);
+      await generateInvoicePreviews(nextLines);
     } catch (error: any) {
       addNotification({
         title: "Error",
@@ -215,17 +216,23 @@ export function GenerateMonthlyInvoicesModal({
     return tier ? tier.rate : 8400;
   };
 
-  const generateInvoicePreviews = (lines: LineDetail[]) => {
+  const generateInvoicePreviews = async (lines: LineDetail[]) => {
     if (lines.length === 0) {
       setInvoicePreviews([]);
       return;
     }
 
-    // Calculate total amount for all lines
-    const totalAmount = lines.reduce(
-      (sum, line) => sum + calculateRate(line.total_cable),
-      0
-    );
+    const lineDetailsIds = lines.map((line) => line.id);
+    const pricingResponses = await Promise.all(["A", "B"].map(async (invoiceType) => {
+      const response = await fetch("/api/invoices/generate/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineDetailsIds, invoiceType }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to calculate invoice preview");
+      return result.data;
+    }));
 
     // Generate invoice numbers
     const monthName =
@@ -240,15 +247,17 @@ export function GenerateMonthlyInvoicesModal({
         type: "A" as const,
         percentage: 90,
         lines: lines, // All lines
-        totalAmount: Math.round(totalAmount * 0.9),
+        totalAmount: Number(pricingResponses[0].totalAmount),
         invoiceNumber: `${baseInvoiceNumber}/A`,
+        linePricing: Object.fromEntries(pricingResponses[0].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount }])),
       },
       {
         type: "B" as const,
         percentage: 10,
         lines: lines, // All lines
-        totalAmount: totalAmount - Math.round(totalAmount * 0.9), // Use remainder to ensure exact 100% coverage without rounding errors
+        totalAmount: Number(pricingResponses[1].totalAmount),
         invoiceNumber: `${baseInvoiceNumber}/B`,
+        linePricing: Object.fromEntries(pricingResponses[1].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount }])),
       },
     ];
 
@@ -433,12 +442,9 @@ export function GenerateMonthlyInvoicesModal({
                     </Label>
                     <div className='text-2xl font-bold'>
                       LKR{" "}
-                      {lineDetails
-                        .reduce(
-                          (sum, line) => sum + calculateRate(line.total_cable),
-                          0
-                        )
-                        .toLocaleString()}
+                      {(invoicePreviews[0]?.totalAmount || 0) + (invoicePreviews[1]?.totalAmount || 0)
+                        ? ((invoicePreviews[0]?.totalAmount || 0) + (invoicePreviews[1]?.totalAmount || 0)).toLocaleString()
+                        : "—"}
                     </div>
                   </div>
                   <div>
@@ -529,13 +535,13 @@ export function GenerateMonthlyInvoicesModal({
                               <TableCell>
                                 LKR{" "}
                                 {Number(
-                                  calculateRate(line.total_cable) || 0
+                                  preview.linePricing[line.id]?.baseRate || 0
                                 ).toLocaleString()}
                               </TableCell>
                               <TableCell>
                                 LKR{" "}
                                 {Number(
-                                  calculateRate(line.total_cable) || 0
+                                  preview.linePricing[line.id]?.invoiceAmount || 0
                                 ).toLocaleString()}
                               </TableCell>
                             </TableRow>

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   createAndIssueGeneratedInvoice,
+  createIssuedInvoiceFromLines,
 } from "@/lib/partnership-accounting-service";
 
 export async function GET(req: NextRequest) {
@@ -63,6 +64,9 @@ export async function GET(req: NextRequest) {
       total_amount: inv.totalAmount ? Number(inv.totalAmount) : 0,
       line_count: inv.lineCount ? Number(inv.lineCount) : 0,
       line_details_ids: inv.lineDetailsIds || null,
+      pricing_schedule_id: inv.pricingScheduleId || null,
+      pricing_snapshot: inv.pricingSnapshot || null,
+      line_details_snapshot: inv.lineDetailsSnapshot || null,
       status: inv.status || null,
       paid_amount: Number(inv.paidAmount || 0),
       payment_status: inv.paymentStatus,
@@ -117,26 +121,38 @@ export async function POST(req: NextRequest) {
     const lineDetailsIds = body.line_details_ids ?? body.lineDetailsIds ?? null;
     const status = body.status ?? "generated";
 
-    if (!invoiceNumber || !Number.isFinite(totalAmount) || totalAmount <= 0) {
+    if (!invoiceNumber || (!Array.isArray(lineDetailsIds) && (!Number.isFinite(totalAmount) || totalAmount <= 0))) {
       return NextResponse.json(
         { error: "Invoice number and a positive total amount are required" },
         { status: 400 },
       );
     }
 
-    const invoice = await createAndIssueGeneratedInvoice({
-      invoiceNumber,
-      invoiceType,
-      month,
-      year,
-      jobMonth,
-      invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
-      totalAmount,
-      lineCount,
-      lineDetailsIds: lineDetailsIds ?? undefined,
-      status,
-      createdById: profile!.id,
-    });
+    const invoice = Array.isArray(lineDetailsIds) && lineDetailsIds.length > 0
+      ? await createIssuedInvoiceFromLines({
+          invoiceNumber,
+          invoiceType,
+          month,
+          year,
+          jobMonth,
+          invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
+          lineDetailsIds,
+          status,
+          createdById: profile!.id,
+        })
+      : await createAndIssueGeneratedInvoice({
+          invoiceNumber,
+          invoiceType,
+          month,
+          year,
+          jobMonth,
+          invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
+          totalAmount,
+          lineCount,
+          lineDetailsIds: lineDetailsIds ?? undefined,
+          status,
+          createdById: profile!.id,
+        });
 
     const formatted = {
       id: invoice.id,
@@ -151,6 +167,9 @@ export async function POST(req: NextRequest) {
       total_amount: invoice.totalAmount ? Number(invoice.totalAmount) : 0,
       line_count: invoice.lineCount ? Number(invoice.lineCount) : 0,
       line_details_ids: invoice.lineDetailsIds || null,
+      pricing_schedule_id: invoice.pricingScheduleId || null,
+      pricing_snapshot: invoice.pricingSnapshot || null,
+      line_details_snapshot: invoice.lineDetailsSnapshot || null,
       status: invoice.status || null,
       paid_amount: Number(invoice.paidAmount || 0),
       payment_status: invoice.paymentStatus,
@@ -162,6 +181,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error creating invoice:", error);
+    if (error instanceof Error && error.message.includes("already exists")) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     return NextResponse.json(
       { error: "Failed to create invoice" },
       { status: 500 }

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { encrypt } from "@/lib/encryption";
 import type { ReceivableAgingBucket } from "@/types/accounting";
+import { calculateInvoicePricing } from "@/lib/pricing-service";
 
 type Tx = Prisma.TransactionClient;
 type DecimalInput = number | Prisma.Decimal;
@@ -369,6 +370,9 @@ export async function createAndIssueGeneratedInvoice(input: {
     throw new Error("Invoice amount must be a positive number");
   }
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.invoiceNumber}))`;
+    const duplicate = await tx.generatedInvoice.findFirst({ where: { invoiceNumber: input.invoiceNumber }, select: { id: true } });
+    if (duplicate) throw new Error("An invoice with this number already exists and cannot be regenerated");
     const invoice = await tx.generatedInvoice.create({
       data: {
         invoiceNumber: input.invoiceNumber,
@@ -402,6 +406,88 @@ export async function createAndIssueGeneratedInvoice(input: {
       lines: [
         { accountId: settings.defaultReceivablesAccountId, description: "Customer receivable", debitAmount: input.totalAmount, creditAmount: 0 },
         { accountId: settings.defaultRevenueAccountId, description: "Service revenue", debitAmount: 0, creditAmount: input.totalAmount },
+      ],
+    });
+    return tx.generatedInvoice.update({
+      where: { id: invoice.id },
+      data: {
+        accountingStatus: "posted",
+        financialYearId: financialYear.id,
+        postedJournalEntryId: entry.id,
+      },
+    });
+  });
+}
+
+/**
+ * Creates an issued service invoice from line IDs. The amount supplied by a
+ * browser is deliberately not accepted: lines, effective-dated rates, and
+ * immutable snapshots are calculated inside the same database transaction as
+ * the invoice and receivable journal.
+ */
+export async function createIssuedInvoiceFromLines(input: {
+  invoiceNumber: string;
+  invoiceType?: string;
+  month?: number;
+  year?: number;
+  jobMonth?: string;
+  invoiceDate?: Date;
+  lineDetailsIds: string[];
+  status?: string;
+  createdById: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    // Serialize concurrent attempts for the same invoice number even though
+    // legacy databases may contain duplicate historical numbers and cannot
+    // safely receive a new global unique index during this additive migration.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.invoiceNumber}))`;
+    const duplicate = await tx.generatedInvoice.findFirst({
+      where: { invoiceNumber: input.invoiceNumber },
+      select: { id: true },
+    });
+    if (duplicate) throw new Error("An invoice with this number already exists and cannot be regenerated");
+
+    const pricing = await calculateInvoicePricing(tx, {
+      lineDetailsIds: input.lineDetailsIds,
+      invoiceType: input.invoiceType,
+    });
+    const invoice = await tx.generatedInvoice.create({
+      data: {
+        invoiceNumber: input.invoiceNumber,
+        invoiceType: input.invoiceType,
+        month: input.month,
+        year: input.year,
+        jobMonth: input.jobMonth,
+        invoiceDate: input.invoiceDate,
+        totalAmount: pricing.totalAmount,
+        lineCount: pricing.lineCount,
+        lineDetailsIds: pricing.lineDetailsIds as Prisma.InputJsonValue,
+        pricingScheduleId: pricing.pricingScheduleId,
+        pricingSnapshot: pricing.pricingSnapshot as Prisma.InputJsonValue,
+        lineDetailsSnapshot: pricing.lineDetailsSnapshot as Prisma.InputJsonValue,
+        status: input.status || "issued",
+      },
+    });
+
+    const settings = (await getFiscalSettings(tx)).settings;
+    if (!settings?.defaultReceivablesAccountId || !settings.defaultRevenueAccountId) {
+      throw new Error("Configure receivables and service revenue accounts before creating invoices");
+    }
+    const date = invoice.invoiceDate || invoice.createdAt;
+    const financialYear = await ensureFinancialYear(tx, date, input.createdById);
+    const entry = await postJournalEntryTx(tx, {
+      date,
+      description: "Service invoice " + invoice.invoiceNumber,
+      reference: invoice.invoiceNumber,
+      referenceType: "service_invoice",
+      referenceId: invoice.id,
+      financialYearId: financialYear.id,
+      sourceKey: "service_invoice:" + invoice.id,
+      createdById: input.createdById,
+      autoApprove: true,
+      lines: [
+        { accountId: settings.defaultReceivablesAccountId, description: "Customer receivable", debitAmount: pricing.totalAmount, creditAmount: 0 },
+        { accountId: settings.defaultRevenueAccountId, description: "Service revenue", debitAmount: 0, creditAmount: pricing.totalAmount },
       ],
     });
     return tx.generatedInvoice.update({

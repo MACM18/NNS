@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Only Admin and Moderator can view email settings
-    if (!["admin", "moderator"].includes(session.user.role)) {
+    if (!["admin", "moderator", "superadmin"].includes((session.user.role || "").toLowerCase())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -81,7 +81,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // Only Admin can modify email settings
-    if (session.user.role !== "admin") {
+    if (!["admin", "superadmin"].includes((session.user.role || "").toLowerCase())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
