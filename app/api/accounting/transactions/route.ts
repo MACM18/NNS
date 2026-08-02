@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const yearId = req.nextUrl.searchParams.get("financialYearId") || undefined;
     const transactions = await prisma.businessTransaction.findMany({
       where: yearId ? { financialYearId: yearId } : undefined,
-      include: { partner: true, vouchers: true },
+      include: { partner: true, vouchers: true, financialYear: true },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
     return NextResponse.json({ data: transactions });

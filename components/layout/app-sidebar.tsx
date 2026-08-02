@@ -139,6 +139,21 @@ const accountingItems = [
     icon: CreditCard,
   },
   {
+    title: "Transactions",
+    url: "/dashboard/accounting/transactions",
+    icon: ClipboardList,
+  },
+  {
+    title: "Partners",
+    url: "/dashboard/accounting/partners",
+    icon: Users,
+  },
+  {
+    title: "Receivables",
+    url: "/dashboard/accounting/receivables",
+    icon: BarChart3,
+  },
+  {
     title: "Reports",
     url: "/dashboard/accounting/reports",
     icon: BarChart3,
@@ -161,7 +176,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // Check if user has accounting access (moderator, admin)
   const hasAccountingAccess =
-    !loading && role && ["admin", "moderator"].includes(role);
+    !loading && role && ["admin", "moderator", "superadmin"].includes(role);
 
   return (
     <Sidebar {...props}>

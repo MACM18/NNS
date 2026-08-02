@@ -111,6 +111,10 @@ export default function PayrollPage() {
   const [periods, setPeriods] = useState<PayrollPeriod[]>([]);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [processingPeriod, setProcessingPeriod] = useState<string | null>(null);
+  const [paymentAccounts, setPaymentAccounts] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [payPeriodId, setPayPeriodId] = useState<string | null>(null);
+  const [bulkPaymentMethod, setBulkPaymentMethod] = useState("bank_transfer");
+  const [paymentAccountId, setPaymentAccountId] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [workers, setWorkers] = useState<any[]>([]);
   const [editingWorker, setEditingWorker] = useState<string | null>(null);
@@ -166,7 +170,9 @@ export default function PayrollPage() {
 
   const { addNotification } = useNotification();
   const { role } = useAuth();
-  const canManage = role === "admin" || role === "moderator";
+  const canPrepare = role === "admin" || role === "moderator" || role === "superadmin";
+  const canApprovePay = role === "admin" || role === "superadmin";
+  const canManage = canPrepare;
 
   const fetchData = useCallback(
     async (showRefreshState = false) => {
@@ -218,6 +224,20 @@ export default function PayrollPage() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!canApprovePay) return;
+    fetch("/api/accounting/accounts?isActive=true&category=Asset")
+      .then((response) => (response.ok ? response.json() : { data: [] }))
+      .then((result) => {
+        const accounts = (result.data || []).filter((account: { code: string }) =>
+          account.code.startsWith("1010") || account.code.startsWith("1020"),
+        );
+        setPaymentAccounts(accounts);
+        if (!paymentAccountId && accounts[0]) setPaymentAccountId(accounts[0].id);
+      })
+      .catch(() => setPaymentAccounts([]));
+  }, [canApprovePay, paymentAccountId]);
 
   useEffect(() => {
     // Auto-generate period name when month/year changes
@@ -274,14 +294,14 @@ export default function PayrollPage() {
     }
   };
 
-  const handleAction = async (periodId: string, action: string) => {
+  const handleAction = async (periodId: string, action: string, details?: Record<string, string>) => {
     try {
       setProcessingPeriod(periodId);
 
       const response = await fetch(`/api/payroll/periods/${periodId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...details }),
       });
 
       if (!response.ok) {
@@ -877,14 +897,12 @@ export default function PayrollPage() {
                                         )}
                                       </Button>
                                     )}
-                                    {canManage &&
+                                    {canApprovePay &&
                                       period.status === "approved" && (
                                         <Button
                                           size='sm'
                                           variant='default'
-                                          onClick={() =>
-                                            handleAction(period.id, "pay")
-                                          }
+                                          onClick={() => setPayPeriodId(period.id)}
                                           disabled={
                                             processingPeriod === period.id
                                           }
@@ -899,7 +917,7 @@ export default function PayrollPage() {
                                           )}
                                         </Button>
                                       )}
-                                    {canManage && (
+                                    {role === "admin" && (
                                       <Button
                                         size='sm'
                                         variant='ghost'

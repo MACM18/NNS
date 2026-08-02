@@ -117,7 +117,7 @@ export async function POST(
     }
 
     const userRole = session.user.role?.toLowerCase();
-    if (userRole !== "admin" && userRole !== "moderator") {
+    if (!["admin", "moderator", "superadmin"].includes(userRole || "")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

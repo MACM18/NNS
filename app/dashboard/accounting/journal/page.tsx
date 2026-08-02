@@ -17,7 +17,7 @@ export default async function JournalEntriesPage() {
 
   // Check if user has accounting access (moderator or above)
   const role = session.user.role || "user";
-  if (role === "user") {
+  if (!["admin", "superadmin", "moderator"].includes(role.toLowerCase())) {
     redirect("/dashboard");
   }
 

@@ -42,6 +42,8 @@ interface Invoice {
   paidAmount?: number;
   payment_status?: string;
   paymentStatus?: string;
+  accounting_status?: string;
+  accountingStatus?: string;
   created_at?: string;
   createdAt?: string;
   customer_name?: string;
@@ -95,7 +97,7 @@ export default function PaymentsPage() {
       setLoading(true);
       // Only service invoices are payable. Free-issued inventory is operational stock,
       // not a supplier liability or cash payment.
-      const generatedRes = await fetch("/api/invoices?limit=100");
+      const generatedRes = await fetch("/api/invoices?limit=1000");
 
       const generated = generatedRes.ok
         ? await generatedRes.json()
@@ -137,6 +139,9 @@ export default function PaymentsPage() {
 
   const getPaymentStatus = (inv: Invoice) =>
     inv.payment_status || inv.paymentStatus || "unpaid";
+
+  const isPosted = (inv: Invoice) =>
+    (inv.accounting_status || inv.accountingStatus || "posted") === "posted";
 
   const getCreatedAt = (inv: Invoice) =>
     inv.created_at || inv.createdAt || new Date().toISOString();
@@ -201,7 +206,7 @@ export default function PaymentsPage() {
 
     const matchesType = typeFilter === "all" || inv.type === typeFilter;
 
-    return matchesSearch && matchesStatus && matchesType;
+    return matchesSearch && matchesStatus && matchesType && isPosted(inv);
   });
 
   // Calculate totals

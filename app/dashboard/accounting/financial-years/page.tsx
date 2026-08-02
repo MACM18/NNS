@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNotification } from "@/contexts/notification-context";
+import { useAuth } from "@/contexts/auth-context";
 
 type Account = { id: string; code: string; name: string; category: string };
 type FinancialYear = {
@@ -43,6 +44,8 @@ function defaultDates() {
 
 export default function FinancialYearsPage() {
   const { addNotification } = useNotification();
+  const { role } = useAuth();
+  const canAdminister = role === "admin" || role === "superadmin";
   const [years, setYears] = useState<FinancialYear[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -69,7 +72,7 @@ export default function FinancialYearsPage() {
     const [yearsResponse, accountsResponse, invoicesResponse] = await Promise.all([
       fetch("/api/accounting/financial-years"),
       fetch("/api/accounting/accounts?isActive=true"),
-      fetch("/api/invoices?limit=100"),
+      fetch("/api/invoices?limit=1000"),
     ]);
     const yearsJson = await yearsResponse.json();
     const accountsJson = await accountsResponse.json();
@@ -157,7 +160,7 @@ export default function FinancialYearsPage() {
         <CardContent className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
           <div className="space-y-2"><Label htmlFor="startDate">Start date</Label><Input id="startDate" type="date" value={dates.startDate} onChange={(event) => setDates({ ...dates, startDate: event.target.value })} /></div>
           <div className="space-y-2"><Label htmlFor="endDate">End date</Label><Input id="endDate" type="date" value={dates.endDate} onChange={(event) => setDates({ ...dates, endDate: event.target.value })} /></div>
-          <Button onClick={createYear} disabled={creating}>{creating ? "Creating..." : "Create year"}</Button>
+          {canAdminister && <Button onClick={createYear} disabled={creating}>{creating ? "Creating..." : "Create year"}</Button>}
         </CardContent>
       </Card>
 
@@ -181,7 +184,7 @@ export default function FinancialYearsPage() {
           </div>
           <div className={`rounded-md border p-3 text-sm ${balanced ? "border-green-500" : "border-amber-500"}`}>Debits: LKR {debitTotal.toLocaleString()} · Credits: LKR {creditTotal.toLocaleString()} · {balanced ? "Balanced" : "Not balanced"}</div>
           {availableReceivables.length > 0 && <div className="space-y-2"><h3 className="font-medium">Unpaid invoices to carry forward</h3>{availableReceivables.map((invoice) => <label key={invoice.id} className="flex items-center gap-3 rounded border p-3 text-sm"><input type="checkbox" checked={Boolean(selectedReceivables[invoice.id])} onChange={(event) => setSelectedReceivables({ ...selectedReceivables, [invoice.id]: event.target.checked })} /><span className="flex-1">{invoice.invoice_number} ({invoice.invoice_date})</span><span>LKR {(invoice.total_amount - invoice.paid_amount).toLocaleString()}</span></label>)}</div>}
-          <Button onClick={postOpening} disabled={!selectedYearId || !balanced || posting || selectedYear?.isClosed}>{posting ? "Posting..." : "Validate and post opening balances"}</Button>
+          {canAdminister && <Button onClick={postOpening} disabled={!selectedYearId || !balanced || posting || selectedYear?.isClosed}>{posting ? "Posting..." : "Validate and post opening balances"}</Button>}
         </CardContent>
       </Card>
     </div>

@@ -60,7 +60,7 @@ export function PaymentModal({
     Array<{ id: string; code: string; name: string }>
   >([]);
   const [formData, setFormData] = useState({
-    amount: remainingAmount || invoiceAmount,
+    amount: remainingAmount ?? invoiceAmount,
     paymentDate: new Date(),
     paymentMethod: "bank_transfer",
     reference: "",
@@ -76,7 +76,7 @@ export function PaymentModal({
     if (open) {
       setFormData((prev) => ({
         ...prev,
-        amount: remainingAmount || invoiceAmount,
+        amount: remainingAmount ?? invoiceAmount,
       }));
       fetchAccounts();
     }

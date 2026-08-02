@@ -177,6 +177,14 @@ export function FinancialReports({
         `\nTotals,,${trialBalance.totalDebits.toFixed(
           2,
         )},${trialBalance.totalCredits.toFixed(2)}`;
+    } else if (activeReport === "income-statement" && basis === "cash" && cashIncomeStatement) {
+      csvContent =
+        "Section,Amount\n" +
+        `Customer collections,${cashIncomeStatement.customerCollections.toFixed(2)}\n` +
+        `Other income,${cashIncomeStatement.otherIncome.toFixed(2)}\n` +
+        `Business expenses paid,-${cashIncomeStatement.businessExpenses.toFixed(2)}\n` +
+        `Wages paid,-${cashIncomeStatement.wagesPaid.toFixed(2)}\n` +
+        `Net cash-basis profit,${cashIncomeStatement.netProfit.toFixed(2)}`;
     } else if (activeReport === "income-statement" && incomeStatement) {
       csvContent =
         "Section,Account,Amount\n" +

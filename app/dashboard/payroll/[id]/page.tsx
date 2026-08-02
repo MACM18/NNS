@@ -113,10 +113,14 @@ export default function PayrollPeriodDetailPage({
   );
   const [refreshing, setRefreshing] = useState(false);
   const [payWorkerModalOpen, setPayWorkerModalOpen] = useState(false);
+  const [payBulkModalOpen, setPayBulkModalOpen] = useState(false);
   const [payWorkerForm, setPayWorkerForm] = useState({
     paymentMethod: "bank_transfer",
     paymentRef: "",
   });
+  const [paymentAccounts, setPaymentAccounts] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [bulkPaymentMethod, setBulkPaymentMethod] = useState("bank_transfer");
+  const [paymentAccountId, setPaymentAccountId] = useState("");
   const [adjustmentError, setAdjustmentError] = useState<string | null>(null);
   const [addWorkerModalOpen, setAddWorkerModalOpen] = useState(false);
   const [allWorkers, setAllWorkers] = useState<any[]>([]);
@@ -132,7 +136,9 @@ export default function PayrollPeriodDetailPage({
 
   const { addNotification } = useNotification();
   const { role } = useAuth();
-  const canManage = role === "admin" || role === "moderator";
+  const canPrepare = role === "admin" || role === "moderator" || role === "superadmin";
+  const canApprovePay = role === "admin" || role === "superadmin";
+  const canManage = canPrepare;
 
   const fetchData = useCallback(
     async (isRefresh = false) => {
@@ -168,14 +174,28 @@ export default function PayrollPeriodDetailPage({
     fetchData();
   }, [fetchData]);
 
-  const handleAction = async (action: string) => {
+  useEffect(() => {
+    if (!canApprovePay) return;
+    fetch("/api/accounting/accounts?isActive=true&category=Asset")
+      .then((response) => (response.ok ? response.json() : { data: [] }))
+      .then((result) => {
+        const accounts = (result.data || []).filter((account: { code: string }) =>
+          account.code.startsWith("1010") || account.code.startsWith("1020"),
+        );
+        setPaymentAccounts(accounts);
+        if (!paymentAccountId && accounts[0]) setPaymentAccountId(accounts[0].id);
+      })
+      .catch(() => setPaymentAccounts([]));
+  }, [canApprovePay, paymentAccountId]);
+
+  const handleAction = async (action: string, details?: Record<string, string>) => {
     try {
       setProcessingAction(true);
 
       const response = await fetch(`/api/payroll/periods/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...details }),
       });
 
       if (!response.ok) {
@@ -538,7 +558,7 @@ export default function PayrollPeriodDetailPage({
                 Calculate Payroll
               </Button>
             )}
-          {canManage && period.status === "processing" && (
+          {canApprovePay && period.status === "processing" && (
             <Button
               onClick={() => handleAction("approve")}
               disabled={processingAction}
@@ -551,9 +571,9 @@ export default function PayrollPeriodDetailPage({
               Approve
             </Button>
           )}
-          {canManage && period.status === "approved" && (
+          {canApprovePay && period.status === "approved" && (
             <Button
-              onClick={() => handleAction("pay")}
+              onClick={() => setPayBulkModalOpen(true)}
               disabled={processingAction}
             >
               {processingAction ? (
@@ -1163,6 +1183,52 @@ export default function PayrollPeriodDetailPage({
             >
               <Download className='h-4 w-4 mr-2' />
               Download PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={payBulkModalOpen} onOpenChange={setPayBulkModalOpen}>
+        <DialogContent className='sm:max-w-[425px]'>
+          <DialogHeader>
+            <DialogTitle>Record payroll payment</DialogTitle>
+            <DialogDescription>Select the account used to pay this payroll period.</DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            <div className='space-y-2'>
+              <Label>Payment method</Label>
+              <Select value={bulkPaymentMethod} onValueChange={setBulkPaymentMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='cash'>Cash</SelectItem>
+                  <SelectItem value='bank_transfer'>Bank transfer</SelectItem>
+                  <SelectItem value='cheque'>Cheque</SelectItem>
+                  <SelectItem value='other'>Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-2'>
+              <Label>Cash or bank account</Label>
+              <Select value={paymentAccountId} onValueChange={setPaymentAccountId}>
+                <SelectTrigger><SelectValue placeholder='Select account' /></SelectTrigger>
+                <SelectContent>
+                  {paymentAccounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.code} - {account.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {paymentAccounts.length === 0 && <p className='text-sm text-destructive'>No active cash or bank accounts are configured.</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setPayBulkModalOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!paymentAccountId || processingAction}
+              onClick={async () => {
+                await handleAction("pay", { bulkPaymentMethod, paymentAccountId });
+                setPayBulkModalOpen(false);
+              }}
+            >
+              {processingAction ? <Loader2 className='h-4 w-4 animate-spin mr-2' /> : null}
+              Record payment
             </Button>
           </DialogFooter>
         </DialogContent>
