@@ -50,7 +50,7 @@ export async function PUT(
     }
 
     const userRole = session.user.role?.toLowerCase();
-    if (userRole !== "admin" && userRole !== "moderator") {
+    if (userRole !== "admin" && userRole !== "moderator" && userRole !== "superadmin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -123,7 +123,11 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { action, paidDate } = body;
+    const { action, paidDate, bulkPaymentMethod, paymentAccountId } = body;
+
+    if (["approve", "pay", "pay-worker"].includes(action) && !["admin", "superadmin"].includes(userRole || "")) {
+      return NextResponse.json({ error: "Only administrators can approve or pay payroll" }, { status: 403 });
+    }
 
     let result;
     switch (action) {
@@ -159,7 +163,10 @@ export async function POST(
         });
 
       case "pay":
-        result = await markPayrollAsPaid(id, paidDate);
+        result = await markPayrollAsPaid(id, paidDate, {
+          paymentMethod: bulkPaymentMethod,
+          cashAccountId: paymentAccountId,
+        });
         return NextResponse.json({
           success: true,
           message: "Payroll marked as paid",
@@ -168,9 +175,9 @@ export async function POST(
 
       case "pay-worker":
         const { paymentId, paymentMethod, paymentRef } = body;
-        if (!paymentId) {
+        if (!paymentId || !paymentMethod) {
           return NextResponse.json(
-            { error: "Payment ID is required" },
+            { error: "Payment ID and payment method are required" },
             { status: 400 }
           );
         }

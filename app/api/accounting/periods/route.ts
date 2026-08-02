@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, periodType, startDate, endDate, notes } = body;
+    const { name, periodType, startDate, endDate, notes, financialYearId } = body;
 
     if (!name || !periodType || !startDate || !endDate) {
       return NextResponse.json(
@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       notes,
+      financialYearId,
     });
 
     return NextResponse.json({ data: period }, { status: 201 });

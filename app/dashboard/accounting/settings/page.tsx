@@ -863,7 +863,7 @@ export default function AccountingSettingsPage() {
                 <div className="space-y-2">
                   <Label>Fiscal Year Start</Label>
                   <Select
-                    value={settings?.fiscalYearStart?.toString() || "1"}
+                    value={settings?.fiscalYearStart?.toString() || "4"}
                     onValueChange={(value) =>
                       handleUpdateSettings({ fiscalYearStart: parseInt(value) })
                     }

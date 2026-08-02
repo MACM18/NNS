@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createAndIssueGeneratedInvoice } from "@/lib/partnership-accounting-service";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true, role: true },
+    });
+    if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await req.json();
@@ -22,29 +30,34 @@ export async function POST(req: NextRequest) {
     const results = [];
 
     for (const invoice of invoices) {
-      // Delete existing invoice if present
-      await prisma.generatedInvoice.deleteMany({
+      const existing = await prisma.generatedInvoice.findFirst({
         where: {
           invoiceNumber: invoice.invoice_number,
           month: parseInt(month),
           year: parseInt(year),
         },
       });
-
-      // Create new invoice
-      const createdInvoice = await prisma.generatedInvoice.create({
-        data: {
-          invoiceNumber: invoice.invoice_number,
-          invoiceType: invoice.invoice_type,
-          month: parseInt(month),
-          year: parseInt(year),
-          jobMonth: invoice.job_month,
-          invoiceDate: new Date(invoice.invoice_date),
-          totalAmount: invoice.total_amount,
-          lineCount: invoice.line_count,
-          lineDetailsIds: invoice.line_details_ids,
-          status: invoice.status || "generated",
-        },
+      if (existing && (existing.accountingStatus === "posted" || Number(existing.paidAmount) > 0)) {
+        return NextResponse.json(
+          { error: "Issued or paid invoices cannot be regenerated: " + invoice.invoice_number },
+          { status: 409 },
+        );
+      }
+      if (existing) {
+        await prisma.generatedInvoice.delete({ where: { id: existing.id } });
+      }
+      const createdInvoice = await createAndIssueGeneratedInvoice({
+        invoiceNumber: invoice.invoice_number,
+        invoiceType: invoice.invoice_type,
+        month: parseInt(month),
+        year: parseInt(year),
+        jobMonth: invoice.job_month,
+        invoiceDate: new Date(invoice.invoice_date),
+        totalAmount: Number(invoice.total_amount),
+        lineCount: Number(invoice.line_count),
+        lineDetailsIds: invoice.line_details_ids,
+        status: invoice.status || "issued",
+        createdById: profile!.id,
       });
 
       results.push(createdInvoice);
@@ -64,6 +77,10 @@ export async function POST(req: NextRequest) {
       line_count: inv.lineCount ? Number(inv.lineCount) : 0,
       line_details_ids: inv.lineDetailsIds || null,
       status: inv.status || null,
+      paid_amount: Number(inv.paidAmount || 0),
+      payment_status: inv.paymentStatus,
+      due_date: inv.dueDate?.toISOString().slice(0, 10) || null,
+      accounting_status: inv.accountingStatus,
       created_at: inv.createdAt?.toISOString(),
     }));
 

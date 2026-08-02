@@ -93,17 +93,12 @@ export default function PaymentsPage() {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      // Fetch both generated and inventory invoices
-      const [generatedRes, inventoryRes] = await Promise.all([
-        fetch("/api/invoices?limit=100"),
-        fetch("/api/inventory-invoices?limit=100"),
-      ]);
+      // Only service invoices are payable. Free-issued inventory is operational stock,
+      // not a supplier liability or cash payment.
+      const generatedRes = await fetch("/api/invoices?limit=100");
 
       const generated = generatedRes.ok
         ? await generatedRes.json()
-        : { data: [] };
-      const inventory = inventoryRes.ok
-        ? await inventoryRes.json()
         : { data: [] };
 
       // Combine and normalize invoices
@@ -111,10 +106,6 @@ export default function PaymentsPage() {
         ...(generated.data || []).map((inv: Invoice) => ({
           ...inv,
           type: "generated" as const,
-        })),
-        ...(inventory.data || []).map((inv: Invoice) => ({
-          ...inv,
-          type: "inventory" as const,
         })),
       ];
 
@@ -322,7 +313,6 @@ export default function PaymentsPage() {
               <SelectContent>
                 <SelectItem value='all'>All Types</SelectItem>
                 <SelectItem value='generated'>Sales Invoices</SelectItem>
-                <SelectItem value='inventory'>Purchase Invoices</SelectItem>
               </SelectContent>
             </Select>
             <DropdownMenu>

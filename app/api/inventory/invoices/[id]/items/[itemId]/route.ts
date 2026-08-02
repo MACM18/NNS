@@ -49,18 +49,39 @@ export async function PATCH(
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { role: true },
+    });
+    if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-    const { itemId } = await params;
+    const { id, itemId } = await params;
     const body = await request.json();
+    const existing = await prisma.inventoryInvoiceItem.findUnique({ where: { id: itemId } });
+    if (!existing || existing.invoiceId !== id) {
+      return NextResponse.json({ error: "Invoice item not found" }, { status: 404 });
+    }
+    const newQuantity = Number(body.quantity_issued ?? body.quantityIssued ?? 0);
+    const oldQuantity = Number(existing.quantityIssued ?? 0);
 
-    const item = await prisma.inventoryInvoiceItem.update({
-      where: { id: itemId },
-      data: {
-        description: body.description,
-        unit: body.unit,
-        quantityRequested: body.quantity_requested ?? body.quantityRequested,
-        quantityIssued: body.quantity_issued ?? body.quantityIssued,
-      },
+    const item = await prisma.$transaction(async (tx) => {
+      if (existing.itemId && newQuantity !== oldQuantity) {
+        await tx.inventoryItem.update({
+          where: { id: existing.itemId },
+          data: { currentStock: { increment: newQuantity - oldQuantity } },
+        });
+      }
+      return tx.inventoryInvoiceItem.update({
+        where: { id: itemId },
+        data: {
+          description: body.description,
+          unit: body.unit,
+          quantityRequested: body.quantity_requested ?? body.quantityRequested,
+          quantityIssued: newQuantity,
+        },
+      });
     });
 
     return NextResponse.json({
@@ -86,11 +107,28 @@ export async function DELETE(
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { role: true },
+    });
+    if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-    const { itemId } = await params;
+    const { id, itemId } = await params;
 
-    await prisma.inventoryInvoiceItem.delete({
-      where: { id: itemId },
+    const existing = await prisma.inventoryInvoiceItem.findUnique({ where: { id: itemId } });
+    if (!existing || existing.invoiceId !== id) {
+      return NextResponse.json({ error: "Invoice item not found" }, { status: 404 });
+    }
+    await prisma.$transaction(async (tx) => {
+      if (existing.itemId) {
+        await tx.inventoryItem.update({
+          where: { id: existing.itemId },
+          data: { currentStock: { decrement: Number(existing.quantityIssued || 0) } },
+        });
+      }
+      await tx.inventoryInvoiceItem.delete({ where: { id: itemId } });
     });
 
     return NextResponse.json({

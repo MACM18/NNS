@@ -87,6 +87,89 @@ export const InvoiceType = {
 
 export type InvoiceTypeValue = (typeof InvoiceType)[keyof typeof InvoiceType];
 
+export type ReportBasis = "accrual" | "cash";
+export type BusinessTransactionType =
+  | "income"
+  | "expense"
+  | "drawing"
+  | "internal_transfer";
+export type BusinessTransactionStatus =
+  | "draft"
+  | "pending"
+  | "posted"
+  | "reversed";
+
+export interface FinancialYear {
+  id: string;
+  name: string;
+  yearOfAssessment?: string | null;
+  startDate: Date;
+  endDate: Date;
+  status: "draft" | "open" | "closed" | string;
+  isClosed: boolean;
+  closedAt?: Date | null;
+}
+
+export interface OpeningBalanceLine {
+  accountId: string;
+  debitAmount: number;
+  creditAmount: number;
+  description?: string;
+}
+
+export interface OpeningReceivable {
+  invoiceId: string;
+  invoiceNumber: string;
+  amount: number;
+  paidAmount?: number;
+  outstandingAmount: number;
+}
+
+export interface PartnerAllocation {
+  partnerId: string;
+  partnerCode: string;
+  partnerName: string;
+  percentage: number;
+  allocatedProfit: number;
+}
+
+export interface BusinessTransaction {
+  id: string;
+  financialYearId?: string | null;
+  date: Date;
+  amount: number;
+  type: BusinessTransactionType;
+  category?: string | null;
+  description: string;
+  isDeductible: boolean;
+  partnerId?: string | null;
+  paymentMethod?: PaymentMethodType | string | null;
+  status: BusinessTransactionStatus | string;
+  journalEntryId?: string | null;
+}
+
+export interface VoucherMetadata {
+  id: string;
+  businessTransactionId: string;
+  fileUrl: string;
+  receiptNo?: string | null;
+  payeeName?: string | null;
+  payeeNic?: string | null;
+}
+
+export interface TaxClassification {
+  code: string;
+  label: string;
+  source: string;
+  enabled?: boolean;
+}
+
+export interface ReceivableAgingBucket {
+  bucket: "current" | "1_30" | "31_60" | "61_90" | "90_plus";
+  count: number;
+  amount: number;
+}
+
 // ==========================================
 // CURRENCY TYPES
 // ==========================================
@@ -300,6 +383,7 @@ export interface InvoicePaymentFormData {
 export interface AccountingSettings {
   id: string;
   fiscalYearStart: number;
+  fiscalYearStartDay?: number;
   baseCurrencyId?: string | null;
   defaultCurrencyId?: string | null;
   defaultReceivablesAccountId?: string | null;
@@ -307,6 +391,8 @@ export interface AccountingSettings {
   defaultCashAccountId?: string | null;
   defaultRevenueAccountId?: string | null;
   defaultExpenseAccountId?: string | null;
+  defaultPayrollDeductionsAccountId?: string | null;
+  taxMappings?: Record<string, string> | null;
   autoGenerateJournalEntries: boolean;
   autoApproveEntries?: boolean;
   requireApproval: boolean;
@@ -325,12 +411,15 @@ export interface AccountingSettings {
 
 export interface AccountingSettingsFormData {
   fiscalYearStart?: number;
+  fiscalYearStartDay?: number;
   baseCurrencyId?: string;
   defaultReceivablesAccountId?: string;
   defaultPayablesAccountId?: string;
   defaultCashAccountId?: string;
   defaultRevenueAccountId?: string;
   defaultExpenseAccountId?: string;
+  defaultPayrollDeductionsAccountId?: string;
+  taxMappings?: Record<string, string>;
   autoGenerateJournalEntries?: boolean;
   requireApproval?: boolean;
   allowBackdatedEntries?: boolean;

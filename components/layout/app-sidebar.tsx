@@ -119,6 +119,11 @@ const accountingItems = [
     icon: Calculator,
   },
   {
+    title: "Financial Years",
+    url: "/dashboard/accounting/financial-years",
+    icon: CalendarDays,
+  },
+  {
     title: "Chart of Accounts",
     url: "/dashboard/accounting/accounts",
     icon: Wallet,

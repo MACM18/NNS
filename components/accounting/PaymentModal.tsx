@@ -86,7 +86,7 @@ export function PaymentModal({
     try {
       // Fetch cash/bank accounts (asset accounts)
       const response = await fetch(
-        "/api/accounting/accounts?isActive=true&category=ASSET",
+        "/api/accounting/accounts?isActive=true&category=Asset",
       );
       if (!response.ok) throw new Error("Failed to fetch accounts");
       const result = await response.json();

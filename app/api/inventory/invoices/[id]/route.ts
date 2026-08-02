@@ -76,11 +76,30 @@ export async function DELETE(
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { role: true },
+    });
+    if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { id } = await params;
 
     // Delete in transaction to ensure consistency
     await prisma.$transaction(async (tx: any) => {
+      const items = await tx.inventoryInvoiceItem.findMany({
+        where: { invoiceId: id },
+        select: { itemId: true, quantityIssued: true },
+      });
+      for (const item of items) {
+        if (item.itemId) {
+          await tx.inventoryItem.update({
+            where: { id: item.itemId },
+            data: { currentStock: { decrement: Number(item.quantityIssued || 0) } },
+          });
+        }
+      }
       // First delete related invoice items
       await tx.inventoryInvoiceItem.deleteMany({
         where: { invoiceId: id },
@@ -115,15 +134,36 @@ export async function PATCH(
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { role: true },
+    });
+    if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { id } = await params;
     const body = await request.json();
 
+    const allowedFields = [
+      "invoiceNumber",
+      "warehouse",
+      "date",
+      "issuedBy",
+      "drawnBy",
+      "invoiceImageUrl",
+      "status",
+      "paymentStatus",
+      "totalCost",
+      "currencyCode",
+      "dueDate",
+    ];
+    const data = Object.fromEntries(
+      Object.entries(body).filter(([key]) => allowedFields.includes(key)),
+    );
     const invoice = await prisma.inventoryInvoice.update({
       where: { id },
-      data: {
-        ...body,
-      },
+      data,
     });
 
     return NextResponse.json({

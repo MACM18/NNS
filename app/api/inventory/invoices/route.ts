@@ -9,7 +9,6 @@ export async function GET(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "10");
     const generateNumber = searchParams.get("generateNumber");
@@ -71,6 +70,13 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { role: true },
+    });
+    if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await req.json();
