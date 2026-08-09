@@ -50,6 +50,7 @@ export function MaterialBalanceTab() {
   const [date, setDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadConnections = useCallback(async () => {
     const response = await fetch("/api/integrations/google-sheets/connection", { credentials: "include" });
@@ -74,10 +75,12 @@ export function MaterialBalanceTab() {
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
+    setLoadError(null);
     try {
       await loadConnections();
       await loadBalance(connectionId, date);
     } catch (error: any) {
+      setLoadError(error?.message || "Failed to load imported stock data");
       addNotification({
         title: "Material Balance unavailable",
         message: error?.message || "Failed to load imported stock data",
@@ -178,14 +181,19 @@ export function MaterialBalanceTab() {
           </div>
 
           {selectedConnection && (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">Source tabs: Material Balance + Month-end</Badge>
               <Badge variant="outline">Connection: {selectedConnection.status}</Badge>
               {importData?.importedAt && <span>Last imported {new Date(importData.importedAt).toLocaleString()}</span>}
             </div>
           )}
 
-          {loading ? (
+          {loadError ? (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300" role="alert">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div><p className="font-semibold">Material Balance could not be loaded</p><p className="mt-1">{loadError}</p></div>
+            </div>
+          ) : loading ? (
             <div className="h-48 animate-pulse rounded-lg bg-muted" />
           ) : !importData ? (
             <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
@@ -193,17 +201,27 @@ export function MaterialBalanceTab() {
             </div>
           ) : (
             <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-10">
-                <Metric label="Items" value={importData.itemCount} />
-                <Metric label="Stock updated" value={importData.updatedStockCount} />
-                <Metric label="Issue invoices" value={importData.dailyIssueInvoiceCount} />
-                <Metric label="Updated invoices" value={importData.dailyIssueInvoiceUpdateCount} />
-                <Metric label="Reversed invoices" value={importData.dailyIssueInvoiceReversalCount} />
-                <Metric label="Corrections" value={importData.correctionInvoiceCount} />
-                <Metric label="Reconciliations" value={importData.reconciliationCount} />
-                <Metric label="Issued" value={formatNumber(totalIssued)} />
-                <Metric label="Usage" value={formatNumber(totalUsage)} />
-                <Metric label="Returned" value={formatNumber(totalReturned)} />
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stock overview</p>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Metric label="Items imported" value={importData.itemCount} />
+                    <Metric label="Stock updated" value={importData.updatedStockCount} />
+                    <Metric label="Month-end reconciliations" value={importData.reconciliationCount} />
+                    <Metric label="Warnings" value={importData.warnings.length + importData.discrepancies.length} tone={importData.warnings.length + importData.discrepancies.length > 0 ? "warning" : "default"} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sync activity</p>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                    <Metric label="New issue receipts" value={importData.dailyIssueInvoiceCount} />
+                    <Metric label="Updated receipts" value={importData.dailyIssueInvoiceUpdateCount} />
+                    <Metric label="Reversed receipts" value={importData.dailyIssueInvoiceReversalCount} />
+                    <Metric label="Corrections" value={importData.correctionInvoiceCount} />
+                    <Metric label="Issued quantity" value={formatNumber(totalIssued)} />
+                    <Metric label="Usage / returned" value={`${formatNumber(totalUsage)} / ${formatNumber(totalReturned)}`} />
+                  </div>
+                </div>
               </div>
 
               {(negativeCount > 0 || importData.warnings.length > 0 || conflictCount > 0 || importData.discrepancies.length > 0) && (
@@ -218,7 +236,7 @@ export function MaterialBalanceTab() {
                 </div>
               )}
 
-              <div className="overflow-x-auto rounded-lg border">
+              <div className="hidden overflow-x-auto rounded-lg border md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -253,6 +271,27 @@ export function MaterialBalanceTab() {
                   </TableBody>
                 </Table>
               </div>
+              <div className="grid gap-3 md:hidden">
+                {importData.items.map((item: MaterialBalanceItemSnapshot) => {
+                  const day = date ? item.dailyEntries[0] : null;
+                  return (
+                    <div key={item.id} className="rounded-xl border bg-card/60 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0"><p className="truncate font-semibold">{item.sourceItemName}</p><p className="text-xs text-muted-foreground">{item.sourceUnit || item.inventoryItem?.unit || "Unit not set"}</p></div>
+                        {statusBadge(item.status)}
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <BalanceValue label="Opening" value={day?.previousBalance ?? item.openingBalance} />
+                        <BalanceValue label="Issued" value={day?.issued ?? item.totalIssued} />
+                        <BalanceValue label="Usage" value={day?.usage ?? item.totalUsage} />
+                        <BalanceValue label="Returned" value={day?.balanceReturn ?? item.totalReturned} />
+                        <BalanceValue label="Closing" value={day?.closingBalance ?? item.finalBalance} strong />
+                        <BalanceValue label="Ending WIP" value={item.monthEndingWip} strong />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
         </CardContent>
@@ -261,11 +300,20 @@ export function MaterialBalanceTab() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number | string }) {
+function Metric({ label, value, tone = "default" }: { label: string; value: number | string; tone?: "default" | "warning" }) {
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
+    <div className={`rounded-lg border p-3 ${tone === "warning" ? "border-amber-500/20 bg-amber-500/5" : "bg-muted/20"}`}>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function BalanceValue({ label, value, strong = false }: { label: string; value: number | null | undefined; strong?: boolean }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`${strong ? "font-semibold" : ""} ${value != null && value < 0 ? "text-red-600 dark:text-red-400" : ""}`}>{value == null ? "—" : formatNumber(value)}</p>
     </div>
   );
 }

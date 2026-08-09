@@ -8,6 +8,10 @@ import {
   AlertTriangle,
   RefreshCw,
   Layers,
+  Boxes,
+  FileText,
+  CircleAlert,
+  Clock3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -49,6 +53,9 @@ interface InventoryStats {
   activeDrums: number;
   monthlyWastePercentage: number;
 }
+
+type InventoryTab = "stock" | "invoices" | "drums" | "waste" | "material-balance";
+type InventorySection = "summary" | "invoices" | "stock" | "drums" | "waste";
 
 export interface InventoryInvoice {
   id: string;
@@ -125,8 +132,8 @@ export interface InventoryInvoiceItem {
 }
 
 export default function InventoryPage() {
-  const { user, loading, role } = useAuth();
-  const [activeTab, setActiveTab] = useState("invoices");
+  const { user, role } = useAuth();
+  const [activeTab, setActiveTab] = useState<InventoryTab>("stock");
   
   // Modals state
   const [addInvoiceModalOpen, setAddInvoiceModalOpen] = useState(false);
@@ -147,10 +154,16 @@ export default function InventoryPage() {
   const [drums, setDrums] = useState<DrumTracking[]>([]);
   const [wasteReports, setWasteReports] = useState<WasteReport[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [sectionErrors, setSectionErrors] = useState<Partial<Record<InventorySection, string>>>({});
 
   useEffect(() => {
-    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "material-balance") {
-      setActiveTab("material-balance");
+    if (typeof window !== "undefined") {
+      const requestedTab = new URLSearchParams(window.location.search).get("tab") as InventoryTab | null;
+      const validTabs: InventoryTab[] = ["stock", "invoices", "drums", "waste", "material-balance"];
+      if (requestedTab && validTabs.includes(requestedTab)) {
+        setActiveTab(requestedTab);
+      }
     }
   }, []);
   
@@ -182,6 +195,15 @@ export default function InventoryPage() {
 
   const { addNotification } = useNotification();
 
+  const setSectionError = (section: InventorySection, message?: string) => {
+    setSectionErrors((current) => {
+      const next = { ...current };
+      if (message) next[section] = message;
+      else delete next[section];
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (user) {
       fetchAllData();
@@ -190,6 +212,7 @@ export default function InventoryPage() {
 
   const fetchAllData = async () => {
     setLoadingData(true);
+    setSectionErrors({});
     try {
       await Promise.all([
         fetchStats(),
@@ -208,6 +231,7 @@ export default function InventoryPage() {
       });
     } finally {
       setLoadingData(false);
+      setLastRefreshedAt(new Date());
     }
   };
 
@@ -219,6 +243,7 @@ export default function InventoryPage() {
       setStats(result.data);
     } catch (error) {
       console.error("Error fetching stats:", error);
+      setSectionError("summary", "Summary metrics could not be loaded.");
     }
   };
 
@@ -236,6 +261,7 @@ export default function InventoryPage() {
       setInvoices([...(operational.data || []), ...(history.data || [])]);
     } catch (error) {
       console.error("Error fetching invoices:", error);
+      setSectionError("invoices", "Invoices could not be loaded. Try refreshing this page.");
     }
   };
 
@@ -256,6 +282,7 @@ export default function InventoryPage() {
       );
     } catch (error) {
       console.error("Error fetching inventory items:", error);
+      setSectionError("stock", "Stock levels could not be loaded. Try refreshing this page.");
     }
   };
 
@@ -267,6 +294,7 @@ export default function InventoryPage() {
       setDrums((result.data || []) as DrumTracking[]);
     } catch (error) {
       console.error("Error fetching drums:", error);
+      setSectionError("drums", "Drum records could not be loaded. Try refreshing this page.");
     }
   };
 
@@ -278,6 +306,7 @@ export default function InventoryPage() {
       setWasteReports(result.data || []);
     } catch (error) {
       console.error("Error fetching waste reports:", error);
+      setSectionError("waste", "Waste reports could not be loaded. Try refreshing this page.");
     }
   };
 
@@ -353,31 +382,6 @@ export default function InventoryPage() {
     }
   };
 
-  const getStockStatus = (currentStock: number, reorderLevel: number) => {
-    const ratio = reorderLevel > 0 ? (currentStock / reorderLevel) * 100 : 150;
-    if (currentStock <= 0) {
-      return <Badge variant="destructive" className="bg-red-500 text-white font-semibold">Out of Stock</Badge>;
-    } else if (ratio <= 100) {
-      return (
-        <Badge variant="destructive" className="bg-red-500/10 text-red-500 hover:bg-red-500/15 border-red-500/20 font-semibold animate-pulse-glow">
-          Critical
-        </Badge>
-      );
-    } else if (ratio < 150) {
-      return (
-        <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20 dark:bg-yellow-950/20 dark:text-yellow-400 font-semibold">
-          Low Stock
-        </Badge>
-      );
-    } else {
-      return (
-        <Badge variant="default" className="bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/15 dark:bg-green-950/20 dark:text-green-400 font-semibold">
-          Normal
-        </Badge>
-      );
-    }
-  };
-
   const handleSuccess = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
@@ -419,9 +423,22 @@ export default function InventoryPage() {
 
   const handleFilterLowStock = () => {
     setActiveTab("stock");
-    setStockStatusFilter("low");
+    setStockStatusFilter("attention");
     setStockSearchQuery("");
   };
+
+  const attentionCount = inventoryItems.filter((item) => {
+    if (item.current_stock <= 0) return true;
+    return item.reorder_level > 0 && item.current_stock / item.reorder_level < 1.5;
+  }).length;
+  const tabCounts: Record<InventoryTab, number> = {
+    stock: inventoryItems.length,
+    invoices: invoices.filter((invoice) => !invoice.is_system_generated || invoice.source_type !== "google_material_balance_adjustment").length,
+    drums: drums.length,
+    waste: wasteReports.length,
+    "material-balance": 0,
+  };
+  const loadErrorCount = Object.keys(sectionErrors).length;
 
   if (!user) {
     return <AuthWrapper />;
@@ -430,24 +447,45 @@ export default function InventoryPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground">
-            Inventory Management
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Manage stock receipts, drum tracking, and waste reporting
-          </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="rounded-xl bg-primary/10 p-2 text-primary">
+              <Boxes className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Operations</p>
+          </div>
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground">
+              Inventory
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              See what is available, what needs attention, and where every stock movement came from.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-live="polite">
+            <span className="inline-flex items-center gap-1.5">
+              <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+              {lastRefreshedAt ? `Updated ${lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Loading latest data"}
+            </span>
+            {loadErrorCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                <CircleAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                {loadErrorCount} section{loadErrorCount === 1 ? "" : "s"} need{loadErrorCount === 1 ? "s" : ""} attention
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           <Button
             onClick={fetchAllData}
             variant="outline"
             size="sm"
             disabled={loadingData}
-            className="h-9"
+            className="h-9 gap-1.5"
+            aria-label="Refresh inventory data"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loadingData ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${loadingData ? "animate-spin" : ""}`} aria-hidden="true" />
             Refresh
           </Button>
           <Button
@@ -465,9 +503,9 @@ export default function InventoryPage() {
             className="h-9 gap-1.5 glass-button"
           >
             <Plus className="h-4 w-4" />
-            <span>Add Invoice</span>
+            <span>Add receipt</span>
           </Button>
-          {(role === "admin" || role === "moderator") && (
+          {(role === "admin" || role === "moderator" || role === "superadmin") && (
             <Button
               onClick={() => setManageItemsModalOpen(true)}
               variant="secondary"
@@ -482,44 +520,55 @@ export default function InventoryPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Total Items"
+          title="Stock items"
           value={stats.totalItems}
           icon={Package}
           color="blue"
-          subtitle="Active inventory items"
+          subtitle="Items being tracked"
           isLoading={loadingData}
+          onClick={() => setActiveTab("stock")}
+          isActive={activeTab === "stock" && stockStatusFilter === "all"}
         />
         <StatCard
-          title="Low Stock Alerts"
-          value={stats.lowStockAlerts}
+          title="Needs attention"
+          value={inventoryItems.length > 0 ? attentionCount : stats.lowStockAlerts}
           icon={AlertTriangle}
           color="red"
-          subtitle="Items below threshold"
+          subtitle="Out, critical, or low"
           isLoading={loadingData}
           onClick={handleFilterLowStock}
-          isActive={stockStatusFilter === "low" && activeTab === "stock"}
+          isActive={stockStatusFilter === "attention" && activeTab === "stock"}
         />
         <StatCard
-          title="Active Drums"
+          title="Active drums"
           value={stats.activeDrums}
           icon={Layers}
           color="purple"
           subtitle="Cable drums in use"
           isLoading={loadingData}
           onClick={() => setActiveTab("drums")}
+          isActive={activeTab === "drums"}
         />
         <StatCard
-          title="Monthly Waste"
+          title="Waste this month"
           value={`${stats.monthlyWastePercentage}%`}
           icon={TrendingDown}
           color="green"
           subtitle="Of total inventory"
           isLoading={loadingData}
           onClick={() => setActiveTab("waste")}
+          isActive={activeTab === "waste"}
         />
       </div>
+
+      {sectionErrors.summary && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-300" role="alert">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{sectionErrors.summary}</span>
+        </div>
+      )}
 
       {/* Critical alerts banner */}
       <CriticalAlerts
@@ -529,29 +578,30 @@ export default function InventoryPage() {
       />
 
       {/* Main Content Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-5 gap-1 h-auto min-h-11 p-1 bg-muted/40 border border-border/20 rounded-xl backdrop-blur-sm">
-          <TabsTrigger value="invoices" className="text-xs sm:text-sm rounded-lg transition-all duration-200">
-            Invoices
-          </TabsTrigger>
-          <TabsTrigger value="stock" className="text-xs sm:text-sm rounded-lg transition-all duration-200">
-            Stock
-          </TabsTrigger>
-          <TabsTrigger value="drums" className="text-xs sm:text-sm rounded-lg transition-all duration-200">
-            Drums
-          </TabsTrigger>
-          <TabsTrigger value="waste" className="text-xs sm:text-sm rounded-lg transition-all duration-200">
-            Waste
-          </TabsTrigger>
-          <TabsTrigger value="material-balance" className="text-xs sm:text-sm rounded-lg transition-all duration-200">
-            Material Balance
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-6">
+        <div className="-mx-1 overflow-x-auto pb-1">
+          <TabsList className="flex h-auto min-w-max gap-1 rounded-xl border border-border/20 bg-muted/40 p-1 backdrop-blur-sm sm:min-w-0">
+            {[
+              { value: "stock" as InventoryTab, label: "Stock", icon: Package },
+              { value: "invoices" as InventoryTab, label: "Invoices", icon: FileText },
+              { value: "drums" as InventoryTab, label: "Drums", icon: Layers },
+              { value: "waste" as InventoryTab, label: "Waste", icon: TrendingDown },
+              { value: "material-balance" as InventoryTab, label: "Material Balance", icon: Boxes },
+            ].map(({ value, label, icon: Icon }) => (
+              <TabsTrigger key={value} value={value} className="min-h-10 gap-1.5 rounded-lg px-3 text-xs transition-all duration-200 sm:text-sm">
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                <span>{label}</span>
+                {tabCounts[value] > 0 && <Badge variant="secondary" className="h-5 min-w-5 px-1 text-[10px]">{tabCounts[value]}</Badge>}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         <TabsContent value="invoices" className="animate-fade-in-up">
           <InvoicesTab
             invoices={invoices}
             loadingData={loadingData}
+            error={sectionErrors.invoices}
             expandedInvoiceId={expandedInvoiceId}
             setExpandedInvoiceId={setExpandedInvoiceId}
             fetchInvoiceItems={fetchInvoiceItems}
@@ -573,16 +623,18 @@ export default function InventoryPage() {
           <StockTab
             inventoryItems={inventoryItems}
             loadingData={loadingData}
+            error={sectionErrors.stock}
             role={role}
             onEdit={(item) => {
               setSelectedItem(item);
               setEditItemModalOpen(true);
             }}
-            getStockStatus={getStockStatus}
             searchQuery={stockSearchQuery}
             setSearchQuery={setStockSearchQuery}
             statusFilter={stockStatusFilter}
             setStatusFilter={setStockStatusFilter}
+            onAddReceipt={() => setAddInvoiceModalOpen(true)}
+            onOpenMaterialBalance={() => setActiveTab("material-balance")}
           />
         </TabsContent>
 
@@ -590,6 +642,7 @@ export default function InventoryPage() {
           <DrumsTab
             drums={drums}
             loadingData={loadingData}
+            error={sectionErrors.drums}
             role={role}
             setAddDrumModalOpen={setAddDrumModalOpen}
             searchDrumQuery={searchDrumQuery}
@@ -610,6 +663,7 @@ export default function InventoryPage() {
           <WasteTab
             wasteReports={wasteReports}
             loadingData={loadingData}
+            error={sectionErrors.waste}
             role={role}
             onDelete={(waste) => {
               setWasteToDelete(waste);
