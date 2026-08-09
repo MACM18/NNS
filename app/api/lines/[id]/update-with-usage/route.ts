@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recalculateDrumWithHistory } from "@/lib/drum-tracking-service";
+import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
 
 // PUT /api/lines/[id]/update-with-usage
 // Update a line's drum usage: restore prior usage (if any), then apply new usage
@@ -14,6 +15,11 @@ export async function PUT(
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
 
     const { id } = await params;
     const body = await req.json();
@@ -67,6 +73,15 @@ export async function PUT(
             await tx.inventoryItem.update({
               where: { id: dropWire.id },
               data: { currentStock: restoredStock },
+            });
+            await recordInventoryStockEvent(tx, {
+              inventoryItemId: dropWire.id,
+              previousStock: Number(dropWire.currentStock || 0),
+              newStock: restoredStock,
+              sourceType: "line_usage",
+              sourceReferenceId: id,
+              createdById: profile?.id || null,
+              reason: "Previous line usage restored during edit",
             });
           }
         }
@@ -133,6 +148,15 @@ export async function PUT(
             data: {
               currentStock: Math.max(0, currentStock - deduction),
             },
+          });
+          await recordInventoryStockEvent(tx, {
+            inventoryItemId: dropWire.id,
+            previousStock: currentStock,
+            newStock: Math.max(0, currentStock - deduction),
+            sourceType: "line_usage",
+            sourceReferenceId: id,
+            createdById: profile?.id || null,
+            reason: "Drop wire cable usage updated on line installation",
           });
         }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
 
 export async function GET(req: NextRequest) {
   try {
@@ -60,6 +61,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
+
     const body = await req.json();
     const { items, waste_date } = body;
 
@@ -76,7 +82,7 @@ export async function POST(req: NextRequest) {
               quantity: Number(item.quantity),
               wasteReason: item.waste_reason ?? item.wasteReason ?? "",
               wasteDate: waste_date ? new Date(waste_date) : new Date(),
-              reportedById: session.user?.id,
+              reportedById: profile?.id || null,
             },
           });
           createdRecords.push(wasteRecord);
@@ -94,6 +100,15 @@ export async function POST(req: NextRequest) {
               data: {
                 currentStock: newStock,
               },
+            });
+            await recordInventoryStockEvent(tx, {
+              inventoryItemId: inventoryItem.id,
+              previousStock: currentStock,
+              newStock,
+              sourceType: "waste",
+              sourceReferenceId: wasteRecord.id,
+              createdById: profile?.id || null,
+              reason: "Inventory waste recorded",
             });
           }
         }
@@ -118,14 +133,34 @@ export async function POST(req: NextRequest) {
     }
 
     // Single record creation (legacy support)
-    const wasteReport = await prisma.wasteTracking.create({
-      data: {
-        itemId: body.item_id ?? body.itemId,
-        quantity: Number(body.quantity),
-        wasteReason: body.waste_reason ?? body.wasteReason ?? "",
-        wasteDate: body.waste_date ? new Date(body.waste_date) : new Date(),
-        reportedById: session.user?.id,
-      },
+    const wasteReport = await prisma.$transaction(async (tx) => {
+      const itemId = body.item_id ?? body.itemId;
+      const quantity = Number(body.quantity);
+      const created = await tx.wasteTracking.create({
+        data: {
+          itemId,
+          quantity,
+          wasteReason: body.waste_reason ?? body.wasteReason ?? "",
+          wasteDate: body.waste_date ? new Date(body.waste_date) : new Date(),
+          reportedById: profile?.id || null,
+        },
+      });
+      const inventoryItem = await tx.inventoryItem.findUnique({ where: { id: itemId } });
+      if (inventoryItem) {
+        const previousStock = Number(inventoryItem.currentStock || 0);
+        const newStock = Math.max(0, previousStock - quantity);
+        await tx.inventoryItem.update({ where: { id: itemId }, data: { currentStock: newStock } });
+        await recordInventoryStockEvent(tx, {
+          inventoryItemId: itemId,
+          previousStock,
+          newStock,
+          sourceType: "waste",
+          sourceReferenceId: created.id,
+          createdById: profile?.id || null,
+          reason: "Inventory waste recorded",
+        });
+      }
+      return created;
     });
 
     return NextResponse.json({ data: wasteReport });

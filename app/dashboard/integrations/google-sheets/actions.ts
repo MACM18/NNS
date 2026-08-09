@@ -4,14 +4,18 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { google } from "googleapis";
 import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
-import { updateInventoryFromSheetSync } from "@/lib/inventory-usage-service";
+import {
+  importMaterialBalanceValues,
+  MATERIAL_BALANCE_TAB,
+  type MaterialBalanceImportResult,
+} from "@/lib/material-balance-service";
 import {
   ensureDrumsExistWithHistory,
   recalculateDrumWithHistory,
 } from "@/lib/drum-tracking-service";
 import { checkStockLevelsAndNotify, notifyAllAdmins } from "@/lib/notification-service-server";
 
-const ALLOWED_ROLES = ["admin", "moderator"];
+const ALLOWED_ROLES = ["admin", "moderator", "superadmin"];
 
 type AuthContext = { userId: string; role: string };
 
@@ -207,7 +211,7 @@ export async function syncConnection(
     };
 
     progress("Authorizing");
-    await authorize();
+    const authCtx = await authorize();
 
     if (!connectionId) {
       throw new Error("connectionId is required");
@@ -270,6 +274,79 @@ export async function syncConnection(
 
     if (!availableTabs.length) {
       throw new Error("No tabs detected in this spreadsheet");
+    }
+
+    const emptyMaterialBalanceResult: MaterialBalanceImportResult = {
+      imported: false,
+      skipped: false,
+      importId: null,
+      importedAt: null,
+      status: "warning",
+      sourceTab: MATERIAL_BALANCE_TAB,
+      sourceDayCount: 0,
+      itemCount: 0,
+      mappedItemCount: 0,
+      unmappedItemCount: 0,
+      updatedStockCount: 0,
+      dailyEntryCount: 0,
+      warnings: [],
+      discrepancies: [],
+    };
+    let materialBalanceResult = emptyMaterialBalanceResult;
+
+    // Material Balance is a read-only source. This stage updates only the
+    // application's operational stock and never writes to the spreadsheet.
+    if (availableTabs.includes(MATERIAL_BALANCE_TAB)) {
+      progress(`Reading ${MATERIAL_BALANCE_TAB} tab`);
+      const materialBalanceRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${MATERIAL_BALANCE_TAB}'!A:ZZ`,
+        valueRenderOption: "UNFORMATTED_VALUE",
+        dateTimeRenderOption: "SERIAL_NUMBER",
+      });
+      const materialBalanceValues = materialBalanceRes.data.values || [];
+      if (materialBalanceValues.length > 0) {
+        const profile = await prisma.profile.findUnique({
+          where: { userId: authCtx.userId },
+          select: { id: true },
+        });
+        progress(`Importing ${MATERIAL_BALANCE_TAB} stock`);
+        try {
+          materialBalanceResult = await importMaterialBalanceValues({
+            connectionId,
+            month,
+            year,
+            values: materialBalanceValues as unknown[][],
+            createdById: profile?.id || null,
+          });
+          progress(
+            `${materialBalanceResult.skipped ? "Material Balance unchanged" : "Material Balance imported"}: ${materialBalanceResult.updatedStockCount} stock items updated`
+          );
+        } catch (materialBalanceError) {
+          console.error("[syncConnection] Material Balance import error:", materialBalanceError);
+          materialBalanceResult = {
+            ...emptyMaterialBalanceResult,
+            warnings: [
+              materialBalanceError instanceof Error
+                ? materialBalanceError.message
+                : String(materialBalanceError),
+            ],
+          };
+          progress("Warning: Material Balance stock import failed; inventory was not changed by this stage");
+        }
+      } else {
+        materialBalanceResult = {
+          ...emptyMaterialBalanceResult,
+          warnings: [`${MATERIAL_BALANCE_TAB} tab contains no data`],
+        };
+        progress(`Warning: ${MATERIAL_BALANCE_TAB} tab contains no data`);
+      }
+    } else {
+      materialBalanceResult = {
+        ...emptyMaterialBalanceResult,
+        warnings: [`${MATERIAL_BALANCE_TAB} tab was not found; stock was not changed`],
+      };
+      progress(`Warning: ${MATERIAL_BALANCE_TAB} tab was not found; stock was not changed`);
     }
 
     // Use stored tab or default to first tab
@@ -455,42 +532,11 @@ export async function syncConnection(
       }
     }
 
-    // Update hardware inventory using the monthly usage tracking service
-    // This prevents duplicate deductions when syncing multiple times
-    let hardwareUpdated = 0;
-    let hardwareCreated = 0;
-    let usageRecordsUpdated = 0;
-    try {
-      progress("Updating hardware inventory (with usage tracking)");
-
-      const inventoryResult = await updateInventoryFromSheetSync(
-        sheetRows,
-        month,
-        year,
-        connectionId
-      );
-
-      hardwareUpdated = inventoryResult.itemsUpdated;
-      hardwareCreated = inventoryResult.itemsCreated;
-      usageRecordsUpdated = inventoryResult.usageRecordsUpdated;
-
-      if (inventoryResult.errors.length > 0) {
-        console.warn(
-          `[syncConnection] Inventory update warnings:`,
-          inventoryResult.errors
-        );
-      }
-
-      progress(
-        `Updated ${hardwareUpdated} items, created ${hardwareCreated} new items, ${usageRecordsUpdated} usage records`
-      );
-    } catch (hardwareError) {
-      console.error(
-        "[syncConnection] Hardware inventory update error:",
-        hardwareError
-      );
-      progress("Warning: Some hardware inventory updates failed");
-    }
+    // Keep the legacy response fields for existing clients while sourcing
+    // stock counts from the auditable Material Balance import.
+    const hardwareUpdated = materialBalanceResult.updatedStockCount;
+    const hardwareCreated = 0;
+    const usageRecordsUpdated = materialBalanceResult.dailyEntryCount;
 
     // Sync the "Drum Number" sheet tab if it exists
     let drumProcessed = 0;
@@ -766,7 +812,7 @@ export async function syncConnection(
     try {
       await notifyAllAdmins({
         title: "Google Sheets Sync Successful",
-        message: `Google Sheets sync completed for ${conn.month}/${conn.year}. Appended ${insertedCount} new rows, updated ${updatedCount} rows, and updated ${hardwareUpdated} inventory items.`,
+        message: `Google Sheets sync completed for ${conn.month}/${conn.year}. Appended ${insertedCount} new rows, updated ${updatedCount} rows, and updated ${hardwareUpdated} Material Balance stock items.`,
         type: "success",
         category: "system",
         actionUrl: "/dashboard/integrations",
@@ -779,9 +825,13 @@ export async function syncConnection(
       await prisma.googleSheetSyncLog.create({
         data: {
           connectionId,
-          status: skippedRows.some((r) => r.status === "warning") ? "warning" : "success",
-          message: `Successfully synced Google Sheet connection for ${conn.month}/${conn.year}.`,
-          details: {
+          status:
+            skippedRows.some((r) => r.status === "warning") ||
+            materialBalanceResult.status === "warning"
+              ? "warning"
+              : "success",
+          message: `Successfully synced Google Sheet connection for ${conn.month}/${conn.year}; Material Balance stock import status: ${materialBalanceResult.status}.`,
+          details: JSON.parse(JSON.stringify({
             totalParsedRows: parsedRows.length,
             insertedCount,
             updatedCount,
@@ -791,9 +841,25 @@ export async function syncConnection(
             hardwareUpdated,
             hardwareCreated,
             usageRecordsUpdated,
+            materialBalance: {
+              status: materialBalanceResult.status,
+              imported: materialBalanceResult.imported,
+              skipped: materialBalanceResult.skipped,
+              importId: materialBalanceResult.importId,
+              sourceTab: materialBalanceResult.sourceTab,
+              sourceDayCount: materialBalanceResult.sourceDayCount,
+              itemCount: materialBalanceResult.itemCount,
+              mappedItemCount: materialBalanceResult.mappedItemCount,
+              unmappedItemCount: materialBalanceResult.unmappedItemCount,
+              updatedStockCount: materialBalanceResult.updatedStockCount,
+              dailyEntryCount: materialBalanceResult.dailyEntryCount,
+              warnings: materialBalanceResult.warnings,
+              discrepancies: materialBalanceResult.discrepancies,
+              importedAt: materialBalanceResult.importedAt,
+            },
             drumSheetProcessed: drumProcessed,
             drumSheetAppended: drumAppended,
-          },
+          })),
           skippedRows,
         },
       });
@@ -813,6 +879,7 @@ export async function syncConnection(
       hardwareUpdated,
       hardwareCreated,
       usageRecordsUpdated,
+      materialBalance: materialBalanceResult,
       drumSheetProcessed: drumProcessed,
       drumSheetAppended: drumAppended,
     };
@@ -1544,4 +1611,3 @@ async function pruneOldSyncLogs() {
     console.error("[pruneOldSyncLogs] Error pruning old sync logs:", error);
   }
 }
-

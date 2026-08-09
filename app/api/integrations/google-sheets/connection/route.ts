@@ -1,6 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import { deleteConnection } from "@/app/dashboard/integrations/google-sheets/actions";
 import { createConnection } from "@/app/dashboard/integrations/google-sheets/actions";
+
+const ALLOWED_ROLES = ["admin", "moderator", "superadmin"];
+
+async function authorizeRead() {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+  const role = String(session.user.role || "user").toLowerCase();
+  if (!ALLOWED_ROLES.includes(role)) throw new Error("Forbidden");
+  return session;
+}
+
+export async function GET() {
+  try {
+    await authorizeRead();
+    const connections = await prisma.googleSheetConnection.findMany({
+      orderBy: [{ year: "desc" }, { month: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        month: true,
+        year: true,
+        sheetName: true,
+        sheetTab: true,
+        status: true,
+        lastSynced: true,
+        materialBalanceImports: {
+          orderBy: { importedAt: "desc" },
+          take: 1,
+          select: { importedAt: true, status: true, updatedStockCount: true },
+        },
+      },
+    });
+
+    return NextResponse.json({
+      data: connections.map((connection) => ({
+        id: connection.id,
+        month: connection.month,
+        year: connection.year,
+        sheetName: connection.sheetName,
+        sheetTab: connection.sheetTab,
+        status: connection.status,
+        lastSynced: connection.lastSynced?.toISOString() || null,
+        materialBalanceImport: connection.materialBalanceImports[0]
+          ? {
+              importedAt: connection.materialBalanceImports[0].importedAt.toISOString(),
+              status: connection.materialBalanceImports[0].status,
+              updatedStockCount: connection.materialBalanceImports[0].updatedStockCount,
+            }
+          : null,
+      })),
+    });
+  } catch (error: any) {
+    const message = error?.message || "Failed to load Google Sheet connections";
+    const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
 
 export async function DELETE(req: NextRequest) {
   try {

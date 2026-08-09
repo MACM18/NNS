@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
 
 // GET /api/inventory/waste/[id] - Get single waste record
 export async function GET(
@@ -62,6 +63,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
+
     const { id } = await params;
 
     // Get the waste record first to know how much to restore
@@ -95,12 +101,22 @@ export async function DELETE(
       if (wasteRecord.itemId && wasteRecord.item) {
         const currentStock = Number(wasteRecord.item.currentStock ?? 0);
         const quantityToRestore = Number(wasteRecord.quantity ?? 0);
+        const newStock = currentStock + quantityToRestore;
 
         await tx.inventoryItem.update({
           where: { id: wasteRecord.itemId },
           data: {
-            currentStock: currentStock + quantityToRestore,
+            currentStock: newStock,
           },
+        });
+        await recordInventoryStockEvent(tx, {
+          inventoryItemId: wasteRecord.itemId,
+          previousStock: currentStock,
+          newStock,
+          sourceType: "waste",
+          sourceReferenceId: wasteRecord.id,
+          createdById: profile?.id || null,
+          reason: "Waste record deleted and stock restored",
         });
       }
     });

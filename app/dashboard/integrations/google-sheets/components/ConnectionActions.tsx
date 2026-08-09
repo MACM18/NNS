@@ -86,6 +86,16 @@ export default function ConnectionActions({ connectionId }: Props) {
 
       <Button
         type='button'
+        variant='outline'
+        size='sm'
+        asChild
+        className='w-full sm:w-auto'
+      >
+        <Link href='/dashboard/inventory?tab=material-balance'>Material Balance</Link>
+      </Button>
+
+      <Button
+        type='button'
         variant='destructive'
         size='sm'
         onClick={() => setOpenDelete(true)}

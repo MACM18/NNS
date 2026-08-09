@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
 
 export async function GET(
   req: NextRequest,
@@ -58,6 +59,13 @@ export async function PUT(
 
     const { id } = await params;
     const body = await req.json();
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true, role: true },
+    });
+    if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // Accept snake_case or camelCase
     const updateData: Record<string, unknown> = {};
@@ -74,9 +82,22 @@ export async function PUT(
         body.reorder_level ?? body.reorderLevel ?? 0
       );
 
-    const item = await prisma.inventoryItem.update({
-      where: { id },
-      data: updateData,
+    const item = await prisma.$transaction(async (tx) => {
+      const existing = await tx.inventoryItem.findUnique({ where: { id } });
+      if (!existing) throw new Error("Item not found");
+      const updated = await tx.inventoryItem.update({ where: { id }, data: updateData });
+      if (updateData.currentStock !== undefined) {
+        await recordInventoryStockEvent(tx, {
+          inventoryItemId: id,
+          previousStock: Number(existing.currentStock || 0),
+          newStock: Number(updated.currentStock || 0),
+          sourceType: "manual",
+          sourceReferenceId: id,
+          createdById: profile?.id || null,
+          reason: "Inventory item stock edited manually",
+        });
+      }
+      return updated;
     });
 
     const formatted = {

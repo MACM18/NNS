@@ -41,6 +41,7 @@ import { InvoicesTab } from "@/components/inventory/invoices-tab";
 import { StockTab } from "@/components/inventory/stock-tab";
 import { DrumsTab } from "@/components/inventory/drums-tab";
 import { WasteTab } from "@/components/inventory/waste-tab";
+import { MaterialBalanceTab } from "@/components/inventory/material-balance-tab";
 
 interface InventoryStats {
   totalItems: number;
@@ -134,6 +135,12 @@ export default function InventoryPage() {
   const [drums, setDrums] = useState<DrumTracking[]>([]);
   const [wasteReports, setWasteReports] = useState<WasteReport[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "material-balance") {
+      setActiveTab("material-balance");
+    }
+  }, []);
   
   // Invoice items cache and expansion state
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
@@ -488,7 +495,7 @@ export default function InventoryPage() {
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="w-full grid grid-cols-4 gap-1 h-11 p-1 bg-muted/40 border border-border/20 rounded-xl backdrop-blur-sm">
+        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-5 gap-1 h-auto min-h-11 p-1 bg-muted/40 border border-border/20 rounded-xl backdrop-blur-sm">
           <TabsTrigger value="invoices" className="text-xs sm:text-sm rounded-lg transition-all duration-200">
             Invoices
           </TabsTrigger>
@@ -500,6 +507,9 @@ export default function InventoryPage() {
           </TabsTrigger>
           <TabsTrigger value="waste" className="text-xs sm:text-sm rounded-lg transition-all duration-200">
             Waste
+          </TabsTrigger>
+          <TabsTrigger value="material-balance" className="text-xs sm:text-sm rounded-lg transition-all duration-200">
+            Material Balance
           </TabsTrigger>
         </TabsList>
 
@@ -571,6 +581,10 @@ export default function InventoryPage() {
               setDeleteWasteConfirmOpen(true);
             }}
           />
+        </TabsContent>
+
+        <TabsContent value="material-balance" className="animate-fade-in-up">
+          <MaterialBalanceTab />
         </TabsContent>
       </Tabs>
 
