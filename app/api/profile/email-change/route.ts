@@ -4,10 +4,10 @@ import { authenticator } from "otplib";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { decrypt } from "@/lib/encryption";
+import { isValidEmailAddress } from "@/lib/email-validation";
 import { sendEmail } from "@/lib/email-service";
 import { prisma } from "@/lib/prisma";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REQUEST_TTL_MS = 30 * 60 * 1000;
 
 function normalizeEmail(value: unknown) {
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     const currentPassword = String(body.currentPassword ?? body.current_password ?? "");
     const twoFactorCode = String(body.twoFactorCode ?? body.two_factor_code ?? "").trim();
 
-    if (!EMAIL_PATTERN.test(newEmail) || newEmail.length > 254) {
+    if (!isValidEmailAddress(newEmail)) {
       return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
     }
     if (newEmail === user.email.toLowerCase()) {
