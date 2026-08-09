@@ -55,6 +55,7 @@ import { useNotification } from "@/contexts/notification-context";
 import { useTheme } from "next-themes";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { PricingSchedulePanel } from "@/components/settings/pricing-schedule-panel";
 
 export default function SettingsPage() {
   const { user, profile, loading } = useAuth();
@@ -83,6 +84,13 @@ export default function SettingsPage() {
     bio: "",
     avatar_url: "",
   });
+  const [emailChangeData, setEmailChangeData] = useState({
+    newEmail: "",
+    confirmEmail: "",
+    currentPassword: "",
+    twoFactorCode: "",
+  });
+  const [emailChangePending, setEmailChangePending] = useState<string | null>(null);
 
   // Company settings data
   const [companyData, setCompanyData] = useState({
@@ -181,10 +189,34 @@ export default function SettingsPage() {
     fetchSecuritySettings();
     checkOAuthUser();
     fetch2FAStatus();
-    if (["admin", "moderator"].includes((profile?.role || "").toLowerCase())) {
+    if (["admin", "superadmin"].includes((profile?.role || "").toLowerCase())) {
       fetchEmailSettings();
     }
   }, [user, profile?.role]);
+
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    if (requestedTab && ["profile", "company", "notifications", "security", "appearance", "data", "email"].includes(requestedTab)) {
+      setActiveTab(requestedTab);
+    }
+  }, []);
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("email_change_token");
+    if (!token) return;
+    fetch("/api/profile/email-change/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Unable to confirm email change");
+        addNotification({ title: "Email updated", message: result.message, type: "success", category: "system" });
+        window.history.replaceState({}, "", "/dashboard/settings");
+      })
+      .catch((error) => addNotification({ title: "Email verification failed", message: error.message, type: "error", category: "system" }));
+  }, [addNotification]);
 
   const checkOAuthUser = async () => {
     if (!user?.id) return;
@@ -380,7 +412,6 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fullName: profileData.full_name,
-          email: profileData.email,
           phone: profileData.phone,
           address: profileData.address,
           bio: profileData.bio,
@@ -406,6 +437,30 @@ export default function SettingsPage() {
         type: "error",
         category: "system",
       });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRequestEmailChange = async () => {
+    if (!emailChangeData.newEmail || emailChangeData.newEmail.toLowerCase() !== emailChangeData.confirmEmail.toLowerCase()) {
+      addNotification({ title: "Email addresses do not match", message: "Enter the same new email address twice.", type: "error", category: "system" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/profile/email-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(emailChangeData),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to request email change");
+      setEmailChangePending(result.verification_url || "Verification email sent");
+      addNotification({ title: "Verification sent", message: result.message, type: "success", category: "system" });
+      setEmailChangeData({ newEmail: "", confirmEmail: "", currentPassword: "", twoFactorCode: "" });
+    } catch (error) {
+      addNotification({ title: "Email change failed", message: error instanceof Error ? error.message : "Unable to request email change", type: "error", category: "system" });
     } finally {
       setIsLoading(false);
     }
@@ -1033,7 +1088,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
           >
             <TabsList
               className={`grid w-full ${
-                ["admin", "moderator"].includes(
+                ["admin", "superadmin"].includes(
                   (profile?.role || "").toLowerCase()
                 )
                   ? "grid-cols-7"
@@ -1048,7 +1103,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                 value='company'
                 className='flex items-center gap-2'
                 disabled={
-                  !["admin", "moderator"].includes(
+                  !["admin", "moderator", "superadmin"].includes(
                     (profile?.role || "").toLowerCase()
                   )
                 }
@@ -1078,7 +1133,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                 <Database className='h-4 w-4' />
                 <span className='hidden sm:inline'>Data</span>
               </TabsTrigger>
-              {["admin", "moderator"].includes(
+              {["admin", "moderator", "superadmin"].includes(
                 (profile?.role || "").toLowerCase()
               ) && (
                 <TabsTrigger value='email' className='flex items-center gap-2'>
@@ -1144,6 +1199,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                         disabled
                         className='bg-muted'
                       />
+                      <p className='text-xs text-muted-foreground'>This is your authentication email. It can only be changed after verification.</p>
                     </div>
 
                     <div className='space-y-2'>
@@ -1236,10 +1292,28 @@ If you lose access to your authenticator app, you can use these codes to sign in
                   </div>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Change authentication email</CardTitle>
+                  <CardDescription>Your current login email stays active until the new address is verified.</CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
+                    <div className='space-y-2'><Label htmlFor='new-auth-email'>New email</Label><Input id='new-auth-email' type='email' value={emailChangeData.newEmail} onChange={(event) => setEmailChangeData({ ...emailChangeData, newEmail: event.target.value })} /></div>
+                    <div className='space-y-2'><Label htmlFor='confirm-auth-email'>Confirm new email</Label><Input id='confirm-auth-email' type='email' value={emailChangeData.confirmEmail} onChange={(event) => setEmailChangeData({ ...emailChangeData, confirmEmail: event.target.value })} /></div>
+                    {user?.email && <div className='space-y-2'><Label htmlFor='email-change-password'>Current password</Label><Input id='email-change-password' type='password' value={emailChangeData.currentPassword} onChange={(event) => setEmailChangeData({ ...emailChangeData, currentPassword: event.target.value })} placeholder='Required for password accounts' /></div>}
+                    <div className='space-y-2'><Label htmlFor='email-change-2fa'>2FA code</Label><Input id='email-change-2fa' inputMode='numeric' value={emailChangeData.twoFactorCode} onChange={(event) => setEmailChangeData({ ...emailChangeData, twoFactorCode: event.target.value })} placeholder='Required when 2FA is enabled' /></div>
+                  </div>
+                  <Button onClick={handleRequestEmailChange} disabled={isLoading}><Mail className='mr-2 h-4 w-4' />Send verification</Button>
+                  {emailChangePending && <p className='break-all rounded-md bg-muted p-3 text-sm text-muted-foreground'>{emailChangePending.startsWith("http") ? <>Development verification link: <a className='underline' href={emailChangePending}>{emailChangePending}</a></> : emailChangePending}</p>}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Company Settings */}
             <TabsContent value='company' className='space-y-6'>
+              <fieldset disabled={!['admin', 'superadmin'].includes((profile?.role || '').toLowerCase())} className='space-y-6'>
               <Card>
                 <CardHeader>
                   <CardTitle className='flex items-center gap-2'>
@@ -1370,7 +1444,9 @@ If you lose access to your authenticator app, you can use these codes to sign in
                 </CardContent>
               </Card>
 
-              <Card>
+              <PricingSchedulePanel canManage={["admin", "superadmin"].includes((profile?.role || "").toLowerCase())} />
+
+              <Card className='hidden'>
                 <CardHeader>
                   <CardTitle>Pricing Tiers</CardTitle>
                   <CardDescription>
@@ -1520,6 +1596,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                   </div>
                 </CardContent>
               </Card>
+              </fieldset>
             </TabsContent>
 
             {/* Notification Settings */}
@@ -2439,7 +2516,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
             </TabsContent>
 
             {/* Email Settings - Admin/Moderator Only */}
-            {["admin", "moderator"].includes(
+            {["admin", "superadmin"].includes(
               (profile?.role || "").toLowerCase()
             ) && (
               <TabsContent value='email' className='space-y-6'>

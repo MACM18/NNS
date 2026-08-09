@@ -21,6 +21,10 @@ import { Prisma } from "@prisma/client";
 import { notifyAllAdmins } from "@/lib/notification-service-server";
 import { sendEmail } from "@/lib/email-service";
 import { generateSalarySlipPDF } from "@/lib/salary-slip-pdf";
+import {
+  ensureFinancialYear,
+  postJournalEntryTx,
+} from "@/lib/partnership-accounting-service";
 
 // Helper to convert Decimal to number
 function decimalToNumber(value: Prisma.Decimal | null | undefined): number {
@@ -970,6 +974,130 @@ export async function generateSalarySlipData(
 // APPROVE AND PAY OPERATIONS
 // ==========================================
 
+async function postPayrollAccruals(id: string): Promise<boolean> {
+  const accountingClient = (prisma as any).accountingSettings;
+  if (!accountingClient || typeof (prisma as any).$transaction !== "function") {
+    return false;
+  }
+  await prisma.$transaction(async (tx) => {
+    const period = await tx.payrollPeriod.findUnique({
+      where: { id },
+      include: { payments: { include: { worker: true } } },
+    });
+    if (!period) throw new Error("Payroll period not found");
+    const settings = await tx.accountingSettings.findFirst();
+    if (!settings) throw new Error("Accounting settings are required before approving payroll");
+    const wagesExpense = await tx.chartOfAccount.findFirst({ where: { code: "6100", isActive: true } });
+    const wagesPayable = await tx.chartOfAccount.findFirst({ where: { code: "2200", isActive: true } });
+    const deductionsPayable =
+      (settings.defaultPayrollDeductionsAccountId
+        ? await tx.chartOfAccount.findUnique({ where: { id: settings.defaultPayrollDeductionsAccountId } })
+        : null) ||
+      (await tx.chartOfAccount.findFirst({ where: { code: "2300", isActive: true } }));
+    if (!wagesExpense || !wagesPayable) {
+      throw new Error("Configure wages expense and wages payable accounts before approving payroll");
+    }
+    for (const payment of period.payments) {
+      if (payment.status === "paid") continue;
+      if (payment.accrualJournalEntryId) {
+        await tx.workerPayment.update({
+          where: { id: payment.id },
+          data: { status: "approved" },
+        });
+        continue;
+      }
+      const gross = decimalToNumber(payment.baseAmount) + decimalToNumber(payment.bonusAmount);
+      const deductions = decimalToNumber(payment.deductionAmount);
+      const net = decimalToNumber(payment.netAmount);
+      if (deductions > 0 && !deductionsPayable) {
+        throw new Error("Configure the payroll deductions payable account before approving payroll");
+      }
+      const financialYear = await ensureFinancialYear(tx, period.startDate, period.createdById);
+      const lines = [
+        {
+          accountId: wagesExpense.id,
+          description: "Gross wages for " + payment.worker.fullName,
+          debitAmount: gross,
+          creditAmount: 0,
+        },
+        {
+          accountId: wagesPayable.id,
+          description: "Net wages payable to " + payment.worker.fullName,
+          debitAmount: 0,
+          creditAmount: net,
+        },
+      ];
+      if (deductions > 0 && deductionsPayable) {
+        lines.push({
+          accountId: deductionsPayable.id,
+          description: "Payroll deductions payable",
+          debitAmount: 0,
+          creditAmount: deductions,
+        });
+      }
+      const entry = await postJournalEntryTx(tx, {
+        date: period.endDate,
+        description: "Payroll accrual: " + payment.worker.fullName + " - " + period.name,
+        reference: period.name,
+        referenceType: "payroll_accrual",
+        referenceId: payment.id,
+        financialYearId: financialYear.id,
+        sourceKey: "payroll_accrual:" + payment.id,
+        createdById: period.createdById,
+        autoApprove: true,
+        lines,
+      });
+      await tx.workerPayment.update({
+        where: { id: payment.id },
+        data: { status: "approved", accrualJournalEntryId: entry.id },
+      });
+    }
+    await tx.payrollPeriod.update({ where: { id }, data: { status: "approved" } });
+  });
+  return true;
+}
+
+async function postPayrollPaymentEntryTx(
+  tx: Prisma.TransactionClient,
+  payment: any,
+  period: any,
+  createdById: string,
+  paymentDate: Date,
+  paymentMethod: string,
+  cashAccountId: string,
+) {
+  if (!payment.accrualJournalEntryId) {
+    throw new Error("Payroll payment requires an approved payroll accrual before cash payment");
+  }
+  if (payment.paymentJournalEntryId) return payment.paymentJournalEntryId;
+  const wagesPayable = await tx.chartOfAccount.findFirst({
+    where: { code: "2200", isActive: true },
+  });
+  if (!wagesPayable) throw new Error("Configure the wages payable account before paying payroll");
+  const net = decimalToNumber(payment.netAmount);
+  const financialYear = await ensureFinancialYear(tx, paymentDate, createdById);
+  const entry = await postJournalEntryTx(tx, {
+    date: paymentDate,
+    description: "Payroll payment to " + payment.worker.fullName,
+    reference: period.name,
+    referenceType: "payroll_payment",
+    referenceId: payment.id,
+    financialYearId: financialYear.id,
+    sourceKey: "payroll_payment:" + payment.id,
+    createdById,
+    autoApprove: true,
+    lines: [
+      { accountId: wagesPayable.id, description: "Wages payable cleared", debitAmount: net, creditAmount: 0 },
+      { accountId: cashAccountId, description: "Payroll cash payment", debitAmount: 0, creditAmount: net },
+    ],
+  });
+  await tx.workerPayment.update({
+    where: { id: payment.id },
+    data: { paymentJournalEntryId: entry.id, paymentMethod },
+  });
+  return entry.id;
+}
+
 export async function approvePayrollPeriod(id: string): Promise<PayrollPeriod> {
   const period = await prisma.payrollPeriod.findUnique({
     where: { id },
@@ -988,17 +1116,24 @@ export async function approvePayrollPeriod(id: string): Promise<PayrollPeriod> {
     throw new Error("Cannot approve a payroll period with no payments");
   }
 
-  // Update all payments to approved
-  await prisma.workerPayment.updateMany({
-    where: { payrollPeriodId: id, status: "calculated" },
-    data: { status: "approved" },
-  });
+  const accountingHandled = await postPayrollAccruals(id);
+  if (!accountingHandled) {
+    await prisma.workerPayment.updateMany({
+      where: { payrollPeriodId: id, status: "calculated" },
+      data: { status: "approved" },
+    });
+  }
 
-  const updated = await prisma.payrollPeriod.update({
-    where: { id },
-    data: { status: "approved" },
-    include: { createdBy: { select: { id: true, fullName: true } } },
-  });
+  const updated = accountingHandled
+    ? await prisma.payrollPeriod.findUniqueOrThrow({
+        where: { id },
+        include: { createdBy: { select: { id: true, fullName: true } } },
+      })
+    : await prisma.payrollPeriod.update({
+        where: { id },
+        data: { status: "approved" },
+        include: { createdBy: { select: { id: true, fullName: true } } },
+      });
 
   // Notify admins of payroll approval
   try {
@@ -1093,6 +1228,7 @@ export async function approvePayrollPeriod(id: string): Promise<PayrollPeriod> {
 export async function markPayrollAsPaid(
   id: string,
   paidDate?: string,
+  paymentDetails?: { paymentMethod?: string; cashAccountId?: string },
 ): Promise<PayrollPeriod> {
   const period = await prisma.payrollPeriod.findUnique({
     where: { id },
@@ -1106,23 +1242,51 @@ export async function markPayrollAsPaid(
     throw new Error("Can only mark approved payroll periods as paid");
   }
 
-  // Update all payments to paid
-  await prisma.workerPayment.updateMany({
-    where: { payrollPeriodId: id, status: "approved" },
-    data: {
-      status: "paid",
-      paidAt: paidDate ? new Date(paidDate) : new Date(),
-    },
-  });
-
-  const updated = await prisma.payrollPeriod.update({
-    where: { id },
-    data: {
-      status: "paid",
-      paidDate: paidDate ? new Date(paidDate) : new Date(),
-    },
-    include: { createdBy: { select: { id: true, fullName: true } } },
-  });
+  const paidAt = paidDate ? new Date(paidDate) : new Date();
+  let updated;
+  if ((prisma as any).accountingSettings && typeof (prisma as any).$transaction === "function") {
+    updated = await prisma.$transaction(async (tx) => {
+      const payments = await tx.workerPayment.findMany({
+        where: { payrollPeriodId: id, status: "approved" },
+        include: { worker: true },
+      });
+      const settings = await tx.accountingSettings.findFirst();
+      if (!settings) throw new Error("Accounting settings are required before paying payroll");
+      if (!paymentDetails?.paymentMethod || !paymentDetails.cashAccountId) {
+        throw new Error("Bulk payroll payment requires payment method and cash account");
+      }
+      for (const payment of payments) {
+        await postPayrollPaymentEntryTx(
+          tx,
+          payment,
+          period,
+          period.createdById,
+          paidAt,
+          paymentDetails.paymentMethod,
+          paymentDetails.cashAccountId,
+        );
+      }
+      await tx.workerPayment.updateMany({
+        where: { payrollPeriodId: id, status: "approved" },
+        data: { status: "paid", paidAt },
+      });
+      return tx.payrollPeriod.update({
+        where: { id },
+        data: { status: "paid", paidDate: paidAt },
+        include: { createdBy: { select: { id: true, fullName: true } } },
+      });
+    });
+  } else {
+    await prisma.workerPayment.updateMany({
+      where: { payrollPeriodId: id, status: "approved" },
+      data: { status: "paid", paidAt },
+    });
+    updated = await prisma.payrollPeriod.update({
+      where: { id },
+      data: { status: "paid", paidDate: paidAt },
+      include: { createdBy: { select: { id: true, fullName: true } } },
+    });
+  }
 
   // Notify admins of payroll paid
   try {
@@ -1164,100 +1328,41 @@ export async function payWorkerPayment(
 
   // Use a transaction for payment update and accounting entry
   const result = await prisma.$transaction(async (tx) => {
-    // 1. Mark as paid
-    const updatedPayment = await tx.workerPayment.update({
+    const currentPayment = await tx.workerPayment.findUnique({
+      where: { id: paymentId },
+      include: { worker: true, payrollPeriod: true },
+    });
+    if (!currentPayment) throw new Error("Payment record not found");
+    if (currentPayment.status === "paid") {
+      throw new Error("Payment already marked as paid");
+    }
+
+    const paidAt = new Date();
+    const settings = await tx.accountingSettings.findFirst();
+    if (!settings) throw new Error("Accounting settings are required before paying payroll");
+    if (!settings.defaultCashAccountId) {
+      throw new Error("Configure wages payable and cash accounts before paying payroll");
+    }
+    await postPayrollPaymentEntryTx(
+      tx,
+      currentPayment,
+      currentPayment.payrollPeriod,
+      profile.id,
+      paidAt,
+      details.paymentMethod,
+      settings.defaultCashAccountId,
+    );
+
+    return tx.workerPayment.update({
       where: { id: paymentId },
       data: {
         status: "paid",
-        paidAt: new Date(),
+        paidAt,
         paymentMethod: details.paymentMethod,
         paymentRef: details.paymentRef,
       },
       include: { worker: true, adjustments: true },
     });
-
-    // 2. Create Journal Entry if accounting settings allow
-    const settings = await tx.accountingSettings.findFirst();
-    if (settings?.autoGenerateJournalEntries) {
-      // Prefer wages & salaries account (6100) for payroll payments, fallback to default expense
-      const wagesAccount = await tx.chartOfAccount.findFirst({
-        where: { code: "6100" },
-      });
-      const expenseAccountId =
-        wagesAccount?.id || settings.defaultExpenseAccountId;
-      const cashAccountId = settings.defaultCashAccountId;
-
-      if (expenseAccountId && cashAccountId) {
-        // We'll call createJournalEntry logic here but manually since we are in a transaction
-        // Actually, it's safer to use the service but we need to pass the tx
-        // For simplicity, let's create it manually in this tx
-
-        const year = new Date().getFullYear();
-        const prefix = settings.entryNumberPrefix || "JE";
-
-        // Find last number (internal logic)
-        const last = await tx.journalEntry.findFirst({
-          where: { entryNumber: { startsWith: `${prefix}-${year}-` } },
-          orderBy: { entryNumber: "desc" },
-          select: { entryNumber: true },
-        });
-
-        let nextSeq = 1;
-        if (last?.entryNumber) {
-          const parts = last.entryNumber.split("-");
-          const lastSeq = parseInt(parts[parts.length - 1], 10);
-          if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
-        }
-        const entryNumber = `${prefix}-${year}-${String(nextSeq).padStart(4, "0")}`;
-
-        const netAmount = decimalToNumber(updatedPayment.netAmount);
-
-        await tx.journalEntry.create({
-          data: {
-            entryNumber,
-            date: new Date(),
-            description: `Payroll: ${payment.worker.fullName} - ${payment.payrollPeriod.name}`,
-            reference: payment.payrollPeriod.name,
-            referenceType: "payroll_payment",
-            referenceId: paymentId,
-            status: "approved",
-            totalDebit: netAmount,
-            totalCredit: netAmount,
-            createdById: profile.id,
-            lines: {
-              create: [
-                {
-                  accountId: expenseAccountId,
-                  description: `Payroll expense for ${payment.worker.fullName}`,
-                  debitAmount: netAmount,
-                  creditAmount: 0,
-                  lineOrder: 0,
-                },
-                {
-                  accountId: cashAccountId,
-                  description: `Payroll payment to ${payment.worker.fullName}`,
-                  debitAmount: 0,
-                  creditAmount: netAmount,
-                  lineOrder: 1,
-                },
-              ],
-            },
-          },
-        });
-
-        // Update account balances
-        await tx.chartOfAccount.update({
-          where: { id: expenseAccountId },
-          data: { currentBalance: { increment: netAmount } },
-        });
-        await tx.chartOfAccount.update({
-          where: { id: cashAccountId },
-          data: { currentBalance: { decrement: netAmount } },
-        });
-      }
-    }
-
-    return updatedPayment;
   });
 
   return {

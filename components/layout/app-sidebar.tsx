@@ -119,6 +119,11 @@ const accountingItems = [
     icon: Calculator,
   },
   {
+    title: "Financial Years",
+    url: "/dashboard/accounting/financial-years",
+    icon: CalendarDays,
+  },
+  {
     title: "Chart of Accounts",
     url: "/dashboard/accounting/accounts",
     icon: Wallet,
@@ -132,6 +137,21 @@ const accountingItems = [
     title: "Payments",
     url: "/dashboard/accounting/payments",
     icon: CreditCard,
+  },
+  {
+    title: "Transactions",
+    url: "/dashboard/accounting/transactions",
+    icon: ClipboardList,
+  },
+  {
+    title: "Partners",
+    url: "/dashboard/accounting/partners",
+    icon: Users,
+  },
+  {
+    title: "Receivables",
+    url: "/dashboard/accounting/receivables",
+    icon: BarChart3,
   },
   {
     title: "Reports",
@@ -156,7 +176,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // Check if user has accounting access (moderator, admin)
   const hasAccountingAccess =
-    !loading && role && ["admin", "moderator"].includes(role);
+    !loading && role && ["admin", "moderator", "superadmin"].includes(role);
 
   return (
     <Sidebar {...props}>

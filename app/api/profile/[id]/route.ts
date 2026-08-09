@@ -35,8 +35,8 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Users can only fetch their own profile, unless they're admin
-    if (session.user.id !== id && session.user.role !== "admin") {
+    // Users can only fetch their own profile, unless they're administrators.
+    if (session.user.id !== id && !["admin", "superadmin"].includes((session.user.role || "").toLowerCase())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -56,6 +56,7 @@ export async function GET(
         ...(columns.has("address") ? { address: true } : {}),
         ...(columns.has("bio") ? { bio: true } : {}),
         ...(columns.has("avatar_url") ? { avatarUrl: true } : {}),
+        user: { select: { email: true } },
       },
     });
 
@@ -63,7 +64,8 @@ export async function GET(
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ profile });
+    const { user: authUser, ...profileData } = profile;
+    return NextResponse.json({ profile: { ...profileData, authenticationEmail: authUser.email } });
   } catch (error) {
     console.error("Error fetching profile:", error);
     return NextResponse.json(
@@ -85,8 +87,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Users can only update their own profile, unless they're admin
-    if (session.user.id !== id && session.user.role !== "admin") {
+    // Users can only update their own profile, unless they're administrators.
+    if (session.user.id !== id && !["admin", "superadmin"].includes((session.user.role || "").toLowerCase())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -95,9 +97,15 @@ export async function PATCH(
     const body = await request.json();
     const { fullName, email, phone, address, bio, avatarUrl } = body;
 
+    if (email !== undefined) {
+      return NextResponse.json(
+        { error: "Email changes require verification through the email-change workflow" },
+        { status: 400 },
+      );
+    }
+
     const data: Record<string, unknown> = {
       ...(fullName !== undefined && { fullName }),
-      ...(email !== undefined && { email }),
       ...(phone !== undefined && columns.has("phone") && { phone }),
       ...(address !== undefined && columns.has("address") && { address }),
       ...(bio !== undefined && columns.has("bio") && { bio }),

@@ -92,7 +92,7 @@ export default function BankAccountsPage() {
     try {
       setLoading(true);
       const res = await fetch(
-        "/api/accounting/accounts?isActive=true&category=ASSET",
+        "/api/accounting/accounts?isActive=true&category=Asset",
       );
       const json = await res.json();
       setAccounts(json.data || []);

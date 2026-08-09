@@ -24,7 +24,7 @@ export async function POST() {
     });
 
     const role = user?.profile?.role?.toLowerCase() || "";
-    if (!user || !["admin", "moderator"].includes(role)) {
+    if (!user || !["admin", "moderator", "superadmin"].includes(role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

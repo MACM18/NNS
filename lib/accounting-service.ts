@@ -27,6 +27,10 @@ import type {
   TrialBalance,
   TrialBalanceRow,
 } from "@/types/accounting";
+import {
+  ensureFinancialYear,
+  recordServicePayment,
+} from "@/lib/partnership-accounting-service";
 
 // Use Prisma.Decimal for type compatibility
 type Decimal = Prisma.Decimal;
@@ -35,45 +39,39 @@ type Decimal = Prisma.Decimal;
 // UTILITY FUNCTIONS
 // ==========================================
 
-/**
- * Generate next sequential number with prefix
- */
-export async function generateSequentialNumber(
+async function generateAtomicAccountingNumber(
   prefix: string,
   table: "journal_entries" | "invoice_payments",
-  field: string,
+  referenceDate: Date,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<string> {
-  const year = new Date().getFullYear();
-  const pattern = `${prefix}-${year}-%`;
-
-  let lastNumber: string | null = null;
-
-  if (table === "journal_entries") {
-    const last = await prisma.journalEntry.findFirst({
-      where: { entryNumber: { startsWith: `${prefix}-${year}-` } },
-      orderBy: { entryNumber: "desc" },
-      select: { entryNumber: true },
-    });
-    lastNumber = last?.entryNumber ?? null;
-  } else if (table === "invoice_payments") {
-    const last = await prisma.invoicePayment.findFirst({
-      where: { paymentNumber: { startsWith: `${prefix}-${year}-` } },
-      orderBy: { paymentNumber: "desc" },
-      select: { paymentNumber: true },
-    });
-    lastNumber = last?.paymentNumber ?? null;
-  }
-
-  let nextSeq = 1;
-  if (lastNumber) {
-    const parts = lastNumber.split("-");
-    const lastSeq = parseInt(parts[parts.length - 1], 10);
-    if (!isNaN(lastSeq)) {
-      nextSeq = lastSeq + 1;
-    }
-  }
-
-  return `${prefix}-${year}-${String(nextSeq).padStart(4, "0")}`;
+  const settings = await client.accountingSettings.findFirst();
+  const startMonth = settings?.fiscalYearStart || 4;
+  const year =
+    referenceDate.getUTCMonth() + 1 >= startMonth
+      ? referenceDate.getUTCFullYear()
+      : referenceDate.getUTCFullYear() - 1;
+  const key = table + ":" + prefix + ":" + year;
+  const last = table === "journal_entries"
+    ? await client.journalEntry.findFirst({
+        where: { entryNumber: { startsWith: `${prefix}-${year}-` } },
+        orderBy: { entryNumber: "desc" },
+        select: { entryNumber: true },
+      })
+    : await client.invoicePayment.findFirst({
+        where: { paymentNumber: { startsWith: `${prefix}-${year}-` } },
+        orderBy: { paymentNumber: "desc" },
+        select: { paymentNumber: true },
+      });
+  const lastNumber = table === "journal_entries"
+    ? Number(String((last as { entryNumber?: string } | null)?.entryNumber || "").split("-").pop()) || 0
+    : Number(String((last as { paymentNumber?: string } | null)?.paymentNumber || "").split("-").pop()) || 0;
+  const sequence = await client.accountingSequence.upsert({
+    where: { sequenceKey: key },
+    create: { sequenceKey: key, nextValue: Math.max(lastNumber + 2, 2) },
+    update: { nextValue: { increment: 1 } },
+  });
+  return prefix + "-" + year + "-" + String(sequence.nextValue - 1).padStart(4, "0");
 }
 
 /**
@@ -195,7 +193,8 @@ export async function initializeAccounting(): Promise<{
 
     await prisma.accountingSettings.create({
       data: {
-        fiscalYearStart: 1, // January
+        fiscalYearStart: 4, // April
+        fiscalYearStartDay: 1,
         baseCurrencyId: baseCurrency?.id,
         defaultReceivablesAccountId: receivablesAccount?.id,
         defaultPayablesAccountId: payablesAccount?.id,
@@ -395,7 +394,7 @@ export async function createBankAccount(data: {
   const account = await createAccount({
     code: data.code,
     name: data.name,
-    category: "ASSET",
+    category: "Asset",
     subCategory: "Bank",
     currencyId: data.currencyId,
     openingBalance: data.openingBalance || 0,
@@ -466,19 +465,13 @@ export async function updateAccountBalance(
   const account = await prisma.chartOfAccount.findUnique({ where: { id } });
   if (!account) throw new Error("Account not found");
 
-  const currentBalance = toNumber(account.currentBalance);
-  let newBalance: number;
-
-  // Debit increases debit-normal accounts, decreases credit-normal accounts
-  if (account.normalBalance === "debit") {
-    newBalance = currentBalance + debitAmount - creditAmount;
-  } else {
-    newBalance = currentBalance + creditAmount - debitAmount;
-  }
-
+  const delta =
+    account.normalBalance === "debit"
+      ? debitAmount - creditAmount
+      : creditAmount - debitAmount;
   await prisma.chartOfAccount.update({
     where: { id },
-    data: { currentBalance: newBalance },
+    data: { currentBalance: { increment: delta } },
   });
 }
 
@@ -509,6 +502,7 @@ export async function createPeriod(data: {
   startDate: Date;
   endDate: Date;
   notes?: string;
+  financialYearId?: string;
 }) {
   return prisma.accountingPeriod.create({ data });
 }
@@ -633,6 +627,15 @@ export async function createJournalEntry(
   autoApprove = false,
 ): Promise<JournalEntry> {
   // Validate balanced entry
+  if (data.lines.length < 2) throw new Error("A journal entry requires at least two lines");
+  for (const line of data.lines) {
+    if (!Number.isFinite(line.debitAmount) || !Number.isFinite(line.creditAmount) || line.debitAmount < 0 || line.creditAmount < 0) {
+      throw new Error("Journal amounts must be finite, non-negative numbers");
+    }
+    if (line.debitAmount > 0 && line.creditAmount > 0) {
+      throw new Error("A journal line cannot contain both debit and credit");
+    }
+  }
   const totalDebit = data.lines.reduce((sum, l) => sum + l.debitAmount, 0);
   const totalCredit = data.lines.reduce((sum, l) => sum + l.creditAmount, 0);
 
@@ -642,81 +645,85 @@ export async function createJournalEntry(
     );
   }
 
-  // Generate entry number
-  const settings = await prisma.accountingSettings.findFirst();
-  const prefix = settings?.entryNumberPrefix || "JE";
-  const entryNumber = await generateSequentialNumber(
-    prefix,
-    "journal_entries",
-    "entryNumber",
-  );
-
-  // Get current period if not specified
-  let periodId = data.periodId;
-  if (!periodId) {
-    const currentPeriod = await getCurrentPeriod();
-    periodId = currentPeriod?.id;
-  }
-
-  // Check if period is closed
-  if (periodId) {
-    const period = await prisma.accountingPeriod.findUnique({
-      where: { id: periodId },
-    });
-    if (period?.isClosed) {
-      throw new Error("Cannot create entries in a closed period");
+  const entry = await prisma.$transaction(async (tx) => {
+    const settings = await tx.accountingSettings.findFirst();
+    const entryNumber = await generateAtomicAccountingNumber(
+      settings?.entryNumberPrefix || "JE",
+      "journal_entries",
+      data.date,
+      tx,
+    );
+    let periodId = data.periodId;
+    if (!periodId) {
+      const currentPeriod = await tx.accountingPeriod.findFirst({
+        where: {
+          startDate: { lte: data.date },
+          endDate: { gte: data.date },
+          isClosed: false,
+        },
+      });
+      periodId = currentPeriod?.id;
     }
-  }
-
-  const entry = await prisma.journalEntry.create({
-    data: {
-      entryNumber,
-      date: data.date,
-      description: data.description,
-      reference: data.reference,
-      referenceType: data.referenceType,
-      referenceId: data.referenceId,
-      periodId,
-      currencyId: data.currencyId,
-      exchangeRate: data.exchangeRate || 1,
-      status: autoApprove
-        ? "approved"
-        : settings?.requireApproval
-          ? "pending"
-          : "approved",
-      totalDebit,
-      totalCredit,
-      createdById,
-      approvedById: autoApprove ? createdById : undefined,
-      approvedAt: autoApprove ? new Date() : undefined,
-      notes: data.notes,
-      lines: {
-        create: data.lines.map((line, index) => ({
-          accountId: line.accountId,
-          description: line.description,
-          debitAmount: line.debitAmount,
-          creditAmount: line.creditAmount,
-          lineOrder: index,
-        })),
+    if (periodId) {
+      const period = await tx.accountingPeriod.findUnique({ where: { id: periodId } });
+      if (period?.isClosed) throw new Error("Cannot create entries in a closed period");
+    }
+    const financialYear = await ensureFinancialYear(tx, data.date, createdById);
+    const status = autoApprove
+      ? "approved"
+      : settings?.requireApproval
+        ? "pending"
+        : "approved";
+    const entry = await tx.journalEntry.create({
+      data: {
+        entryNumber,
+        date: data.date,
+        description: data.description,
+        reference: data.reference,
+        referenceType: data.referenceType,
+        referenceId: data.referenceId,
+        financialYearId: financialYear.id,
+        periodId,
+        currencyId: data.currencyId,
+        exchangeRate: data.exchangeRate || 1,
+        status,
+        totalDebit,
+        totalCredit,
+        createdById,
+        approvedById: status === "approved" ? createdById : undefined,
+        approvedAt: status === "approved" ? new Date() : undefined,
+        notes: data.notes,
+        lines: {
+          create: data.lines.map((line, index) => ({
+            accountId: line.accountId,
+            description: line.description,
+            debitAmount: line.debitAmount,
+            creditAmount: line.creditAmount,
+            lineOrder: index,
+          })),
+        },
       },
-    },
-    include: {
-      lines: { include: { account: true } },
-      period: true,
-      currency: true,
-    },
-  });
-
-  // Update account balances if approved
-  if (entry.status === "approved") {
-    for (const line of entry.lines) {
-      await updateAccountBalance(
-        line.accountId,
-        toNumber(line.debitAmount),
-        toNumber(line.creditAmount),
-      );
+      include: {
+        lines: { include: { account: true } },
+        period: true,
+        currency: true,
+      },
+    });
+    if (entry.status === "approved") {
+      for (const line of entry.lines) {
+        const account = await tx.chartOfAccount.findUnique({ where: { id: line.accountId } });
+        if (!account || !account.isActive) throw new Error("Journal account is missing or inactive");
+        const delta = account.normalBalance === "debit"
+          ? toNumber(line.debitAmount) - toNumber(line.creditAmount)
+          : toNumber(line.creditAmount) - toNumber(line.debitAmount);
+        await tx.chartOfAccount.update({
+          where: { id: line.accountId },
+          data: { currentBalance: { increment: delta } },
+        });
+      }
     }
-  }
+    return entry;
+  });
 
   return {
     ...entry,
@@ -809,38 +816,40 @@ export async function approveJournalEntry(
   id: string,
   approvedById: string,
 ): Promise<JournalEntry> {
-  const entry = await prisma.journalEntry.findUnique({
-    where: { id },
-    include: { lines: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    const entry = await tx.journalEntry.findUnique({
+      where: { id },
+      include: { lines: true },
+    });
+    if (!entry) throw new Error("Journal entry not found");
+    if (entry.status !== "pending" && entry.status !== "draft") {
+      throw new Error("Entry is not in pending/draft status");
+    }
+    if (entry.periodId) {
+      const period = await tx.accountingPeriod.findUnique({ where: { id: entry.periodId } });
+      if (period?.isClosed) throw new Error("Cannot approve an entry in a closed period");
+    }
+    if (entry.financialYearId) {
+      const year = await tx.financialYear.findUnique({ where: { id: entry.financialYearId } });
+      if (year?.isClosed || year?.status === "closed") throw new Error("Cannot approve an entry in a closed financial year");
+    }
+    const updated = await tx.journalEntry.update({
+      where: { id },
+      data: { status: "approved", approvedById, approvedAt: new Date() },
+      include: { lines: { include: { account: true } }, period: true, currency: true },
+    });
+    for (const line of updated.lines) {
+      if (!line.account.isActive) throw new Error("Cannot approve an entry with an inactive account");
+      const delta = line.account.normalBalance === "debit"
+        ? toNumber(line.debitAmount) - toNumber(line.creditAmount)
+        : toNumber(line.creditAmount) - toNumber(line.debitAmount);
+      await tx.chartOfAccount.update({
+        where: { id: line.accountId },
+        data: { currentBalance: { increment: delta } },
+      });
+    }
+    return updated;
   });
-
-  if (!entry) throw new Error("Journal entry not found");
-  if (entry.status !== "pending" && entry.status !== "draft") {
-    throw new Error("Entry is not in pending/draft status");
-  }
-
-  const updated = await prisma.journalEntry.update({
-    where: { id },
-    data: {
-      status: "approved",
-      approvedById,
-      approvedAt: new Date(),
-    },
-    include: {
-      lines: { include: { account: true } },
-      period: true,
-      currency: true,
-    },
-  });
-
-  // Update account balances
-  for (const line of updated.lines) {
-    await updateAccountBalance(
-      line.accountId,
-      toNumber(line.debitAmount),
-      toNumber(line.creditAmount),
-    );
-  }
 
   return {
     ...updated,
@@ -856,37 +865,27 @@ export async function approveJournalEntry(
 }
 
 export async function unapproveJournalEntry(id: string): Promise<JournalEntry> {
-  const entry = await prisma.journalEntry.findUnique({
-    where: { id },
-    include: { lines: true },
-  });
-
-  if (!entry) throw new Error("Journal entry not found");
-  if (entry.status !== "approved") {
-    throw new Error("Entry is not approved");
-  }
-
-  // Reverse the account balance updates
-  for (const line of entry.lines) {
-    await updateAccountBalance(
-      line.accountId,
-      -toNumber(line.debitAmount), // Negate to reverse
-      -toNumber(line.creditAmount), // Negate to reverse
-    );
-  }
-
-  const updated = await prisma.journalEntry.update({
-    where: { id },
-    data: {
-      status: "pending",
-      approvedById: null,
-      approvedAt: null,
-    },
-    include: {
-      lines: { include: { account: true } },
-      period: true,
-      currency: true,
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    const entry = await tx.journalEntry.findUnique({ where: { id }, include: { lines: true } });
+    if (!entry) throw new Error("Journal entry not found");
+    if (entry.status !== "approved") throw new Error("Entry is not approved");
+    if (entry.periodId) {
+      const period = await tx.accountingPeriod.findUnique({ where: { id: entry.periodId } });
+      if (period?.isClosed) throw new Error("Cannot unapprove an entry in a closed period");
+    }
+    for (const line of entry.lines) {
+      const account = await tx.chartOfAccount.findUnique({ where: { id: line.accountId } });
+      if (!account) throw new Error("Account not found");
+      const delta = account.normalBalance === "debit"
+        ? toNumber(line.debitAmount) - toNumber(line.creditAmount)
+        : toNumber(line.creditAmount) - toNumber(line.debitAmount);
+      await tx.chartOfAccount.update({ where: { id: line.accountId }, data: { currentBalance: { increment: -delta } } });
+    }
+    return tx.journalEntry.update({
+      where: { id },
+      data: { status: "pending", approvedById: null, approvedAt: null },
+      include: { lines: { include: { account: true } }, period: true, currency: true },
+    });
   });
 
   return {
@@ -1020,163 +1019,31 @@ export async function recordPayment(
   data: InvoicePaymentFormData,
   createdById: string,
 ): Promise<{ payment: unknown; journalEntry?: JournalEntry }> {
-  const settings = await prisma.accountingSettings.findFirst();
+  if (data.invoiceType !== "generated") {
+    throw new Error("Inventory invoices supplied free of charge are not payable through accounting");
+  }
 
-  // Generate payment number
-  const prefix = settings?.paymentNumberPrefix || "PAY";
-  const paymentNumber = await generateSequentialNumber(
-    prefix,
-    "invoice_payments",
-    "paymentNumber",
-  );
-
-  // Get exchange rate
-  const exchangeRate = data.exchangeRate || 1;
-  const amountInBase = data.amount * exchangeRate;
-
-  // Create payment
-  const payment = await prisma.invoicePayment.create({
-    data: {
-      paymentNumber,
-      invoiceId: data.invoiceId,
-      invoiceType: data.invoiceType,
-      paymentDate: data.paymentDate,
-      amount: data.amount,
-      currencyId: data.currencyId,
-      exchangeRate,
-      amountInBase,
-      paymentMethod: data.paymentMethod,
-      reference: data.reference,
-      bankAccountId: data.bankAccountId,
-      status: "completed",
-      notes: data.notes,
-      createdById,
-    },
-    include: { currency: true },
+  const result = await recordServicePayment({
+    invoiceId: data.invoiceId,
+    amount: data.amount,
+    paymentDate: data.paymentDate,
+    paymentMethod: data.paymentMethod,
+    bankAccountId: data.bankAccountId || "",
+    reference: data.reference,
+    notes: data.notes,
+    currencyId: data.currencyId,
+    exchangeRate: data.exchangeRate,
+    createdById,
   });
-
-  // Update invoice payment status
-  if (data.invoiceType === "generated") {
-    const invoice = await prisma.generatedInvoice.findUnique({
-      where: { id: data.invoiceId },
-    });
-
-    if (invoice) {
-      const totalAmount = toNumber(invoice.totalAmount);
-      const newPaidAmount = toNumber(invoice.paidAmount) + amountInBase;
-      const newStatus = newPaidAmount >= totalAmount ? "paid" : "partial";
-
-      await prisma.generatedInvoice.update({
-        where: { id: data.invoiceId },
-        data: {
-          paidAmount: newPaidAmount,
-          paymentStatus: newStatus,
-        },
-      });
-    }
-  } else if (data.invoiceType === "inventory") {
-    const invoice = await prisma.inventoryInvoice.findUnique({
-      where: { id: data.invoiceId },
-    });
-
-    if (invoice && invoice.totalCost) {
-      const totalCost = toNumber(invoice.totalCost);
-      const newPaidAmount = toNumber(invoice.paidAmount) + amountInBase;
-      const newStatus = newPaidAmount >= totalCost ? "paid" : "partial";
-
-      await prisma.inventoryInvoice.update({
-        where: { id: data.invoiceId },
-        data: {
-          paidAmount: newPaidAmount,
-          paymentStatus: newStatus,
-        },
-      });
-    }
-  }
-
-  // Auto-generate journal entry if enabled
-  let journalEntry: JournalEntry | undefined;
-  if (settings?.autoGenerateJournalEntries) {
-    const cashAccountId = data.bankAccountId || settings.defaultCashAccountId;
-    const receivablesAccountId =
-      data.invoiceType === "generated"
-        ? settings.defaultReceivablesAccountId
-        : settings.defaultPayablesAccountId;
-
-    if (cashAccountId && receivablesAccountId) {
-      journalEntry = await createJournalEntry(
-        {
-          date: data.paymentDate,
-          description: `Payment received: ${paymentNumber}`,
-          reference: paymentNumber,
-          referenceType: "invoice_payment",
-          referenceId: payment.id,
-          currencyId: data.currencyId,
-          exchangeRate,
-          lines:
-            data.invoiceType === "generated"
-              ? [
-                  // Debit Cash, Credit Accounts Receivable
-                  {
-                    accountId: cashAccountId,
-                    description: "Cash received",
-                    debitAmount: amountInBase,
-                    creditAmount: 0,
-                  },
-                  {
-                    accountId: receivablesAccountId,
-                    description: "Reduce receivables",
-                    debitAmount: 0,
-                    creditAmount: amountInBase,
-                  },
-                ]
-              : [
-                  // Debit Accounts Payable, Credit Cash
-                  {
-                    accountId: receivablesAccountId,
-                    description: "Reduce payables",
-                    debitAmount: amountInBase,
-                    creditAmount: 0,
-                  },
-                  {
-                    accountId: cashAccountId,
-                    description: "Cash paid",
-                    debitAmount: 0,
-                    creditAmount: amountInBase,
-                  },
-                ],
-        },
-        createdById,
-        true, // Auto-approve
-      );
-
-      // Link journal entry to payment
-      await prisma.invoicePayment.update({
-        where: { id: payment.id },
-        data: { journalEntryId: journalEntry.id },
-      });
-    }
-  }
-
-  // If automatic journal entries are disabled, still adjust the cash/bank account balance
-  if (!settings?.autoGenerateJournalEntries && data.bankAccountId) {
-    // payments for generated invoices are cash receipts (increase bank account)
-    if (data.invoiceType === "generated") {
-      await updateAccountBalance(data.bankAccountId, amountInBase, 0);
-    } else {
-      // for inventory/payable invoices it's a cash outflow
-      await updateAccountBalance(data.bankAccountId, 0, amountInBase);
-    }
-  }
 
   return {
     payment: {
-      ...payment,
-      amount: toNumber(payment.amount),
-      exchangeRate: toNumber(payment.exchangeRate),
-      amountInBase: toNumber(payment.amountInBase),
+      ...result.payment,
+      amount: toNumber(result.payment.amount),
+      exchangeRate: toNumber(result.payment.exchangeRate),
+      amountInBase: toNumber(result.payment.amountInBase),
     },
-    journalEntry,
+    journalEntry: result.journalEntry as unknown as JournalEntry,
   };
 }
 
@@ -1763,12 +1630,15 @@ export async function getAccountingSettings() {
 
 export async function updateAccountingSettings(data: {
   fiscalYearStart?: number;
+  fiscalYearStartDay?: number;
   baseCurrencyId?: string;
   defaultReceivablesAccountId?: string;
   defaultPayablesAccountId?: string;
   defaultCashAccountId?: string;
   defaultRevenueAccountId?: string;
   defaultExpenseAccountId?: string;
+  defaultPayrollDeductionsAccountId?: string;
+  taxMappings?: Prisma.InputJsonValue;
   autoGenerateJournalEntries?: boolean;
   requireApproval?: boolean;
   allowBackdatedEntries?: boolean;
@@ -1793,7 +1663,8 @@ export async function updateAccountingSettings(data: {
     return prisma.accountingSettings.create({
       data: {
         ...data,
-        fiscalYearStart: data.fiscalYearStart || 1,
+        fiscalYearStart: data.fiscalYearStart || 4,
+        fiscalYearStartDay: data.fiscalYearStartDay || 1,
       },
       include: {
         defaultReceivablesAccount: true,

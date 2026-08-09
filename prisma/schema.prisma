@@ -38,6 +38,7 @@ model User {
   notifications Notification[]
   lineEntries   LineEntry[]
   loginHistory  LoginHistory[]
+  emailChangeRequests EmailChangeRequest[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -84,6 +85,22 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
+model EmailChangeRequest {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  newEmail   String    @map("new_email")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([newEmail, expiresAt])
+  @@map("email_change_requests")
+}
+
 // ==========================================
 // PROFILES (Application-level user data)
 // ==========================================
@@ -122,6 +139,9 @@ model Profile {
   payrollPeriodsCreated     PayrollPeriod[]          @relation("PayrollPeriodCreatedBy")
   workerPaymentsCreated     WorkerPayment[]          @relation("WorkerPaymentCreatedBy")
   payrollAdjustmentsCreated PayrollAdjustment[]      @relation("AdjustmentCreatedBy")
+  financialYearsCreated     FinancialYear[]          @relation("FinancialYearCreatedBy")
+  businessTransactionsCreated BusinessTransaction[]  @relation("BusinessTransactionCreatedBy")
+  pricingSchedulesCreated   PricingSchedule[]        @relation("PricingScheduleCreatedBy")
 
   @@map("profiles")
 }
@@ -144,6 +164,38 @@ model CompanySettings {
   @@map("company_settings")
   // default mode for payment calculation on this period (per-line vs fixed monthly)
   paymentType String    @default("per_line") @map("payment_type") // per_line | fixed_monthly
+}
+
+model PricingSchedule {
+  id            String    @id @default(uuid())
+  name          String
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  status        String    @default("active")
+  createdById   String?   @map("created_by")
+  lockedAt      DateTime? @map("locked_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  createdBy Profile?          @relation("PricingScheduleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  tiers     PricingTier[]
+  invoices  GeneratedInvoice[]
+
+  @@unique([effectiveFrom])
+  @@index([effectiveFrom, status])
+  @@map("pricing_schedules")
+}
+
+model PricingTier {
+  id                String   @id @default(uuid())
+  pricingScheduleId String   @map("pricing_schedule_id")
+  minLength         Decimal  @map("min_length") @db.Decimal(10, 2)
+  maxLength         Decimal? @map("max_length") @db.Decimal(10, 2)
+  rate              Decimal  @db.Decimal(14, 2)
+
+  pricingSchedule PricingSchedule @relation(fields: [pricingScheduleId], references: [id], onDelete: Cascade)
+
+  @@index([pricingScheduleId, minLength, maxLength])
+  @@map("pricing_tiers")
 }
 
 // ==========================================
@@ -550,8 +602,18 @@ model GeneratedInvoice {
   paidAmount     Decimal  @default(0) @map("paid_amount")
   currencyCode   String?  @map("currency_code") // ISO currency code
   dueDate        DateTime? @map("due_date") @db.Date
+  financialYearId String?  @map("financial_year_id")
+  accountingStatus String  @default("unposted") @map("accounting_status")
+  isOpeningBalance Boolean @default(false) @map("is_opening_balance")
+  postedJournalEntryId String? @unique @map("posted_journal_entry_id")
+  pricingScheduleId String? @map("pricing_schedule_id")
+  pricingSnapshot Json? @map("pricing_snapshot")
+  lineDetailsSnapshot Json? @map("line_details_snapshot")
   
   createdAt      DateTime @default(now()) @map("created_at")
+
+  financialYear FinancialYear? @relation(fields: [financialYearId], references: [id])
+  pricingSchedule PricingSchedule? @relation(fields: [pricingScheduleId], references: [id], onDelete: SetNull)
 
   @@map("generated_invoices")
 }
@@ -798,11 +860,13 @@ model AccountingPeriod {
   closedAt    DateTime? @map("closed_at")
   closedById  String?  @map("closed_by")
   notes       String?
+  financialYearId String? @map("financial_year_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
   journalEntries JournalEntry[]
+  financialYear FinancialYear? @relation(fields: [financialYearId], references: [id])
 
   @@unique([periodType, startDate, endDate])
   @@map("accounting_periods")
@@ -848,13 +912,17 @@ model JournalEntry {
   approvedById    String?  @map("approved_by")
   approvedAt      DateTime? @map("approved_at")
   notes           String?
+  financialYearId String?  @map("financial_year_id")
+  sourceKey       String?  @unique @map("source_key")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Relations
   period    AccountingPeriod? @relation(fields: [periodId], references: [id])
+  financialYear FinancialYear? @relation(fields: [financialYearId], references: [id])
   currency  Currency?         @relation(fields: [currencyId], references: [id])
   lines     JournalEntryLine[]
+  businessTransaction BusinessTransaction?
 
   @@index([date])
   @@index([status])
@@ -913,13 +981,16 @@ model InvoicePayment {
 // Accounting Settings for customization
 model AccountingSettings {
   id                        String   @id @default(uuid())
-  fiscalYearStart           Int      @default(1) @map("fiscal_year_start") // Month (1-12)
+  fiscalYearStart           Int      @default(4) @map("fiscal_year_start") // Month (1-12)
+  fiscalYearStartDay        Int      @default(1) @map("fiscal_year_start_day")
   baseCurrencyId            String?  @map("base_currency_id")
   defaultReceivablesAccountId String? @map("default_receivables_account_id")
   defaultPayablesAccountId  String?  @map("default_payables_account_id")
   defaultCashAccountId      String?  @map("default_cash_account_id")
   defaultRevenueAccountId   String?  @map("default_revenue_account_id")
   defaultExpenseAccountId   String?  @map("default_expense_account_id")
+  defaultPayrollDeductionsAccountId String? @map("default_payroll_deductions_account_id")
+  taxMappings              Json?    @map("tax_mappings")
   autoGenerateJournalEntries Boolean @default(true) @map("auto_generate_journal_entries")
   requireApproval           Boolean  @default(false) @map("require_approval")
   allowBackdatedEntries     Boolean  @default(true) @map("allow_backdated_entries")
@@ -936,6 +1007,123 @@ model AccountingSettings {
   defaultExpenseAccount     ChartOfAccount? @relation("DefaultExpenseAccount", fields: [defaultExpenseAccountId], references: [id])
 
   @@map("accounting_settings")
+}
+
+model AccountingSequence {
+  id        String   @id @default(uuid())
+  sequenceKey String @unique @map("sequence_key")
+  nextValue Int      @default(1) @map("next_value")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("accounting_sequences")
+}
+
+// ==========================================
+// FINANCIAL YEARS & PARTNERSHIP ACCOUNTING
+// ==========================================
+model FinancialYear {
+  id               String    @id @default(uuid())
+  name             String
+  yearOfAssessment String?   @map("year_of_assessment")
+  startDate        DateTime  @map("start_date") @db.Date
+  endDate          DateTime  @map("end_date") @db.Date
+  status           String    @default("open") // draft, open, closed
+  isClosed         Boolean   @default(false) @map("is_closed")
+  closedAt         DateTime? @map("closed_at")
+  closedById       String?   @map("closed_by")
+  notes            String?
+  createdById      String?   @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  createdBy            Profile?              @relation("FinancialYearCreatedBy", fields: [createdById], references: [id])
+  periods              AccountingPeriod[]
+  journalEntries       JournalEntry[]
+  invoices             GeneratedInvoice[]
+  allocations          PartnerAllocation[]
+  businessTransactions BusinessTransaction[]
+
+  @@unique([startDate, endDate])
+  @@index([startDate, endDate])
+  @@map("financial_years")
+}
+
+model PartnershipPartner {
+  id                String   @id @default(uuid())
+  code              String   @unique
+  name              String
+  capitalAccountId  String?  @map("capital_account_id")
+  drawingsAccountId String?  @map("drawings_account_id")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  allocations          PartnerAllocation[]
+  businessTransactions BusinessTransaction[]
+
+  @@map("partnership_partners")
+}
+
+model PartnerAllocation {
+  id              String   @id @default(uuid())
+  financialYearId String   @map("financial_year_id")
+  partnerId       String   @map("partner_id")
+  percentage      Decimal  @db.Decimal(5, 2)
+  allocatedProfit  Decimal? @map("allocated_profit") @db.Decimal(14, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  financialYear FinancialYear       @relation(fields: [financialYearId], references: [id], onDelete: Cascade)
+  partner       PartnershipPartner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([financialYearId, partnerId])
+  @@map("partner_allocations")
+}
+
+model BusinessTransaction {
+  id              String   @id @default(uuid())
+  financialYearId String?  @map("financial_year_id")
+  date            DateTime @db.Date
+  amount          Decimal  @db.Decimal(14, 2)
+  type            String   // income, expense, drawing, internal_transfer
+  category        String?
+  description     String
+  isDeductible    Boolean  @default(false) @map("is_deductible")
+  partnerId       String?  @map("partner_id")
+  paymentMethod   String?  @map("payment_method")
+  cashAccountId   String?  @map("cash_account_id")
+  offsetAccountId String?  @map("offset_account_id")
+  status          String   @default("draft") // draft, pending, posted, reversed
+  journalEntryId  String?  @unique @map("journal_entry_id")
+  createdById     String?  @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  financialYear FinancialYear?      @relation(fields: [financialYearId], references: [id])
+  partner       PartnershipPartner? @relation(fields: [partnerId], references: [id])
+  createdBy     Profile?            @relation("BusinessTransactionCreatedBy", fields: [createdById], references: [id])
+  journalEntry  JournalEntry?       @relation(fields: [journalEntryId], references: [id])
+  vouchers      Voucher[]
+
+  @@index([date])
+  @@index([type, isDeductible])
+  @@map("business_transactions")
+}
+
+model Voucher {
+  id                    String   @id @default(uuid())
+  businessTransactionId String   @map("business_transaction_id")
+  fileUrl               String   @map("file_url")
+  receiptNo             String?  @map("receipt_no")
+  payeeName             String?  @map("payee_name")
+  payeeNicEncrypted     String?  @map("payee_nic_encrypted")
+  createdById            String?  @map("created_by")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  businessTransaction BusinessTransaction @relation(fields: [businessTransactionId], references: [id], onDelete: Cascade)
+
+  @@index([businessTransactionId])
+  @@map("accounting_vouchers")
 }
 
 // ==========================================
@@ -1013,6 +1201,8 @@ model WorkerPayment {
   paymentMethod   String?  @map("payment_method") // bank_transfer, cash, cheque
   paymentRef      String?  @map("payment_ref")
   notes           String?
+  accrualJournalEntryId String? @unique @map("accrual_journal_entry_id")
+  paymentJournalEntryId String? @unique @map("payment_journal_entry_id")
   
   // Metadata
   createdById     String   @map("created_by")

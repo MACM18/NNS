@@ -41,6 +41,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useNotification } from "@/contexts/notification-context";
+import { useAuth } from "@/contexts/auth-context";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import type {
   JournalEntry,
@@ -95,6 +96,8 @@ export function JournalEntryTable({
   });
 
   const { addNotification } = useNotification();
+  const { role } = useAuth();
+  const canApprove = role === "admin" || role === "superadmin";
 
   const fetchEntries = async () => {
     try {
@@ -543,7 +546,7 @@ export function JournalEntryTable({
                             <Pencil className='h-4 w-4 text-muted-foreground' />
                           </Button>
                         )}
-                        {(entry.status === "pending" ||
+                        {canApprove && (entry.status === "pending" ||
                           entry.status === "draft") && (
                           <Button
                             variant='ghost'
@@ -554,7 +557,7 @@ export function JournalEntryTable({
                             <Check className='h-4 w-4 text-green-600' />
                           </Button>
                         )}
-                        {entry.status === "approved" && !entry.isReversed && (
+                        {canApprove && entry.status === "approved" && !entry.isReversed && (
                           <>
                             <Button
                               variant='ghost'

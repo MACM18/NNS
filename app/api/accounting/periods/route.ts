@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, periodType, startDate, endDate, notes } = body;
+    const { name, periodType, startDate, endDate, notes, financialYearId } = body;
 
     if (!name || !periodType || !startDate || !endDate) {
       return NextResponse.json(
@@ -80,12 +80,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let linkedFinancialYearId = financialYearId;
+    if (!linkedFinancialYearId) {
+      const matchingYear = await prisma.financialYear.findFirst({
+        where: {
+          startDate: { lte: new Date(startDate) },
+          endDate: { gte: new Date(endDate) },
+        },
+        orderBy: { startDate: "desc" },
+        select: { id: true },
+      });
+      if (!matchingYear) {
+        return NextResponse.json(
+          { error: "This period must fall inside an existing financial year. Create the financial year first." },
+          { status: 400 },
+        );
+      }
+      linkedFinancialYearId = matchingYear.id;
+    }
+
     const period = await createPeriod({
       name,
       periodType,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       notes,
+      financialYearId: linkedFinancialYearId,
     });
 
     return NextResponse.json({ data: period }, { status: 201 });

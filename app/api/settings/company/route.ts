@@ -9,6 +9,11 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const role = (session.user.role || "user").toLowerCase();
+    if (!["admin", "moderator", "superadmin"].includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const settings = await prisma.companySettings.findFirst();
 
     if (!settings) {
@@ -48,11 +53,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Require admin or moderator role to update company settings
+    // Company identity and bank settings are administrator-controlled.
     const role = (session.user.role || "user").toLowerCase();
-    if (!["admin", "moderator"].includes(role)) {
+    if (!["admin", "superadmin"].includes(role)) {
       return NextResponse.json(
-        { error: "Forbidden: Admin or Moderator access required" },
+        { error: "Forbidden: administrator access required" },
         { status: 403 }
       );
     }
@@ -126,7 +131,6 @@ export async function PUT(req: NextRequest) {
           website: body.website,
           registeredNumber: body.registered_number,
           bankDetails: bankDetails ?? undefined,
-          pricingTiers,
         },
       });
     } else {
@@ -138,6 +142,7 @@ export async function PUT(req: NextRequest) {
           website: body.website || "nns.lk",
           registeredNumber: body.registered_number,
           bankDetails: bankDetails ?? undefined,
+          // Preserve the legacy JSON only for initial schedule seeding.
           pricingTiers,
         },
       });

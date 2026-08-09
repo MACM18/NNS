@@ -9,8 +9,8 @@ import { prisma } from "@/lib/prisma";
 import {
   getPayments,
   hasAccountingAccess,
-  recordPayment,
 } from "@/lib/accounting-service";
+import { recordServicePayment } from "@/lib/partnership-accounting-service";
 import type { InvoiceTypeValue, PaymentMethodType } from "@/types/accounting";
 
 export async function GET(req: NextRequest) {
@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
       paymentMethod,
       reference,
       bankAccountId,
+      paymentAccountId,
       notes,
     } = body;
 
@@ -126,6 +127,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (invoiceType !== "generated") {
+      return NextResponse.json(
+        { error: "Inventory invoices are not payable through accounting because materials are free-issued" },
+        { status: 400 },
+      );
+    }
+
     if (amount <= 0) {
       return NextResponse.json(
         { error: "Payment amount must be greater than zero" },
@@ -133,21 +141,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await recordPayment(
-      {
-        invoiceId,
-        invoiceType,
-        paymentDate: new Date(paymentDate),
-        amount,
-        currencyId,
-        exchangeRate,
-        paymentMethod,
-        reference,
-        bankAccountId,
-        notes,
-      },
-      profile!.id
-    );
+    const result = await recordServicePayment({
+      invoiceId,
+      amount: Number(amount),
+      paymentDate: new Date(paymentDate),
+      paymentMethod,
+      bankAccountId: bankAccountId || paymentAccountId,
+      currencyId,
+      exchangeRate: exchangeRate ? Number(exchangeRate) : undefined,
+      reference,
+      notes,
+      createdById: profile!.id,
+    });
 
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (error) {

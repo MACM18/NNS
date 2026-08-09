@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getErrorMessage } from "@/lib/error-utils";
+import { isValidEmailAddress } from "@/lib/email-validation";
 
 const ALLOWED_ROLES = ["admin", "moderator"];
 
@@ -21,64 +22,6 @@ interface WorkerResponse {
   created_by: string | null;
   created_at: string;
   updated_at: string;
-}
-
-function isValidEmailAddress(input: string): boolean {
-  const email = input.trim();
-  if (email.length === 0) return false;
-  // Practical max length per common standards (RFC 5321/5322 guidance)
-  if (email.length > 254) return false;
-  // Fast reject whitespace
-  for (let i = 0; i < email.length; i++) {
-    const code = email.charCodeAt(i);
-    // space, tab, CR, LF
-    if (code === 32 || code === 9 || code === 10 || code === 13) return false;
-  }
-
-  const at = email.indexOf("@");
-  if (at <= 0) return false;
-  if (at !== email.lastIndexOf("@")) return false;
-  if (at >= email.length - 1) return false;
-
-  const local = email.slice(0, at);
-  const domain = email.slice(at + 1);
-  if (local.length > 64) return false;
-  if (domain.length > 253) return false;
-
-  // Local-part: allow common "atext" characters plus dots, but disallow
-  // leading/trailing dot and consecutive dots.
-  if (local.startsWith(".") || local.endsWith(".")) return false;
-  if (local.includes("..")) return false;
-  for (let i = 0; i < local.length; i++) {
-    const c = local[i];
-    const isAlphaNum =
-      (c >= "a" && c <= "z") ||
-      (c >= "A" && c <= "Z") ||
-      (c >= "0" && c <= "9");
-    const isAllowedSymbol = "!#$%&'*+/=?^_`{|}~.-".includes(c);
-    if (!isAlphaNum && !isAllowedSymbol) return false;
-  }
-
-  // Domain: basic hostname-style validation with at least one dot.
-  if (domain.startsWith(".") || domain.endsWith(".")) return false;
-  if (domain.includes("..")) return false;
-  const labels = domain.split(".");
-  if (labels.length < 2) return false;
-
-  for (const label of labels) {
-    if (label.length === 0 || label.length > 63) return false;
-    if (label.startsWith("-") || label.endsWith("-")) return false;
-    for (let i = 0; i < label.length; i++) {
-      const c = label[i];
-      const isAlphaNum =
-        (c >= "a" && c <= "z") ||
-        (c >= "A" && c <= "Z") ||
-        (c >= "0" && c <= "9");
-      if (!isAlphaNum && c !== "-") return false;
-    }
-  }
-
-  return true;
 }
 
 function escapeHtml(text: string): string {

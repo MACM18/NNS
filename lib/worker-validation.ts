@@ -3,6 +3,7 @@
  */
 
 import type { CreateWorkerRequest, UpdateWorkerRequest } from "@/types/workers";
+import { isValidEmailAddress } from "@/lib/email-validation";
 
 /**
  * Validate worker full name
@@ -47,8 +48,7 @@ export function validateEmail(email: string): string | null {
     return null; // Email is optional
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (!isValidEmailAddress(email)) {
     return "Please enter a valid email address";
   }
 

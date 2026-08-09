@@ -24,6 +24,17 @@ interface GeneratedInvoice {
   total_amount: number;
   line_count: number;
   line_details_ids: string[];
+  line_details_snapshot?: Array<{
+    lineId: string;
+    customerName: string;
+    telephoneNo: string;
+    address: string;
+    serviceDate: string;
+    cableLength: number;
+    baseRate: number;
+    invoiceAmount: number;
+  }> | null;
+  pricing_snapshot?: unknown;
   status: string;
   created_at: string;
 }
@@ -41,6 +52,8 @@ interface LineDetail {
   total_cable: number;
   date: string;
   address: string;
+  base_rate?: number | null;
+  invoice_amount?: number | null;
 }
 
 interface CompanySettings {
@@ -71,7 +84,6 @@ export function InvoicePDFModal({
   const [lineDetails, setLineDetails] = useState<LineDetail[]>([]);
   const [companySettings, setCompanySettings] =
     useState<CompanySettings | null>(null);
-  const [pricingTiers, setPricingTiers] = useState<any[]>([]);
 
   const { addNotification } = useNotification();
 
@@ -86,19 +98,30 @@ export function InvoicePDFModal({
 
     setLoading(true);
     try {
-      // Fetch line details by IDs
-      const linesResponse = await fetch("/api/lines/by-ids", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: invoice.line_details_ids }),
-      });
-
-      if (!linesResponse.ok) {
-        throw new Error("Failed to fetch line details");
+      let lines: LineDetail[] = [];
+      if (Array.isArray(invoice.line_details_snapshot) && invoice.line_details_snapshot.length > 0) {
+        lines = invoice.line_details_snapshot.map((line) => ({
+          id: line.lineId,
+          name: line.customerName,
+          phone_number: line.telephoneNo,
+          total_cable: line.cableLength,
+          date: line.serviceDate,
+          address: line.address,
+          base_rate: line.baseRate,
+          invoice_amount: line.invoiceAmount,
+        }));
+      } else if (Array.isArray(invoice.line_details_ids) && invoice.line_details_ids.length > 0) {
+        // Legacy invoices may still show current operational line details, but
+        // never invent a historical rate from today's pricing.
+        const linesResponse = await fetch("/api/lines/by-ids", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: invoice.line_details_ids }),
+        });
+        if (!linesResponse.ok) throw new Error("Failed to fetch line details");
+        const linesData = await linesResponse.json();
+        lines = (linesData.data || []).map((line: LineDetail) => ({ ...line, base_rate: null, invoice_amount: null }));
       }
-
-      const linesData = await linesResponse.json();
-      const lines = linesData.data || [];
 
       // Fetch company settings
       const settingsResponse = await fetch("/api/settings/company");
@@ -112,38 +135,11 @@ export function InvoicePDFModal({
       setLineDetails(lines as LineDetail[]);
 
       if (settings) {
-        // Work with a mutable copy and normalize pricing_tiers
-        const parsedSettings: any = { ...settings };
-        if (typeof parsedSettings.pricing_tiers === "string") {
-          try {
-            parsedSettings.pricing_tiers = JSON.parse(
-              parsedSettings.pricing_tiers
-            );
-          } catch {
-            parsedSettings.pricing_tiers = getDefaultPricingTiers();
-          }
-        }
-
-        // Ensure numeric fields in tiers
-        const normalizedTiers = (
-          (parsedSettings.pricing_tiers as any[]) || getDefaultPricingTiers()
-        ).map((t: any) => ({
-          min_length: Number(t.min_length) || 0,
-          max_length:
-            t.max_length === 999999 ||
-            String(t.max_length) === "" ||
-            t.max_length == null
-              ? 999999
-              : Number(t.max_length) || 999999,
-          rate: Number(t.rate) || 0,
-        }));
-
-        setCompanySettings(parsedSettings as CompanySettings);
-        setPricingTiers(normalizedTiers);
+        setCompanySettings(settings as CompanySettings);
       } else {
         setCompanySettings(getDefaultCompanySettings());
-        setPricingTiers(getDefaultPricingTiers());
       }
+      setLineDetails(lines);
     } catch (error: any) {
       console.error("Error fetching invoice data:", error);
       addNotification({
@@ -164,40 +160,25 @@ export function InvoicePDFModal({
     website: "nns.lk",
     registered_number: "SLTS-OSP-2023-170",
     bank_details: {
-      bank_name: "Sampath Bank",
-      account_title: "M A N N Sanjeewa",
-      account_number: "1057 5222 1967",
-      branch_code: "Horana",
+      bank_name: "",
+      account_title: "",
+      account_number: "",
+      branch_code: "",
     },
-    pricing_tiers: getDefaultPricingTiers(),
+    pricing_tiers: [],
   });
-
-  const getDefaultPricingTiers = () => [
-    { min_length: 0, max_length: 100, rate: 6000 },
-    { min_length: 101, max_length: 200, rate: 6500 },
-    { min_length: 201, max_length: 300, rate: 7200 },
-    { min_length: 301, max_length: 400, rate: 7800 },
-    { min_length: 401, max_length: 500, rate: 8200 },
-    { min_length: 501, max_length: 999999, rate: 8400 },
-  ];
-
-  const calculateRate = (cableLength: number): number => {
-    const tier = pricingTiers.find(
-      (t) => cableLength >= t.min_length && cableLength <= t.max_length
-    );
-    return tier ? tier.rate : 8400;
-  };
 
   const groupLinesByRate = () => {
     const groups: {
-      [key: string]: { count: number; rate: number; amount: number };
+      [key: string]: { count: number; rate: number | null; amount: number | null };
     } = {};
 
     lineDetails.forEach((line) => {
-      const rate = calculateRate(line.total_cable);
+      const rate = line.base_rate == null ? 0 : Number(line.base_rate);
       let rangeKey = "";
 
-      if (line.total_cable <= 100) rangeKey = "0-100";
+      if (line.base_rate == null) rangeKey = "Historical rate unavailable";
+      else if (line.total_cable <= 100) rangeKey = "0-100";
       else if (line.total_cable <= 200) rangeKey = "101-200";
       else if (line.total_cable <= 300) rangeKey = "201-300";
       else if (line.total_cable <= 400) rangeKey = "301-400";
@@ -205,11 +186,11 @@ export function InvoicePDFModal({
       else rangeKey = "Over 500";
 
       if (!groups[rangeKey]) {
-        groups[rangeKey] = { count: 0, rate, amount: 0 };
+        groups[rangeKey] = { count: 0, rate: line.base_rate == null ? null : rate, amount: line.invoice_amount == null ? null : 0 };
       }
 
       groups[rangeKey].count += 1;
-      groups[rangeKey].amount += rate;
+      if (line.invoice_amount != null) groups[rangeKey].amount = (groups[rangeKey].amount || 0) + Number(line.invoice_amount);
     });
 
     return groups;
@@ -243,10 +224,6 @@ export function InvoicePDFModal({
 
     const groupedLines = groupLinesByRate();
     const totalAmount = invoice.total_amount;
-    const adjustedAmount =
-      invoice.invoice_type === "A"
-        ? Math.round(totalAmount * 0.9)
-        : totalAmount;
 
     return `
 <!DOCTYPE html>
@@ -313,9 +290,7 @@ export function InvoicePDFModal({
                     <td></td>
                     <td>${data.count}</td>
                     <td>${Number(data.rate || 0).toLocaleString()}.00</td>
-                    <td class="amount">${Number(
-                      data.amount || 0
-                    ).toLocaleString()}.00</td>
+                    <td class="amount">${data.amount == null ? "—" : `${Number(data.amount).toLocaleString()}.00`}</td>
                 </tr>
             `
               )
@@ -344,18 +319,6 @@ export function InvoicePDFModal({
                   totalAmount || 0
                 ).toLocaleString()}.00</strong></td>
             </tr>
-            ${
-              invoice.invoice_type === "A"
-                ? `
-            <tr class="total-row">
-                <td colspan="6"><strong>90%</strong></td>
-                <td class="amount"><strong>${Number(
-                  adjustedAmount || 0
-                ).toLocaleString()}.00</strong></td>
-            </tr>
-            `
-                : ""
-            }
         </tbody>
     </table>
 
@@ -488,10 +451,10 @@ export function InvoicePDFModal({
                               {data.count}
                             </td>
                             <td className='border border-gray-300 p-2'>
-                              {Number(data.rate || 0).toLocaleString()}.00
+                              {data.rate == null ? "—" : `${Number(data.rate).toLocaleString()}.00`}
                             </td>
                             <td className='border border-gray-300 p-2 text-right'>
-                              {Number(data.amount || 0).toLocaleString()}.00
+                              {data.amount == null ? "—" : `${Number(data.amount).toLocaleString()}.00`}
                             </td>
                           </tr>
                         )
@@ -505,24 +468,6 @@ export function InvoicePDFModal({
                           .00
                         </td>
                       </tr>
-                      {invoice.invoice_type === "A" && (
-                        <tr className='font-bold'>
-                          <td
-                            className='border border-gray-300 p-2'
-                            colSpan={4}
-                          >
-                            90%
-                          </td>
-                          <td className='border border-gray-300 p-2 text-right'>
-                            {Number(
-                              Math.round(
-                                Number(invoice.total_amount || 0) * 0.9
-                              )
-                            ).toLocaleString()}
-                            .00
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>

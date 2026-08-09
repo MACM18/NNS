@@ -42,6 +42,8 @@ interface Invoice {
   paidAmount?: number;
   payment_status?: string;
   paymentStatus?: string;
+  accounting_status?: string;
+  accountingStatus?: string;
   created_at?: string;
   createdAt?: string;
   customer_name?: string;
@@ -93,17 +95,12 @@ export default function PaymentsPage() {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      // Fetch both generated and inventory invoices
-      const [generatedRes, inventoryRes] = await Promise.all([
-        fetch("/api/invoices?limit=100"),
-        fetch("/api/inventory-invoices?limit=100"),
-      ]);
+      // Only service invoices are payable. Free-issued inventory is operational stock,
+      // not a supplier liability or cash payment.
+      const generatedRes = await fetch("/api/invoices?limit=1000");
 
       const generated = generatedRes.ok
         ? await generatedRes.json()
-        : { data: [] };
-      const inventory = inventoryRes.ok
-        ? await inventoryRes.json()
         : { data: [] };
 
       // Combine and normalize invoices
@@ -111,10 +108,6 @@ export default function PaymentsPage() {
         ...(generated.data || []).map((inv: Invoice) => ({
           ...inv,
           type: "generated" as const,
-        })),
-        ...(inventory.data || []).map((inv: Invoice) => ({
-          ...inv,
-          type: "inventory" as const,
         })),
       ];
 
@@ -146,6 +139,9 @@ export default function PaymentsPage() {
 
   const getPaymentStatus = (inv: Invoice) =>
     inv.payment_status || inv.paymentStatus || "unpaid";
+
+  const isPosted = (inv: Invoice) =>
+    (inv.accounting_status || inv.accountingStatus || "posted") === "posted";
 
   const getCreatedAt = (inv: Invoice) =>
     inv.created_at || inv.createdAt || new Date().toISOString();
@@ -210,7 +206,7 @@ export default function PaymentsPage() {
 
     const matchesType = typeFilter === "all" || inv.type === typeFilter;
 
-    return matchesSearch && matchesStatus && matchesType;
+    return matchesSearch && matchesStatus && matchesType && isPosted(inv);
   });
 
   // Calculate totals
@@ -322,7 +318,6 @@ export default function PaymentsPage() {
               <SelectContent>
                 <SelectItem value='all'>All Types</SelectItem>
                 <SelectItem value='generated'>Sales Invoices</SelectItem>
-                <SelectItem value='inventory'>Purchase Invoices</SelectItem>
               </SelectContent>
             </Select>
             <DropdownMenu>

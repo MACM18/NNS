@@ -40,6 +40,16 @@ import type {
 import { cn } from "@/lib/utils";
 
 type ReportType = "trial-balance" | "income-statement" | "balance-sheet";
+type CashIncomeStatement = {
+  basis: "cash";
+  periodStart: string;
+  periodEnd: string;
+  customerCollections: number;
+  otherIncome: number;
+  businessExpenses: number;
+  wagesPaid: number;
+  netProfit: number;
+};
 
 interface FinancialReportsProps {
   defaultReport?: ReportType;
@@ -54,11 +64,14 @@ export function FinancialReports({
   const [selectedPeriod, setSelectedPeriod] = useState<string>("");
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
+  const [basis, setBasis] = useState<"accrual" | "cash">("accrual");
 
   // Report data
   const [trialBalance, setTrialBalance] = useState<TrialBalance | null>(null);
   const [incomeStatement, setIncomeStatement] =
     useState<IncomeStatement | null>(null);
+  const [cashIncomeStatement, setCashIncomeStatement] =
+    useState<CashIncomeStatement | null>(null);
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null);
 
   const { addNotification } = useNotification();
@@ -87,10 +100,14 @@ export function FinancialReports({
 
     setLoading(true);
     try {
-      const params = new URLSearchParams({ reportType: activeReport });
-      if (selectedPeriod) params.append("periodId", selectedPeriod);
-      if (dateFrom) params.append("startDate", dateFrom.toISOString());
-      if (dateTo) params.append("endDate", dateTo.toISOString());
+      const selected = periods.find((period) => period.id === selectedPeriod);
+      const effectiveStart = dateFrom || (selected ? new Date(selected.startDate) : undefined);
+      const effectiveEnd = dateTo || (selected ? new Date(selected.endDate) : undefined);
+      const params = new URLSearchParams({ type: activeReport });
+      if (activeReport === "income-statement") params.append("basis", basis);
+      if (effectiveStart) params.append("startDate", effectiveStart.toISOString());
+      if (effectiveEnd) params.append("endDate", effectiveEnd.toISOString());
+      if (activeReport !== "income-statement" && effectiveEnd) params.append("asOfDate", effectiveEnd.toISOString());
 
       const response = await fetch(`/api/accounting/reports?${params}`);
       if (!response.ok) throw new Error("Failed to fetch report");
@@ -102,7 +119,11 @@ export function FinancialReports({
           setTrialBalance(result.data);
           break;
         case "income-statement":
-          setIncomeStatement(result.data);
+          if (basis === "cash") {
+            setCashIncomeStatement(result.data);
+          } else {
+            setIncomeStatement(result.data);
+          }
           break;
         case "balance-sheet":
           setBalanceSheet(result.data);
@@ -128,7 +149,7 @@ export function FinancialReports({
     if (selectedPeriod || dateFrom) {
       fetchReport();
     }
-  }, [activeReport, selectedPeriod, dateFrom, dateTo]);
+  }, [activeReport, selectedPeriod, dateFrom, dateTo, basis, periods]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -156,6 +177,14 @@ export function FinancialReports({
         `\nTotals,,${trialBalance.totalDebits.toFixed(
           2,
         )},${trialBalance.totalCredits.toFixed(2)}`;
+    } else if (activeReport === "income-statement" && basis === "cash" && cashIncomeStatement) {
+      csvContent =
+        "Section,Amount\n" +
+        `Customer collections,${cashIncomeStatement.customerCollections.toFixed(2)}\n` +
+        `Other income,${cashIncomeStatement.otherIncome.toFixed(2)}\n` +
+        `Business expenses paid,-${cashIncomeStatement.businessExpenses.toFixed(2)}\n` +
+        `Wages paid,-${cashIncomeStatement.wagesPaid.toFixed(2)}\n` +
+        `Net cash-basis profit,${cashIncomeStatement.netProfit.toFixed(2)}`;
     } else if (activeReport === "income-statement" && incomeStatement) {
       csvContent =
         "Section,Account,Amount\n" +
@@ -271,6 +300,15 @@ export function FinancialReports({
               </div>
             </div>
             <div className='flex gap-2'>
+              {activeReport === "income-statement" && (
+                <div className='space-y-2'>
+                  <Label>Basis</Label>
+                  <Select value={basis} onValueChange={(value) => setBasis(value as "accrual" | "cash")}>
+                    <SelectTrigger className='w-[130px]'><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value='accrual'>Accrual</SelectItem><SelectItem value='cash'>Cash</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button variant='outline' size='icon' onClick={handleExport}>
                 <Download className='h-4 w-4' />
               </Button>
@@ -368,7 +406,25 @@ export function FinancialReports({
           )}
 
           {/* Income Statement */}
-          {activeReport === "income-statement" && incomeStatement && (
+          {activeReport === "income-statement" && basis === "cash" && cashIncomeStatement && (
+            <Card>
+              <CardHeader>
+                <CardTitle className='text-center'>Cash-Basis Income Statement</CardTitle>
+                <p className='text-center text-sm text-muted-foreground'>For the period ending {format(new Date(cashIncomeStatement.periodEnd), "MMMM d, yyyy")}</p>
+              </CardHeader>
+              <CardContent>
+                <Table><TableBody>
+                  <TableRow><TableCell>Customer collections</TableCell><TableCell className='text-right font-mono'>{formatCurrency(cashIncomeStatement.customerCollections)}</TableCell></TableRow>
+                  <TableRow><TableCell>Other cash income</TableCell><TableCell className='text-right font-mono'>{formatCurrency(cashIncomeStatement.otherIncome)}</TableCell></TableRow>
+                  <TableRow><TableCell>Business expenses paid</TableCell><TableCell className='text-right font-mono text-red-600'>-{formatCurrency(cashIncomeStatement.businessExpenses)}</TableCell></TableRow>
+                  <TableRow><TableCell>Wages paid</TableCell><TableCell className='text-right font-mono text-red-600'>-{formatCurrency(cashIncomeStatement.wagesPaid)}</TableCell></TableRow>
+                  <TableRow className='border-t-2 font-bold'><TableCell>Net cash-basis profit</TableCell><TableCell className={cn('text-right font-mono', cashIncomeStatement.netProfit >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(cashIncomeStatement.netProfit)}</TableCell></TableRow>
+                </TableBody></Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeReport === "income-statement" && basis === "accrual" && incomeStatement && (
             <Card>
               <CardHeader>
                 <CardTitle className='text-center'>Income Statement</CardTitle>

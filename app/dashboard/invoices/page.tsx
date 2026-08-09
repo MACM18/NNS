@@ -58,6 +58,17 @@ interface GeneratedInvoice {
   total_amount: number;
   line_count: number;
   line_details_ids: string[];
+  line_details_snapshot?: Array<{
+    lineId: string;
+    customerName: string;
+    telephoneNo: string;
+    address: string;
+    serviceDate: string;
+    cableLength: number;
+    baseRate: number;
+    invoiceAmount: number;
+  }> | null;
+  pricing_snapshot?: unknown;
   status: string;
   created_at: string;
 }
