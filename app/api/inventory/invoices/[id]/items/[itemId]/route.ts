@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
 
 // GET /api/inventory/invoices/[id]/items/[itemId] - Get single invoice item
 export async function GET(
@@ -51,7 +52,7 @@ export async function PATCH(
     }
     const profile = await prisma.profile.findUnique({
       where: { userId: session.user.id },
-      select: { role: true },
+      select: { id: true, role: true },
     });
     if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -68,9 +69,21 @@ export async function PATCH(
 
     const item = await prisma.$transaction(async (tx) => {
       if (existing.itemId && newQuantity !== oldQuantity) {
+        const inventoryItem = await tx.inventoryItem.findUnique({ where: { id: existing.itemId } });
+        const previousStock = Number(inventoryItem?.currentStock || 0);
+        const newStock = previousStock + newQuantity - oldQuantity;
         await tx.inventoryItem.update({
           where: { id: existing.itemId },
-          data: { currentStock: { increment: newQuantity - oldQuantity } },
+          data: { currentStock: newStock },
+        });
+        await recordInventoryStockEvent(tx, {
+          inventoryItemId: existing.itemId,
+          previousStock,
+          newStock,
+          sourceType: "inventory_receipt",
+          sourceReferenceId: itemId,
+          createdById: profile?.id || null,
+          reason: "Inventory receipt line updated",
         });
       }
       return tx.inventoryInvoiceItem.update({
@@ -109,7 +122,7 @@ export async function DELETE(
     }
     const profile = await prisma.profile.findUnique({
       where: { userId: session.user.id },
-      select: { role: true },
+      select: { id: true, role: true },
     });
     if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -123,9 +136,21 @@ export async function DELETE(
     }
     await prisma.$transaction(async (tx) => {
       if (existing.itemId) {
+        const inventoryItem = await tx.inventoryItem.findUnique({ where: { id: existing.itemId } });
+        const previousStock = Number(inventoryItem?.currentStock || 0);
+        const newStock = previousStock - Number(existing.quantityIssued || 0);
         await tx.inventoryItem.update({
           where: { id: existing.itemId },
-          data: { currentStock: { decrement: Number(existing.quantityIssued || 0) } },
+          data: { currentStock: newStock },
+        });
+        await recordInventoryStockEvent(tx, {
+          inventoryItemId: existing.itemId,
+          previousStock,
+          newStock,
+          sourceType: "inventory_receipt",
+          sourceReferenceId: itemId,
+          createdById: profile?.id || null,
+          reason: "Inventory receipt line deleted",
         });
       }
       await tx.inventoryInvoiceItem.delete({ where: { id: itemId } });

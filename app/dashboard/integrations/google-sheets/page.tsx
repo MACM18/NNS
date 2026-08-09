@@ -33,6 +33,11 @@ interface SheetConnectionRow {
   status: string | null;
   record_count: number | null;
   created_at: string;
+  material_balance_import: {
+    imported_at: string;
+    status: string;
+    updated_stock_count: number;
+  } | null;
 }
 
 const MONTHS = [
@@ -69,6 +74,11 @@ async function fetchConnections(page = 1, pageSize = 10) {
         status: true,
         recordCount: true,
         createdAt: true,
+        materialBalanceImports: {
+          orderBy: { importedAt: "desc" },
+          take: 1,
+          select: { importedAt: true, status: true, updatedStockCount: true },
+        },
       },
     }),
     prisma.googleSheetConnection.count(),
@@ -85,6 +95,13 @@ async function fetchConnections(page = 1, pageSize = 10) {
     status: r.status,
     record_count: r.recordCount,
     created_at: (r.createdAt as Date)?.toISOString?.() || r.createdAt,
+    material_balance_import: r.materialBalanceImports?.[0]
+      ? {
+          imported_at: r.materialBalanceImports[0].importedAt?.toISOString?.(),
+          status: r.materialBalanceImports[0].status,
+          updated_stock_count: r.materialBalanceImports[0].updatedStockCount,
+        }
+      : null,
   })) as SheetConnectionRow[];
   return { rows: mapped, total };
 }
@@ -154,8 +171,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
               Google Sheets Integration
             </h1>
             <p className='text-muted-foreground mt-2 text-sm md:text-base'>
-              Connect Google Sheets to sync line installation data for each
-              month
+              Sync line installation data and import the read-only Material Balance tab for operational stock.
             </p>
           </div>
 
@@ -247,7 +263,12 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                             </a>
                           </TableCell>
                           <TableCell>
-                            {getStatusBadge(connection.status)}
+                            <div className='space-y-1'>
+                              {getStatusBadge(connection.status)}
+                              <div className='text-[11px] text-muted-foreground'>
+                                Material Balance: {connection.material_balance_import?.status || "Not imported"}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell className='text-center'>
                             {connection.record_count ?? 0}
@@ -302,7 +323,12 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                             </div>
                           </TableCell>
                           <TableCell>
-                            {getStatusBadge(connection.status)}
+                            <div className='space-y-1'>
+                              {getStatusBadge(connection.status)}
+                              <div className='text-[11px] text-muted-foreground'>
+                                Material: {connection.material_balance_import?.status || "Not imported"}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell className='text-center'>
                             <div className='space-y-1'>
@@ -340,6 +366,12 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                             {monthLabel} {connection.year}
                           </div>
                           {getStatusBadge(connection.status)}
+                        </div>
+                        <div className='flex items-center justify-between text-sm'>
+                          <span className='text-muted-foreground'>Material Balance:</span>
+                          <span className='font-medium'>
+                            {connection.material_balance_import?.status || "Not imported"}
+                          </span>
                         </div>
                         <div>
                           <a

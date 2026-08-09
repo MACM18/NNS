@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
 
 export async function GET(req: NextRequest) {
   try {
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
     const profile = await prisma.profile.findUnique({
       where: { userId: session.user.id },
-      select: { role: true },
+      select: { id: true, role: true },
     });
     if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -127,6 +128,15 @@ export async function POST(req: NextRequest) {
                     currentStock +
                     Number(item.quantity_issued ?? item.quantityIssued),
                 },
+              });
+              await recordInventoryStockEvent(tx, {
+                inventoryItemId: inventoryItem.id,
+                previousStock: currentStock,
+                newStock: currentStock + Number(item.quantity_issued ?? item.quantityIssued),
+                sourceType: "inventory_receipt",
+                sourceReferenceId: invoice.id,
+                createdById: profile?.id || null,
+                reason: `Inventory receipt ${invoice.invoiceNumber}`,
               });
 
               // Create drum tracking for cable items

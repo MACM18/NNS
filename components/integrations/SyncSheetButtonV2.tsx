@@ -40,6 +40,18 @@ interface SyncFinalResult {
   hardwareCreated?: number;
   drumProcessed?: number;
   drumUsageInserted?: number;
+  materialBalance?: {
+    status?: string;
+    imported?: boolean;
+    skipped?: boolean;
+    itemCount?: number;
+    mappedItemCount?: number;
+    unmappedItemCount?: number;
+    updatedStockCount?: number;
+    sourceDayCount?: number;
+    warnings?: string[];
+    discrepancies?: unknown[];
+  };
 }
 
 function toOptionalNumber(value: unknown): number | undefined {
@@ -61,6 +73,24 @@ function normalizeFinalResult(result: unknown): SyncFinalResult | null {
     hardwareCreated: toOptionalNumber(result.hardwareCreated),
     drumProcessed: toOptionalNumber(result.drumProcessed),
     drumUsageInserted: toOptionalNumber(result.drumUsageInserted),
+    materialBalance: isRecord(result.materialBalance)
+      ? {
+          status: typeof result.materialBalance.status === "string" ? result.materialBalance.status : undefined,
+          imported: result.materialBalance.imported === true,
+          skipped: result.materialBalance.skipped === true,
+          itemCount: toOptionalNumber(result.materialBalance.itemCount),
+          mappedItemCount: toOptionalNumber(result.materialBalance.mappedItemCount),
+          unmappedItemCount: toOptionalNumber(result.materialBalance.unmappedItemCount),
+          updatedStockCount: toOptionalNumber(result.materialBalance.updatedStockCount),
+          sourceDayCount: toOptionalNumber(result.materialBalance.sourceDayCount),
+          warnings: Array.isArray(result.materialBalance.warnings)
+            ? result.materialBalance.warnings.filter((warning): warning is string => typeof warning === "string")
+            : [],
+          discrepancies: Array.isArray(result.materialBalance.discrepancies)
+            ? result.materialBalance.discrepancies
+            : [],
+        }
+      : undefined,
   };
 }
 
@@ -68,7 +98,7 @@ const getStepIcon = (step: string) => {
   if (step.includes("Authorizing")) return Clock;
   if (step.includes("Google") || step.includes("sheet")) return FileSpreadsheet;
   if (step.includes("database") || step.includes("Syncing")) return Database;
-  if (step.includes("inventory") || step.includes("hardware")) return Package;
+  if (step.includes("inventory") || step.includes("hardware") || step.includes("Material Balance")) return Package;
   if (step.includes("drum")) return TrendingUp;
   return Terminal;
 };
@@ -424,7 +454,7 @@ export default function SyncSheetButton({
                 </div>
                 <div>
                   <span className='text-muted-foreground'>
-                    Hardware Updated:
+                    Material Stock Updated:
                   </span>{" "}
                   <span className='font-medium'>
                     {finalResult.hardwareUpdated ?? 0}
@@ -432,10 +462,10 @@ export default function SyncSheetButton({
                 </div>
                 <div>
                   <span className='text-muted-foreground'>
-                    Hardware Created:
+                    Unmapped Stock Rows:
                   </span>{" "}
                   <span className='font-medium'>
-                    {finalResult.hardwareCreated ?? 0}
+                    {finalResult.materialBalance?.unmappedItemCount ?? 0}
                   </span>
                 </div>
                 <div>
@@ -450,6 +480,28 @@ export default function SyncSheetButton({
                     {finalResult.drumUsageInserted ?? 0}
                   </span>
                 </div>
+                {finalResult.materialBalance && (
+                  <>
+                    <div>
+                      <span className='text-muted-foreground'>Material Items:</span>{" "}
+                      <span className='font-medium'>{finalResult.materialBalance.itemCount ?? 0}</span>
+                    </div>
+                    <div>
+                      <span className='text-muted-foreground'>Stock Updated:</span>{" "}
+                      <span className='font-medium'>{finalResult.materialBalance.updatedStockCount ?? 0}</span>
+                    </div>
+                    <div>
+                      <span className='text-muted-foreground'>Unmapped:</span>{" "}
+                      <span className='font-medium'>{finalResult.materialBalance.unmappedItemCount ?? 0}</span>
+                    </div>
+                    <div>
+                      <span className='text-muted-foreground'>Material Status:</span>{" "}
+                      <span className={cn('font-medium', finalResult.materialBalance.status === 'warning' ? 'text-amber-600' : 'text-green-600')}>
+                        {finalResult.materialBalance.status || 'unknown'}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { isRecord } from "@/lib/error-utils";
 import { recalculateDrumWithHistory } from "@/lib/drum-tracking-service";
+import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
 
 function toNumber(value: unknown): number | undefined {
   if (typeof value === "number")
@@ -52,6 +53,11 @@ export async function POST(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
 
     const body = await req.json();
 
@@ -259,6 +265,15 @@ export async function POST(req: NextRequest) {
             await tx.inventoryItem.update({
               where: { id: dropWire.id },
               data: { currentStock: newStock },
+            });
+            await recordInventoryStockEvent(tx, {
+              inventoryItemId: dropWire.id,
+              previousStock: currentStock,
+              newStock,
+              sourceType: "line_usage",
+              sourceReferenceId: createdLine.id,
+              createdById: profile?.id || null,
+              reason: "Drop wire cable used on line installation",
             });
           }
 

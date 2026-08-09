@@ -131,6 +131,9 @@ model Profile {
   workAssignmentsCreated    WorkAssignment[]         @relation("AssignmentCreatedBy")
   lineAssignees             LineAssignee[]
   googleSheetConnections    GoogleSheetConnection[]
+  materialBalanceImports    MaterialBalanceImport[] @relation("MaterialBalanceImportCreatedBy")
+  materialBalanceMappings   MaterialBalanceItemMapping[] @relation("MaterialBalanceMappingCreatedBy")
+  inventoryStockEvents      InventoryStockEvent[] @relation("InventoryStockEventCreatedBy")
 
   // Worker relationship (if this profile is linked to a worker)
   linkedWorker              Worker?                  @relation("WorkerProfile")
@@ -267,6 +270,9 @@ model InventoryItem {
   monthlyWastage         MonthlyWastage[]
   wasteTracking          WasteTracking[]
   monthlyInventoryUsages MonthlyInventoryUsage[]
+  materialBalanceItems     MaterialBalanceItem[]
+  materialBalanceMappings  MaterialBalanceItemMapping[]
+  inventoryStockEvents     InventoryStockEvent[]
 
   @@map("inventory_items")
 }
@@ -762,10 +768,131 @@ model GoogleSheetConnection {
   // Relations
   createdBy Profile? @relation(fields: [createdById], references: [id])
   syncLogs  GoogleSheetSyncLog[]
+  materialBalanceImports MaterialBalanceImport[]
 
   @@index([year, month])
   @@map("google_sheet_connections")
 }
+
+// ==========================================
+// GOOGLE SHEETS MATERIAL BALANCE STOCK IMPORT
+// ==========================================
+// These records are an auditable mirror of the read-only Material Balance tab.
+// They never create accounting purchases, payables, cash movements, or expenses.
+model MaterialBalanceImport {
+  id                String   @id @default(uuid())
+  connectionId      String   @map("connection_id")
+  sourceTab         String   @default("Material Balance") @map("source_tab")
+  sourceChecksum    String   @map("source_checksum")
+  status            String   @default("success") // success, warning, failed, skipped
+  importedAt        DateTime @default(now()) @map("imported_at")
+  sourceRowCount    Int      @default(0) @map("source_row_count")
+  sourceDayCount    Int      @default(0) @map("source_day_count")
+  itemCount         Int      @default(0) @map("item_count")
+  mappedItemCount   Int      @default(0) @map("mapped_item_count")
+  unmappedItemCount Int      @default(0) @map("unmapped_item_count")
+  updatedStockCount Int      @default(0) @map("updated_stock_count")
+  warnings          Json     @default("[]")
+  discrepancies     Json     @default("[]")
+  createdById       String?  @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  connection  GoogleSheetConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  createdBy   Profile?              @relation("MaterialBalanceImportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items       MaterialBalanceItem[]
+  stockEvents InventoryStockEvent[]
+
+  @@unique([connectionId, sourceChecksum])
+  @@index([connectionId, importedAt])
+  @@index([status])
+  @@map("material_balance_imports")
+}
+
+model MaterialBalanceItem {
+  id                   String   @id @default(uuid())
+  importId             String   @map("import_id")
+  sourceItemName       String   @map("source_item_name")
+  normalizedSourceName String   @map("normalized_source_name")
+  sourceUnit           String?  @map("source_unit")
+  sourceRow            Int      @map("source_row")
+  inventoryItemId      String?  @map("inventory_item_id")
+  openingBalance       Decimal  @default(0) @map("opening_balance")
+  totalIssued          Decimal  @default(0) @map("total_issued")
+  totalUsage           Decimal  @default(0) @map("total_usage")
+  totalReturned        Decimal  @default(0) @map("total_returned")
+  finalBalance         Decimal  @default(0) @map("final_balance")
+  status               String   @default("unmapped") // mapped, unmapped, warning
+  warning              String?
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  import        MaterialBalanceImport       @relation(fields: [importId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem?              @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  dailyEntries  MaterialBalanceDailyEntry[]
+
+  @@index([importId, status])
+  @@index([inventoryItemId])
+  @@map("material_balance_items")
+}
+
+model MaterialBalanceDailyEntry {
+  id                    String   @id @default(uuid())
+  materialBalanceItemId String   @map("material_balance_item_id")
+  balanceDate           DateTime @map("balance_date") @db.Date
+  previousBalance       Decimal  @default(0) @map("previous_balance")
+  issued                Decimal  @default(0)
+  usage                 Decimal  @default(0)
+  balanceReturn         Decimal  @default(0) @map("balance_return")
+  closingBalance        Decimal? @map("closing_balance")
+  sourceColumn          Int?     @map("source_column")
+  sourceBlockIndex      Int?     @map("source_block_index")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  materialBalanceItem MaterialBalanceItem @relation(fields: [materialBalanceItemId], references: [id], onDelete: Cascade)
+
+  @@unique([materialBalanceItemId, balanceDate])
+  @@index([balanceDate])
+  @@map("material_balance_daily_entries")
+}
+
+model MaterialBalanceItemMapping {
+  id                   String   @id @default(uuid())
+  sourceName           String   @map("source_name")
+  normalizedSourceName String   @unique @map("normalized_source_name")
+  inventoryItemId      String   @map("inventory_item_id")
+  createdById          String?  @map("created_by")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  createdBy     Profile?      @relation("MaterialBalanceMappingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([inventoryItemId])
+  @@map("material_balance_item_mappings")
+}
+
+model InventoryStockEvent {
+  id                      String   @id @default(uuid())
+  inventoryItemId         String   @map("inventory_item_id")
+  sourceType              String   @map("source_type") // google_material_balance, inventory_receipt, line_usage, waste, manual
+  sourceReferenceId       String?  @map("source_reference_id")
+  materialBalanceImportId String?  @map("material_balance_import_id")
+  previousStock           Decimal  @map("previous_stock")
+  newStock                Decimal  @map("new_stock")
+  quantityDelta           Decimal  @map("quantity_delta")
+  reason                  String?
+  createdById             String?  @map("created_by")
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  inventoryItem         InventoryItem          @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  materialBalanceImport MaterialBalanceImport? @relation(fields: [materialBalanceImportId], references: [id], onDelete: SetNull)
+  createdBy             Profile?               @relation("InventoryStockEventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([inventoryItemId, createdAt])
+  @@index([sourceType, sourceReferenceId])
+  @@index([materialBalanceImportId])
+  @@map("inventory_stock_events")
+}
+
 
 model GoogleSheetSyncLog {
   id           String                @id @default(uuid())

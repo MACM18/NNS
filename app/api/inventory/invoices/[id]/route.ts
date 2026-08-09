@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
 
 // GET /api/inventory/invoices/[id] - Get single invoice with items
 export async function GET(
@@ -78,7 +79,7 @@ export async function DELETE(
     }
     const profile = await prisma.profile.findUnique({
       where: { userId: session.user.id },
-      select: { role: true },
+      select: { id: true, role: true },
     });
     if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -94,9 +95,21 @@ export async function DELETE(
       });
       for (const item of items) {
         if (item.itemId) {
+          const inventoryItem = await tx.inventoryItem.findUnique({ where: { id: item.itemId } });
+          const previousStock = Number(inventoryItem?.currentStock || 0);
+          const newStock = previousStock - Number(item.quantityIssued || 0);
           await tx.inventoryItem.update({
             where: { id: item.itemId },
-            data: { currentStock: { decrement: Number(item.quantityIssued || 0) } },
+            data: { currentStock: newStock },
+          });
+          await recordInventoryStockEvent(tx, {
+            inventoryItemId: item.itemId,
+            previousStock,
+            newStock,
+            sourceType: "inventory_receipt",
+            sourceReferenceId: id,
+            createdById: profile?.id || null,
+            reason: "Inventory receipt deleted",
           });
         }
       }

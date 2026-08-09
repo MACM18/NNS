@@ -62,6 +62,16 @@ interface SyncLog {
     usageRecordsUpdated?: number;
     drumSheetProcessed?: number;
     drumSheetAppended?: number;
+    materialBalance?: {
+      status?: string;
+      itemCount?: number;
+      mappedItemCount?: number;
+      unmappedItemCount?: number;
+      updatedStockCount?: number;
+      sourceDayCount?: number;
+      warnings?: string[];
+      discrepancies?: unknown[];
+    };
   };
   skippedRows: Array<{
     rowNum: number;

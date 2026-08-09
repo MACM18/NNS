@@ -1,0 +1,263 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, FileSpreadsheet, LockKeyhole, RefreshCw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useNotification } from "@/contexts/notification-context";
+import type { MaterialBalanceImport, MaterialBalanceItemSnapshot } from "@/types/material-balance";
+
+interface ConnectionOption {
+  id: string;
+  month: number;
+  year: number;
+  sheetName: string | null;
+  status: string;
+  materialBalanceImport: {
+    importedAt: string;
+    status: string;
+    updatedStockCount: number;
+  } | null;
+}
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+}
+
+function statusBadge(status: string) {
+  if (status === "mapped") {
+    return <Badge variant="outline" className="text-green-700 border-green-300 dark:text-green-400">Mapped</Badge>;
+  }
+  if (status === "warning") {
+    return <Badge variant="outline" className="text-amber-700 border-amber-300 dark:text-amber-400">Warning</Badge>;
+  }
+  return <Badge variant="outline" className="text-muted-foreground">Unmapped</Badge>;
+}
+
+export function MaterialBalanceTab() {
+  const { addNotification } = useNotification();
+  const [connections, setConnections] = useState<ConnectionOption[]>([]);
+  const [connectionId, setConnectionId] = useState("");
+  const [importData, setImportData] = useState<MaterialBalanceImport | null>(null);
+  const [date, setDate] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadConnections = useCallback(async () => {
+    const response = await fetch("/api/integrations/google-sheets/connection", { credentials: "include" });
+    if (!response.ok) throw new Error("Failed to load Google Sheet connections");
+    const payload = await response.json();
+    const rows = Array.isArray(payload.data) ? payload.data : [];
+    setConnections(rows);
+    if (!connectionId && rows[0]?.id) setConnectionId(rows[0].id);
+  }, [connectionId]);
+
+  const loadBalance = useCallback(async (id: string, selectedDate = "") => {
+    if (!id) {
+      setImportData(null);
+      return;
+    }
+    const query = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : "";
+    const response = await fetch(`/api/integrations/google-sheets/connections/${id}/material-balance${query}`, { credentials: "include" });
+    if (!response.ok) throw new Error("Failed to load Material Balance");
+    const payload = await response.json();
+    setImportData(payload.data || null);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadConnections();
+      await loadBalance(connectionId, date);
+    } catch (error: any) {
+      addNotification({
+        title: "Material Balance unavailable",
+        message: error?.message || "Failed to load imported stock data",
+        type: "error",
+        category: "system",
+      });
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  }, [addNotification, connectionId, date, loadBalance, loadConnections]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (connectionId) void loadBalance(connectionId, date);
+  }, [connectionId, date, loadBalance]);
+
+  const dates = useMemo(() => {
+    const values = new Set<string>();
+    for (const item of importData?.items || []) {
+      for (const entry of item.dailyEntries) values.add(entry.date);
+    }
+    return Array.from(values).sort();
+  }, [importData]);
+
+  const selectedConnection = connections.find((connection) => connection.id === connectionId);
+  const negativeCount = (importData?.items || []).filter((item) =>
+    [item.openingBalance, item.finalBalance, ...item.dailyEntries.flatMap((entry) => [entry.previousBalance, entry.closingBalance])]
+      .some((value) => value < 0)
+  ).length;
+  const conflictCount = (importData?.items || []).filter((item) =>
+    item.inventoryItem?.lastStockEvent && item.inventoryItem.lastStockEvent.sourceType !== "google_material_balance"
+  ).length;
+  const totalIssued = (importData?.items || []).reduce((sum, item) => sum + item.totalIssued, 0);
+  const totalUsage = (importData?.items || []).reduce((sum, item) => sum + item.totalUsage, 0);
+  const totalReturned = (importData?.items || []).reduce((sum, item) => sum + item.totalReturned, 0);
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-blue-200/70 bg-blue-50/40 dark:border-blue-900/50 dark:bg-blue-950/20">
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <LockKeyhole className="mt-0.5 h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <div>
+              <p className="font-semibold">Material Balance is read-only from Google Sheets</p>
+              <p className="text-sm text-muted-foreground">
+                The sync reads the sheet and updates operational stock in this app. It never edits the source sheet or creates accounting purchases.
+              </p>
+            </div>
+          </div>
+          <Button asChild variant="outline" size="sm" className="shrink-0 gap-2">
+            <Link href="/dashboard/integrations/google-sheets"><FileSpreadsheet className="h-4 w-4" />Open sync settings</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Google Sheet Material Balance</CardTitle>
+            <CardDescription>Imported stock balances, daily issuance, usage, and returns.</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing} className="gap-2">
+            <RefreshCw className={refreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />Reload imported data
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1.5 text-sm">
+              <span className="font-medium">Connected sheet</span>
+              <select
+                value={connectionId}
+                onChange={(event) => { setConnectionId(event.target.value); setDate(""); }}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {connections.length === 0 && <option value="">No connections found</option>}
+                {connections.map((connection) => (
+                  <option key={connection.id} value={connection.id}>
+                    {MONTHS[connection.month - 1] || connection.month} {connection.year}{connection.sheetName ? ` — ${connection.sheetName}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1.5 text-sm">
+              <span className="font-medium">Daily view</span>
+              <select
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Whole imported period</option>
+                {dates.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+          </div>
+
+          {selectedConnection && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="outline">Source tab: Material Balance</Badge>
+              <Badge variant="outline">Connection: {selectedConnection.status}</Badge>
+              {importData?.importedAt && <span>Last imported {new Date(importData.importedAt).toLocaleString()}</span>}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="h-48 animate-pulse rounded-lg bg-muted" />
+          ) : !importData ? (
+            <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+              No Material Balance import is available yet. Run Sync from the Google Sheets integration page.
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <Metric label="Items" value={importData.itemCount} />
+                <Metric label="Stock updated" value={importData.updatedStockCount} />
+                <Metric label="Issued" value={formatNumber(totalIssued)} />
+                <Metric label="Usage" value={formatNumber(totalUsage)} />
+                <Metric label="Returned" value={formatNumber(totalReturned)} />
+              </div>
+
+              {(negativeCount > 0 || importData.warnings.length > 0 || conflictCount > 0) && (
+                <div className="space-y-2 rounded-lg border border-amber-300/70 bg-amber-50/60 p-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+                  <div className="flex items-center gap-2 font-semibold text-amber-800 dark:text-amber-300"><AlertTriangle className="h-4 w-4" />Review required</div>
+                  <ul className="list-disc space-y-1 pl-5 text-amber-800/90 dark:text-amber-200/90">
+                    {negativeCount > 0 && <li>{negativeCount} item(s) contain negative balances from the source sheet.</li>}
+                    {conflictCount > 0 && <li>{conflictCount} mapped item(s) were changed by another app stock operation after the last sheet import.</li>}
+                    {importData.warnings.slice(0, 3).map((warning) => <li key={warning}>{warning}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              <div className="overflow-x-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Material</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead className="text-right">Opening</TableHead>
+                      <TableHead className="text-right">Issued</TableHead>
+                      <TableHead className="text-right">Usage</TableHead>
+                      <TableHead className="text-right">Return</TableHead>
+                      <TableHead className="text-right">Closing</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importData.items.map((item: MaterialBalanceItemSnapshot) => {
+                      const day = date ? item.dailyEntries[0] : null;
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.sourceItemName}</TableCell>
+                          <TableCell>{item.sourceUnit || item.inventoryItem?.unit || "—"}</TableCell>
+                          <TableCell className="text-right">{formatNumber(day?.previousBalance ?? item.openingBalance)}</TableCell>
+                          <TableCell className="text-right">{formatNumber(day?.issued ?? item.totalIssued)}</TableCell>
+                          <TableCell className="text-right">{formatNumber(day?.usage ?? item.totalUsage)}</TableCell>
+                          <TableCell className="text-right">{formatNumber(day?.balanceReturn ?? item.totalReturned)}</TableCell>
+                          <TableCell className="text-right font-semibold">{formatNumber(day?.closingBalance ?? item.finalBalance)}</TableCell>
+                          <TableCell>{statusBadge(item.status)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold">{value}</p>
+    </div>
+  );
+}
