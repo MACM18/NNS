@@ -548,10 +548,16 @@ function materialUnit(sourceUnit: string | null | undefined, sourceName?: string
   return "pcs";
 }
 
-function hasMeaningfulMaterialData(
+/**
+ * A source row is eligible for automatic inventory creation only when it
+ * carries useful stock information. Existing mapped rows are handled
+ * separately so a previously configured zero-stock item is not removed from
+ * the catalog just because the sheet is currently empty.
+ */
+export function shouldImportMaterialBalanceItem(
   dailyItem: ParsedMaterialBalanceItem | undefined,
   monthlyItem: ParsedMaterialBalanceMonthItem | null,
-) {
+): boolean {
   if (monthlyItem && Math.abs(monthlyItem.endingWip) > 0.01) return true;
   if (dailyItem && Math.abs(dailyItem.totalIssued) > 0.01) return true;
   return Boolean(dailyItem?.dailyEntries.some((entry) => Math.abs(entry.issued) > 0.01));
@@ -1364,7 +1370,7 @@ export async function importMaterialBalanceValues(input: {
       Array.from(allNames).filter((normalizedSourceName) => {
         const dailyItem = dailyByName.get(normalizedSourceName);
         const monthlyItem = monthlyByName.get(normalizedSourceName) || null;
-        if (hasMeaningfulMaterialData(dailyItem, monthlyItem)) return true;
+        if (shouldImportMaterialBalanceItem(dailyItem, monthlyItem)) return true;
 
         // Keep already-known zero-stock items in sync, but do not create new
         // catalog rows for source materials that are entirely zero.
