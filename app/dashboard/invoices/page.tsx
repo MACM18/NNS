@@ -11,7 +11,9 @@ import {
   Calendar,
   RefreshCw,
   Columns,
+  WalletCards,
 } from "lucide-react";
+import Link from "next/link";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -70,6 +72,10 @@ interface GeneratedInvoice {
   }> | null;
   pricing_snapshot?: unknown;
   status: string;
+  paid_amount?: number;
+  payment_status?: "unpaid" | "partial" | "paid";
+  accounting_status?: "unposted" | "posted" | "reversed";
+  due_date?: string | null;
   created_at: string;
 }
 
@@ -87,6 +93,8 @@ const COLUMNS = [
   { id: "line_count", label: "Lines" },
   { id: "total_amount", label: "Amount" },
   { id: "status", label: "Status" },
+  { id: "accounting_status", label: "Accounting" },
+  { id: "payment_status", label: "Collection" },
   { id: "actions", label: "Actions" },
 ];
 
@@ -314,6 +322,31 @@ export default function InvoicesPage() {
     }
   };
 
+  const getAccountingStatusBadge = (status?: string) => {
+    switch (status) {
+      case "posted":
+        return <Badge variant='outline' className='border-emerald-200 bg-emerald-50 text-emerald-700'>Revenue posted</Badge>;
+      case "reversed":
+        return <Badge variant='outline' className='border-red-200 bg-red-50 text-red-700'>Reversed</Badge>;
+      default:
+        return <Badge variant='secondary'>Not posted</Badge>;
+    }
+  };
+
+  const getPaymentStatusBadge = (invoice: GeneratedInvoice) => {
+    const paid = Number(invoice.paid_amount || 0);
+    const total = Number(invoice.total_amount || 0);
+    const status = invoice.payment_status || (paid >= total && total > 0 ? "paid" : paid > 0 ? "partial" : "unpaid");
+    return (
+      <div className='space-y-1'>
+        <Badge variant={status === "paid" ? "default" : status === "partial" ? "secondary" : "outline"}>
+          {status === "paid" ? "Collected" : status === "partial" ? "Partially collected" : "Awaiting payment"}
+        </Badge>
+        <p className='text-xs text-muted-foreground'>Paid LKR {paid.toLocaleString()} · Due LKR {Math.max(0, total - paid).toLocaleString()}</p>
+      </div>
+    );
+  };
+
   if (!user) {
     return <AuthWrapper />;
   }
@@ -379,6 +412,21 @@ export default function InvoicesPage() {
           </Button>
         </div>
       </div>
+
+      <Card className='border-primary/20 bg-primary/5'>
+        <CardContent className='flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between'>
+          <div className='flex items-start gap-3'>
+            <WalletCards className='mt-0.5 h-5 w-5 shrink-0 text-primary' />
+            <div>
+              <p className='font-medium'>Accrual revenue and cash collection are separate</p>
+              <p className='text-sm text-muted-foreground'>Issuing an invoice posts service revenue and a receivable. Recording payment posts cash and clears the receivable without recording revenue again.</p>
+            </div>
+          </div>
+          <Button asChild variant='outline' size='sm' className='shrink-0'>
+            <Link href='/dashboard/accounting/payments'>Open payment workspace</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
@@ -455,7 +503,7 @@ export default function InvoicesPage() {
             </CardHeader>
             <CardContent>
               {isRefreshing ? (
-                <TableSkeleton columns={7} rows={6} />
+                <TableSkeleton columns={COLUMNS.length} rows={6} />
               ) : invoices.length === 0 ? (
                 <div className='text-center py-8 text-muted-foreground'>
                   <FileText className='h-12 w-12 mx-auto mb-4 opacity-50' />
@@ -487,6 +535,12 @@ export default function InvoicesPage() {
                         )}
                         {visibleColumns.has("status") && (
                           <TableHead>Status</TableHead>
+                        )}
+                        {visibleColumns.has("accounting_status") && (
+                          <TableHead>Accounting</TableHead>
+                        )}
+                        {visibleColumns.has("payment_status") && (
+                          <TableHead>Collection</TableHead>
                         )}
                         {visibleColumns.has("actions") && (
                           <TableHead>Actions</TableHead>
@@ -520,6 +574,12 @@ export default function InvoicesPage() {
                           )}
                           {visibleColumns.has("status") && (
                             <TableCell>{getStatusBadge(invoice.status)}</TableCell>
+                          )}
+                          {visibleColumns.has("accounting_status") && (
+                            <TableCell>{getAccountingStatusBadge(invoice.accounting_status)}</TableCell>
+                          )}
+                          {visibleColumns.has("payment_status") && (
+                            <TableCell>{getPaymentStatusBadge(invoice)}</TableCell>
                           )}
                           {visibleColumns.has("actions") && (
                             <TableCell>

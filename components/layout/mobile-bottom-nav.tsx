@@ -1,20 +1,21 @@
 "use client";
 
-import { Home, Package, FileText, ClipboardList, User } from "lucide-react";
+import { Home, FileText, ClipboardList, User, Calculator } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
 
-const navItems = [
+const baseNavItems = [
   {
     href: "/dashboard",
     label: "Home",
     icon: Home,
   },
   {
-    href: "/dashboard/inventory",
-    label: "Inventory",
-    icon: Package,
+    href: "/dashboard/invoices",
+    label: "Invoices",
+    icon: FileText,
   },
   {
     href: "/dashboard/lines",
@@ -33,8 +34,19 @@ const navItems = [
   },
 ];
 
+const accountingNavItem = {
+  href: "/dashboard/accounting",
+  label: "Accounting",
+  icon: Calculator,
+};
+
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const { role, loading } = useAuth();
+  const hasAccountingAccess = !loading && ["admin", "moderator", "superadmin"].includes((role || "").toLowerCase());
+  const navItems = hasAccountingAccess
+    ? [baseNavItems[0], baseNavItems[1], accountingNavItem, baseNavItems[3], baseNavItems[4]]
+    : baseNavItems;
 
   return (
     <nav className='fixed bottom-0 left-0 right-0 z-50 border-t bg-background lg:hidden'>

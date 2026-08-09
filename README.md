@@ -67,6 +67,14 @@ Start command:
 pnpm start
 ```
 
+Production database changes must be applied with the reviewed migration history:
+
+```bash
+pnpm prisma migrate deploy
+```
+
+Do not run `prisma db push` or `prisma db push --accept-data-loss` in production.
+
 Required envs:
 
 - `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`

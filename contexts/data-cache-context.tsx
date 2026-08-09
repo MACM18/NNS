@@ -70,6 +70,10 @@ export interface GeneratedInvoiceRecord {
   total_amount: number;
   line_count: number;
   line_details_ids: string[];
+  paid_amount?: number;
+  payment_status?: "unpaid" | "partial" | "paid";
+  accounting_status?: "unposted" | "posted" | "reversed";
+  due_date?: string | null;
   status: string;
   created_at: string;
 }

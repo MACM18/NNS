@@ -935,10 +935,18 @@ export async function getPartnershipSummary(financialYearId: string) {
   };
 }
 
-export async function getPartners() {
+export async function getPartners(options?: { includeInactive?: boolean }) {
   return prisma.partnershipPartner.findMany({
-    where: { isActive: true },
+    where: options?.includeInactive ? undefined : { isActive: true },
     orderBy: { name: "asc" },
+    include: {
+      _count: {
+        select: {
+          allocations: true,
+          businessTransactions: true,
+        },
+      },
+    },
   });
 }
 

@@ -43,8 +43,17 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/auth-context";
 
-// Menu items.
-const navItems = [
+type NavItem = {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  roles?: string[];
+};
+
+const MANAGEMENT_ROLES = ["admin", "moderator", "superadmin"];
+const ADMINISTRATION_ROLES = ["admin", "superadmin"];
+
+const operationsItems: NavItem[] = [
   {
     title: "Dashboard",
     url: "/dashboard",
@@ -69,40 +78,12 @@ const navItems = [
     title: "Work Tracking",
     url: "/dashboard/work-tracking",
     icon: CalendarDays,
-    roles: ["admin", "moderator"],
+    roles: MANAGEMENT_ROLES,
   },
   {
     title: "Inventory",
     url: "/dashboard/inventory",
     icon: Package,
-  },
-  {
-    title: "Users",
-    url: "/dashboard/users",
-    icon: Users,
-    // admin only
-    roles: ["admin"],
-  },
-  {
-    title: "Content",
-    url: "/dashboard/content",
-    icon: BookOpen,
-    // admin and moderator
-    roles: ["admin", "moderator"],
-  },
-  {
-    title: "Integrations",
-    url: "/dashboard/integrations",
-    icon: Zap,
-    // admin and moderator
-    roles: ["admin", "moderator"],
-  },
-  {
-    title: "Careers",
-    url: "/dashboard/careers",
-    icon: Briefcase,
-    // admin and moderator
-    roles: ["admin", "moderator"],
   },
   {
     title: "Search",
@@ -111,8 +92,7 @@ const navItems = [
   },
 ];
 
-// Accounting menu items - moderator and admin only
-const accountingItems = [
+const accountingItems: NavItem[] = [
   {
     title: "Overview",
     url: "/dashboard/accounting",
@@ -170,13 +150,68 @@ const accountingItems = [
   },
 ];
 
+const administrationItems: NavItem[] = [
+  { title: "Users", url: "/dashboard/users", icon: Users, roles: ADMINISTRATION_ROLES },
+  { title: "Content", url: "/dashboard/content", icon: BookOpen, roles: MANAGEMENT_ROLES },
+  { title: "Integrations", url: "/dashboard/integrations", icon: Zap, roles: MANAGEMENT_ROLES },
+  { title: "Careers", url: "/dashboard/careers", icon: Briefcase, roles: MANAGEMENT_ROLES },
+];
+
+function SidebarNavGroup({
+  title,
+  items,
+  pathname,
+  role,
+  loading,
+}: {
+  title: string;
+  items: NavItem[];
+  pathname: string;
+  role: string | null;
+  loading: boolean;
+}) {
+  const visibleItems = items.filter((item) => {
+    if (!item.roles?.length) return true;
+    if (loading) return false;
+    return item.roles.includes((role || "").toLowerCase());
+  });
+
+  if (visibleItems.length === 0) return null;
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{title}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {visibleItems.map((item) => (
+            <SidebarMenuItem key={item.title}>
+              <SidebarMenuButton
+                asChild
+                isActive={
+                  pathname === item.url ||
+                  (item.url !== "/dashboard" && pathname.startsWith(item.url))
+                }
+              >
+                <Link href={item.url}>
+                  <item.icon />
+                  <span>{item.title}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const { signOut, role, loading } = useAuth();
+  const normalizedRole = (role || "").toLowerCase();
 
-  // Check if user has accounting access (moderator, admin)
-  const hasAccountingAccess =
-    !loading && role && ["admin", "moderator", "superadmin"].includes(role);
+  const hasAccountingAccess = !loading && MANAGEMENT_ROLES.includes(normalizedRole);
+  const hasAdministrationAccess = !loading && administrationItems.some((item) => item.roles?.includes(normalizedRole));
 
   return (
     <Sidebar {...props}>
@@ -189,89 +224,35 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems
-                .filter((item) => {
-                  // if item has no roles specified, it's visible to all authenticated users
-                  if (!item.roles || item.roles.length === 0) return true;
-                  // if still loading, hide role-restricted items until we know the role
-                  if (loading) return false;
-                  const r = (role || "").toLowerCase();
-                  return item.roles.map((x) => x.toLowerCase()).includes(r);
-                })
-                .map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={pathname === item.url}>
-                      <Link href={item.url}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <SidebarNavGroup title='Operations' items={operationsItems} pathname={pathname} role={role} loading={loading} />
 
-        {/* Accounting Section - Only visible to moderators and admins */}
         {hasAccountingAccess && (
           <>
             <SidebarSeparator />
-            <SidebarGroup>
-              <SidebarGroupLabel>Accounting</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {accountingItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={
-                          pathname === item.url ||
-                          (item.url !== "/dashboard/accounting" &&
-                            pathname.startsWith(item.url))
-                        }
-                      >
-                        <Link href={item.url}>
-                          <item.icon />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            <SidebarNavGroup title='Accounting' items={accountingItems} pathname={pathname} role={role} loading={loading} />
+          </>
+        )}
+
+        {hasAdministrationAccess && (
+          <>
+            <SidebarSeparator />
+            <SidebarNavGroup title='Administration' items={administrationItems} pathname={pathname} role={role} loading={loading} />
           </>
         )}
 
         <SidebarSeparator />
         <SidebarGroup>
-          <SidebarGroupLabel>Settings</SidebarGroupLabel>
+          <SidebarGroupLabel>Account</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === "/dashboard/profile"}
-                >
-                  <Link href='/dashboard/profile'>
-                    <Users />
-                    <span>Profile</span>
-                  </Link>
+                <SidebarMenuButton asChild isActive={pathname === "/dashboard/profile"}>
+                  <Link href='/dashboard/profile'><Users /><span>Profile</span></Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === "/dashboard/settings"}
-                >
-                  <Link href='/dashboard/settings'>
-                    <Settings />
-                    <span>Settings</span>
-                  </Link>
+                <SidebarMenuButton asChild isActive={pathname === "/dashboard/settings"}>
+                  <Link href='/dashboard/settings'><Settings /><span>Settings</span></Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
