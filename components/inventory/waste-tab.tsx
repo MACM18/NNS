@@ -21,15 +21,15 @@ export function WasteTab({ wasteReports, loadingData, error, role, onDelete }: W
   const canDelete = role === "admin" || role === "superadmin";
 
   return (
-    <Card className="glass-card overflow-hidden border-border/40">
-      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-sm">
+      <CardHeader className="flex flex-col gap-2 border-b border-border/40 bg-muted/[0.12] sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle className="text-base font-bold">Waste and loss</CardTitle>
+          <CardTitle className="text-lg font-bold">Waste and loss</CardTitle>
           <CardDescription>Keep a clear record of scrap, damage, and other stock losses.</CardDescription>
         </div>
         {!loadingData && !error && <Badge variant="outline" className="w-fit gap-1.5"><TrendingDown className="h-3.5 w-3.5" />{wasteReports.length} report{wasteReports.length === 1 ? "" : "s"}</Badge>}
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 sm:p-5">
         {error ? (
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300" role="alert">{error}</div>
         ) : loadingData ? (

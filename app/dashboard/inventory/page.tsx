@@ -1,20 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Plus,
-  Package,
-  TrendingDown,
-  AlertTriangle,
-  RefreshCw,
-  Layers,
-  Boxes,
-  FileText,
-  CircleAlert,
-  Clock3,
-} from "lucide-react";
+import { CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -39,13 +28,14 @@ import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { useNotification } from "@/contexts/notification-context";
 
 // Extracted UI Components
-import { StatCard } from "@/components/inventory/stat-card";
 import { CriticalAlerts } from "@/components/inventory/critical-alerts";
 import { InvoicesTab } from "@/components/inventory/invoices-tab";
 import { StockTab } from "@/components/inventory/stock-tab";
 import { DrumsTab } from "@/components/inventory/drums-tab";
 import { WasteTab } from "@/components/inventory/waste-tab";
 import { MaterialBalanceTab } from "@/components/inventory/material-balance-tab";
+import { InventoryWorkspaceHeader } from "@/components/inventory/inventory-workspace-header";
+import { InventorySectionNav } from "@/components/inventory/inventory-section-nav";
 
 interface InventoryStats {
   totalItems: number;
@@ -477,124 +467,32 @@ export default function InventoryPage() {
     return <AuthWrapper />;
   }
 
+  const canManageItems = ["admin", "moderator", "superadmin"].includes((role || "").toLowerCase());
+
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="rounded-xl bg-primary/10 p-2 text-primary">
-              <Boxes className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Operations</p>
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground">
-              Inventory
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              See what is available, what needs attention, and where every stock movement came from.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-live="polite">
-            <span className="inline-flex items-center gap-1.5">
-              <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-              {lastRefreshedAt ? `Updated ${lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Loading latest data"}
-            </span>
-            {loadErrorCount > 0 && (
-              <span className="inline-flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
-                <CircleAlert className="h-3.5 w-3.5" aria-hidden="true" />
-                {loadErrorCount} section{loadErrorCount === 1 ? "" : "s"} need{loadErrorCount === 1 ? "s" : ""} attention
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          <Button
-            onClick={fetchAllData}
-            variant="outline"
-            size="sm"
-            disabled={loadingData}
-            className="h-9 gap-1.5"
-            aria-label="Refresh inventory data"
-          >
-            <RefreshCw className={`h-4 w-4 ${loadingData ? "animate-spin" : ""}`} aria-hidden="true" />
-            Refresh
-          </Button>
-          <Button
-            onClick={() => setAddWasteModalOpen(true)}
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1.5 border-border/60 hover:bg-muted/50"
-          >
-            <TrendingDown className="h-4 w-4" />
-            <span>Record Waste</span>
-          </Button>
-          <Button
-            onClick={() => setAddInvoiceModalOpen(true)}
-            size="sm"
-            className="h-9 gap-1.5 glass-button"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add receipt</span>
-          </Button>
-          {["admin", "moderator", "superadmin"].includes((role || "").toLowerCase()) && (
-            <Button
-              onClick={() => setManageItemsModalOpen(true)}
-              variant="secondary"
-              size="sm"
-              className="h-9 gap-1.5 bg-secondary/80 hover:bg-secondary border border-border/20"
-            >
-              <Layers className="h-4 w-4" />
-              <span>Manage Items</span>
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Stock items"
-          value={stats.totalItems}
-          icon={Package}
-          color="blue"
-          subtitle="Items being tracked"
-          isLoading={loadingData}
-          onClick={() => setActiveTab("stock")}
-          isActive={activeTab === "stock" && stockStatusFilter === "all"}
-        />
-        <StatCard
-          title="Needs attention"
-          value={inventoryItems.length > 0 ? attentionCount : stats.lowStockAlerts}
-          icon={AlertTriangle}
-          color="red"
-          subtitle="Out, critical, or low"
-          isLoading={loadingData}
-          onClick={handleFilterLowStock}
-          isActive={stockStatusFilter === "attention" && activeTab === "stock"}
-        />
-        <StatCard
-          title="Active drums"
-          value={stats.activeDrums}
-          icon={Layers}
-          color="purple"
-          subtitle="Cable drums in use"
-          isLoading={loadingData}
-          onClick={() => setActiveTab("drums")}
-          isActive={activeTab === "drums"}
-        />
-        <StatCard
-          title="Waste this month"
-          value={`${stats.monthlyWastePercentage}%`}
-          icon={TrendingDown}
-          color="green"
-          subtitle="Of total inventory"
-          isLoading={loadingData}
-          onClick={() => setActiveTab("waste")}
-          isActive={activeTab === "waste"}
-        />
-      </div>
+      <InventoryWorkspaceHeader
+        totalItems={inventoryItems.length || stats.totalItems}
+        attentionCount={inventoryItems.length > 0 ? attentionCount : stats.lowStockAlerts}
+        activeDrums={stats.activeDrums}
+        wastePercentage={stats.monthlyWastePercentage}
+        lastRefreshedAt={lastRefreshedAt}
+        loading={loadingData}
+        errorCount={loadErrorCount}
+        canManageItems={canManageItems}
+        onRefresh={() => void fetchAllData()}
+        onAddReceipt={() => setAddInvoiceModalOpen(true)}
+        onRecordWaste={() => setAddWasteModalOpen(true)}
+        onManageItems={() => setManageItemsModalOpen(true)}
+        onShowAllStock={() => {
+          setActiveTab("stock");
+          setStockStatusFilter("all");
+          setStockSearchQuery("");
+        }}
+        onShowAttention={handleFilterLowStock}
+        onShowDrums={() => setActiveTab("drums")}
+        onShowWaste={() => setActiveTab("waste")}
+      />
 
       {sectionErrors.summary && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-300" role="alert">
@@ -603,32 +501,37 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* Critical alerts banner */}
-      <CriticalAlerts
-        items={inventoryItems}
-        onFilterLowStock={handleFilterLowStock}
-        isLoading={loadingData}
-      />
-
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-6">
-        <div className="-mx-1 overflow-x-auto pb-1">
-          <TabsList className="flex h-auto min-w-max gap-1 rounded-xl border border-border/20 bg-muted/40 p-1 backdrop-blur-sm sm:min-w-0">
-            {[
-              { value: "stock" as InventoryTab, label: "Stock", icon: Package },
-              { value: "invoices" as InventoryTab, label: "Invoices", icon: FileText },
-              { value: "drums" as InventoryTab, label: "Drums", icon: Layers },
-              { value: "waste" as InventoryTab, label: "Waste", icon: TrendingDown },
-              { value: "material-balance" as InventoryTab, label: "Material Balance", icon: Boxes },
-            ].map(({ value, label, icon: Icon }) => (
-              <TabsTrigger key={value} value={value} className="min-h-10 gap-1.5 rounded-lg px-3 text-xs transition-all duration-200 sm:text-sm">
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                <span>{label}</span>
-                {tabCounts[value] > 0 && <Badge variant="secondary" className="h-5 min-w-5 px-1 text-[10px]">{tabCounts[value]}</Badge>}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
+        <InventorySectionNav counts={tabCounts} />
+
+        <TabsContent value="stock" className="animate-fade-in-up space-y-4">
+          <CriticalAlerts
+            items={inventoryItems}
+            onFilterLowStock={handleFilterLowStock}
+            isLoading={loadingData}
+          />
+          <StockTab
+            inventoryItems={inventoryItems}
+            loadingData={loadingData}
+            error={sectionErrors.stock}
+            role={role}
+            onEdit={(item) => {
+              setSelectedItem(item);
+              setEditItemModalOpen(true);
+            }}
+            onDelete={(item) => {
+              setItemToDelete(item);
+              setDeleteItemConfirmOpen(true);
+            }}
+            searchQuery={stockSearchQuery}
+            setSearchQuery={setStockSearchQuery}
+            statusFilter={stockStatusFilter}
+            setStatusFilter={setStockStatusFilter}
+            onAddReceipt={() => setAddInvoiceModalOpen(true)}
+            onOpenMaterialBalance={() => setActiveTab("material-balance")}
+          />
+        </TabsContent>
 
         <TabsContent value="invoices" className="animate-fade-in-up">
           <InvoicesTab
@@ -649,29 +552,6 @@ export default function InventoryPage() {
               setDeleteConfirmOpen(true);
             }}
             getStatusBadge={getStatusBadge}
-          />
-        </TabsContent>
-
-        <TabsContent value="stock" className="animate-fade-in-up">
-          <StockTab
-            inventoryItems={inventoryItems}
-            loadingData={loadingData}
-            error={sectionErrors.stock}
-            role={role}
-            onEdit={(item) => {
-              setSelectedItem(item);
-              setEditItemModalOpen(true);
-            }}
-            onDelete={(item) => {
-              setItemToDelete(item);
-              setDeleteItemConfirmOpen(true);
-            }}
-            searchQuery={stockSearchQuery}
-            setSearchQuery={setStockSearchQuery}
-            statusFilter={stockStatusFilter}
-            setStatusFilter={setStockStatusFilter}
-            onAddReceipt={() => setAddInvoiceModalOpen(true)}
-            onOpenMaterialBalance={() => setActiveTab("material-balance")}
           />
         </TabsContent>
 

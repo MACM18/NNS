@@ -42,7 +42,7 @@ export function CriticalAlerts({ items, onFilterLowStock, isLoading = false }: C
   const lowCount = attentionItems.filter(({ type }) => type === "low").length;
 
   return (
-    <Card className="border border-red-500/20 bg-gradient-to-br from-red-500/5 via-transparent to-transparent shadow-lg shadow-red-500/5 backdrop-blur-md">
+    <Card className="overflow-hidden rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/5 via-transparent to-transparent shadow-sm shadow-red-500/5 backdrop-blur-md">
       <CardHeader className="flex flex-col gap-3 p-4 pb-2 sm:flex-row sm:items-center sm:justify-between sm:p-5 sm:pb-2">
         <div className="flex items-center gap-2">
           <div className="rounded-lg bg-red-500/10 p-1.5 text-red-500" aria-hidden="true">

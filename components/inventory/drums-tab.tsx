@@ -96,14 +96,14 @@ export function DrumsTab({
     return matchesSearch && matchesStatus;
   });
 
-  const isAdminOrManager = role === "admin" || role === "moderator" || role === "superadmin";
+  const isAdminOrManager = ["admin", "moderator", "superadmin"].includes((role || "").toLowerCase());
 
   return (
-    <Card className="glass-card border-border/40 overflow-hidden">
-      <CardHeader>
+    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-sm">
+      <CardHeader className="border-b border-border/40 bg-muted/[0.12]">
         <div className="flex flex-col md:flex-row justify-between gap-4">
           <div>
-            <CardTitle className="text-base font-bold">Drum Inventory</CardTitle>
+            <CardTitle className="text-lg font-bold">Drum inventory</CardTitle>
             <CardDescription>
               Manage cable drums and their status
             </CardDescription>
@@ -178,7 +178,7 @@ export function DrumsTab({
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 sm:p-5">
         {error ? (
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300" role="alert">{error}</div>
         ) : loadingData ? (
