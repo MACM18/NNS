@@ -1,4 +1,7 @@
-import { parseMaterialBalanceValues } from "@/lib/material-balance-service";
+import {
+  normalizeMaterialSourceName,
+  parseMaterialBalanceValues,
+} from "@/lib/material-balance-service";
 
 function makeSheet(month: number, year: number, days: number) {
   const header: unknown[] = ["NNS Enterprise - Daily material balance", null];
@@ -25,6 +28,12 @@ function makeSheet(month: number, year: number, days: number) {
 }
 
 describe("Material Balance parser", () => {
+  it("normalizes trailing parenthetical units without backtracking regexes", () => {
+    expect(normalizeMaterialSourceName("C HOOK(NOS)")).toBe("chook");
+    expect(normalizeMaterialSourceName("Fiber Rosset Box (NOS)")).toBe("fiberrosettebox");
+    expect(normalizeMaterialSourceName(`source ${"(".repeat(10000)}value`)).toBe("sourcevalue");
+  });
+
   it("parses variable daily blocks and source totals", () => {
     const { values } = makeSheet(8, 2026, 31);
     const parsed = parseMaterialBalanceValues(values, 8, 2026);

@@ -80,7 +80,27 @@ function normalizeKey(value: string): string {
 }
 
 export function normalizeMaterialSourceName(value: string): string {
-  return normalizeKey(value.replace(/\s*\([^)]*\)\s*$/g, ""));
+  const trimmed = value.trim();
+
+  if (trimmed.endsWith(")")) {
+    let depth = 0;
+
+    for (let index = trimmed.length - 1; index >= 0; index -= 1) {
+      const character = trimmed[index];
+
+      if (character === ")") {
+        depth += 1;
+      } else if (character === "(") {
+        depth -= 1;
+
+        if (depth === 0) {
+          return normalizeKey(trimmed.slice(0, index).trimEnd());
+        }
+      }
+    }
+  }
+
+  return normalizeKey(trimmed);
 }
 
 function parseNumber(value: SheetValue): number {
