@@ -52,6 +52,11 @@ export async function GET(req: NextRequest) {
       drawn_by: inv.drawnBy || "",
       total_items: Number(inv.totalItems || 0),
       status: inv.status,
+      source_type: inv.sourceType || null,
+      source_key: inv.sourceKey || null,
+      material_balance_import_id: inv.materialBalanceImportId || null,
+      source_date: inv.sourceDate?.toISOString().slice(0, 10) || null,
+      is_system_generated: inv.isSystemGenerated,
       created_at: inv.createdAt?.toISOString(),
       updated_at: inv.updatedAt?.toISOString(),
     }));
@@ -81,7 +86,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { items, ...invoiceData } = body;
+    const { items, sourceType: _sourceType, sourceKey: _sourceKey, materialBalanceImportId: _importId, isSystemGenerated: _systemGenerated, ...invoiceData } = body;
 
     // Create invoice with items in a transaction
     const result = await prisma.$transaction(
@@ -90,7 +95,7 @@ export async function POST(req: NextRequest) {
         const invoice = await tx.inventoryInvoice.create({
           data: {
             ...invoiceData,
-            createdById: session.user?.id,
+            createdById: profile?.id || null,
             totalItems: items?.length || 0,
           },
         });
@@ -177,6 +182,11 @@ export async function POST(req: NextRequest) {
       drawn_by: created.drawnBy || "",
       total_items: Number(created.totalItems || 0),
       status: created.status,
+      source_type: created.sourceType || null,
+      source_key: created.sourceKey || null,
+      material_balance_import_id: created.materialBalanceImportId || null,
+      source_date: created.sourceDate?.toISOString().slice(0, 10) || null,
+      is_system_generated: created.isSystemGenerated,
       created_at: created.createdAt?.toISOString(),
       updated_at: created.updatedAt?.toISOString(),
     };

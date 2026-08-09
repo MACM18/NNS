@@ -318,12 +318,21 @@ model InventoryInvoice {
   paidAmount        Decimal  @default(0) @map("paid_amount")
   currencyCode      String?  @map("currency_code")
   dueDate           DateTime? @map("due_date") @db.Date
+  sourceType        String?   @map("source_type") // google_material_balance_issue, google_material_balance_adjustment
+  sourceKey         String?   @unique @map("source_key")
+  materialBalanceImportId String? @map("material_balance_import_id")
+  sourceDate        DateTime? @map("source_date") @db.Date
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  correctionOfId    String?   @map("correction_of_id")
   
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   // Relations
   createdBy Profile?               @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  materialBalanceImport MaterialBalanceImport? @relation("MaterialBalanceGeneratedInvoices", fields: [materialBalanceImportId], references: [id], onDelete: SetNull)
+  correctionOf InventoryInvoice?   @relation("InventoryInvoiceCorrections", fields: [correctionOfId], references: [id], onDelete: SetNull)
+  corrections InventoryInvoice[]    @relation("InventoryInvoiceCorrections")
   items     InventoryInvoiceItem[]
 
   @@map("inventory_invoices")
@@ -792,6 +801,13 @@ model MaterialBalanceImport {
   mappedItemCount   Int      @default(0) @map("mapped_item_count")
   unmappedItemCount Int      @default(0) @map("unmapped_item_count")
   updatedStockCount Int      @default(0) @map("updated_stock_count")
+  dailyIssueInvoiceCount Int @default(0) @map("daily_issue_invoice_count")
+  correctionInvoiceCount Int @default(0) @map("correction_invoice_count")
+  reconciliationCount Int    @default(0) @map("reconciliation_count")
+  monthlySourceTab  String?  @map("monthly_source_tab")
+  monthlyChecksum   String?  @map("monthly_checksum")
+  monthlyItemCount  Int      @default(0) @map("monthly_item_count")
+  stockChanges      Json     @default("[]") @map("stock_changes")
   warnings          Json     @default("[]")
   discrepancies     Json     @default("[]")
   createdById       String?  @map("created_by")
@@ -801,6 +817,7 @@ model MaterialBalanceImport {
   createdBy   Profile?              @relation("MaterialBalanceImportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   items       MaterialBalanceItem[]
   stockEvents InventoryStockEvent[]
+  generatedInvoices InventoryInvoice[] @relation("MaterialBalanceGeneratedInvoices")
 
   @@unique([connectionId, sourceChecksum])
   @@index([connectionId, importedAt])
@@ -821,6 +838,12 @@ model MaterialBalanceItem {
   totalUsage           Decimal  @default(0) @map("total_usage")
   totalReturned        Decimal  @default(0) @map("total_returned")
   finalBalance         Decimal  @default(0) @map("final_balance")
+  monthOpeningBalance  Decimal? @map("month_opening_balance")
+  monthStockIssued     Decimal? @map("month_stock_issued")
+  monthInHand          Decimal? @map("month_in_hand")
+  monthMaterialUsed    Decimal? @map("month_material_used")
+  monthEndingWip       Decimal? @map("month_ending_wip")
+  monthSourceRow       Int?     @map("month_source_row")
   status               String   @default("unmapped") // mapped, unmapped, warning
   warning              String?
   createdAt            DateTime @default(now()) @map("created_at")

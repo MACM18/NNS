@@ -2,6 +2,9 @@ export type MaterialBalanceImportStatus = "success" | "warning" | "failed" | "sk
 
 export type MaterialBalanceStockSource =
   | "google_material_balance"
+  | "google_material_balance_issue"
+  | "google_material_balance_adjustment"
+  | "google_material_balance_reconciliation"
   | "inventory_receipt"
   | "line_usage"
   | "waste"
@@ -29,6 +32,12 @@ export interface MaterialBalanceItemSnapshot {
   totalUsage: number;
   totalReturned: number;
   finalBalance: number;
+  monthOpeningBalance: number | null;
+  monthStockIssued: number | null;
+  monthInHand: number | null;
+  monthMaterialUsed: number | null;
+  monthEndingWip: number | null;
+  monthSourceRow: number | null;
   status: "mapped" | "unmapped" | "warning" | string;
   warning: string | null;
   inventoryItem: {
@@ -56,10 +65,32 @@ export interface MaterialBalanceImport {
   mappedItemCount: number;
   unmappedItemCount: number;
   updatedStockCount: number;
+  dailyIssueInvoiceCount: number;
+  correctionInvoiceCount: number;
+  reconciliationCount: number;
+  monthlySourceTab: string;
+  monthlyChecksum: string | null;
+  monthlyItemCount: number;
+  stockChanges: Array<{
+    sourceItemName: string;
+    inventoryItemId: string | null;
+    inventoryItemName: string | null;
+    issueDate: string | null;
+    issuedQuantity: number;
+    previousStock: number;
+    newStock: number;
+    sheetEndingWip: number | null;
+    adjustmentDelta: number;
+    invoiceId: string | null;
+    invoiceNumber: string | null;
+    referenceId: string | null;
+    status: string;
+    warning?: string | null;
+  }>;
   warnings: string[];
   discrepancies: Array<{
     itemName: string;
-    field: "issued" | "usage" | "return";
+    field: "issued" | "usage" | "return" | "month_issued" | "month_usage" | "month_ending_wip";
     dailyTotal: number;
     sheetTotal: number;
     difference: number;

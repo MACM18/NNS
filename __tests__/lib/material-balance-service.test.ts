@@ -1,5 +1,6 @@
 import {
   normalizeMaterialSourceName,
+  parseMaterialBalanceMonthValues,
   parseMaterialBalanceValues,
 } from "@/lib/material-balance-service";
 
@@ -7,7 +8,7 @@ function makeSheet(month: number, year: number, days: number) {
   const header: unknown[] = ["NNS Enterprise - Daily material balance", null];
   const labels: unknown[] = ["Item", "Unit"];
   for (let day = 1; day <= days; day += 1) {
-    header.push("Date", `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, null, null);
+    header.push("Date:", `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, null, null);
     labels.push("Previous Day balance", "Issued", "Usage", "Balance Return");
   }
   const totalColumn = header.length;
@@ -49,6 +50,19 @@ describe("Material Balance parser", () => {
     }));
     expect(parsed.items[0].dailyEntries).toHaveLength(31);
     expect(parsed.discrepancies).toHaveLength(0);
+  });
+
+  it("parses the month-end Ending WIP Material column dynamically", () => {
+    const parsed = parseMaterialBalanceMonthValues([
+      ["MATERIAL BALANCE SHEET FOR NEW CONNECTION"],
+      ["No", "Item", "Opening Balance", "Stock Issued", null, "In hand End of the month", "Material used for invoice", "Ending WIP Material"],
+      [1, "C HOOK(NOS)", 4, 15, null, 6, 13, 6],
+      [2, "FIBER DROP WIRE(M)", 1160, 2000, null, -85, 2569, -85],
+    ], 8, 2026);
+
+    expect(parsed.itemCount).toBe(2);
+    expect(parsed.items[0]).toEqual(expect.objectContaining({ normalizedSourceName: "chook", endingWip: 6 }));
+    expect(parsed.items[1].warnings).toContain("Negative month-end Ending WIP Material");
   });
 
   it("supports February-sized sheets and preserves negative balances", () => {

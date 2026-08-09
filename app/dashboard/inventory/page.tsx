@@ -59,6 +59,11 @@ export interface InventoryInvoice {
   drawn_by: string;
   total_items: number;
   status: string;
+  source_type?: string | null;
+  source_key?: string | null;
+  material_balance_import_id?: string | null;
+  source_date?: string | null;
+  is_system_generated?: boolean;
   created_at: string;
 }
 
@@ -284,6 +289,19 @@ export default function InventoryPage() {
       });
     }
   };
+
+  useEffect(() => {
+    const invoiceId = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("invoiceId")
+      : null;
+    const target = invoiceId ? invoices.find((invoice) => invoice.id === invoiceId) : null;
+    if (!target) return;
+    setActiveTab("invoices");
+    setExpandedInvoiceId(target.id);
+    void fetchInvoiceItems(target.id);
+    // The query parameter is intentionally handled once invoices are loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoices]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {

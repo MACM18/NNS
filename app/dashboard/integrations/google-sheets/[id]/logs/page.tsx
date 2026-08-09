@@ -68,9 +68,28 @@ interface SyncLog {
       mappedItemCount?: number;
       unmappedItemCount?: number;
       updatedStockCount?: number;
+      dailyIssueInvoiceCount?: number;
+      correctionInvoiceCount?: number;
+      reconciliationCount?: number;
       sourceDayCount?: number;
+      dashboardChangesDetected?: boolean;
       warnings?: string[];
       discrepancies?: unknown[];
+      stockChanges?: Array<{
+        sourceItemName: string;
+        inventoryItemId: string | null;
+        inventoryItemName: string | null;
+        issueDate: string | null;
+        issuedQuantity: number;
+        previousStock: number;
+        newStock: number;
+        sheetEndingWip: number | null;
+        adjustmentDelta: number;
+        invoiceId: string | null;
+        invoiceNumber: string | null;
+        status: string;
+        warning?: string | null;
+      }>;
     };
   };
   skippedRows: Array<{
@@ -223,6 +242,7 @@ export default function ConnectionLogsPage() {
   });
 
   const expandedLog = logs.find((l) => l.id === expandedLogId);
+  const materialBalanceChanges = expandedLog?.details.materialBalance?.stockChanges || [];
 
   // Filtered rows for the selected log's details table
   const filteredSkippedRows = expandedLog
@@ -396,7 +416,7 @@ export default function ConnectionLogsPage() {
                   </div>
 
                   {expandedLog.status !== "failed" && (
-                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-1 text-center">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 pt-1 text-center">
                       <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
                         <div className="text-xs font-bold text-muted-foreground uppercase tracking-wide text-[9px]">Parsed</div>
                         <div className="text-lg font-bold text-foreground mt-0.5">{expandedLog.details.totalParsedRows || 0}</div>
@@ -427,10 +447,88 @@ export default function ConnectionLogsPage() {
                           {expandedLog.details.hardwareUpdated || 0}
                         </div>
                       </div>
+                      <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
+                        <div className="text-xs font-bold text-blue-700 uppercase tracking-wide text-[9px]">Issue Invoices</div>
+                        <div className="text-lg font-bold text-blue-600 mt-0.5">
+                          {expandedLog.details.materialBalance?.dailyIssueInvoiceCount || 0}
+                        </div>
+                      </div>
+                      <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
+                        <div className="text-xs font-bold text-orange-700 uppercase tracking-wide text-[9px]">Reconciled</div>
+                        <div className="text-lg font-bold text-orange-600 mt-0.5">
+                          {expandedLog.details.materialBalance?.reconciliationCount || 0}
+                        </div>
+                      </div>
+                      <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">
+                        <div className="text-xs font-bold text-amber-700 uppercase tracking-wide text-[9px]">Corrections</div>
+                        <div className="text-lg font-bold text-amber-600 mt-0.5">
+                          {expandedLog.details.materialBalance?.correctionInvoiceCount || 0}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </CardContent>
               </Card>
+
+              {expandedLog.status !== "failed" && materialBalanceChanges.length > 0 && (
+                <Card className="shadow-sm border-muted/80">
+                  <CardHeader className="p-3.5 pb-2 border-b bg-muted/10">
+                    <CardTitle className="text-sm font-bold flex items-center gap-2">
+                      <Database className="h-4 w-4 text-blue-600" />
+                      Material Stock Changes ({materialBalanceChanges.length})
+                    </CardTitle>
+                    <CardDescription className="text-[11px]">
+                      Free-issued daily records and month-end values from the read-only Google Sheet.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-3.5">
+                    {expandedLog.details.materialBalance?.dashboardChangesDetected && (
+                      <div className="mb-3 rounded border border-amber-300/60 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
+                        A dashboard stock change was detected after the previous sync. The current month’s sheet value was reapplied and recorded as a reconciliation.
+                      </div>
+                    )}
+                    <div className="border rounded-md overflow-x-auto">
+                      <Table className="text-xs">
+                        <TableHeader className="bg-muted/10">
+                          <TableRow>
+                            <TableHead>Material</TableHead>
+                            <TableHead>Issue date</TableHead>
+                            <TableHead className="text-right">Previous</TableHead>
+                            <TableHead className="text-right">Adjustment</TableHead>
+                            <TableHead className="text-right">New stock</TableHead>
+                            <TableHead className="text-right">Ending WIP</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Invoice</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {materialBalanceChanges.map((change, index) => (
+                            <TableRow key={`${change.inventoryItemId || change.sourceItemName}-${change.issueDate || "month-end"}-${index}`}>
+                              <TableCell>
+                                <div className="font-medium">{change.inventoryItemName || change.sourceItemName}</div>
+                                {change.inventoryItemName && <div className="text-[10px] text-muted-foreground">{change.sourceItemName}</div>}
+                              </TableCell>
+                              <TableCell>{change.issueDate || "Month-end"}</TableCell>
+                              <TableCell className="text-right tabular-nums">{change.previousStock}</TableCell>
+                              <TableCell className="text-right tabular-nums">{change.adjustmentDelta}</TableCell>
+                              <TableCell className="text-right tabular-nums font-semibold">{change.newStock}</TableCell>
+                              <TableCell className="text-right tabular-nums">{change.sheetEndingWip ?? "-"}</TableCell>
+                              <TableCell><Badge variant="outline" className="text-[10px]">{change.status}</Badge></TableCell>
+                              <TableCell>
+                                {change.invoiceId ? (
+                                  <Link className="text-blue-600 hover:underline font-mono text-[10px]" href={`/dashboard/inventory?tab=invoices&invoiceId=${change.invoiceId}`}>
+                                    {change.invoiceNumber || "View"}
+                                  </Link>
+                                ) : "-"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Warnings / Skipped Rows Table */}
               {expandedLog.status !== "failed" && (

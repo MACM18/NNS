@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 
 export const MATERIAL_BALANCE_TAB = "Material Balance";
+export const MATERIAL_BALANCE_MONTH_TAB = "Material Balance - Month";
 
 type SheetValue = unknown;
 type SheetValues = SheetValue[][];
@@ -35,7 +36,7 @@ export interface ParsedMaterialBalanceItem {
 
 export interface MaterialBalanceDiscrepancy {
   itemName: string;
-  field: "issued" | "usage" | "return";
+  field: "issued" | "usage" | "return" | "month_issued" | "month_usage" | "month_ending_wip";
   dailyTotal: number;
   sheetTotal: number;
   difference: number;
@@ -48,6 +49,28 @@ export interface ParsedMaterialBalance {
   items: ParsedMaterialBalanceItem[];
   warnings: string[];
   discrepancies: MaterialBalanceDiscrepancy[];
+}
+
+export interface ParsedMaterialBalanceMonthItem {
+  sourceItemName: string;
+  normalizedSourceName: string;
+  sourceRow: number;
+  openingBalance: number;
+  stockIssued: number;
+  inHand: number;
+  materialUsed: number;
+  endingWip: number;
+  warnings: string[];
+}
+
+export interface ParsedMaterialBalanceMonth {
+  checksum: string;
+  sourceRowCount: number;
+  itemCount: number;
+  itemColumn: number;
+  endingWipColumn: number;
+  items: ParsedMaterialBalanceMonthItem[];
+  warnings: string[];
 }
 
 export interface MaterialBalanceImportResult {
@@ -63,8 +86,33 @@ export interface MaterialBalanceImportResult {
   unmappedItemCount: number;
   updatedStockCount: number;
   dailyEntryCount: number;
+  dailyIssueInvoiceCount: number;
+  correctionInvoiceCount: number;
+  reconciliationCount: number;
+  monthlySourceTab: string;
+  monthlyChecksum: string | null;
+  monthlyItemCount: number;
+  stockChanges: MaterialBalanceStockChange[];
+  dashboardChangesDetected: boolean;
   warnings: string[];
   discrepancies: MaterialBalanceDiscrepancy[];
+}
+
+export interface MaterialBalanceStockChange {
+  sourceItemName: string;
+  inventoryItemId: string | null;
+  inventoryItemName: string | null;
+  issueDate: string | null;
+  issuedQuantity: number;
+  previousStock: number;
+  newStock: number;
+  sheetEndingWip: number | null;
+  adjustmentDelta: number;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  referenceId: string | null;
+  status: "created" | "unchanged" | "corrected" | "reconciled" | "unmapped" | "warning" | string;
+  warning?: string | null;
 }
 
 function text(value: SheetValue): string {
@@ -186,7 +234,8 @@ function buildDayBlocks(
   const limit = totalColumn > 0 ? totalColumn : headerRow.length;
 
   for (let column = 2; column < limit; column += 1) {
-    const isDateLabel = headerKey(headerRow[column]) === "date";
+    const header = headerKey(headerRow[column]);
+    const isDateLabel = header === "date" || header === "date:";
     const date = parseDate(
       isDateLabel ? headerRow[column + 1] : headerRow[column],
       month,
@@ -216,6 +265,91 @@ function buildDayBlocks(
   }
 
   return blocks;
+}
+
+function findHeaderColumn(row: SheetValue[], expected: string): number {
+  return row.findIndex((value) => headerKey(value) === expected);
+}
+
+export function parseMaterialBalanceMonthValues(
+  values: SheetValues,
+  month: number,
+  year: number
+): ParsedMaterialBalanceMonth {
+  const warnings: string[] = [];
+  let headerRowIndex = -1;
+  let itemColumn = -1;
+  let endingWipColumn = -1;
+
+  for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
+    const row = values[rowIndex] || [];
+    const itemIndex = findHeaderColumn(row, "item");
+    const endingIndex = findHeaderColumn(row, "ending wip material");
+    if (itemIndex >= 0 && endingIndex >= 0) {
+      headerRowIndex = rowIndex;
+      itemColumn = itemIndex;
+      endingWipColumn = endingIndex;
+      break;
+    }
+  }
+
+  if (headerRowIndex < 0) {
+    return {
+      checksum: createHash("sha256").update(JSON.stringify(values)).digest("hex"),
+      sourceRowCount: values.length,
+      itemCount: 0,
+      itemColumn: -1,
+      endingWipColumn: -1,
+      items: [],
+      warnings: [`${MATERIAL_BALANCE_MONTH_TAB} is missing Item or Ending WIP Material columns for ${month}/${year}`],
+    };
+  }
+
+  const row = values[headerRowIndex] || [];
+  const openingColumn = findHeaderColumn(row, "opening balance");
+  const issuedColumn = findHeaderColumn(row, "stock issued");
+  const inHandColumn = findHeaderColumn(row, "in hand end of the month");
+  const usedColumn = findHeaderColumn(row, "material used for invoice");
+  const items: ParsedMaterialBalanceMonthItem[] = [];
+
+  for (let rowIndex = headerRowIndex + 1; rowIndex < values.length; rowIndex += 1) {
+    const sourceRow = values[rowIndex] || [];
+    const sourceItemName = text(sourceRow[itemColumn]);
+    if (!sourceItemName) continue;
+
+    const itemWarnings: string[] = [];
+    const endingWip = parseNumber(sourceRow[endingWipColumn]);
+    if (endingWip < 0) itemWarnings.push("Negative month-end Ending WIP Material");
+
+    const item = {
+      sourceItemName,
+      normalizedSourceName: normalizeMaterialSourceName(sourceItemName),
+      sourceRow: rowIndex + 1,
+      openingBalance: openingColumn >= 0 ? parseNumber(sourceRow[openingColumn]) : 0,
+      stockIssued: issuedColumn >= 0 ? parseNumber(sourceRow[issuedColumn]) : 0,
+      inHand: inHandColumn >= 0 ? parseNumber(sourceRow[inHandColumn]) : endingWip,
+      materialUsed: usedColumn >= 0 ? parseNumber(sourceRow[usedColumn]) : 0,
+      endingWip,
+      warnings: itemWarnings,
+    };
+
+    if (Math.abs(item.inHand - item.endingWip) > 0.01) {
+      itemWarnings.push("In-hand month-end value differs from Ending WIP Material");
+    }
+    items.push(item);
+  }
+
+  if (items.length === 0) warnings.push(`${MATERIAL_BALANCE_MONTH_TAB} contains no item rows`);
+
+  return {
+    checksum: createHash("sha256").update(JSON.stringify(values)).digest("hex"),
+    sourceRowCount: values.length,
+    itemCount: items.length,
+    itemColumn,
+    endingWipColumn,
+    items,
+    warnings: Array.from(new Set(warnings)),
+  };
 }
 
 export function parseMaterialBalanceValues(
@@ -386,20 +520,32 @@ async function resolveInventoryMappings(tx: DbClient) {
   return { inventoryItems, byName, configured };
 }
 
+function formatStockValue(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(6).replace(/0+$/, "").replace(/\.$/, "") : "0";
+}
+
+function generatedInvoiceNumber(sourceKey: string, date: string): string {
+  const suffix = createHash("sha1").update(sourceKey).digest("hex").slice(0, 10).toUpperCase();
+  return `MB-${date.replace(/-/g, "")}-${suffix}`;
+}
+
+async function lockMaterialBalanceConnection(
+  tx: Prisma.TransactionClient,
+  connectionId: string,
+) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`nns-material-balance:${connectionId}`}))`;
+}
+
+function combinedChecksum(dailyChecksum: string, monthlyChecksum: string | null): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ dailyChecksum, monthlyChecksum }))
+    .digest("hex");
+}
+
 function resultFromImport(
-  existing: {
-    id: string;
-    importedAt: Date;
-    status: string;
-    sourceDayCount: number;
-    itemCount: number;
-    mappedItemCount: number;
-    unmappedItemCount: number;
-    updatedStockCount: number;
-    warnings: unknown;
-    discrepancies: unknown;
-  },
-  skipped: boolean
+  existing: any,
+  skipped: boolean,
+  overrides: Partial<MaterialBalanceImportResult> = {}
 ): MaterialBalanceImportResult {
   return {
     imported: !skipped,
@@ -414,11 +560,245 @@ function resultFromImport(
     unmappedItemCount: existing.unmappedItemCount,
     updatedStockCount: existing.updatedStockCount,
     dailyEntryCount: 0,
-    warnings: Array.isArray(existing.warnings) ? (existing.warnings as string[]) : [],
-    discrepancies: Array.isArray(existing.discrepancies)
-      ? (existing.discrepancies as MaterialBalanceDiscrepancy[])
-      : [],
+    dailyIssueInvoiceCount: existing.dailyIssueInvoiceCount || 0,
+    correctionInvoiceCount: existing.correctionInvoiceCount || 0,
+    reconciliationCount: existing.reconciliationCount || 0,
+    monthlySourceTab: existing.monthlySourceTab || MATERIAL_BALANCE_MONTH_TAB,
+    monthlyChecksum: existing.monthlyChecksum || null,
+    monthlyItemCount: existing.monthlyItemCount || 0,
+    stockChanges: Array.isArray(existing.stockChanges) ? existing.stockChanges : [],
+    dashboardChangesDetected: false,
+    warnings: Array.isArray(existing.warnings) ? existing.warnings : [],
+    discrepancies: Array.isArray(existing.discrepancies) ? existing.discrepancies : [],
+    ...overrides,
   };
+}
+
+type PreparedMaterialItem = ParsedMaterialBalanceItem & {
+  monthlyItem: ParsedMaterialBalanceMonthItem | null;
+  inventoryItemId: string | null;
+  inventoryItemName: string | null;
+  status: string;
+  warning: string | null;
+  finalBalance: number;
+};
+
+async function createGeneratedInvoice(
+  tx: Prisma.TransactionClient,
+  input: {
+    sourceKey: string;
+    sourceType: "google_material_balance_issue" | "google_material_balance_adjustment" | "google_material_balance_reconciliation";
+    sourceDate: string;
+    importId: string;
+    createdById?: string | null;
+    correctionOfId?: string | null;
+    lines: Array<{
+      item: PreparedMaterialItem;
+      quantity: number;
+      status: "created" | "corrected" | "reconciled";
+      reason: string;
+    }>;
+  }
+): Promise<{ invoice: { id: string; invoiceNumber: string }; changes: MaterialBalanceStockChange[] } | null> {
+  if (input.lines.length === 0) return null;
+
+  const existing = await tx.inventoryInvoice.findUnique({
+    where: { sourceKey: input.sourceKey },
+    select: { id: true, invoiceNumber: true },
+  });
+  if (existing) {
+    return { invoice: existing, changes: [] };
+  }
+
+  const invoice = await tx.inventoryInvoice.create({
+    data: {
+      invoiceNumber: generatedInvoiceNumber(input.sourceKey, input.sourceDate),
+      warehouse: "Material Balance",
+      date: new Date(`${input.sourceDate}T00:00:00.000Z`),
+      issuedBy: "Google Sheets",
+      drawnBy: input.sourceType === "google_material_balance_issue"
+        ? "Free-issued material"
+        : "Material Balance correction",
+      createdById: input.createdById || null,
+      totalItems: input.lines.length,
+      status: "completed",
+      paymentStatus: "not_applicable",
+      totalCost: 0,
+      paidAmount: 0,
+      sourceType: input.sourceType,
+      sourceKey: input.sourceKey,
+      materialBalanceImportId: input.importId,
+      sourceDate: new Date(`${input.sourceDate}T00:00:00.000Z`),
+      isSystemGenerated: true,
+      correctionOfId: input.correctionOfId || null,
+    },
+    select: { id: true, invoiceNumber: true },
+  });
+
+  const changes: MaterialBalanceStockChange[] = [];
+  for (const line of input.lines) {
+    const inventoryItem = await tx.inventoryItem.findUnique({
+      where: { id: line.item.inventoryItemId! },
+      select: { id: true, name: true, unit: true, currentStock: true },
+    });
+    if (!inventoryItem) continue;
+
+    const quantity = Number(line.quantity);
+    const previousStock = Number(inventoryItem.currentStock || 0);
+    const newStock = previousStock + quantity;
+
+    await tx.inventoryInvoiceItem.create({
+      data: {
+        invoiceId: invoice.id,
+        itemId: inventoryItem.id,
+        description: `${line.item.sourceItemName} - ${line.reason}`,
+        unit: line.item.sourceUnit || inventoryItem.unit,
+        quantityRequested: quantity,
+        quantityIssued: quantity,
+      },
+    });
+
+    await tx.inventoryItem.update({
+      where: { id: inventoryItem.id },
+      data: { currentStock: newStock },
+    });
+
+    const event = await tx.inventoryStockEvent.create({
+      data: {
+        inventoryItemId: inventoryItem.id,
+        sourceType: input.sourceType,
+        sourceReferenceId: invoice.id,
+        materialBalanceImportId: input.importId,
+        previousStock,
+        newStock,
+        quantityDelta: quantity,
+        reason: line.reason,
+        createdById: input.createdById || null,
+      },
+      select: { id: true },
+    });
+
+    changes.push({
+      sourceItemName: line.item.sourceItemName,
+      inventoryItemId: inventoryItem.id,
+      inventoryItemName: inventoryItem.name,
+      issueDate: input.sourceDate,
+      issuedQuantity: line.item.dailyEntries.find((entry) => entry.date === input.sourceDate)?.issued || 0,
+      previousStock,
+      newStock,
+      sheetEndingWip: line.item.monthlyItem?.endingWip ?? line.item.finalBalance,
+      adjustmentDelta: quantity,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      referenceId: event.id,
+      status: line.status,
+      warning: line.item.warning,
+    });
+  }
+
+  return { invoice, changes };
+}
+
+async function reconcileExistingImport(input: {
+  connectionId: string;
+  month: number;
+  year: number;
+  importId: string;
+  createdById?: string | null;
+}): Promise<MaterialBalanceImportResult> {
+  return prisma.$transaction(async (tx) => {
+    await lockMaterialBalanceConnection(tx, input.connectionId);
+    const existing = await tx.materialBalanceImport.findUnique({
+      where: { id: input.importId },
+      include: {
+        items: {
+          include: {
+            inventoryItem: { select: { id: true, name: true, currentStock: true, unit: true } },
+          },
+        },
+      },
+    });
+    if (!existing) throw new Error("Material Balance import no longer exists");
+
+    const changes: MaterialBalanceStockChange[] = [];
+    let dashboardChangesDetected = false;
+    let reconciliationCount = 0;
+    const monthEnd = new Date(Date.UTC(input.year, input.month, 0));
+
+    for (const snapshot of existing.items) {
+      if (!snapshot.inventoryItemId || !snapshot.inventoryItem) continue;
+      const currentStock = Number(snapshot.inventoryItem.currentStock || 0);
+      const expectedStock = Number(snapshot.monthEndingWip ?? snapshot.finalBalance ?? 0);
+      const dashboardChange = await tx.inventoryStockEvent.findFirst({
+        where: {
+          inventoryItemId: snapshot.inventoryItemId,
+          createdAt: { gt: existing.importedAt },
+          sourceType: {
+            notIn: [
+              "google_material_balance_issue",
+              "google_material_balance_adjustment",
+              "google_material_balance_reconciliation",
+              "google_material_balance",
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      if (dashboardChange) dashboardChangesDetected = true;
+      if (Math.abs(currentStock - expectedStock) <= 0.01) continue;
+
+      const sourceKey = [
+        "gmb-reconcile",
+        input.connectionId,
+        existing.id,
+        snapshot.inventoryItemId,
+        dashboardChange?.id || "stock-mismatch",
+        formatStockValue(currentStock),
+        formatStockValue(expectedStock),
+      ].join(":");
+      const generated = await createGeneratedInvoice(tx, {
+        sourceKey,
+        sourceType: "google_material_balance_reconciliation",
+        sourceDate: monthEnd.toISOString().slice(0, 10),
+        importId: existing.id,
+        createdById: input.createdById,
+        lines: [{
+          item: {
+            sourceItemName: snapshot.sourceItemName,
+            normalizedSourceName: snapshot.normalizedSourceName,
+            sourceUnit: snapshot.sourceUnit,
+            sourceRow: snapshot.sourceRow,
+            openingBalance: Number(snapshot.openingBalance),
+            totalIssued: Number(snapshot.totalIssued),
+            totalUsage: Number(snapshot.totalUsage),
+            totalReturned: Number(snapshot.totalReturned),
+            finalBalance: expectedStock,
+            dailyEntries: [],
+            warnings: snapshot.warning ? [snapshot.warning] : [],
+            monthlyItem: null,
+            inventoryItemId: snapshot.inventoryItemId,
+            inventoryItemName: snapshot.inventoryItem.name,
+            status: "reconciled",
+            warning: dashboardChange ? "Dashboard stock changed after the previous Material Balance sync" : snapshot.warning,
+          },
+          quantity: expectedStock - currentStock,
+          status: "reconciled",
+          reason: `Reconciled to ${MATERIAL_BALANCE_MONTH_TAB} Ending WIP Material`,
+        }],
+      });
+      if (generated) {
+        changes.push(...generated.changes);
+        reconciliationCount += 1;
+      }
+    }
+
+    return resultFromImport(existing, true, {
+      reconciliationCount,
+      updatedStockCount: changes.length,
+      stockChanges: changes,
+      dashboardChangesDetected,
+    });
+  });
 }
 
 export async function importMaterialBalanceValues(input: {
@@ -426,44 +806,88 @@ export async function importMaterialBalanceValues(input: {
   month: number;
   year: number;
   values: SheetValues;
+  monthlyValues?: SheetValues;
   createdById?: string | null;
 }): Promise<MaterialBalanceImportResult> {
   const parsed = parseMaterialBalanceValues(input.values, input.month, input.year);
+  const monthlyParsed = input.monthlyValues
+    ? parseMaterialBalanceMonthValues(input.monthlyValues, input.month, input.year)
+    : null;
+  const monthlyChecksum = monthlyParsed?.checksum || null;
+  const checksum = combinedChecksum(parsed.checksum, monthlyChecksum);
 
   const existing = await prisma.materialBalanceImport.findUnique({
     where: {
       connectionId_sourceChecksum: {
         connectionId: input.connectionId,
-        sourceChecksum: parsed.checksum,
+        sourceChecksum: checksum,
       },
     },
-    select: {
-      id: true,
-      importedAt: true,
-      status: true,
-      sourceDayCount: true,
-      itemCount: true,
-      mappedItemCount: true,
-      unmappedItemCount: true,
-      updatedStockCount: true,
-      warnings: true,
-      discrepancies: true,
-    },
+    select: { id: true },
   });
-  if (existing) return resultFromImport(existing, true);
+  if (existing) {
+    return reconcileExistingImport({
+      connectionId: input.connectionId,
+      month: input.month,
+      year: input.year,
+      importId: existing.id,
+      createdById: input.createdById,
+    });
+  }
 
   return prisma.$transaction(async (tx) => {
+    await lockMaterialBalanceConnection(tx, input.connectionId);
+    const alreadyCreated = await tx.materialBalanceImport.findUnique({
+      where: {
+        connectionId_sourceChecksum: {
+          connectionId: input.connectionId,
+          sourceChecksum: checksum,
+        },
+      },
+      select: {
+        id: true,
+        importedAt: true,
+        status: true,
+        sourceDayCount: true,
+        itemCount: true,
+        mappedItemCount: true,
+        unmappedItemCount: true,
+        updatedStockCount: true,
+        dailyIssueInvoiceCount: true,
+        correctionInvoiceCount: true,
+        reconciliationCount: true,
+        monthlySourceTab: true,
+        monthlyChecksum: true,
+        monthlyItemCount: true,
+        stockChanges: true,
+        warnings: true,
+        discrepancies: true,
+      },
+    });
+    if (alreadyCreated) return resultFromImport(alreadyCreated, true);
     const mappings = await resolveInventoryMappings(tx);
+    const monthlyByName = new Map((monthlyParsed?.items || []).map((item) => [item.normalizedSourceName, item]));
+    const dailyByName = new Map(parsed.items.map((item) => [item.normalizedSourceName, item]));
+    const names = new Set([...dailyByName.keys(), ...monthlyByName.keys()]);
     const mappedInventoryIds = new Set<string>();
-    const prepared = parsed.items.map((item) => {
-      const configuredId = mappings.configured.get(item.normalizedSourceName);
-      const targetKey = resolveTargetKey(item.sourceItemName);
+    const prepared: PreparedMaterialItem[] = [];
+
+    for (const normalizedSourceName of names) {
+      const dailyItem = dailyByName.get(normalizedSourceName);
+      const monthlyItem = monthlyByName.get(normalizedSourceName) || null;
+      const sourceItemName = dailyItem?.sourceItemName || monthlyItem?.sourceItemName || normalizedSourceName;
+      const configuredId = mappings.configured.get(normalizedSourceName);
+      const targetKey = resolveTargetKey(sourceItemName);
       const inventoryItem = configuredId
         ? mappings.inventoryItems.find((candidate) => candidate.id === configuredId)
         : mappings.byName.get(targetKey);
       let inventoryItemId = inventoryItem?.id || null;
       let status = inventoryItemId ? "mapped" : "unmapped";
-      let warning = item.warnings.join("; ") || null;
+      const warnings = [
+        ...(dailyItem?.warnings || []),
+        ...(monthlyItem?.warnings || []),
+      ];
+      let warning = warnings.join("; ") || null;
 
       if (inventoryItemId && mappedInventoryIds.has(inventoryItemId)) {
         status = "warning";
@@ -471,23 +895,102 @@ export async function importMaterialBalanceValues(input: {
         inventoryItemId = null;
       }
       if (inventoryItemId) mappedInventoryIds.add(inventoryItemId);
-      if (item.warnings.length > 0 && status === "mapped") status = "warning";
 
-      return { ...item, inventoryItemId, status, warning };
-    });
+      prepared.push({
+        sourceItemName,
+        normalizedSourceName,
+        sourceUnit: dailyItem?.sourceUnit || null,
+        sourceRow: dailyItem?.sourceRow || monthlyItem?.sourceRow || 0,
+        openingBalance: dailyItem?.openingBalance ?? monthlyItem?.openingBalance ?? 0,
+        totalIssued: dailyItem?.totalIssued ?? 0,
+        totalUsage: dailyItem?.totalUsage ?? 0,
+        totalReturned: dailyItem?.totalReturned ?? 0,
+        finalBalance: monthlyItem?.endingWip ?? dailyItem?.finalBalance ?? 0,
+        dailyEntries: dailyItem?.dailyEntries || [],
+        warnings,
+        monthlyItem,
+        inventoryItemId,
+        inventoryItemName: inventoryItem?.name || null,
+        status,
+        warning,
+      });
+    }
 
+    const monthlyAvailable = Boolean(monthlyParsed && monthlyParsed.itemColumn >= 0 && monthlyParsed.endingWipColumn >= 0);
+    const warnings = [
+      ...parsed.warnings,
+      ...(monthlyParsed?.warnings || []),
+      ...prepared.flatMap((item) => item.warnings),
+      ...(!monthlyAvailable ? [`${MATERIAL_BALANCE_MONTH_TAB} is required before automatic stock invoices can be applied`] : []),
+    ];
+    const discrepancies: MaterialBalanceDiscrepancy[] = [...parsed.discrepancies];
+    for (const item of prepared) {
+      if (!item.monthlyItem) continue;
+      const comparisons: Array<[MaterialBalanceDiscrepancy["field"], number, number]> = [
+        ["month_issued", item.totalIssued, item.monthlyItem.stockIssued],
+        ["month_usage", item.totalUsage, item.monthlyItem.materialUsed],
+        ["month_ending_wip", item.finalBalance, item.monthlyItem.endingWip],
+      ];
+      for (const [field, dailyValue, monthlyValue] of comparisons) {
+        if (Math.abs(dailyValue - monthlyValue) > 0.01) {
+          discrepancies.push({
+            itemName: item.sourceItemName,
+            field,
+            dailyTotal: dailyValue,
+            sheetTotal: monthlyValue,
+            difference: dailyValue - monthlyValue,
+          });
+        }
+      }
+    }
     const mappedItemCount = prepared.filter((item) => item.inventoryItemId).length;
     const unmappedItemCount = prepared.length - mappedItemCount;
-    const updates = prepared.filter((item) => item.inventoryItemId);
-    const status = parsed.warnings.length || parsed.discrepancies.length || prepared.some((item) => item.status !== "mapped")
+    const status = warnings.length > 0 || discrepancies.length > 0 || prepared.some((item) => item.status !== "mapped")
       ? "warning"
       : "success";
+
+    const previousImport = await tx.materialBalanceImport.findFirst({
+      where: { connectionId: input.connectionId },
+      orderBy: { importedAt: "desc" },
+      include: { items: { include: { dailyEntries: true } } },
+    });
+    const previousIssued = new Map<string, number>();
+    for (const previousItem of previousImport?.items || []) {
+      for (const entry of previousItem.dailyEntries) {
+        const date = entry.balanceDate.toISOString().slice(0, 10);
+        previousIssued.set(`${previousItem.normalizedSourceName}:${date}`, Number(entry.issued || 0));
+      }
+    }
+
+    let dashboardChangesDetected = false;
+    if (previousImport) {
+      const event = await tx.inventoryStockEvent.findFirst({
+        where: {
+          inventoryItemId: {
+            in: previousImport.items
+              .map((item) => item.inventoryItemId)
+              .filter((itemId): itemId is string => Boolean(itemId)),
+          },
+          createdAt: { gt: previousImport.importedAt },
+          sourceType: {
+            notIn: [
+              "google_material_balance_issue",
+              "google_material_balance_adjustment",
+              "google_material_balance_reconciliation",
+              "google_material_balance",
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      dashboardChangesDetected = Boolean(event);
+    }
 
     const created = await tx.materialBalanceImport.create({
       data: {
         connectionId: input.connectionId,
         sourceTab: MATERIAL_BALANCE_TAB,
-        sourceChecksum: parsed.checksum,
+        sourceChecksum: checksum,
         status,
         sourceRowCount: parsed.sourceRowCount,
         sourceDayCount: parsed.dayCount,
@@ -495,14 +998,20 @@ export async function importMaterialBalanceValues(input: {
         mappedItemCount,
         unmappedItemCount,
         updatedStockCount: 0,
-        warnings: JSON.parse(JSON.stringify([...parsed.warnings, ...prepared.flatMap((item) => item.warnings)])),
-        discrepancies: JSON.parse(JSON.stringify(parsed.discrepancies)),
+        dailyIssueInvoiceCount: 0,
+        correctionInvoiceCount: 0,
+        reconciliationCount: 0,
+        monthlySourceTab: MATERIAL_BALANCE_MONTH_TAB,
+        monthlyChecksum,
+        monthlyItemCount: monthlyParsed?.itemCount || 0,
+        stockChanges: [],
+        warnings: JSON.parse(JSON.stringify(Array.from(new Set(warnings)))),
+        discrepancies: JSON.parse(JSON.stringify(discrepancies)),
         createdById: input.createdById || null,
       },
       select: { id: true, importedAt: true },
     });
 
-    let updatedStockCount = 0;
     let dailyEntryCount = 0;
     for (const item of prepared) {
       const snapshot = await tx.materialBalanceItem.create({
@@ -518,6 +1027,12 @@ export async function importMaterialBalanceValues(input: {
           totalUsage: item.totalUsage,
           totalReturned: item.totalReturned,
           finalBalance: item.finalBalance,
+          monthOpeningBalance: item.monthlyItem?.openingBalance ?? null,
+          monthStockIssued: item.monthlyItem?.stockIssued ?? null,
+          monthInHand: item.monthlyItem?.inHand ?? null,
+          monthMaterialUsed: item.monthlyItem?.materialUsed ?? null,
+          monthEndingWip: item.monthlyItem?.endingWip ?? null,
+          monthSourceRow: item.monthlyItem?.sourceRow ?? null,
           status: item.status,
           warning: item.warning,
         },
@@ -540,37 +1055,160 @@ export async function importMaterialBalanceValues(input: {
         });
         dailyEntryCount += item.dailyEntries.length;
       }
-
-      if (!item.inventoryItemId) continue;
-      const inventoryItem = mappings.inventoryItems.find((candidate) => candidate.id === item.inventoryItemId);
-      if (!inventoryItem) continue;
-      const previousStock = Number(inventoryItem.currentStock);
-      const newStock = item.finalBalance;
-      if (Math.abs(previousStock - newStock) <= 0.01) continue;
-
-      await tx.inventoryItem.update({
-        where: { id: item.inventoryItemId },
-        data: { currentStock: newStock },
-      });
-      await tx.inventoryStockEvent.create({
-        data: {
-          inventoryItemId: item.inventoryItemId,
-          sourceType: "google_material_balance",
-          sourceReferenceId: snapshot.id,
-          materialBalanceImportId: created.id,
-          previousStock,
-          newStock,
-          quantityDelta: newStock - previousStock,
-          reason: `Imported from ${MATERIAL_BALANCE_TAB} (${input.month}/${input.year})`,
-          createdById: input.createdById || null,
-        },
-      });
-      updatedStockCount += 1;
     }
 
+    const stockChanges: MaterialBalanceStockChange[] = [];
+    let dailyIssueInvoiceCount = 0;
+    let correctionInvoiceCount = 0;
+    let reconciliationCount = 0;
+
+    for (const item of prepared) {
+      if (item.inventoryItemId) continue;
+      stockChanges.push({
+        sourceItemName: item.sourceItemName,
+        inventoryItemId: null,
+        inventoryItemName: null,
+        issueDate: null,
+        issuedQuantity: item.totalIssued,
+        previousStock: 0,
+        newStock: 0,
+        sheetEndingWip: item.monthlyItem?.endingWip ?? null,
+        adjustmentDelta: 0,
+        invoiceId: null,
+        invoiceNumber: null,
+        referenceId: null,
+        status: "unmapped",
+        warning: item.warning || "No inventory mapping exists for this Material Balance item",
+      });
+    }
+
+    if (monthlyAvailable) {
+      const invoiceLinesByDate = new Map<string, Array<{ item: PreparedMaterialItem; quantity: number }>>();
+      for (const item of prepared) {
+        if (!item.inventoryItemId) continue;
+        const currentDates = new Set(item.dailyEntries.map((entry) => entry.date));
+        const previousDates = previousImport
+          ? previousImport.items
+              .find((previousItem) => previousItem.normalizedSourceName === item.normalizedSourceName)
+              ?.dailyEntries.map((entry) => entry.balanceDate.toISOString().slice(0, 10)) || []
+          : [];
+        for (const date of new Set([...currentDates, ...previousDates])) {
+          const currentIssued = item.dailyEntries.find((entry) => entry.date === date)?.issued || 0;
+          const previousIssuedValue = previousIssued.get(`${item.normalizedSourceName}:${date}`) || 0;
+          const quantity = currentIssued - previousIssuedValue;
+          if (Math.abs(quantity) <= 0.01) continue;
+          const lines = invoiceLinesByDate.get(date) || [];
+          lines.push({ item, quantity });
+          invoiceLinesByDate.set(date, lines);
+        }
+      }
+
+      for (const [date, lines] of invoiceLinesByDate) {
+        const hasPreviousImport = Boolean(previousImport);
+        const sourceType = hasPreviousImport ? "google_material_balance_adjustment" : "google_material_balance_issue";
+        const sourceKey = [
+          "gmb",
+          input.connectionId,
+          date,
+          hasPreviousImport ? `correction-${created.id}` : "issue",
+        ].join(":");
+        const original = hasPreviousImport
+          ? await tx.inventoryInvoice.findUnique({
+              where: { sourceKey: ["gmb", input.connectionId, date, "issue"].join(":") },
+              select: { id: true },
+            })
+          : null;
+        const generated = await createGeneratedInvoice(tx, {
+          sourceKey,
+          sourceType,
+          sourceDate: date,
+          importId: created.id,
+          createdById: input.createdById,
+          correctionOfId: original?.id || null,
+          lines: lines.map(({ item, quantity }) => ({
+            item,
+            quantity,
+            status: hasPreviousImport ? "corrected" : "created",
+            reason: hasPreviousImport ? "Corrected daily Material Balance issue quantity" : "Daily Material Balance issue",
+          })),
+        });
+        if (generated) {
+          stockChanges.push(...generated.changes);
+          if (hasPreviousImport) correctionInvoiceCount += 1;
+          else dailyIssueInvoiceCount += 1;
+        }
+      }
+
+      const monthEnd = new Date(Date.UTC(input.year, input.month, 0)).toISOString().slice(0, 10);
+      for (const item of prepared) {
+        if (!item.inventoryItemId || !item.monthlyItem) continue;
+        const current = await tx.inventoryItem.findUnique({
+          where: { id: item.inventoryItemId },
+          select: { currentStock: true },
+        });
+        if (!current) continue;
+        const currentStock = Number(current.currentStock || 0);
+        const expectedStock = item.monthlyItem.endingWip;
+        if (Math.abs(currentStock - expectedStock) <= 0.01) {
+          stockChanges.push({
+            sourceItemName: item.sourceItemName,
+            inventoryItemId: item.inventoryItemId,
+            inventoryItemName: item.inventoryItemName,
+            issueDate: null,
+            issuedQuantity: 0,
+            previousStock: currentStock,
+            newStock: currentStock,
+            sheetEndingWip: expectedStock,
+            adjustmentDelta: 0,
+            invoiceId: null,
+            invoiceNumber: null,
+            referenceId: null,
+            status: "unchanged",
+            warning: item.warning,
+          });
+          continue;
+        }
+
+        const sourceKey = [
+          "gmb-month-end",
+          input.connectionId,
+          created.id,
+          item.inventoryItemId,
+          formatStockValue(currentStock),
+          formatStockValue(expectedStock),
+        ].join(":");
+        const generated = await createGeneratedInvoice(tx, {
+          sourceKey,
+          sourceType: "google_material_balance_reconciliation",
+          sourceDate: monthEnd,
+          importId: created.id,
+          createdById: input.createdById,
+          lines: [{
+            item,
+            quantity: expectedStock - currentStock,
+            status: "reconciled",
+            reason: `Reconciled to ${MATERIAL_BALANCE_MONTH_TAB} Ending WIP Material`,
+          }],
+        });
+        if (generated) {
+          stockChanges.push(...generated.changes);
+          reconciliationCount += 1;
+        }
+      }
+    }
+
+    const updatedStockCount = new Set(
+      stockChanges.filter((change) => change.status !== "unchanged" && change.inventoryItemId).map((change) => change.inventoryItemId),
+    ).size;
     const finalized = await tx.materialBalanceImport.update({
       where: { id: created.id },
-      data: { updatedStockCount },
+      data: {
+        updatedStockCount,
+        dailyIssueInvoiceCount,
+        correctionInvoiceCount,
+        reconciliationCount,
+        stockChanges: JSON.parse(JSON.stringify(stockChanges)),
+      },
       select: {
         id: true,
         importedAt: true,
@@ -580,15 +1218,23 @@ export async function importMaterialBalanceValues(input: {
         mappedItemCount: true,
         unmappedItemCount: true,
         updatedStockCount: true,
+        dailyIssueInvoiceCount: true,
+        correctionInvoiceCount: true,
+        reconciliationCount: true,
+        monthlySourceTab: true,
+        monthlyChecksum: true,
+        monthlyItemCount: true,
+        stockChanges: true,
         warnings: true,
         discrepancies: true,
       },
     });
 
-    return {
-      ...resultFromImport(finalized, false),
+    return resultFromImport(finalized, false, {
       dailyEntryCount,
-    };
+      stockChanges,
+      dashboardChangesDetected,
+    });
   });
 }
 
@@ -605,6 +1251,13 @@ export function serializeMaterialBalanceImport(input: any) {
     mappedItemCount: input.mappedItemCount,
     unmappedItemCount: input.unmappedItemCount,
     updatedStockCount: input.updatedStockCount,
+    dailyIssueInvoiceCount: input.dailyIssueInvoiceCount || 0,
+    correctionInvoiceCount: input.correctionInvoiceCount || 0,
+    reconciliationCount: input.reconciliationCount || 0,
+    monthlySourceTab: input.monthlySourceTab || MATERIAL_BALANCE_MONTH_TAB,
+    monthlyChecksum: input.monthlyChecksum || null,
+    monthlyItemCount: input.monthlyItemCount || 0,
+    stockChanges: Array.isArray(input.stockChanges) ? input.stockChanges : [],
     warnings: Array.isArray(input.warnings) ? input.warnings : [],
     discrepancies: Array.isArray(input.discrepancies) ? input.discrepancies : [],
     items: (input.items || []).map((item: any) => ({
@@ -619,6 +1272,12 @@ export function serializeMaterialBalanceImport(input: any) {
       totalUsage: Number(item.totalUsage ?? 0),
       totalReturned: Number(item.totalReturned ?? 0),
       finalBalance: Number(item.finalBalance ?? 0),
+      monthOpeningBalance: item.monthOpeningBalance == null ? null : Number(item.monthOpeningBalance),
+      monthStockIssued: item.monthStockIssued == null ? null : Number(item.monthStockIssued),
+      monthInHand: item.monthInHand == null ? null : Number(item.monthInHand),
+      monthMaterialUsed: item.monthMaterialUsed == null ? null : Number(item.monthMaterialUsed),
+      monthEndingWip: item.monthEndingWip == null ? null : Number(item.monthEndingWip),
+      monthSourceRow: item.monthSourceRow ?? null,
       status: item.status,
       warning: item.warning,
       inventoryItem: item.inventoryItem
