@@ -3,6 +3,7 @@ import {
   parseMaterialBalanceMonthValues,
   parseMaterialBalanceValues,
   resolveTargetKey,
+  shouldImportMaterialBalanceItem,
 } from "@/lib/material-balance-service";
 
 function makeSheet(month: number, year: number, days: number) {
@@ -40,6 +41,88 @@ describe("Material Balance parser", () => {
     expect(resolveTargetKey("FAC Connector(NOS)")).toBe("fac");
     expect(resolveTargetKey("Fiber Rosset Box(NOS)")).toBe("fiberrosette");
     expect(resolveTargetKey("Nut and Bolt(NOS)")).toBe("nutbolt");
+    expect(resolveTargetKey("C HOOK(NOS)")).toBe("chook");
+    expect(resolveTargetKey("L HOOK(NOS)")).toBe("lhook");
+    expect(resolveTargetKey("U CLIP(NOS)")).toBe("uclip");
+    expect(resolveTargetKey("INTERNAL WIRE(M)")).toBe("internalwire");
+    expect(resolveTargetKey("FIBER DROP WIRE(M)")).toBe("fiberdropwire");
+    expect(resolveTargetKey("RJ-45(NOS)")).toBe("rj45");
+    expect(resolveTargetKey("RJ-11(NOS)")).toBe("rj11");
+    expect(resolveTargetKey("CABLE TIE 6(NOS)")).toBe("ctie");
+    expect(resolveTargetKey("TOP BOLT(NOS)")).toBe("topbolt");
+  });
+
+  it("recognizes the complete Google Sheet catalog and skips only empty new rows", () => {
+    const catalog = [
+      ["PROTECTOR(NOS)", "NOS"],
+      ["C HOOK(NOS)", "NOS"],
+      ["L HOOK(NOS)", "NOS"],
+      ["NUT&BOLT(NOS)", "NOS"],
+      ["RETAINERS WHITE(NOS)", "NOS"],
+      ["RETAINERS BLACK(NOS)", "NOS"],
+      ["DROP WIRE(M)", "M"],
+      ["EARTH ROD(NOS)", "NOS"],
+      ["EARTH WIRE(M)", "M"],
+      ["INTERNAL WIRE(M)", "M"],
+      ["U CLIP(NOS)", "NOS"],
+      ["DROP WIRE CLET(NOS)", "NOS"],
+      ["CONCRETE NAIL 1 1/2(NOS)", "NOS"],
+      ["CONCRETE NAIL 1 (NOS)", "NOS"],
+      ["FIBER DROP WIRE(M)", "M"],
+      ["SINGLE ROSSET BOX(NOS)", "NOS"],
+      ["FIBER ROSSET BOX(NOS)", "NOS"],
+      ["FAC CONNECTOR(NOS)", "NOS"],
+      ["12.5*20 TRUNKING(M)", "M"],
+      ["SPIRAL CASING 1/4(M)", "M"],
+      ["PVC CONDUIT(M)", "M"],
+      ["CONDUIT CLIP(NOS)", "NOS"],
+      ["CAT 5E CABLE(M)", "M"],
+      ["RJ-45(NOS)", "NOS"],
+      ["RJ-11(NOS)", "NOS"],
+      ["CABLE TIE 4(NOS)", "NOS"],
+      ["CABLE TIE 6(NOS)", "NOS"],
+      ["TOP BOLT(NOS)", "NOS"],
+      ["DROP CONNECTOR(NOS)", "NOS"],
+      ["SCREW NAIL 1(NOS)", "NOS"],
+      ["SCREW NAIL 1 1/2(NOS)", "NOS"],
+      ["ROLL PLUG(NOS)", "NOS"],
+      ["SOCKET(NOS)", "NOS"],
+      ["BEND(NOS)", "NOS"],
+    ] as const;
+    const header: unknown[] = ["Title", null, "Date:", "2026-08-01", null, null, "Total"];
+    const labels: unknown[] = ["Item", "Unit", "Previous Day balance", "Issued", "Usage", "Balance Return", "Issued", "Usage", "Return", "Final Balance"];
+    const rows = catalog.map(([name, unit], index) => [name, unit, index + 1, 0, 0, 0, 0, 0, 0, index + 1]);
+    const parsed = parseMaterialBalanceValues([header, labels, ...rows], 8, 2026);
+
+    expect(parsed.items).toHaveLength(catalog.length);
+    expect(parsed.items.map((item) => item.sourceItemName)).toEqual(catalog.map(([name]) => name));
+    expect(shouldImportMaterialBalanceItem(parsed.items[0], {
+      sourceItemName: "PROTECTOR(NOS)",
+      normalizedSourceName: "protector",
+      sourceRow: 3,
+      openingBalance: 0,
+      stockIssued: 0,
+      inHand: 0,
+      materialUsed: 0,
+      endingWip: 0,
+      warnings: [],
+    })).toBe(false);
+    expect(shouldImportMaterialBalanceItem(undefined, {
+      sourceItemName: "FIBER DROP WIRE(M)",
+      normalizedSourceName: "fiberdropwirem",
+      sourceRow: 17,
+      openingBalance: 0,
+      stockIssued: 0,
+      inHand: 0,
+      materialUsed: 0,
+      endingWip: -85,
+      warnings: [],
+    })).toBe(true);
+    expect(shouldImportMaterialBalanceItem({
+      ...parsed.items[0],
+      totalIssued: 2,
+      dailyEntries: [{ ...parsed.items[0].dailyEntries[0], issued: 2 }],
+    }, null)).toBe(true);
   });
 
   it("parses variable daily blocks and source totals", () => {

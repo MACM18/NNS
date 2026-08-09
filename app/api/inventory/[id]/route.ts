@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
 
+const INVENTORY_MANAGER_ROLES = ["admin", "moderator", "superadmin"];
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -14,12 +16,22 @@ export async function GET(
     }
 
     const { id } = await params;
+    const includeInactive = new URL(req.url).searchParams.get("includeInactive") === "true";
+    if (includeInactive) {
+      const profile = await prisma.profile.findUnique({
+        where: { userId: session.user.id },
+        select: { role: true },
+      });
+      if (!INVENTORY_MANAGER_ROLES.includes((profile?.role || "").toLowerCase())) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
 
     const item = await prisma.inventoryItem.findUnique({
       where: { id },
     });
 
-    if (!item) {
+    if (!item || (!item.isActive && !includeInactive)) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
@@ -33,6 +45,7 @@ export async function GET(
           ? Number(item.drumSize)
           : null,
       reorder_level: Number(item.reorderLevel ?? 0),
+      is_active: item.isActive,
       created_at: item.createdAt?.toISOString(),
       updated_at: item.updatedAt?.toISOString(),
     };
@@ -71,16 +84,25 @@ export async function PUT(
     const updateData: Record<string, unknown> = {};
     if (body.name !== undefined) updateData.name = body.name;
     if (body.unit !== undefined) updateData.unit = body.unit;
-    if (body.current_stock !== undefined || body.currentStock !== undefined)
-      updateData.currentStock = Number(
-        body.current_stock ?? body.currentStock ?? 0
-      );
+    if (body.current_stock !== undefined || body.currentStock !== undefined) {
+      const currentStock = Number(body.current_stock ?? body.currentStock);
+      if (!Number.isFinite(currentStock)) {
+        return NextResponse.json({ error: "Current stock must be a finite number" }, { status: 400 });
+      }
+      updateData.currentStock = currentStock;
+    }
     if (body.drum_size !== undefined || body.drumSize !== undefined)
       updateData.drumSize = body.drum_size ?? body.drumSize;
-    if (body.reorder_level !== undefined || body.reorderLevel !== undefined)
-      updateData.reorderLevel = Number(
-        body.reorder_level ?? body.reorderLevel ?? 0
-      );
+    if (body.reorder_level !== undefined || body.reorderLevel !== undefined) {
+      const reorderLevel = Number(body.reorder_level ?? body.reorderLevel);
+      if (!Number.isFinite(reorderLevel) || reorderLevel < 0) {
+        return NextResponse.json({ error: "Reorder level must be a non-negative finite number" }, { status: 400 });
+      }
+      updateData.reorderLevel = reorderLevel;
+    }
+    if (body.is_active !== undefined || body.isActive !== undefined) {
+      updateData.isActive = Boolean(body.is_active ?? body.isActive);
+    }
 
     const item = await prisma.$transaction(async (tx) => {
       const existing = await tx.inventoryItem.findUnique({ where: { id } });
@@ -110,6 +132,7 @@ export async function PUT(
           ? Number(item.drumSize)
           : null,
       reorder_level: Number(item.reorderLevel ?? 0),
+      is_active: item.isActive,
       created_at: item.createdAt?.toISOString(),
       updated_at: item.updatedAt?.toISOString(),
     };
@@ -135,14 +158,71 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true, role: true },
+    });
+    if (!INVENTORY_MANAGER_ROLES.includes((profile?.role || "").toLowerCase())) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-    await prisma.inventoryItem.delete({
-      where: { id },
+    const result = await prisma.$transaction(async (tx) => {
+      const item = await tx.inventoryItem.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          currentStock: true,
+          _count: {
+            select: {
+              inventoryInvoiceItems: true,
+              drumTracking: true,
+              monthlyWastage: true,
+              wasteTracking: true,
+              monthlyInventoryUsages: true,
+              materialBalanceItems: true,
+              materialBalanceMappings: true,
+              inventoryStockEvents: true,
+            },
+          },
+        },
+      });
+      if (!item) throw new Error("Item not found");
+
+      const historyCounts = item._count;
+      const hasHistory = Object.values(historyCounts).some((count) => count > 0);
+      const hasNonZeroStock = Number(item.currentStock || 0) !== 0;
+
+      if (hasHistory || hasNonZeroStock) {
+        const archived = await tx.inventoryItem.update({
+          where: { id },
+          data: { isActive: false },
+          select: { id: true, name: true, isActive: true },
+        });
+        return {
+          action: "archived" as const,
+          item: archived,
+          reason: hasHistory ? "Item has historical records" : "Item has non-zero stock",
+          historyCounts,
+        };
+      }
+
+      await tx.inventoryItem.delete({ where: { id } });
+      return { action: "deleted" as const, item: { id, name: item.name, isActive: false }, historyCounts };
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      action: result.action,
+      item: result.item,
+      reason: "reason" in result ? result.reason : null,
+      history_counts: result.historyCounts,
+    });
   } catch (error) {
     console.error("Error deleting inventory item:", error);
+    if (error instanceof Error && error.message === "Item not found") {
+      return NextResponse.json({ error: "Item not found" }, { status: 404 });
+    }
     return NextResponse.json(
       { error: "Failed to delete inventory item" },
       { status: 500 }

@@ -51,8 +51,9 @@ export function InvoicesTab({
 }: InvoicesTabProps) {
   const [view, setView] = useState("all");
   const [loadingInvoiceId, setLoadingInvoiceId] = useState<string | null>(null);
-  const canEdit = role === "admin" || role === "moderator" || role === "superadmin";
-  const canDelete = role === "admin" || role === "superadmin";
+  const normalizedRole = (role || "").toLowerCase();
+  const canEdit = ["admin", "moderator", "superadmin"].includes(normalizedRole);
+  const canDelete = ["admin", "superadmin"].includes(normalizedRole);
   const visibleInvoices = invoices.filter((invoice) => {
     if (view === "manual") return !invoice.is_system_generated;
     if (view === "google") return invoice.is_system_generated && invoice.source_type !== "google_material_balance_adjustment";
@@ -106,11 +107,11 @@ export function InvoicesTab({
   };
 
   return (
-    <Card className="glass-card overflow-hidden border-border/40">
-      <CardHeader className="space-y-4">
+    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-sm">
+      <CardHeader className="space-y-4 border-b border-border/40 bg-muted/[0.12]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle className="text-base font-bold">Inventory receipts</CardTitle>
+            <CardTitle className="text-lg font-bold">Inventory receipts</CardTitle>
             <CardDescription>Manual receipts, free-issued materials, and sync history in one place.</CardDescription>
           </div>
           <Select value={view} onValueChange={setView}>
@@ -131,7 +132,7 @@ export function InvoicesTab({
           <span>Google Sheet records are locked and have no purchase cost</span>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 sm:p-5">
         {error ? (
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300" role="alert">{error}</div>
         ) : loadingData ? (

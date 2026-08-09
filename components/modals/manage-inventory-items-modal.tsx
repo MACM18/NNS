@@ -8,6 +8,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -24,42 +34,49 @@ interface InventoryItem {
   id: string;
   name: string;
   unit: string;
+  current_stock: number;
   reorder_level: number;
+  is_active?: boolean;
 }
 
 interface ManageInventoryItemsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userRole: string;
+  onSuccess?: () => void;
 }
 
 export function ManageInventoryItemsModal({
   open,
   onOpenChange,
   userRole,
+  onSuccess,
 }: ManageInventoryItemsModalProps) {
+  const canManageItems = ["admin", "moderator", "superadmin"].includes(userRole.toLowerCase());
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [newItem, setNewItem] = useState<Omit<InventoryItem, "id">>({
     name: "",
     unit: "",
+    current_stock: 0,
     reorder_level: 0,
+    is_active: true,
   });
+  const [statusFilter, setStatusFilter] = useState<"active" | "archived">("active");
+  const [itemPendingDelete, setItemPendingDelete] = useState<InventoryItem | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(5);
 
-  const totalPages = Math.ceil(items.length / pageSize);
-  const paginatedItems = items.slice((page - 1) * pageSize, page * pageSize);
-
-  useEffect(() => {
-    if (open) fetchItems();
-  }, [open]);
+  const visibleItems = items.filter((item) => statusFilter === "active" ? item.is_active !== false : item.is_active === false);
+  const totalPages = Math.ceil(visibleItems.length / pageSize);
+  const paginatedItems = visibleItems.slice((page - 1) * pageSize, page * pageSize);
 
   const fetchItems = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/inventory?all=true");
+      const response = await fetch("/api/inventory?all=true&includeInactive=true");
       if (!response.ok) throw new Error("Failed to fetch items");
       const result = await response.json();
       setItems((result.data as InventoryItem[]) || []);
@@ -95,7 +112,8 @@ export function ManageInventoryItemsModal({
       if (!response.ok) throw new Error("Failed to update item");
       toast({ title: "Item Updated" });
       setEditingItem(null);
-      fetchItems();
+      await fetchItems();
+      onSuccess?.();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -122,8 +140,9 @@ export function ManageInventoryItemsModal({
       });
       if (!response.ok) throw new Error("Failed to create item");
       toast({ title: "Item Added" });
-      setNewItem({ name: "", unit: "", reorder_level: 0 });
+      setNewItem({ name: "", unit: "", current_stock: 0, reorder_level: 0, is_active: true });
       fetchItems();
+      onSuccess?.();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -138,15 +157,41 @@ export function ManageInventoryItemsModal({
       const response = await fetch(`/api/inventory/${item.id}`, {
         method: "DELETE",
       });
-      if (!response.ok) throw new Error("Failed to delete item");
-      toast({ title: "Item Deleted" });
-      fetchItems();
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Failed to remove item");
+      toast({
+        title: result.action === "archived" ? "Item Archived" : "Item Deleted",
+        description: result.action === "archived"
+          ? "The item history was preserved and the item was hidden from active stock."
+          : "The unused item was permanently deleted.",
+      });
+      setDeleteDialogOpen(false);
+      setItemPendingDelete(null);
+      await fetchItems();
+      onSuccess?.();
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
+    }
+  };
+
+  const restoreItem = async (item: InventoryItem) => {
+    try {
+      const response = await fetch(`/api/inventory/${item.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: true }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Failed to restore item");
+      toast({ title: "Item Restored", description: `${item.name} is active again.` });
+      await fetchItems();
+      onSuccess?.();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
 
@@ -157,14 +202,19 @@ export function ManageInventoryItemsModal({
     }
   }, [open]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='max-w-2xl'>
         <DialogHeader>
           <DialogTitle>Manage Inventory Items</DialogTitle>
         </DialogHeader>
-        <div className='mb-4'>
-          <div className='flex gap-2 mb-2'>
+        <div className='mb-4 space-y-3'>
+          <div className='flex flex-col gap-2 sm:flex-row'>
             <Input
               placeholder='Name'
               value={newItem.name}
@@ -183,13 +233,27 @@ export function ManageInventoryItemsModal({
                 handleNewChange("reorder_level", Number(e.target.value))
               }
             />
+            <Input
+              placeholder='Initial Stock (can be negative)'
+              type='number'
+              step='any'
+              value={newItem.current_stock}
+              onChange={(e) => handleNewChange("current_stock", Number(e.target.value))}
+            />
             <Button
               onClick={saveNew}
-              disabled={userRole === "user"}
+              disabled={!canManageItems}
               variant='default'
             >
               <Plus className='h-4 w-4' />
             </Button>
+          </div>
+          <div className='flex items-center justify-between gap-2'>
+            <p className='text-xs text-muted-foreground'>Negative initial stock is allowed when it reflects a real opening balance.</p>
+            <div className='flex gap-1 rounded-lg border p-1'>
+              <Button size='sm' variant={statusFilter === "active" ? "secondary" : "ghost"} className='h-7 text-xs' onClick={() => setStatusFilter("active")}>Active</Button>
+              <Button size='sm' variant={statusFilter === "archived" ? "secondary" : "ghost"} className='h-7 text-xs' onClick={() => setStatusFilter("archived")}>Archived</Button>
+            </div>
           </div>
         </div>
         <div className='overflow-x-auto'>
@@ -198,14 +262,16 @@ export function ManageInventoryItemsModal({
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Unit</TableHead>
+                <TableHead>Stock</TableHead>
                 <TableHead>Reorder Level</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={4}>Loading...</TableCell>
+                    <TableCell colSpan={6}>Loading...</TableCell>
                 </TableRow>
               ) : (
                 paginatedItems.map((item) => (
@@ -250,6 +316,13 @@ export function ManageInventoryItemsModal({
                         item.reorder_level
                       )}
                     </TableCell>
+                    <TableCell className={item.current_stock < 0 ? "font-semibold text-destructive" : ""}>{item.current_stock} {item.unit}</TableCell>
+                    <TableCell>
+                      {item.reorder_level}
+                    </TableCell>
+                    <TableCell>
+                      {item.is_active === false ? <span className='rounded-full border border-muted-foreground/30 px-2 py-0.5 text-xs text-muted-foreground'>Archived</span> : item.current_stock < 0 ? <span className='rounded-full border border-destructive/30 px-2 py-0.5 text-xs text-destructive'>Negative stock</span> : <span className='rounded-full border border-emerald-500/30 px-2 py-0.5 text-xs text-emerald-600'>Active</span>}
+                    </TableCell>
                     <TableCell className='flex gap-2'>
                       {editingItem?.id === item.id ? (
                         <>
@@ -274,18 +347,21 @@ export function ManageInventoryItemsModal({
                             size='icon'
                             variant='outline'
                             onClick={() => handleEdit(item)}
-                            disabled={userRole === "user"}
+                            disabled={!canManageItems}
                           >
                             <Pencil className='h-4 w-4' />
                           </Button>
-                          {userRole === "admin" && (
+                          {canManageItems && item.is_active !== false && (
                             <Button
                               size='icon'
                               variant='destructive'
-                              onClick={() => handleDelete(item)}
+                              onClick={() => { setItemPendingDelete(item); setDeleteDialogOpen(true); }}
                             >
                               <Trash2 className='h-4 w-4' />
                             </Button>
+                          )}
+                          {canManageItems && item.is_active === false && (
+                            <Button size='sm' variant='outline' onClick={() => void restoreItem(item)}>Restore</Button>
                           )}
                         </>
                       )}
@@ -299,7 +375,7 @@ export function ManageInventoryItemsModal({
         {/* Pagination Controls */}
         <div className='flex justify-between items-center mt-4'>
           <span className='text-sm text-muted-foreground'>
-            Page {page} of {totalPages || 1}
+            Page {page} of {totalPages || 1} · {visibleItems.length} item{visibleItems.length === 1 ? "" : "s"}
           </span>
           <div className='flex gap-2'>
             <Button
@@ -326,6 +402,22 @@ export function ManageInventoryItemsModal({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove {itemPendingDelete?.name || "this item"}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            If this item has stock or historical records, it will be archived and all invoices, mappings, and stock history will remain available. Only an unused zero-stock item can be permanently deleted.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => itemPendingDelete && void handleDelete(itemPendingDelete)}>Remove item</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

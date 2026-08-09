@@ -261,6 +261,7 @@ model InventoryItem {
   currentStock Decimal  @default(0) @map("current_stock")
   drumSize     Decimal? @map("drum_size")
   reorderLevel Decimal  @default(0) @map("reorder_level")
+  isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -273,6 +274,8 @@ model InventoryItem {
   materialBalanceItems     MaterialBalanceItem[]
   materialBalanceMappings  MaterialBalanceItemMapping[]
   inventoryStockEvents     InventoryStockEvent[]
+
+  @@index([isActive])
 
   @@map("inventory_items")
 }

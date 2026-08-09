@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { BarChart3, Check, Package, Pencil, Search, SlidersHorizontal, X } from "lucide-react";
+import { BarChart3, Check, Package, Pencil, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ interface StockTabProps {
   error?: string;
   role: string | null;
   onEdit: (item: InventoryItem) => void;
+  onDelete?: (item: InventoryItem) => void;
   onAddReceipt?: () => void;
   onOpenMaterialBalance?: () => void;
   searchQuery: string;
@@ -48,6 +49,12 @@ function getStatusClasses(status: StockStatus) {
   return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
 }
 
+function getStatusAccent(status: StockStatus) {
+  if (status === "out" || status === "critical") return "bg-red-500";
+  if (status === "low") return "bg-amber-500";
+  return "bg-emerald-500";
+}
+
 function StockGauge({ item, status }: { item: InventoryItem; status: StockStatus }) {
   const percent = item.reorder_level > 0 ? Math.round((item.current_stock / item.reorder_level) * 100) : null;
   const width = percent === null ? (item.current_stock > 0 ? 100 : 0) : Math.max(0, Math.min(percent / 1.5, 100));
@@ -65,7 +72,8 @@ function StockGauge({ item, status }: { item: InventoryItem; status: StockStatus
   );
 }
 
-function StockStatusBadge({ status }: { status: StockStatus }) {
+function StockStatusBadge({ status, negative = false }: { status: StockStatus; negative?: boolean }) {
+  if (negative) return <Badge variant="outline" className="border-red-500/30 bg-red-500/10 font-semibold text-red-600 dark:text-red-400">Negative stock</Badge>;
   return <Badge variant="outline" className={`font-semibold ${getStatusClasses(status)}`}>{getStatusText(status)}</Badge>;
 }
 
@@ -75,6 +83,7 @@ export function StockTab({
   error,
   role,
   onEdit,
+  onDelete,
   onAddReceipt,
   onOpenMaterialBalance,
   searchQuery,
@@ -83,7 +92,7 @@ export function StockTab({
   setStatusFilter,
 }: StockTabProps) {
   const [sortMode, setSortMode] = useState<SortMode>("attention");
-  const canEditItems = role === "admin" || role === "moderator" || role === "superadmin";
+  const canEditItems = ["admin", "moderator", "superadmin"].includes((role || "").toLowerCase());
   const statusCounts = useMemo(() => inventoryItems.reduce<Record<StockStatus, number>>((counts, item) => {
     counts[getStockStatusKey(item)] += 1;
     return counts;
@@ -116,12 +125,12 @@ export function StockTab({
   };
 
   return (
-    <Card className="glass-card overflow-hidden border-border/40">
-      <CardHeader className="space-y-4">
+    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-sm">
+      <CardHeader className="space-y-5 border-b border-border/40 bg-muted/[0.12]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle className="text-base font-bold">Stock on hand</CardTitle>
-            <CardDescription>Current quantities compared with each item&apos;s reorder level.</CardDescription>
+            <CardTitle className="text-lg font-bold">Stock on hand</CardTitle>
+            <CardDescription>Search, review health, and manage each operational stock item.</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>{inventoryItems.length} item{inventoryItems.length === 1 ? "" : "s"}</span>
@@ -136,18 +145,18 @@ export function StockTab({
         </div>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
-            <div className="relative min-w-0 flex-1 sm:max-w-sm">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <div className="relative min-w-0 flex-1 sm:max-w-md">
+              <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <Input
-                placeholder="Search item name"
+                placeholder="Search materials and stock items"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                className="h-9 bg-background/50 pl-8"
+                className="h-11 rounded-xl bg-background/80 pl-9 shadow-sm"
                 aria-label="Search inventory items"
               />
             </div>
             <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-              <SelectTrigger className="h-9 w-full bg-background/50 sm:w-[170px]" aria-label="Sort stock items">
+              <SelectTrigger className="h-11 w-full rounded-xl bg-background/80 sm:w-[190px]" aria-label="Sort stock items">
                 <SlidersHorizontal className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
                 <SelectValue />
               </SelectTrigger>
@@ -159,13 +168,13 @@ export function StockTab({
             </Select>
           </div>
           {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 justify-start gap-1.5 px-2 text-muted-foreground sm:justify-center">
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-11 justify-start gap-1.5 rounded-xl px-3 text-muted-foreground sm:justify-center">
               <X className="h-3.5 w-3.5" aria-hidden="true" />
               Clear filters
             </Button>
           )}
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Stock status filters">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" role="group" aria-label="Stock status filters">
           {[
             ["all", "All", inventoryItems.length],
             ["attention", "Needs attention", statusCounts.out + statusCounts.critical + statusCounts.low],
@@ -174,32 +183,34 @@ export function StockTab({
             ["low", "Low", statusCounts.low],
             ["normal", "Normal", statusCounts.normal],
           ].map(([value, label, count]) => (
-            <Button
+            <button
               key={value}
               type="button"
-              size="sm"
-              variant={statusFilter === value ? "secondary" : "ghost"}
               onClick={() => setStatusFilter(String(value))}
-              className="h-8 shrink-0 gap-1.5 rounded-full px-3 text-xs"
+              className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${statusFilter === value ? "border-primary/30 bg-background shadow-sm" : "border-border/40 bg-background/35 hover:border-border hover:bg-background/60"}`}
               aria-pressed={statusFilter === value}
             >
-              {statusFilter === value && <Check className="h-3 w-3" aria-hidden="true" />}
-              {label}
-              <span className="text-muted-foreground">{count}</span>
-            </Button>
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 truncate text-[11px] font-semibold text-muted-foreground">
+                  {statusFilter === value && <Check className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />}
+                  {label}
+                </span>
+              </span>
+              <span className="text-lg font-black tabular-nums text-foreground">{count}</span>
+            </button>
           ))}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 sm:p-5">
         {error ? (
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300" role="alert">{error}</div>
         ) : loadingData ? (
           <TableSkeleton columns={5} rows={6} />
         ) : filteredItems.length > 0 ? (
           <>
-            <div className="hidden overflow-x-auto rounded-lg border md:block">
+            <div className="hidden overflow-x-auto rounded-2xl border border-border/50 md:block">
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-muted/30">
                   <TableRow>
                     <TableHead>Item</TableHead>
                     <TableHead>On hand</TableHead>
@@ -213,10 +224,13 @@ export function StockTab({
                   {filteredItems.map((item) => {
                     const status = getStockStatusKey(item);
                     return (
-                      <TableRow key={item.id} className="hover:bg-muted/30">
+                      <TableRow key={item.id} className="group hover:bg-muted/25">
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="rounded-md bg-muted/60 p-1.5 text-muted-foreground"><Package className="h-4 w-4" aria-hidden="true" /></div>
+                            <div className="relative rounded-lg bg-muted/60 p-2 text-muted-foreground">
+                              <Package className="h-4 w-4" aria-hidden="true" />
+                              <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${getStatusAccent(status)}`} aria-hidden="true" />
+                            </div>
                             <div>
                               <p className="font-semibold">{item.name}</p>
                               <p className="text-xs text-muted-foreground">Measured in {item.unit}</p>
@@ -233,11 +247,11 @@ export function StockTab({
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <StockGauge item={item} status={status} />
-                            <StockStatusBadge status={status} />
+                            <StockStatusBadge status={status} negative={item.current_stock < 0} />
                           </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{item.last_updated ? new Date(item.last_updated).toLocaleDateString() : "Not recorded"}</TableCell>
-                        {canEditItems && <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(item)} aria-label={`Edit ${item.name}`}><Pencil className="h-4 w-4" /></Button></TableCell>}
+                        {canEditItems && <TableCell className="text-right"><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(item)} aria-label={`Edit ${item.name}`}><Pencil className="h-4 w-4" /></Button>{onDelete && <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onDelete(item)} aria-label={`Remove ${item.name}`}><Trash2 className="h-4 w-4" /></Button>}</div></TableCell>}
                       </TableRow>
                     );
                   })}
@@ -248,13 +262,14 @@ export function StockTab({
               {filteredItems.map((item) => {
                 const status = getStockStatusKey(item);
                 return (
-                  <div key={item.id} className="rounded-xl border bg-card/60 p-4 shadow-sm">
+                  <div key={item.id} className="relative overflow-hidden rounded-2xl border bg-card/70 p-4 pl-5 shadow-sm">
+                    <span className={`absolute inset-y-0 left-0 w-1 ${getStatusAccent(status)}`} aria-hidden="true" />
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate font-semibold">{item.name}</p>
                         <p className="text-xs text-muted-foreground">Reorder at {item.reorder_level || 0} {item.unit}</p>
                       </div>
-                      <StockStatusBadge status={status} />
+                      <StockStatusBadge status={status} negative={item.current_stock < 0} />
                     </div>
                     <div className="mt-4 flex items-end justify-between gap-3">
                       <div>
@@ -265,7 +280,7 @@ export function StockTab({
                     </div>
                     <div className="mt-3 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
                       <span>Updated {item.last_updated ? new Date(item.last_updated).toLocaleDateString() : "not recorded"}</span>
-                      {canEditItems && <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => onEdit(item)}><Pencil className="h-3.5 w-3.5" />Edit</Button>}
+                      {canEditItems && <div className="flex gap-1.5"><Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => onEdit(item)}><Pencil className="h-3.5 w-3.5" />Edit</Button>{onDelete && <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onDelete(item)} aria-label={`Remove ${item.name}`}><Trash2 className="h-4 w-4" /></Button>}</div>}
                     </div>
                   </div>
                 );

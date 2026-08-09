@@ -505,6 +505,10 @@ const DEFAULT_ALIASES: Record<string, string> = {
   facconnect: "fac",
   uclip: "uclip",
   concretenail1: "concretenail",
+  rj45: "rj45",
+  rj11: "rj11",
+  cabletie6: "ctie",
+  topbolt: "topbolt",
 };
 
 export function resolveTargetKey(sourceName: string): string {
@@ -535,8 +539,44 @@ function displayMaterialName(sourceName: string): string {
   return trimmed;
 }
 
-function materialUnit(sourceUnit: string | null | undefined): string {
-  return sourceUnit?.trim() || "pcs";
+function materialUnit(sourceUnit: string | null | undefined, sourceName?: string): string {
+  if (sourceUnit?.trim()) return sourceUnit.trim();
+  const marker = sourceName?.match(/\(([^)]+)\)\s*$/)?.[1]?.trim().toLowerCase();
+  if (marker === "m" || marker === "meter" || marker === "meters") return "m";
+  if (marker === "km") return "km";
+  if (marker === "kg") return "kg";
+  return "pcs";
+}
+
+/**
+ * A source row is eligible for automatic inventory creation only when it
+ * carries useful stock information. Existing mapped rows are handled
+ * separately so a previously configured zero-stock item is not removed from
+ * the catalog just because the sheet is currently empty.
+ */
+export function shouldImportMaterialBalanceItem(
+  dailyItem: ParsedMaterialBalanceItem | undefined,
+  monthlyItem: ParsedMaterialBalanceMonthItem | null,
+): boolean {
+  if (monthlyItem && Math.abs(monthlyItem.endingWip) > 0.01) return true;
+  if (dailyItem && Math.abs(dailyItem.totalIssued) > 0.01) return true;
+  return Boolean(dailyItem?.dailyEntries.some((entry) => Math.abs(entry.issued) > 0.01));
+}
+
+function normalizedUnit(value: string | null | undefined): string | null {
+  const unit = value?.trim().toLowerCase();
+  if (!unit) return null;
+  if (["nos", "no", "pcs", "pc", "piece", "pieces", "unit", "units"].includes(unit)) return "pcs";
+  if (["m", "meter", "meters", "metre", "metres"].includes(unit)) return "m";
+  if (["km", "kilometer", "kilometers", "kilometre", "kilometres"].includes(unit)) return "km";
+  if (["kg", "kilogram", "kilograms"].includes(unit)) return "kg";
+  return unit;
+}
+
+function unitsMatch(sourceUnit: string | null | undefined, inventoryUnit: string | null | undefined): boolean {
+  const source = normalizedUnit(sourceUnit);
+  if (!source) return true;
+  return source === normalizedUnit(inventoryUnit);
 }
 
 async function resolveInventoryMappings(tx: DbClient) {
@@ -556,12 +596,25 @@ async function getOrCreateInventoryItem(
   sourceItemName: string,
   sourceUnit: string | null,
 ) {
-  const name = displayMaterialName(sourceItemName);
+  const baseName = displayMaterialName(sourceItemName);
   const existing = await tx.inventoryItem.findUnique({
-    where: { name },
+    where: { name: baseName },
     select: { id: true, name: true, unit: true, currentStock: true },
   });
-  if (existing) return { item: existing, created: false };
+  if (existing && unitsMatch(sourceUnit, existing.unit)) return { item: existing, created: false };
+
+  // A same-name row with a different unit is a distinct material. Keep the
+  // unit in the generated name rather than silently merging unlike stock.
+  const suffix = (sourceUnit || materialUnit(sourceUnit, sourceItemName)).trim() || "pcs";
+  let name = existing ? `${baseName} (${suffix})` : baseName;
+  let collision = existing ? await tx.inventoryItem.findUnique({ where: { name }, select: { id: true, name: true, unit: true, currentStock: true } }) : null;
+  let sequence = 2;
+  while (collision && !unitsMatch(sourceUnit, collision.unit)) {
+    name = `${baseName} (${suffix}) ${sequence}`;
+    collision = await tx.inventoryItem.findUnique({ where: { name }, select: { id: true, name: true, unit: true, currentStock: true } });
+    sequence += 1;
+  }
+  if (collision) return { item: collision, created: false };
 
   // The unique name constraint arbitrates concurrent syncs without leaving
   // the interactive transaction in an aborted state after a P2002 error.
@@ -570,7 +623,7 @@ async function getOrCreateInventoryItem(
     update: {},
     create: {
       name,
-      unit: materialUnit(sourceUnit),
+      unit: materialUnit(sourceUnit, sourceItemName),
       currentStock: 0,
       reorderLevel: 0,
     },
@@ -1054,7 +1107,10 @@ async function reconcileExistingImport(input: {
           || mappings.configured.get(resolveTargetKey(snapshot.sourceItemName));
         inventoryItem = configuredId
           ? mappings.inventoryItems.find((candidate) => candidate.id === configuredId) || null
-          : mappings.byName.get(resolveTargetKey(snapshot.sourceItemName)) || null;
+          : (() => {
+              const candidate = mappings.byName.get(resolveTargetKey(snapshot.sourceItemName));
+              return candidate && unitsMatch(snapshot.sourceUnit, candidate.unit) ? candidate : null;
+            })();
         if (!inventoryItem) {
           const created = await getOrCreateInventoryItem(tx, snapshot.sourceItemName, snapshot.sourceUnit);
           inventoryItem = created.item;
@@ -1309,7 +1365,22 @@ export async function importMaterialBalanceValues(input: {
     const mappings = await resolveInventoryMappings(tx);
     const monthlyByName = new Map((monthlyParsed?.items || []).map((item) => [item.normalizedSourceName, item]));
     const dailyByName = new Map(parsed.items.map((item) => [item.normalizedSourceName, item]));
-    const names = new Set([...dailyByName.keys(), ...monthlyByName.keys()]);
+    const allNames = new Set([...dailyByName.keys(), ...monthlyByName.keys()]);
+    const names = new Set(
+      Array.from(allNames).filter((normalizedSourceName) => {
+        const dailyItem = dailyByName.get(normalizedSourceName);
+        const monthlyItem = monthlyByName.get(normalizedSourceName) || null;
+        if (shouldImportMaterialBalanceItem(dailyItem, monthlyItem)) return true;
+
+        // Keep already-known zero-stock items in sync, but do not create new
+        // catalog rows for source materials that are entirely zero.
+        const sourceItemName = dailyItem?.sourceItemName || monthlyItem?.sourceItemName || normalizedSourceName;
+        const configuredId = mappings.configured.get(normalizedSourceName)
+          || mappings.configured.get(resolveTargetKey(sourceItemName));
+        const existing = mappings.byName.get(resolveTargetKey(sourceItemName));
+        return Boolean(configuredId || (existing && unitsMatch(dailyItem?.sourceUnit || null, existing.unit)));
+      }),
+    );
     const mappedInventoryIds = new Set<string>();
     const prepared: PreparedMaterialItem[] = [];
 
@@ -1321,7 +1392,10 @@ export async function importMaterialBalanceValues(input: {
       const targetKey = resolveTargetKey(sourceItemName);
       let inventoryItem = configuredId
         ? mappings.inventoryItems.find((candidate) => candidate.id === configuredId)
-        : mappings.byName.get(targetKey);
+        : (() => {
+            const candidate = mappings.byName.get(targetKey);
+            return candidate && unitsMatch(dailyItem?.sourceUnit || null, candidate.unit) ? candidate : undefined;
+          })();
       let autoCreated = false;
       if (!inventoryItem) {
         const created = await getOrCreateInventoryItem(tx, sourceItemName, dailyItem?.sourceUnit || null);

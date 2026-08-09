@@ -10,10 +10,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Get total inventory items count
-    const totalItems = await prisma.inventoryItem.count();
+    const activeWhere = { isActive: true };
+    const totalItems = await prisma.inventoryItem.count({ where: activeWhere });
 
     // Get low stock items count (where current_stock <= reorder_level)
     const lowStockItems = await prisma.inventoryItem.findMany({
+      where: activeWhere,
       select: { id: true, currentStock: true, reorderLevel: true },
     });
 
@@ -45,6 +47,7 @@ export async function GET(req: NextRequest) {
     });
 
     const totalStockData = await prisma.inventoryItem.aggregate({
+      where: activeWhere,
       _sum: { currentStock: true },
     });
 

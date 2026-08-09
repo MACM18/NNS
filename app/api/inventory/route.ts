@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+const INVENTORY_MANAGER_ROLES = ["admin", "moderator", "superadmin"];
+
+async function getInventoryProfile() {
+  const session = await auth();
+  if (!session?.user) return null;
+  return prisma.profile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, role: true },
+  });
+}
+
+function canManageInventory(role: string | null | undefined) {
+  return INVENTORY_MANAGER_ROLES.includes((role || "").toLowerCase());
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -15,9 +30,17 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category");
     const search = searchParams.get("search");
     const all = searchParams.get("all");
+    const includeInactive = searchParams.get("includeInactive") === "true";
+
+    if (includeInactive) {
+      const profile = await getInventoryProfile();
+      if (!canManageInventory(profile?.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
 
     // Build where clause
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = includeInactive ? {} : { isActive: true };
 
     if (category) {
       where.category = category;
@@ -56,6 +79,7 @@ export async function GET(req: NextRequest) {
             ? Number(it.drumSize)
             : null,
         reorder_level: Number(it.reorderLevel ?? 0),
+        is_active: it.isActive,
         created_at: it.createdAt?.toISOString(),
         updated_at: it.updatedAt?.toISOString(),
         inventory_invoice_items: includeRelations
@@ -115,6 +139,7 @@ export async function GET(req: NextRequest) {
           ? Number(it.drumSize)
           : null,
       reorder_level: Number(it.reorderLevel ?? 0),
+      is_active: it.isActive,
       created_at: it.createdAt?.toISOString(),
       updated_at: it.updatedAt?.toISOString(),
       inventory_invoice_items: includeRelations
@@ -163,27 +188,36 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
+    const profile = await getInventoryProfile();
+    if (!profile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!canManageInventory(profile.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await req.json();
 
     // Whitelist supported fields (snake_case accepted)
-    const name = body.name;
-    const unit = body.unit;
-    const current_stock = body.current_stock ?? body.currentStock ?? 0;
+    const name = String(body.name ?? "").trim();
+    const unit = String(body.unit ?? "pcs").trim() || "pcs";
+    const current_stock = Number(body.current_stock ?? body.currentStock ?? 0);
     const drum_size = body.drum_size ?? body.drumSize ?? undefined;
-    const reorder_level = body.reorder_level ?? body.reorderLevel ?? 0;
+    const reorder_level = Number(body.reorder_level ?? body.reorderLevel ?? 0);
+
+    if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    if (!Number.isFinite(current_stock)) return NextResponse.json({ error: "Current stock must be a finite number" }, { status: 400 });
+    if (!Number.isFinite(reorder_level) || reorder_level < 0) {
+      return NextResponse.json({ error: "Reorder level must be a non-negative finite number" }, { status: 400 });
+    }
 
     const item = await prisma.inventoryItem.create({
       data: {
         name,
         unit,
-        currentStock: Number(current_stock || 0),
+        currentStock: current_stock,
         drumSize: drum_size !== undefined ? Number(drum_size) : undefined,
-        reorderLevel: Number(reorder_level || 0),
+        reorderLevel: reorder_level,
       },
     });
 
@@ -197,6 +231,7 @@ export async function POST(req: NextRequest) {
           ? Number(item.drumSize)
           : null,
       reorder_level: Number(item.reorderLevel ?? 0),
+      is_active: item.isActive,
       created_at: item.createdAt?.toISOString(),
       updated_at: item.updatedAt?.toISOString(),
     };

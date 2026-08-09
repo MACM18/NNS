@@ -123,7 +123,7 @@ export function MaterialBalanceTab() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-blue-200/70 bg-blue-50/40 dark:border-blue-900/50 dark:bg-blue-950/20">
+      <Card className="relative overflow-hidden rounded-2xl border-blue-200/70 bg-gradient-to-r from-blue-50/70 via-blue-50/30 to-transparent shadow-sm dark:border-blue-900/50 dark:from-blue-950/30 dark:via-blue-950/10">
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <LockKeyhole className="mt-0.5 h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -140,17 +140,17 @@ export function MaterialBalanceTab() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="overflow-hidden rounded-3xl border-border/40 shadow-sm">
+        <CardHeader className="gap-4 border-b border-border/40 bg-muted/[0.12] sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Google Sheet Material Balance</CardTitle>
+            <CardTitle className="text-lg">Google Sheet Material Balance</CardTitle>
             <CardDescription>Imported stock balances, daily issuance, usage, and returns.</CardDescription>
           </div>
           <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing} className="gap-2">
             <RefreshCw className={refreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />Reload imported data
           </Button>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5 p-4 sm:p-5">
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1.5 text-sm">
               <span className="font-medium">Connected sheet</span>
