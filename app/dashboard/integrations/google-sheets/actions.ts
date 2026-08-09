@@ -7,6 +7,7 @@ import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
 import {
   importMaterialBalanceValues,
   MATERIAL_BALANCE_TAB,
+  MATERIAL_BALANCE_MONTH_TAB,
   type MaterialBalanceImportResult,
 } from "@/lib/material-balance-service";
 import {
@@ -289,6 +290,14 @@ export async function syncConnection(
       unmappedItemCount: 0,
       updatedStockCount: 0,
       dailyEntryCount: 0,
+      dailyIssueInvoiceCount: 0,
+      correctionInvoiceCount: 0,
+      reconciliationCount: 0,
+      monthlySourceTab: MATERIAL_BALANCE_MONTH_TAB,
+      monthlyChecksum: null,
+      monthlyItemCount: 0,
+      stockChanges: [],
+      dashboardChangesDetected: false,
       warnings: [],
       discrepancies: [],
     };
@@ -298,13 +307,24 @@ export async function syncConnection(
     // application's operational stock and never writes to the spreadsheet.
     if (availableTabs.includes(MATERIAL_BALANCE_TAB)) {
       progress(`Reading ${MATERIAL_BALANCE_TAB} tab`);
-      const materialBalanceRes = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: `'${MATERIAL_BALANCE_TAB}'!A:ZZ`,
-        valueRenderOption: "UNFORMATTED_VALUE",
-        dateTimeRenderOption: "SERIAL_NUMBER",
-      });
+      const [materialBalanceRes, monthlyMaterialBalanceRes] = await Promise.all([
+        sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'${MATERIAL_BALANCE_TAB}'!A:ZZ`,
+          valueRenderOption: "UNFORMATTED_VALUE",
+          dateTimeRenderOption: "SERIAL_NUMBER",
+        }),
+        availableTabs.includes(MATERIAL_BALANCE_MONTH_TAB)
+          ? sheets.spreadsheets.values.get({
+              spreadsheetId,
+              range: `'${MATERIAL_BALANCE_MONTH_TAB}'!A:ZZ`,
+              valueRenderOption: "UNFORMATTED_VALUE",
+              dateTimeRenderOption: "SERIAL_NUMBER",
+            })
+          : Promise.resolve({ data: { values: [] } }),
+      ]);
       const materialBalanceValues = materialBalanceRes.data.values || [];
+      const monthlyMaterialBalanceValues = monthlyMaterialBalanceRes.data.values || [];
       if (materialBalanceValues.length > 0) {
         const profile = await prisma.profile.findUnique({
           where: { userId: authCtx.userId },
@@ -317,6 +337,9 @@ export async function syncConnection(
             month,
             year,
             values: materialBalanceValues as unknown[][],
+            monthlyValues: monthlyMaterialBalanceValues.length > 0
+              ? monthlyMaterialBalanceValues as unknown[][]
+              : undefined,
             createdById: profile?.id || null,
           });
           progress(
@@ -853,6 +876,14 @@ export async function syncConnection(
               unmappedItemCount: materialBalanceResult.unmappedItemCount,
               updatedStockCount: materialBalanceResult.updatedStockCount,
               dailyEntryCount: materialBalanceResult.dailyEntryCount,
+              dailyIssueInvoiceCount: materialBalanceResult.dailyIssueInvoiceCount,
+              correctionInvoiceCount: materialBalanceResult.correctionInvoiceCount,
+              reconciliationCount: materialBalanceResult.reconciliationCount,
+              monthlySourceTab: materialBalanceResult.monthlySourceTab,
+              monthlyChecksum: materialBalanceResult.monthlyChecksum,
+              monthlyItemCount: materialBalanceResult.monthlyItemCount,
+              dashboardChangesDetected: materialBalanceResult.dashboardChangesDetected,
+              stockChanges: materialBalanceResult.stockChanges,
               warnings: materialBalanceResult.warnings,
               discrepancies: materialBalanceResult.discrepancies,
               importedAt: materialBalanceResult.importedAt,

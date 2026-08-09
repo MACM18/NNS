@@ -48,6 +48,10 @@ interface SyncFinalResult {
     mappedItemCount?: number;
     unmappedItemCount?: number;
     updatedStockCount?: number;
+    dailyIssueInvoiceCount?: number;
+    correctionInvoiceCount?: number;
+    reconciliationCount?: number;
+    dashboardChangesDetected?: boolean;
     sourceDayCount?: number;
     warnings?: string[];
     discrepancies?: unknown[];
@@ -82,6 +86,10 @@ function normalizeFinalResult(result: unknown): SyncFinalResult | null {
           mappedItemCount: toOptionalNumber(result.materialBalance.mappedItemCount),
           unmappedItemCount: toOptionalNumber(result.materialBalance.unmappedItemCount),
           updatedStockCount: toOptionalNumber(result.materialBalance.updatedStockCount),
+          dailyIssueInvoiceCount: toOptionalNumber(result.materialBalance.dailyIssueInvoiceCount),
+          correctionInvoiceCount: toOptionalNumber(result.materialBalance.correctionInvoiceCount),
+          reconciliationCount: toOptionalNumber(result.materialBalance.reconciliationCount),
+          dashboardChangesDetected: result.materialBalance.dashboardChangesDetected === true,
           sourceDayCount: toOptionalNumber(result.materialBalance.sourceDayCount),
           warnings: Array.isArray(result.materialBalance.warnings)
             ? result.materialBalance.warnings.filter((warning): warning is string => typeof warning === "string")
@@ -491,6 +499,18 @@ export default function SyncSheetButton({
                       <span className='font-medium'>{finalResult.materialBalance.updatedStockCount ?? 0}</span>
                     </div>
                     <div>
+                      <span className='text-muted-foreground'>Issue Invoices:</span>{" "}
+                      <span className='font-medium'>{finalResult.materialBalance.dailyIssueInvoiceCount ?? 0}</span>
+                    </div>
+                    <div>
+                      <span className='text-muted-foreground'>Reconciliations:</span>{" "}
+                      <span className='font-medium'>{finalResult.materialBalance.reconciliationCount ?? 0}</span>
+                    </div>
+                    <div>
+                      <span className='text-muted-foreground'>Corrections:</span>{" "}
+                      <span className='font-medium'>{finalResult.materialBalance.correctionInvoiceCount ?? 0}</span>
+                    </div>
+                    <div>
                       <span className='text-muted-foreground'>Unmapped:</span>{" "}
                       <span className='font-medium'>{finalResult.materialBalance.unmappedItemCount ?? 0}</span>
                     </div>
@@ -500,6 +520,11 @@ export default function SyncSheetButton({
                         {finalResult.materialBalance.status || 'unknown'}
                       </span>
                     </div>
+                    {finalResult.materialBalance.dashboardChangesDetected && (
+                      <div className="col-span-2 text-amber-600">
+                        Dashboard stock changes were detected and reconciled to the current sheet.
+                      </div>
+                    )}
                   </>
                 )}
               </div>

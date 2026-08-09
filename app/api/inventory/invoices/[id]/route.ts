@@ -52,6 +52,11 @@ export async function GET(
       drawn_by: invoice.drawnBy || "",
       total_items: Number(invoice.totalItems || 0),
       status: invoice.status,
+      source_type: invoice.sourceType || null,
+      source_key: invoice.sourceKey || null,
+      material_balance_import_id: invoice.materialBalanceImportId || null,
+      source_date: invoice.sourceDate?.toISOString().slice(0, 10) || null,
+      is_system_generated: invoice.isSystemGenerated,
       created_at: invoice.createdAt?.toISOString(),
       updated_at: invoice.updatedAt?.toISOString(),
       items: formattedItems,
@@ -86,6 +91,20 @@ export async function DELETE(
     }
 
     const { id } = await params;
+
+    const targetInvoice = await prisma.inventoryInvoice.findUnique({
+      where: { id },
+      select: { isSystemGenerated: true },
+    });
+    if (!targetInvoice) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+    if (targetInvoice.isSystemGenerated) {
+      return NextResponse.json(
+        { error: "System-generated Material Balance invoices cannot be deleted; create a correction through the next sync" },
+        { status: 409 },
+      );
+    }
 
     // Delete in transaction to ensure consistency
     await prisma.$transaction(async (tx: any) => {
@@ -157,6 +176,20 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
+
+    const targetInvoice = await prisma.inventoryInvoice.findUnique({
+      where: { id },
+      select: { isSystemGenerated: true },
+    });
+    if (!targetInvoice) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+    if (targetInvoice.isSystemGenerated) {
+      return NextResponse.json(
+        { error: "System-generated Material Balance invoices cannot be edited; create a correction through the next sync" },
+        { status: 409 },
+      );
+    }
 
     const allowedFields = [
       "invoiceNumber",

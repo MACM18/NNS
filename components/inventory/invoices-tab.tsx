@@ -4,6 +4,7 @@ import React from "react";
 import { Eye, Pencil, Trash, Package } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import { InventoryInvoice, InventoryInvoiceItem } from "@/app/dashboard/inventory/page";
@@ -79,7 +80,14 @@ export function InvoicesTab({
                       <React.Fragment key={invoice.id}>
                         <TableRow className="hover:bg-muted/30 transition-colors">
                           <TableCell className="font-mono text-sm font-semibold">
-                            {invoice.invoice_number}
+                            <div className="flex flex-col items-start gap-1">
+                              <span>{invoice.invoice_number}</span>
+                              {invoice.is_system_generated && (
+                                <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-600 bg-blue-500/5">
+                                  Free-issued / Google Sheet
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>{invoice.warehouse}</TableCell>
                           <TableCell>
@@ -108,7 +116,7 @@ export function InvoicesTab({
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              {(role === "admin" || role === "moderator") && (
+                              {!invoice.is_system_generated && (role === "admin" || role === "moderator") && (
                                 <Button
                                   size="sm"
                                   variant="secondary"
@@ -118,7 +126,7 @@ export function InvoicesTab({
                                   Edit
                                 </Button>
                               )}
-                              {role === "admin" && (
+                              {!invoice.is_system_generated && role === "admin" && (
                                 <Button
                                   size="sm"
                                   variant="destructive"

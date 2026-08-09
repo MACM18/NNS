@@ -64,6 +64,16 @@ export async function PATCH(
     if (!existing || existing.invoiceId !== id) {
       return NextResponse.json({ error: "Invoice item not found" }, { status: 404 });
     }
+    const parentInvoice = await prisma.inventoryInvoice.findUnique({
+      where: { id },
+      select: { isSystemGenerated: true },
+    });
+    if (parentInvoice?.isSystemGenerated) {
+      return NextResponse.json(
+        { error: "Items on system-generated Material Balance invoices cannot be edited" },
+        { status: 409 },
+      );
+    }
     const newQuantity = Number(body.quantity_issued ?? body.quantityIssued ?? 0);
     const oldQuantity = Number(existing.quantityIssued ?? 0);
 
@@ -133,6 +143,16 @@ export async function DELETE(
     const existing = await prisma.inventoryInvoiceItem.findUnique({ where: { id: itemId } });
     if (!existing || existing.invoiceId !== id) {
       return NextResponse.json({ error: "Invoice item not found" }, { status: 404 });
+    }
+    const parentInvoice = await prisma.inventoryInvoice.findUnique({
+      where: { id },
+      select: { isSystemGenerated: true },
+    });
+    if (parentInvoice?.isSystemGenerated) {
+      return NextResponse.json(
+        { error: "Items on system-generated Material Balance invoices cannot be deleted" },
+        { status: 409 },
+      );
     }
     await prisma.$transaction(async (tx) => {
       if (existing.itemId) {

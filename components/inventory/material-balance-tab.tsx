@@ -112,7 +112,7 @@ export function MaterialBalanceTab() {
       .some((value) => value < 0)
   ).length;
   const conflictCount = (importData?.items || []).filter((item) =>
-    item.inventoryItem?.lastStockEvent && item.inventoryItem.lastStockEvent.sourceType !== "google_material_balance"
+    item.inventoryItem?.lastStockEvent && !item.inventoryItem.lastStockEvent.sourceType.startsWith("google_material_balance")
   ).length;
   const totalIssued = (importData?.items || []).reduce((sum, item) => sum + item.totalIssued, 0);
   const totalUsage = (importData?.items || []).reduce((sum, item) => sum + item.totalUsage, 0);
@@ -179,7 +179,7 @@ export function MaterialBalanceTab() {
 
           {selectedConnection && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="outline">Source tab: Material Balance</Badge>
+              <Badge variant="outline">Source tabs: Material Balance + Month-end</Badge>
               <Badge variant="outline">Connection: {selectedConnection.status}</Badge>
               {importData?.importedAt && <span>Last imported {new Date(importData.importedAt).toLocaleString()}</span>}
             </div>
@@ -193,20 +193,24 @@ export function MaterialBalanceTab() {
             </div>
           ) : (
             <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-8">
                 <Metric label="Items" value={importData.itemCount} />
                 <Metric label="Stock updated" value={importData.updatedStockCount} />
+                <Metric label="Issue invoices" value={importData.dailyIssueInvoiceCount} />
+                <Metric label="Corrections" value={importData.correctionInvoiceCount} />
+                <Metric label="Reconciliations" value={importData.reconciliationCount} />
                 <Metric label="Issued" value={formatNumber(totalIssued)} />
                 <Metric label="Usage" value={formatNumber(totalUsage)} />
                 <Metric label="Returned" value={formatNumber(totalReturned)} />
               </div>
 
-              {(negativeCount > 0 || importData.warnings.length > 0 || conflictCount > 0) && (
+              {(negativeCount > 0 || importData.warnings.length > 0 || conflictCount > 0 || importData.discrepancies.length > 0) && (
                 <div className="space-y-2 rounded-lg border border-amber-300/70 bg-amber-50/60 p-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20">
                   <div className="flex items-center gap-2 font-semibold text-amber-800 dark:text-amber-300"><AlertTriangle className="h-4 w-4" />Review required</div>
                   <ul className="list-disc space-y-1 pl-5 text-amber-800/90 dark:text-amber-200/90">
                     {negativeCount > 0 && <li>{negativeCount} item(s) contain negative balances from the source sheet.</li>}
                     {conflictCount > 0 && <li>{conflictCount} mapped item(s) were changed by another app stock operation after the last sheet import.</li>}
+                    {importData.discrepancies.length > 0 && <li>{importData.discrepancies.length} daily/month-end reconciliation discrepancy(ies) were recorded without changing the source values.</li>}
                     {importData.warnings.slice(0, 3).map((warning) => <li key={warning}>{warning}</li>)}
                   </ul>
                 </div>
@@ -223,6 +227,7 @@ export function MaterialBalanceTab() {
                       <TableHead className="text-right">Usage</TableHead>
                       <TableHead className="text-right">Return</TableHead>
                       <TableHead className="text-right">Closing</TableHead>
+                      <TableHead className="text-right">Ending WIP</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -238,6 +243,7 @@ export function MaterialBalanceTab() {
                           <TableCell className="text-right">{formatNumber(day?.usage ?? item.totalUsage)}</TableCell>
                           <TableCell className="text-right">{formatNumber(day?.balanceReturn ?? item.totalReturned)}</TableCell>
                           <TableCell className="text-right font-semibold">{formatNumber(day?.closingBalance ?? item.finalBalance)}</TableCell>
+                          <TableCell className="text-right font-semibold">{item.monthEndingWip == null ? "—" : formatNumber(item.monthEndingWip)}</TableCell>
                           <TableCell>{statusBadge(item.status)}</TableCell>
                         </TableRow>
                       );
