@@ -66,6 +66,8 @@ export interface MaterialBalanceImport {
   unmappedItemCount: number;
   updatedStockCount: number;
   dailyIssueInvoiceCount: number;
+  dailyIssueInvoiceUpdateCount: number;
+  dailyIssueInvoiceReversalCount: number;
   correctionInvoiceCount: number;
   reconciliationCount: number;
   monthlySourceTab: string;

@@ -69,6 +69,8 @@ interface SyncLog {
       unmappedItemCount?: number;
       updatedStockCount?: number;
       dailyIssueInvoiceCount?: number;
+      dailyIssueInvoiceUpdateCount?: number;
+      dailyIssueInvoiceReversalCount?: number;
       correctionInvoiceCount?: number;
       reconciliationCount?: number;
       sourceDayCount?: number;
@@ -451,6 +453,18 @@ export default function ConnectionLogsPage() {
                         <div className="text-xs font-bold text-blue-700 uppercase tracking-wide text-[9px]">Issue Invoices</div>
                         <div className="text-lg font-bold text-blue-600 mt-0.5">
                           {expandedLog.details.materialBalance?.dailyIssueInvoiceCount || 0}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-indigo-200/60 bg-indigo-50/50 p-3 dark:border-indigo-900/40 dark:bg-indigo-950/20">
+                        <div className="text-xs font-bold text-indigo-700 uppercase tracking-wide text-[9px]">Updated Daily</div>
+                        <div className="text-lg font-bold text-indigo-600 mt-0.5">
+                          {expandedLog.details.materialBalance?.dailyIssueInvoiceUpdateCount || 0}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200/60 bg-slate-50/50 p-3 dark:border-slate-800/40 dark:bg-slate-950/20">
+                        <div className="text-xs font-bold text-slate-700 uppercase tracking-wide text-[9px]">Reversed Daily</div>
+                        <div className="text-lg font-bold text-slate-600 mt-0.5">
+                          {expandedLog.details.materialBalance?.dailyIssueInvoiceReversalCount || 0}
                         </div>
                       </div>
                       <div className="border border-muted/80 rounded px-2.5 py-1.5 bg-card/60">

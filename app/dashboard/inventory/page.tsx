@@ -64,7 +64,14 @@ export interface InventoryInvoice {
   material_balance_import_id?: string | null;
   source_date?: string | null;
   is_system_generated?: boolean;
+  canonical_day_status?: string | null;
+  latest_import_reference?: string | null;
+  source_connection_id?: string | null;
+  last_synced_at?: string | null;
+  revision_count?: number;
+  locked?: boolean;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface InventoryItem {
@@ -217,10 +224,16 @@ export default function InventoryPage() {
 
   const fetchInvoices = async () => {
     try {
-      const response = await fetch("/api/inventory/invoices?limit=10");
-      if (!response.ok) throw new Error("Failed to fetch invoices");
-      const result = await response.json();
-      setInvoices(result.data || []);
+      const [operationalResponse, historyResponse] = await Promise.all([
+        fetch("/api/inventory/invoices?limit=50&view=operational"),
+        fetch("/api/inventory/invoices?limit=100&view=history"),
+      ]);
+      if (!operationalResponse.ok || !historyResponse.ok) throw new Error("Failed to fetch invoices");
+      const [operational, history] = await Promise.all([
+        operationalResponse.json(),
+        historyResponse.json(),
+      ]);
+      setInvoices([...(operational.data || []), ...(history.data || [])]);
     } catch (error) {
       console.error("Error fetching invoices:", error);
     }
@@ -331,6 +344,10 @@ export default function InventoryPage() {
             Inactive
           </Badge>
         );
+      case "reversed":
+        return <Badge variant="outline" className="bg-slate-500/10 text-slate-600 border-slate-500/20">Reversed</Badge>;
+      case "superseded":
+        return <Badge variant="outline" className="bg-muted text-muted-foreground border-border">Historical revision</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }

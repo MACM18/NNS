@@ -802,6 +802,8 @@ model MaterialBalanceImport {
   unmappedItemCount Int      @default(0) @map("unmapped_item_count")
   updatedStockCount Int      @default(0) @map("updated_stock_count")
   dailyIssueInvoiceCount Int @default(0) @map("daily_issue_invoice_count")
+  dailyIssueInvoiceUpdateCount Int @default(0) @map("daily_issue_invoice_update_count")
+  dailyIssueInvoiceReversalCount Int @default(0) @map("daily_issue_invoice_reversal_count")
   correctionInvoiceCount Int @default(0) @map("correction_invoice_count")
   reconciliationCount Int    @default(0) @map("reconciliation_count")
   monthlySourceTab  String?  @map("monthly_source_tab")

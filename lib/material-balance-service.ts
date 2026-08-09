@@ -87,6 +87,8 @@ export interface MaterialBalanceImportResult {
   updatedStockCount: number;
   dailyEntryCount: number;
   dailyIssueInvoiceCount: number;
+  dailyIssueInvoiceUpdateCount: number;
+  dailyIssueInvoiceReversalCount: number;
   correctionInvoiceCount: number;
   reconciliationCount: number;
   monthlySourceTab: string;
@@ -491,26 +493,55 @@ export function parseMaterialBalanceValues(
 const DEFAULT_ALIASES: Record<string, string> = {
   chook: "chook",
   lhook: "lhook",
-  nutandbolt: "nutandbolt",
+  nutandbolt: "nutbolt",
   nutbolt: "nutbolt",
   protector: "protector",
   dropwirem: "dropwirecable",
   internalwirem: "internalwire",
   fiberdropwirem: "fiberdropwire",
   fiberrosettebox: "fiberrosette",
-  facconnector: "facconnector",
+  fiberrosetbox: "fiberrosette",
+  facconnector: "fac",
+  facconnect: "fac",
   uclip: "uclip",
   concretenail1: "concretenail",
 };
 
-function resolveTargetKey(sourceName: string): string {
+export function resolveTargetKey(sourceName: string): string {
   const key = normalizeMaterialSourceName(sourceName);
   return DEFAULT_ALIASES[key] || key;
 }
 
+function displayMaterialName(sourceName: string): string {
+  const trimmed = sourceName.trim();
+  if (!trimmed.endsWith(")")) return trimmed;
+
+  let depth = 0;
+  for (let index = trimmed.length - 1; index >= 0; index -= 1) {
+    const character = trimmed[index];
+    if (character === ")") depth += 1;
+    if (character === "(") {
+      depth -= 1;
+      if (depth === 0 && index > 0) {
+        const suffix = trimmed.slice(index + 1, -1).trim().toLowerCase();
+        if (/^(nos|pcs?|pieces?|m|meter|meters|km|kg|box|set|unit|units)$/.test(suffix)) {
+          return trimmed.slice(0, index).trimEnd();
+        }
+        return trimmed;
+      }
+    }
+  }
+
+  return trimmed;
+}
+
+function materialUnit(sourceUnit: string | null | undefined): string {
+  return sourceUnit?.trim() || "pcs";
+}
+
 async function resolveInventoryMappings(tx: DbClient) {
   const [inventoryItems, configuredMappings] = await Promise.all([
-    tx.inventoryItem.findMany({ select: { id: true, name: true, currentStock: true } }),
+    tx.inventoryItem.findMany({ select: { id: true, name: true, unit: true, currentStock: true } }),
     tx.materialBalanceItemMapping.findMany({ select: { normalizedSourceName: true, inventoryItemId: true } }),
   ]);
 
@@ -518,6 +549,59 @@ async function resolveInventoryMappings(tx: DbClient) {
   const configured = new Map(configuredMappings.map((mapping) => [mapping.normalizedSourceName, mapping.inventoryItemId]));
 
   return { inventoryItems, byName, configured };
+}
+
+async function getOrCreateInventoryItem(
+  tx: Prisma.TransactionClient,
+  sourceItemName: string,
+  sourceUnit: string | null,
+) {
+  const name = displayMaterialName(sourceItemName);
+  const existing = await tx.inventoryItem.findUnique({
+    where: { name },
+    select: { id: true, name: true, unit: true, currentStock: true },
+  });
+  if (existing) return { item: existing, created: false };
+
+  // The unique name constraint arbitrates concurrent syncs without leaving
+  // the interactive transaction in an aborted state after a P2002 error.
+  const item = await tx.inventoryItem.upsert({
+    where: { name },
+    update: {},
+    create: {
+      name,
+      unit: materialUnit(sourceUnit),
+      currentStock: 0,
+      reorderLevel: 0,
+    },
+    select: { id: true, name: true, unit: true, currentStock: true },
+  });
+  return { item, created: true };
+}
+
+async function persistMaterialBalanceMapping(
+  tx: Prisma.TransactionClient,
+  input: {
+    sourceName: string;
+    normalizedSourceName: string;
+    inventoryItemId: string;
+    createdById?: string | null;
+  },
+) {
+  await tx.materialBalanceItemMapping.upsert({
+    where: { normalizedSourceName: input.normalizedSourceName },
+    update: {
+      sourceName: input.sourceName,
+      inventoryItemId: input.inventoryItemId,
+      createdById: input.createdById || null,
+    },
+    create: {
+      sourceName: input.sourceName,
+      normalizedSourceName: input.normalizedSourceName,
+      inventoryItemId: input.inventoryItemId,
+      createdById: input.createdById || null,
+    },
+  });
 }
 
 function formatStockValue(value: number): string {
@@ -561,6 +645,8 @@ function resultFromImport(
     updatedStockCount: existing.updatedStockCount,
     dailyEntryCount: 0,
     dailyIssueInvoiceCount: existing.dailyIssueInvoiceCount || 0,
+    dailyIssueInvoiceUpdateCount: existing.dailyIssueInvoiceUpdateCount || 0,
+    dailyIssueInvoiceReversalCount: existing.dailyIssueInvoiceReversalCount || 0,
     correctionInvoiceCount: existing.correctionInvoiceCount || 0,
     reconciliationCount: existing.reconciliationCount || 0,
     monthlySourceTab: existing.monthlySourceTab || MATERIAL_BALANCE_MONTH_TAB,
@@ -581,6 +667,7 @@ type PreparedMaterialItem = ParsedMaterialBalanceItem & {
   status: string;
   warning: string | null;
   finalBalance: number;
+  autoCreated: boolean;
 };
 
 async function createGeneratedInvoice(
@@ -699,6 +786,235 @@ async function createGeneratedInvoice(
   return { invoice, changes };
 }
 
+type DailyInvoiceAction = "created" | "updated" | "reversed" | "unchanged";
+
+async function applyStockDelta(
+  tx: Prisma.TransactionClient,
+  inventoryItemId: string,
+  quantity: number,
+) {
+  if (Math.abs(quantity) <= 0.000001) return null;
+
+  const rows = await tx.$queryRaw<Array<{ current_stock: unknown }>>`
+    SELECT "current_stock" FROM "inventory_items" WHERE "id" = ${inventoryItemId} FOR UPDATE
+  `;
+  if (!rows[0]) return null;
+
+  const previousStock = Number(rows[0].current_stock || 0);
+  const newStock = previousStock + quantity;
+  await tx.inventoryItem.update({
+    where: { id: inventoryItemId },
+    data: { currentStock: newStock },
+  });
+  return { previousStock, newStock };
+}
+
+async function upsertCanonicalDailyInvoice(
+  tx: Prisma.TransactionClient,
+  input: {
+    connectionId: string;
+    sourceKey: string;
+    sourceDate: string;
+    importId: string;
+    createdById?: string | null;
+    lines: Array<{ item: PreparedMaterialItem; quantity: number }>;
+  },
+): Promise<{
+  invoice: { id: string; invoiceNumber: string } | null;
+  action: DailyInvoiceAction;
+  changes: MaterialBalanceStockChange[];
+  revisionCount: number;
+}> {
+  const sourceDate = new Date(`${input.sourceDate}T00:00:00.000Z`);
+  const sourceTypes = [
+    "google_material_balance_issue",
+    "google_material_balance_adjustment",
+  ];
+  const generatedInvoices = await tx.inventoryInvoice.findMany({
+    where: {
+      isSystemGenerated: true,
+      sourceDate,
+      sourceType: { in: sourceTypes },
+      materialBalanceImport: { connectionId: input.connectionId },
+    },
+    include: {
+      items: { include: { item: { select: { id: true, name: true, unit: true } } } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const canonical = generatedInvoices.find((invoice) => invoice.sourceKey === input.sourceKey) || null;
+  const legacyInvoices = generatedInvoices.filter((invoice) => invoice.id !== canonical?.id);
+  const invoiceIds = generatedInvoices.map((invoice) => invoice.id);
+  const desired = new Map(
+    input.lines
+      .filter((line) => Number(line.quantity) > 0.000001)
+      .map((line) => [line.item.inventoryItemId!, line]),
+  );
+
+  if (!canonical && desired.size === 0 && legacyInvoices.length === 0) {
+    return { invoice: null, action: "unchanged", changes: [], revisionCount: 0 };
+  }
+
+  const invoice = canonical
+    ? await tx.inventoryInvoice.update({
+        where: { id: canonical.id },
+        data: {
+          materialBalanceImportId: input.importId,
+          sourceDate,
+          status: desired.size > 0 ? "completed" : "reversed",
+          totalItems: desired.size,
+        },
+        select: { id: true, invoiceNumber: true },
+      })
+    : await tx.inventoryInvoice.create({
+        data: {
+          invoiceNumber: generatedInvoiceNumber(input.sourceKey, input.sourceDate),
+          warehouse: "Material Balance",
+          date: sourceDate,
+          issuedBy: "Google Sheets",
+          drawnBy: "Free-issued material",
+          createdById: input.createdById || null,
+          totalItems: desired.size,
+          status: desired.size > 0 ? "completed" : "reversed",
+          paymentStatus: "not_applicable",
+          totalCost: 0,
+          paidAmount: 0,
+          sourceType: "google_material_balance_issue",
+          sourceKey: input.sourceKey,
+          materialBalanceImportId: input.importId,
+          sourceDate,
+          isSystemGenerated: true,
+        },
+        select: { id: true, invoiceNumber: true },
+      });
+
+  for (const historical of legacyInvoices) {
+    if (historical.status !== "superseded") {
+      await tx.inventoryInvoice.update({
+        where: { id: historical.id },
+        data: { status: "superseded" },
+      });
+    }
+  }
+
+  const currentLines = await tx.inventoryInvoiceItem.findMany({
+    where: { invoiceId: invoice.id },
+    include: { item: { select: { id: true, name: true, unit: true } } },
+  });
+  const currentByItemId = new Map(currentLines.filter((line) => line.itemId).map((line) => [line.itemId!, line]));
+  const itemDetails = new Map<string, { name: string; unit: string }>();
+  for (const line of currentLines) {
+    if (line.itemId && line.item) itemDetails.set(line.itemId, { name: line.item.name, unit: line.item.unit });
+  }
+  for (const line of input.lines) {
+    if (line.item.inventoryItemId) {
+      itemDetails.set(line.item.inventoryItemId, {
+        name: line.item.inventoryItemName || line.item.sourceItemName,
+        unit: line.item.sourceUnit || "pcs",
+      });
+    }
+  }
+
+  for (const [itemId, line] of desired) {
+    const existingLine = currentByItemId.get(itemId);
+    const description = `${line.item.sourceItemName} - Daily Material Balance issue`;
+    const data = {
+      description,
+      unit: line.item.sourceUnit || itemDetails.get(itemId)?.unit || "pcs",
+      quantityRequested: Number(line.quantity),
+      quantityIssued: Number(line.quantity),
+    };
+    if (existingLine) {
+      await tx.inventoryInvoiceItem.update({ where: { id: existingLine.id }, data });
+    } else {
+      await tx.inventoryInvoiceItem.create({ data: { invoiceId: invoice.id, itemId, ...data } });
+    }
+  }
+
+  for (const existingLine of currentLines) {
+    if (!existingLine.itemId || !desired.has(existingLine.itemId)) {
+      await tx.inventoryInvoiceItem.delete({ where: { id: existingLine.id } });
+    }
+  }
+
+  const appliedByItem = new Map<string, number>();
+  if (invoiceIds.length > 0) {
+    const events = await tx.inventoryStockEvent.findMany({
+      where: {
+        sourceReferenceId: { in: invoiceIds },
+        sourceType: { in: sourceTypes },
+      },
+      select: { inventoryItemId: true, quantityDelta: true },
+    });
+    for (const event of events) {
+      appliedByItem.set(
+        event.inventoryItemId,
+        (appliedByItem.get(event.inventoryItemId) || 0) + Number(event.quantityDelta || 0),
+      );
+    }
+  }
+
+  const changes: MaterialBalanceStockChange[] = [];
+  const itemIds = new Set([...appliedByItem.keys(), ...desired.keys()]);
+  const action: DailyInvoiceAction = !canonical
+    ? "created"
+    : desired.size === 0
+      ? "reversed"
+      : "updated";
+  for (const itemId of itemIds) {
+    const desiredLine = desired.get(itemId);
+    const desiredQuantity = desiredLine?.quantity || 0;
+    const delta = desiredQuantity - (appliedByItem.get(itemId) || 0);
+    if (Math.abs(delta) <= 0.000001) continue;
+
+    const stock = await applyStockDelta(tx, itemId, delta);
+    if (!stock) continue;
+    const details = itemDetails.get(itemId);
+    const item = desiredLine?.item;
+    const event = await tx.inventoryStockEvent.create({
+      data: {
+        inventoryItemId: itemId,
+        sourceType: action === "created" ? "google_material_balance_issue" : "google_material_balance_adjustment",
+        sourceReferenceId: invoice.id,
+        materialBalanceImportId: input.importId,
+        previousStock: stock.previousStock,
+        newStock: stock.newStock,
+        quantityDelta: delta,
+        reason: action === "reversed"
+          ? "Reversed daily Material Balance issue after sheet correction"
+          : action === "created"
+            ? "Daily Material Balance issue"
+            : "Updated canonical daily Material Balance issue",
+        createdById: input.createdById || null,
+      },
+      select: { id: true },
+    });
+    changes.push({
+      sourceItemName: item?.sourceItemName || details?.name || "Inventory item",
+      inventoryItemId: itemId,
+      inventoryItemName: details?.name || item?.inventoryItemName || null,
+      issueDate: input.sourceDate,
+      issuedQuantity: desiredQuantity,
+      previousStock: stock.previousStock,
+      newStock: stock.newStock,
+      sheetEndingWip: item?.monthlyItem?.endingWip ?? item?.finalBalance ?? null,
+      adjustmentDelta: delta,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      referenceId: event.id,
+      status: action,
+      warning: item?.warning,
+    });
+  }
+
+  return {
+    invoice,
+    action,
+    changes,
+    revisionCount: legacyInvoices.length,
+  };
+}
+
 async function reconcileExistingImport(input: {
   connectionId: string;
   month: number;
@@ -714,6 +1030,7 @@ async function reconcileExistingImport(input: {
         items: {
           include: {
             inventoryItem: { select: { id: true, name: true, currentStock: true, unit: true } },
+            dailyEntries: true,
           },
         },
       },
@@ -722,8 +1039,125 @@ async function reconcileExistingImport(input: {
 
     const changes: MaterialBalanceStockChange[] = [];
     let dashboardChangesDetected = false;
+    let dailyIssueInvoiceCount = 0;
+    let dailyIssueInvoiceUpdateCount = 0;
+    let dailyIssueInvoiceReversalCount = 0;
+    let correctionInvoiceCount = 0;
     let reconciliationCount = 0;
     const monthEnd = new Date(Date.UTC(input.year, input.month, 0));
+
+    const mappings = await resolveInventoryMappings(tx);
+    for (const snapshot of existing.items) {
+      let inventoryItem = snapshot.inventoryItem;
+      if (!inventoryItem) {
+        const configuredId = mappings.configured.get(snapshot.normalizedSourceName)
+          || mappings.configured.get(resolveTargetKey(snapshot.sourceItemName));
+        inventoryItem = configuredId
+          ? mappings.inventoryItems.find((candidate) => candidate.id === configuredId) || null
+          : mappings.byName.get(resolveTargetKey(snapshot.sourceItemName)) || null;
+        if (!inventoryItem) {
+          const created = await getOrCreateInventoryItem(tx, snapshot.sourceItemName, snapshot.sourceUnit);
+          inventoryItem = created.item;
+          if (!mappings.inventoryItems.some((candidate) => candidate.id === inventoryItem?.id)) {
+            mappings.inventoryItems.push(inventoryItem);
+          }
+          mappings.byName.set(resolveTargetKey(inventoryItem.name), inventoryItem);
+        }
+        await persistMaterialBalanceMapping(tx, {
+          sourceName: snapshot.sourceItemName,
+          normalizedSourceName: snapshot.normalizedSourceName,
+          inventoryItemId: inventoryItem.id,
+          createdById: input.createdById,
+        });
+        await tx.materialBalanceItem.update({
+          where: { id: snapshot.id },
+          data: { inventoryItemId: inventoryItem.id, status: "mapped", warning: snapshot.warning },
+        });
+        snapshot.inventoryItemId = inventoryItem.id;
+        snapshot.inventoryItem = inventoryItem;
+      }
+    }
+
+    const prepared = existing.items.map((snapshot) => ({
+      sourceItemName: snapshot.sourceItemName,
+      normalizedSourceName: snapshot.normalizedSourceName,
+      sourceUnit: snapshot.sourceUnit,
+      sourceRow: snapshot.sourceRow,
+      openingBalance: Number(snapshot.openingBalance || 0),
+      totalIssued: Number(snapshot.totalIssued || 0),
+      totalUsage: Number(snapshot.totalUsage || 0),
+      totalReturned: Number(snapshot.totalReturned || 0),
+      finalBalance: Number(snapshot.finalBalance || 0),
+      dailyEntries: snapshot.dailyEntries.map((entry) => ({
+        date: entry.balanceDate.toISOString().slice(0, 10),
+        previousBalance: Number(entry.previousBalance || 0),
+        issued: Number(entry.issued || 0),
+        usage: Number(entry.usage || 0),
+        balanceReturn: Number(entry.balanceReturn || 0),
+        closingBalance: Number(entry.closingBalance || 0),
+        sourceColumn: entry.sourceColumn || 0,
+        sourceBlockIndex: entry.sourceBlockIndex || 0,
+      })),
+      warnings: snapshot.warning ? [snapshot.warning] : [],
+      monthlyItem: snapshot.monthEndingWip == null ? null : {
+        sourceItemName: snapshot.sourceItemName,
+        normalizedSourceName: snapshot.normalizedSourceName,
+        sourceRow: snapshot.monthSourceRow || snapshot.sourceRow,
+        openingBalance: Number(snapshot.monthOpeningBalance || 0),
+        stockIssued: Number(snapshot.monthStockIssued || 0),
+        inHand: Number(snapshot.monthInHand || 0),
+        materialUsed: Number(snapshot.monthMaterialUsed || 0),
+        endingWip: Number(snapshot.monthEndingWip || 0),
+        warnings: snapshot.warning ? [snapshot.warning] : [],
+      },
+      inventoryItemId: snapshot.inventoryItemId,
+      inventoryItemName: snapshot.inventoryItem?.name || null,
+      status: snapshot.status,
+      warning: snapshot.warning,
+      autoCreated: false,
+    } satisfies PreparedMaterialItem));
+
+    const monthlyAvailable = prepared.some((item) => item.monthlyItem);
+    if (monthlyAvailable) {
+      const firstDay = new Date(Date.UTC(input.year, input.month - 1, 1));
+      const lastDay = new Date(Date.UTC(input.year, input.month, 0));
+      const existingDailyInvoices = await tx.inventoryInvoice.findMany({
+        where: {
+          isSystemGenerated: true,
+          sourceType: { in: ["google_material_balance_issue", "google_material_balance_adjustment"] },
+          sourceDate: { gte: firstDay, lte: lastDay },
+          materialBalanceImport: { connectionId: input.connectionId },
+        },
+        select: { sourceDate: true },
+      });
+      const dates = new Set<string>(existingDailyInvoices
+        .map((invoice) => invoice.sourceDate?.toISOString().slice(0, 10))
+        .filter((date): date is string => Boolean(date)));
+      for (const item of prepared) for (const entry of item.dailyEntries) dates.add(entry.date);
+
+      for (const date of dates) {
+        const daily = await upsertCanonicalDailyInvoice(tx, {
+          connectionId: input.connectionId,
+          sourceKey: ["gmb", input.connectionId, date, "issue"].join(":"),
+          sourceDate: date,
+          importId: existing.id,
+          createdById: input.createdById,
+          lines: prepared
+            .filter((item) => item.inventoryItemId)
+            .map((item) => ({
+              item,
+              quantity: item.dailyEntries.find((entry) => entry.date === date)?.issued || 0,
+            })),
+        });
+        if (daily.invoice) {
+          changes.push(...daily.changes);
+          correctionInvoiceCount += daily.revisionCount;
+          if (daily.action === "created") dailyIssueInvoiceCount += 1;
+          if (daily.action === "updated") dailyIssueInvoiceUpdateCount += 1;
+          if (daily.action === "reversed") dailyIssueInvoiceReversalCount += 1;
+        }
+      }
+    }
 
     for (const snapshot of existing.items) {
       if (!snapshot.inventoryItemId || !snapshot.inventoryItem) continue;
@@ -780,6 +1214,7 @@ async function reconcileExistingImport(input: {
             inventoryItemName: snapshot.inventoryItem.name,
             status: "reconciled",
             warning: dashboardChange ? "Dashboard stock changed after the previous Material Balance sync" : snapshot.warning,
+            autoCreated: false,
           },
           quantity: expectedStock - currentStock,
           status: "reconciled",
@@ -793,6 +1228,10 @@ async function reconcileExistingImport(input: {
     }
 
     return resultFromImport(existing, true, {
+      dailyIssueInvoiceCount,
+      dailyIssueInvoiceUpdateCount,
+      dailyIssueInvoiceReversalCount,
+      correctionInvoiceCount,
       reconciliationCount,
       updatedStockCount: changes.length,
       stockChanges: changes,
@@ -854,6 +1293,8 @@ export async function importMaterialBalanceValues(input: {
         unmappedItemCount: true,
         updatedStockCount: true,
         dailyIssueInvoiceCount: true,
+        dailyIssueInvoiceUpdateCount: true,
+        dailyIssueInvoiceReversalCount: true,
         correctionInvoiceCount: true,
         reconciliationCount: true,
         monthlySourceTab: true,
@@ -876,11 +1317,21 @@ export async function importMaterialBalanceValues(input: {
       const dailyItem = dailyByName.get(normalizedSourceName);
       const monthlyItem = monthlyByName.get(normalizedSourceName) || null;
       const sourceItemName = dailyItem?.sourceItemName || monthlyItem?.sourceItemName || normalizedSourceName;
-      const configuredId = mappings.configured.get(normalizedSourceName);
+      const configuredId = mappings.configured.get(normalizedSourceName) || mappings.configured.get(resolveTargetKey(sourceItemName));
       const targetKey = resolveTargetKey(sourceItemName);
-      const inventoryItem = configuredId
+      let inventoryItem = configuredId
         ? mappings.inventoryItems.find((candidate) => candidate.id === configuredId)
         : mappings.byName.get(targetKey);
+      let autoCreated = false;
+      if (!inventoryItem) {
+        const created = await getOrCreateInventoryItem(tx, sourceItemName, dailyItem?.sourceUnit || null);
+        inventoryItem = created.item;
+        autoCreated = created.created;
+        if (!mappings.inventoryItems.some((candidate) => candidate.id === inventoryItem?.id)) {
+          mappings.inventoryItems.push(inventoryItem);
+        }
+        mappings.byName.set(resolveTargetKey(inventoryItem.name), inventoryItem);
+      }
       let inventoryItemId = inventoryItem?.id || null;
       let status = inventoryItemId ? "mapped" : "unmapped";
       const warnings = [
@@ -894,7 +1345,16 @@ export async function importMaterialBalanceValues(input: {
         warning = [warning, "Multiple source rows map to the same inventory item; stock update skipped"].filter(Boolean).join("; ");
         inventoryItemId = null;
       }
-      if (inventoryItemId) mappedInventoryIds.add(inventoryItemId);
+      if (inventoryItemId) {
+        mappedInventoryIds.add(inventoryItemId);
+        await persistMaterialBalanceMapping(tx, {
+          sourceName: sourceItemName,
+          normalizedSourceName,
+          inventoryItemId,
+          createdById: input.createdById,
+        });
+        mappings.configured.set(normalizedSourceName, inventoryItemId);
+      }
 
       prepared.push({
         sourceItemName,
@@ -913,6 +1373,7 @@ export async function importMaterialBalanceValues(input: {
         inventoryItemName: inventoryItem?.name || null,
         status,
         warning,
+        autoCreated,
       });
     }
 
@@ -954,14 +1415,6 @@ export async function importMaterialBalanceValues(input: {
       orderBy: { importedAt: "desc" },
       include: { items: { include: { dailyEntries: true } } },
     });
-    const previousIssued = new Map<string, number>();
-    for (const previousItem of previousImport?.items || []) {
-      for (const entry of previousItem.dailyEntries) {
-        const date = entry.balanceDate.toISOString().slice(0, 10);
-        previousIssued.set(`${previousItem.normalizedSourceName}:${date}`, Number(entry.issued || 0));
-      }
-    }
-
     let dashboardChangesDetected = false;
     if (previousImport) {
       const event = await tx.inventoryStockEvent.findFirst({
@@ -999,6 +1452,8 @@ export async function importMaterialBalanceValues(input: {
         unmappedItemCount,
         updatedStockCount: 0,
         dailyIssueInvoiceCount: 0,
+        dailyIssueInvoiceUpdateCount: 0,
+        dailyIssueInvoiceReversalCount: 0,
         correctionInvoiceCount: 0,
         reconciliationCount: 0,
         monthlySourceTab: MATERIAL_BALANCE_MONTH_TAB,
@@ -1059,6 +1514,8 @@ export async function importMaterialBalanceValues(input: {
 
     const stockChanges: MaterialBalanceStockChange[] = [];
     let dailyIssueInvoiceCount = 0;
+    let dailyIssueInvoiceUpdateCount = 0;
+    let dailyIssueInvoiceReversalCount = 0;
     let correctionInvoiceCount = 0;
     let reconciliationCount = 0;
 
@@ -1083,59 +1540,45 @@ export async function importMaterialBalanceValues(input: {
     }
 
     if (monthlyAvailable) {
-      const invoiceLinesByDate = new Map<string, Array<{ item: PreparedMaterialItem; quantity: number }>>();
+      const firstDay = new Date(Date.UTC(input.year, input.month - 1, 1));
+      const lastDay = new Date(Date.UTC(input.year, input.month, 0));
+      const existingDailyInvoices = await tx.inventoryInvoice.findMany({
+        where: {
+          isSystemGenerated: true,
+          sourceType: { in: ["google_material_balance_issue", "google_material_balance_adjustment"] },
+          sourceDate: { gte: firstDay, lte: lastDay },
+          materialBalanceImport: { connectionId: input.connectionId },
+        },
+        select: { sourceDate: true },
+      });
+      const dates = new Set<string>(existingDailyInvoices
+        .map((invoice) => invoice.sourceDate?.toISOString().slice(0, 10))
+        .filter((date): date is string => Boolean(date)));
       for (const item of prepared) {
-        if (!item.inventoryItemId) continue;
-        const currentDates = new Set(item.dailyEntries.map((entry) => entry.date));
-        const previousDates = previousImport
-          ? previousImport.items
-              .find((previousItem) => previousItem.normalizedSourceName === item.normalizedSourceName)
-              ?.dailyEntries.map((entry) => entry.balanceDate.toISOString().slice(0, 10)) || []
-          : [];
-        for (const date of new Set([...currentDates, ...previousDates])) {
-          const currentIssued = item.dailyEntries.find((entry) => entry.date === date)?.issued || 0;
-          const previousIssuedValue = previousIssued.get(`${item.normalizedSourceName}:${date}`) || 0;
-          const quantity = currentIssued - previousIssuedValue;
-          if (Math.abs(quantity) <= 0.01) continue;
-          const lines = invoiceLinesByDate.get(date) || [];
-          lines.push({ item, quantity });
-          invoiceLinesByDate.set(date, lines);
-        }
+        for (const entry of item.dailyEntries) dates.add(entry.date);
       }
 
-      for (const [date, lines] of invoiceLinesByDate) {
-        const hasPreviousImport = Boolean(previousImport);
-        const sourceType = hasPreviousImport ? "google_material_balance_adjustment" : "google_material_balance_issue";
-        const sourceKey = [
-          "gmb",
-          input.connectionId,
-          date,
-          hasPreviousImport ? `correction-${created.id}` : "issue",
-        ].join(":");
-        const original = hasPreviousImport
-          ? await tx.inventoryInvoice.findUnique({
-              where: { sourceKey: ["gmb", input.connectionId, date, "issue"].join(":") },
-              select: { id: true },
-            })
-          : null;
-        const generated = await createGeneratedInvoice(tx, {
-          sourceKey,
-          sourceType,
+      for (const date of dates) {
+        const lines = prepared
+          .filter((item) => item.inventoryItemId)
+          .map((item) => ({
+            item,
+            quantity: item.dailyEntries.find((entry) => entry.date === date)?.issued || 0,
+          }));
+        const daily = await upsertCanonicalDailyInvoice(tx, {
+          connectionId: input.connectionId,
+          sourceKey: ["gmb", input.connectionId, date, "issue"].join(":"),
           sourceDate: date,
           importId: created.id,
           createdById: input.createdById,
-          correctionOfId: original?.id || null,
-          lines: lines.map(({ item, quantity }) => ({
-            item,
-            quantity,
-            status: hasPreviousImport ? "corrected" : "created",
-            reason: hasPreviousImport ? "Corrected daily Material Balance issue quantity" : "Daily Material Balance issue",
-          })),
+          lines,
         });
-        if (generated) {
-          stockChanges.push(...generated.changes);
-          if (hasPreviousImport) correctionInvoiceCount += 1;
-          else dailyIssueInvoiceCount += 1;
+        if (daily.invoice) {
+          stockChanges.push(...daily.changes);
+          correctionInvoiceCount += daily.revisionCount;
+          if (daily.action === "created") dailyIssueInvoiceCount += 1;
+          if (daily.action === "updated") dailyIssueInvoiceUpdateCount += 1;
+          if (daily.action === "reversed") dailyIssueInvoiceReversalCount += 1;
         }
       }
 
@@ -1205,6 +1648,8 @@ export async function importMaterialBalanceValues(input: {
       data: {
         updatedStockCount,
         dailyIssueInvoiceCount,
+        dailyIssueInvoiceUpdateCount,
+        dailyIssueInvoiceReversalCount,
         correctionInvoiceCount,
         reconciliationCount,
         stockChanges: JSON.parse(JSON.stringify(stockChanges)),
@@ -1219,6 +1664,8 @@ export async function importMaterialBalanceValues(input: {
         unmappedItemCount: true,
         updatedStockCount: true,
         dailyIssueInvoiceCount: true,
+        dailyIssueInvoiceUpdateCount: true,
+        dailyIssueInvoiceReversalCount: true,
         correctionInvoiceCount: true,
         reconciliationCount: true,
         monthlySourceTab: true,
@@ -1232,6 +1679,11 @@ export async function importMaterialBalanceValues(input: {
 
     return resultFromImport(finalized, false, {
       dailyEntryCount,
+      dailyIssueInvoiceCount,
+      dailyIssueInvoiceUpdateCount,
+      dailyIssueInvoiceReversalCount,
+      correctionInvoiceCount,
+      reconciliationCount,
       stockChanges,
       dashboardChangesDetected,
     });
@@ -1252,6 +1704,8 @@ export function serializeMaterialBalanceImport(input: any) {
     unmappedItemCount: input.unmappedItemCount,
     updatedStockCount: input.updatedStockCount,
     dailyIssueInvoiceCount: input.dailyIssueInvoiceCount || 0,
+    dailyIssueInvoiceUpdateCount: input.dailyIssueInvoiceUpdateCount || 0,
+    dailyIssueInvoiceReversalCount: input.dailyIssueInvoiceReversalCount || 0,
     correctionInvoiceCount: input.correctionInvoiceCount || 0,
     reconciliationCount: input.reconciliationCount || 0,
     monthlySourceTab: input.monthlySourceTab || MATERIAL_BALANCE_MONTH_TAB,

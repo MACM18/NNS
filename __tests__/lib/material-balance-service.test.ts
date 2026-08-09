@@ -2,6 +2,7 @@ import {
   normalizeMaterialSourceName,
   parseMaterialBalanceMonthValues,
   parseMaterialBalanceValues,
+  resolveTargetKey,
 } from "@/lib/material-balance-service";
 
 function makeSheet(month: number, year: number, days: number) {
@@ -33,6 +34,12 @@ describe("Material Balance parser", () => {
     expect(normalizeMaterialSourceName("C HOOK(NOS)")).toBe("chook");
     expect(normalizeMaterialSourceName("Fiber Rosset Box (NOS)")).toBe("fiberrosettebox");
     expect(normalizeMaterialSourceName(`source ${"(".repeat(10000)}value`)).toBe("sourcevalue");
+  });
+
+  it("resolves known Material Balance aliases to current inventory names", () => {
+    expect(resolveTargetKey("FAC Connector(NOS)")).toBe("fac");
+    expect(resolveTargetKey("Fiber Rosset Box(NOS)")).toBe("fiberrosette");
+    expect(resolveTargetKey("Nut and Bolt(NOS)")).toBe("nutbolt");
   });
 
   it("parses variable daily blocks and source totals", () => {

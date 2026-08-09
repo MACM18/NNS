@@ -1,12 +1,13 @@
 "use client";
 
 import React from "react";
-import { Eye, Pencil, Trash, Package } from "lucide-react";
+import { Eye, Pencil, Trash, Package, LockKeyhole } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InventoryInvoice, InventoryInvoiceItem } from "@/app/dashboard/inventory/page";
 
 interface InvoicesTabProps {
@@ -34,18 +35,39 @@ export function InvoicesTab({
   onDelete,
   getStatusBadge,
 }: InvoicesTabProps) {
+  const [view, setView] = React.useState("all");
+  const visibleInvoices = invoices.filter((invoice) => {
+    if (view === "manual") return !invoice.is_system_generated;
+    if (view === "google") return invoice.is_system_generated && invoice.source_type !== "google_material_balance_adjustment";
+    if (view === "history") return invoice.is_system_generated && invoice.source_type === "google_material_balance_adjustment";
+    return true;
+  });
+
   return (
     <Card className="glass-card border-border/40 overflow-hidden">
       <CardHeader>
-        <CardTitle className="text-base font-bold">Recent Invoices</CardTitle>
-        <CardDescription>
-          Material receipts and stock updates
-        </CardDescription>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="text-base font-bold">Inventory Invoices</CardTitle>
+            <CardDescription>Material receipts, free-issued stock, and sync history</CardDescription>
+          </div>
+          <Select value={view} onValueChange={setView}>
+            <SelectTrigger className="w-full sm:w-[190px]">
+              <SelectValue placeholder="Invoice view" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All invoices</SelectItem>
+              <SelectItem value="manual">Manual invoices</SelectItem>
+              <SelectItem value="google">Current Google Sheet</SelectItem>
+              <SelectItem value="history">Historical revisions</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent>
         {loadingData ? (
           <TableSkeleton columns={7} rows={6} />
-        ) : invoices.length > 0 ? (
+        ) : visibleInvoices.length > 0 ? (
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <div className="inline-block min-w-full align-middle">
               <div className="overflow-hidden">
@@ -76,7 +98,7 @@ export function InvoicesTab({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {invoices.map((invoice) => (
+                    {visibleInvoices.map((invoice) => (
                       <React.Fragment key={invoice.id}>
                         <TableRow className="hover:bg-muted/30 transition-colors">
                           <TableCell className="font-mono text-sm font-semibold">
@@ -84,8 +106,16 @@ export function InvoicesTab({
                               <span>{invoice.invoice_number}</span>
                               {invoice.is_system_generated && (
                                 <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-600 bg-blue-500/5">
-                                  Free-issued / Google Sheet
+                                  {invoice.source_type === "google_material_balance_adjustment"
+                                    ? "Historical revision / Google Sheet"
+                                    : "Free-issued / Google Sheet"}
                                 </Badge>
+                              )}
+                              {invoice.is_system_generated && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {invoice.source_date || invoice.date}
+                                  {invoice.last_synced_at ? ` · synced ${new Date(invoice.last_synced_at).toLocaleDateString()}` : ""}
+                                </span>
                               )}
                             </div>
                           </TableCell>
@@ -96,7 +126,10 @@ export function InvoicesTab({
                           <TableCell className="font-medium">{invoice.total_items}</TableCell>
                           <TableCell>{invoice.issued_by}</TableCell>
                           <TableCell>
-                            {getStatusBadge(invoice.status)}
+                            <div className="flex items-center gap-1.5">
+                              {getStatusBadge(invoice.status)}
+                              {invoice.is_system_generated && <LockKeyhole className="h-3.5 w-3.5 text-muted-foreground" aria-label="Locked system invoice" />}
+                            </div>
                           </TableCell>
                           <TableCell className="text-center align-middle">
                             <div className="flex gap-1 justify-center items-center min-h-[32px]">
@@ -116,7 +149,7 @@ export function InvoicesTab({
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              {!invoice.is_system_generated && (role === "admin" || role === "moderator") && (
+                              {!invoice.is_system_generated && (role === "admin" || role === "moderator" || role === "superadmin") && (
                                 <Button
                                   size="sm"
                                   variant="secondary"
@@ -126,7 +159,7 @@ export function InvoicesTab({
                                   Edit
                                 </Button>
                               )}
-                              {!invoice.is_system_generated && role === "admin" && (
+                              {!invoice.is_system_generated && (role === "admin" || role === "superadmin") && (
                                 <Button
                                   size="sm"
                                   variant="destructive"

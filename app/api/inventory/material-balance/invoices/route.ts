@@ -16,16 +16,14 @@ export async function GET(request: NextRequest) {
     const connectionId = searchParams.get("connectionId");
     const importId = searchParams.get("importId");
     const date = searchParams.get("date");
+    const history = searchParams.get("history") === "true";
     const invoices = await prisma.inventoryInvoice.findMany({
       where: {
         isSystemGenerated: true,
-        sourceType: {
-          in: [
-            "google_material_balance_issue",
-            "google_material_balance_adjustment",
-            "google_material_balance_reconciliation",
-          ],
-        },
+        sourceType: history
+          ? "google_material_balance_adjustment"
+          : { in: ["google_material_balance_issue", "google_material_balance_reconciliation"] },
+        ...(history ? {} : { status: { not: "superseded" } }),
         ...(importId ? { materialBalanceImportId: importId } : {}),
         ...(date ? { sourceDate: new Date(`${date}T00:00:00.000Z`) } : {}),
         ...(connectionId
@@ -35,6 +33,8 @@ export async function GET(request: NextRequest) {
       orderBy: [{ sourceDate: "desc" }, { createdAt: "desc" }],
       include: {
         items: { include: { item: { select: { id: true, name: true, unit: true } } } },
+        materialBalanceImport: { select: { id: true, connectionId: true, importedAt: true } },
+        corrections: { select: { id: true } },
       },
     });
 
@@ -46,6 +46,13 @@ export async function GET(request: NextRequest) {
         sourceDate: invoice.sourceDate?.toISOString().slice(0, 10) || null,
         importId: invoice.materialBalanceImportId,
         status: invoice.status,
+        canonicalDayStatus: invoice.sourceType === "google_material_balance_issue" ? invoice.status : null,
+        latestImportReference: invoice.materialBalanceImport?.id || null,
+        connectionId: invoice.materialBalanceImport?.connectionId || null,
+        lastSyncedAt: invoice.materialBalanceImport?.importedAt?.toISOString() || null,
+        revisionCount: invoice.corrections?.length || 0,
+        isSystemGenerated: invoice.isSystemGenerated,
+        locked: invoice.isSystemGenerated,
         totalCost: Number(invoice.totalCost || 0),
         items: invoice.items.map((item) => ({
           id: item.id,

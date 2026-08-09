@@ -193,10 +193,12 @@ export function MaterialBalanceTab() {
             </div>
           ) : (
             <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-8">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-10">
                 <Metric label="Items" value={importData.itemCount} />
                 <Metric label="Stock updated" value={importData.updatedStockCount} />
                 <Metric label="Issue invoices" value={importData.dailyIssueInvoiceCount} />
+                <Metric label="Updated invoices" value={importData.dailyIssueInvoiceUpdateCount} />
+                <Metric label="Reversed invoices" value={importData.dailyIssueInvoiceReversalCount} />
                 <Metric label="Corrections" value={importData.correctionInvoiceCount} />
                 <Metric label="Reconciliations" value={importData.reconciliationCount} />
                 <Metric label="Issued" value={formatNumber(totalIssued)} />
