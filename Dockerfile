@@ -43,5 +43,7 @@ COPY --from=builder /app ./
 # Expose Next.js port
 EXPOSE 3000
 
-# Run prisma db push to sync schema at startup, then start the server
-CMD ["sh", "-c", "npx prisma db push && npm run start"]
+# Apply reviewed migrations at startup, then start the server.
+# Do not use db push in production: it bypasses migration history and may
+# require accepting destructive schema changes.
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]

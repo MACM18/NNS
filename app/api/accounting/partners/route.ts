@@ -4,12 +4,18 @@ import { prisma } from "@/lib/prisma";
 import { getPartners, savePartnerAllocation } from "@/lib/partnership-accounting-service";
 import { hasAccountingAccess } from "@/lib/accounting-service";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const profile = await prisma.profile.findUnique({ where: { userId: session.user.id }, select: { role: true } });
   if (!hasAccountingAccess(profile?.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  return NextResponse.json({ data: await getPartners() });
+  const role = (profile?.role || "").toLowerCase();
+  const includeInactive = req.nextUrl.searchParams.get("includeInactive") === "true";
+  return NextResponse.json({
+    data: await getPartners({
+      includeInactive: includeInactive && ["admin", "superadmin"].includes(role),
+    }),
+  });
 }
 
 export async function POST(req: NextRequest) {
