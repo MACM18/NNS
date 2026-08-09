@@ -24,6 +24,8 @@ export async function GET(
             item: true,
           },
         },
+        materialBalanceImport: { select: { id: true, connectionId: true, importedAt: true } },
+        corrections: { select: { id: true } },
       },
     });
 
@@ -57,6 +59,14 @@ export async function GET(
       material_balance_import_id: invoice.materialBalanceImportId || null,
       source_date: invoice.sourceDate?.toISOString().slice(0, 10) || null,
       is_system_generated: invoice.isSystemGenerated,
+      canonical_day_status: invoice.isSystemGenerated && invoice.sourceType === "google_material_balance_issue"
+        ? invoice.status
+        : null,
+      latest_import_reference: invoice.materialBalanceImport?.id || null,
+      source_connection_id: invoice.materialBalanceImport?.connectionId || null,
+      last_synced_at: invoice.materialBalanceImport?.importedAt?.toISOString() || null,
+      revision_count: invoice.corrections?.length || 0,
+      locked: invoice.isSystemGenerated,
       created_at: invoice.createdAt?.toISOString(),
       updated_at: invoice.updatedAt?.toISOString(),
       items: formattedItems,

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Search, Pencil, ToggleRight, ToggleLeft, LayoutGrid, List, Package, RefreshCw, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, ToggleRight, ToggleLeft, LayoutGrid, List, Package, RefreshCw, Loader2, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 interface DrumsTabProps {
   drums: DrumTracking[];
   loadingData: boolean;
+  error?: string;
   role: string | null;
   setAddDrumModalOpen: (open: boolean) => void;
   searchDrumQuery: string;
@@ -34,6 +35,7 @@ interface DrumsTabProps {
 export function DrumsTab({
   drums,
   loadingData,
+  error,
   role,
   setAddDrumModalOpen,
   searchDrumQuery,
@@ -94,7 +96,7 @@ export function DrumsTab({
     return matchesSearch && matchesStatus;
   });
 
-  const isAdminOrManager = role === "admin" || role === "moderator";
+  const isAdminOrManager = role === "admin" || role === "moderator" || role === "superadmin";
 
   return (
     <Card className="glass-card border-border/40 overflow-hidden">
@@ -177,7 +179,9 @@ export function DrumsTab({
         </div>
       </CardHeader>
       <CardContent>
-        {loadingData ? (
+        {error ? (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300" role="alert">{error}</div>
+        ) : loadingData ? (
           <TableSkeleton columns={6} rows={6} />
         ) : filteredDrums.length > 0 ? (
           viewMode === "grid" ? (
@@ -314,6 +318,3 @@ export function DrumsTab({
     </Card>
   );
 }
-
-// Add simple Lucide Trash2 import here since it is used inside table view
-import { Trash2 } from "lucide-react";

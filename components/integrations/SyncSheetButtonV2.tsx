@@ -49,6 +49,8 @@ interface SyncFinalResult {
     unmappedItemCount?: number;
     updatedStockCount?: number;
     dailyIssueInvoiceCount?: number;
+    dailyIssueInvoiceUpdateCount?: number;
+    dailyIssueInvoiceReversalCount?: number;
     correctionInvoiceCount?: number;
     reconciliationCount?: number;
     dashboardChangesDetected?: boolean;
@@ -87,6 +89,8 @@ function normalizeFinalResult(result: unknown): SyncFinalResult | null {
           unmappedItemCount: toOptionalNumber(result.materialBalance.unmappedItemCount),
           updatedStockCount: toOptionalNumber(result.materialBalance.updatedStockCount),
           dailyIssueInvoiceCount: toOptionalNumber(result.materialBalance.dailyIssueInvoiceCount),
+          dailyIssueInvoiceUpdateCount: toOptionalNumber(result.materialBalance.dailyIssueInvoiceUpdateCount),
+          dailyIssueInvoiceReversalCount: toOptionalNumber(result.materialBalance.dailyIssueInvoiceReversalCount),
           correctionInvoiceCount: toOptionalNumber(result.materialBalance.correctionInvoiceCount),
           reconciliationCount: toOptionalNumber(result.materialBalance.reconciliationCount),
           dashboardChangesDetected: result.materialBalance.dashboardChangesDetected === true,
@@ -501,6 +505,14 @@ export default function SyncSheetButton({
                     <div>
                       <span className='text-muted-foreground'>Issue Invoices:</span>{" "}
                       <span className='font-medium'>{finalResult.materialBalance.dailyIssueInvoiceCount ?? 0}</span>
+                    </div>
+                    <div>
+                      <span className='text-muted-foreground'>Updated Daily Invoices:</span>{" "}
+                      <span className='font-medium'>{finalResult.materialBalance.dailyIssueInvoiceUpdateCount ?? 0}</span>
+                    </div>
+                    <div>
+                      <span className='text-muted-foreground'>Reversed Daily Invoices:</span>{" "}
+                      <span className='font-medium'>{finalResult.materialBalance.dailyIssueInvoiceReversalCount ?? 0}</span>
                     </div>
                     <div>
                       <span className='text-muted-foreground'>Reconciliations:</span>{" "}

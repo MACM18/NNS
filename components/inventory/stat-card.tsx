@@ -56,8 +56,19 @@ export function StatCard({
   return (
     <Card
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (onClick && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-pressed={onClick ? isActive : undefined}
+      aria-label={onClick ? `${title}: ${value}${subtitle ? `. ${subtitle}` : ""}` : undefined}
       className={cn(
-        "bg-gradient-to-br backdrop-blur-md border hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group cursor-pointer",
+        "bg-gradient-to-br backdrop-blur-md border hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group",
+        onClick && "cursor-pointer",
         colors.bg,
         isActive && colors.activeBorder,
         isActive && "shadow-lg scale-[1.02]"

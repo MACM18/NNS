@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "10");
     const generateNumber = searchParams.get("generateNumber");
+    const view = searchParams.get("view") || "all";
 
     // If requesting invoice number generation
     if (generateNumber === "true") {
@@ -39,8 +40,26 @@ export async function GET(req: NextRequest) {
     }
 
     const invoices = await prisma.inventoryInvoice.findMany({
+      where: view === "operational"
+        ? {
+            OR: [
+              { isSystemGenerated: false },
+              {
+                isSystemGenerated: true,
+                sourceType: { not: "google_material_balance_adjustment" },
+                status: { not: "superseded" },
+              },
+            ],
+          }
+        : view === "history"
+          ? { isSystemGenerated: true, sourceType: "google_material_balance_adjustment" }
+          : undefined,
       orderBy: { createdAt: "desc" },
       take: limit,
+      include: {
+        materialBalanceImport: { select: { id: true, connectionId: true, importedAt: true } },
+        corrections: { select: { id: true } },
+      },
     });
 
     const formatted = invoices.map((inv) => ({
@@ -57,6 +76,13 @@ export async function GET(req: NextRequest) {
       material_balance_import_id: inv.materialBalanceImportId || null,
       source_date: inv.sourceDate?.toISOString().slice(0, 10) || null,
       is_system_generated: inv.isSystemGenerated,
+      canonical_day_status: inv.isSystemGenerated && inv.sourceType === "google_material_balance_issue"
+        ? inv.status
+        : null,
+      latest_import_reference: inv.materialBalanceImport?.id || null,
+      source_connection_id: inv.materialBalanceImport?.connectionId || null,
+      last_synced_at: inv.materialBalanceImport?.importedAt?.toISOString() || null,
+      revision_count: inv.corrections?.length || 0,
       created_at: inv.createdAt?.toISOString(),
       updated_at: inv.updatedAt?.toISOString(),
     }));
@@ -187,6 +213,11 @@ export async function POST(req: NextRequest) {
       material_balance_import_id: created.materialBalanceImportId || null,
       source_date: created.sourceDate?.toISOString().slice(0, 10) || null,
       is_system_generated: created.isSystemGenerated,
+      canonical_day_status: null,
+      latest_import_reference: null,
+      source_connection_id: null,
+      last_synced_at: null,
+      revision_count: 0,
       created_at: created.createdAt?.toISOString(),
       updated_at: created.updatedAt?.toISOString(),
     };
