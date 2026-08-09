@@ -88,6 +88,7 @@ export interface InventoryItem {
   current_stock: number;
   reorder_level: number;
   last_updated: string;
+  is_active?: boolean;
 }
 
 export interface DrumTracking {
@@ -178,6 +179,8 @@ export default function InventoryPage() {
   const [selectedDrum, setSelectedDrum] = useState<DrumTracking | null>(null);
   const [editItemModalOpen, setEditItemModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [deleteItemConfirmOpen, setDeleteItemConfirmOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
   
   // Delete confirm state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -278,6 +281,7 @@ export default function InventoryPage() {
           current_stock: d.current_stock,
           reorder_level: d.reorder_level,
           last_updated: d.updated_at,
+          is_active: d.is_active !== false,
         }))
       );
     } catch (error) {
@@ -384,6 +388,35 @@ export default function InventoryPage() {
 
   const handleSuccess = () => {
     setRefreshTrigger((prev) => prev + 1);
+  };
+
+  const deleteInventoryItem = async () => {
+    if (!itemToDelete) return;
+    try {
+      const response = await fetch(`/api/inventory/${itemToDelete.id}`, { method: "DELETE" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Failed to remove inventory item");
+
+      const action = result.action === "archived" ? "archived" : "deleted";
+      addNotification({
+        title: action === "archived" ? "Item Archived" : "Item Deleted",
+        message: action === "archived"
+          ? `${itemToDelete.name} was archived so its history remains available.`
+          : `${itemToDelete.name} was permanently deleted because it had no history.`,
+        type: "success",
+        category: "system",
+      });
+      setDeleteItemConfirmOpen(false);
+      setItemToDelete(null);
+      handleSuccess();
+    } catch (error) {
+      addNotification({
+        title: "Could not remove item",
+        message: error instanceof Error ? error.message : "Failed to remove inventory item",
+        type: "error",
+        category: "system",
+      });
+    }
   };
 
   const updateDrumStatus = async (
@@ -505,7 +538,7 @@ export default function InventoryPage() {
             <Plus className="h-4 w-4" />
             <span>Add receipt</span>
           </Button>
-          {(role === "admin" || role === "moderator" || role === "superadmin") && (
+          {["admin", "moderator", "superadmin"].includes((role || "").toLowerCase()) && (
             <Button
               onClick={() => setManageItemsModalOpen(true)}
               variant="secondary"
@@ -629,6 +662,10 @@ export default function InventoryPage() {
               setSelectedItem(item);
               setEditItemModalOpen(true);
             }}
+            onDelete={(item) => {
+              setItemToDelete(item);
+              setDeleteItemConfirmOpen(true);
+            }}
             searchQuery={stockSearchQuery}
             setSearchQuery={setStockSearchQuery}
             statusFilter={stockStatusFilter}
@@ -702,6 +739,7 @@ export default function InventoryPage() {
         open={manageItemsModalOpen}
         onOpenChange={setManageItemsModalOpen}
         userRole={role ?? ""}
+        onSuccess={handleSuccess}
       />
       <EditDrumModal
         open={editDrumModalOpen}
@@ -724,6 +762,23 @@ export default function InventoryPage() {
         item={selectedItem}
         onSuccess={handleSuccess}
       />
+
+      <Dialog open={deleteItemConfirmOpen} onOpenChange={setDeleteItemConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove inventory item</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {itemToDelete
+              ? `Remove ${itemToDelete.name}? Items with stock or historical records are archived automatically, so invoices and stock history are not deleted.`
+              : "Remove this inventory item? Historical records are always preserved."}
+          </p>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDeleteItemConfirmOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void deleteInventoryItem()}>Remove item</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialogs */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

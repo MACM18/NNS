@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { BarChart3, Check, Package, Pencil, Search, SlidersHorizontal, X } from "lucide-react";
+import { BarChart3, Check, Package, Pencil, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ interface StockTabProps {
   error?: string;
   role: string | null;
   onEdit: (item: InventoryItem) => void;
+  onDelete?: (item: InventoryItem) => void;
   onAddReceipt?: () => void;
   onOpenMaterialBalance?: () => void;
   searchQuery: string;
@@ -65,7 +66,8 @@ function StockGauge({ item, status }: { item: InventoryItem; status: StockStatus
   );
 }
 
-function StockStatusBadge({ status }: { status: StockStatus }) {
+function StockStatusBadge({ status, negative = false }: { status: StockStatus; negative?: boolean }) {
+  if (negative) return <Badge variant="outline" className="border-red-500/30 bg-red-500/10 font-semibold text-red-600 dark:text-red-400">Negative stock</Badge>;
   return <Badge variant="outline" className={`font-semibold ${getStatusClasses(status)}`}>{getStatusText(status)}</Badge>;
 }
 
@@ -75,6 +77,7 @@ export function StockTab({
   error,
   role,
   onEdit,
+  onDelete,
   onAddReceipt,
   onOpenMaterialBalance,
   searchQuery,
@@ -83,7 +86,7 @@ export function StockTab({
   setStatusFilter,
 }: StockTabProps) {
   const [sortMode, setSortMode] = useState<SortMode>("attention");
-  const canEditItems = role === "admin" || role === "moderator" || role === "superadmin";
+  const canEditItems = ["admin", "moderator", "superadmin"].includes((role || "").toLowerCase());
   const statusCounts = useMemo(() => inventoryItems.reduce<Record<StockStatus, number>>((counts, item) => {
     counts[getStockStatusKey(item)] += 1;
     return counts;
@@ -233,11 +236,11 @@ export function StockTab({
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <StockGauge item={item} status={status} />
-                            <StockStatusBadge status={status} />
+                            <StockStatusBadge status={status} negative={item.current_stock < 0} />
                           </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{item.last_updated ? new Date(item.last_updated).toLocaleDateString() : "Not recorded"}</TableCell>
-                        {canEditItems && <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(item)} aria-label={`Edit ${item.name}`}><Pencil className="h-4 w-4" /></Button></TableCell>}
+                        {canEditItems && <TableCell className="text-right"><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(item)} aria-label={`Edit ${item.name}`}><Pencil className="h-4 w-4" /></Button>{onDelete && <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onDelete(item)} aria-label={`Remove ${item.name}`}><Trash2 className="h-4 w-4" /></Button>}</div></TableCell>}
                       </TableRow>
                     );
                   })}
@@ -254,7 +257,7 @@ export function StockTab({
                         <p className="truncate font-semibold">{item.name}</p>
                         <p className="text-xs text-muted-foreground">Reorder at {item.reorder_level || 0} {item.unit}</p>
                       </div>
-                      <StockStatusBadge status={status} />
+                      <StockStatusBadge status={status} negative={item.current_stock < 0} />
                     </div>
                     <div className="mt-4 flex items-end justify-between gap-3">
                       <div>
@@ -265,7 +268,7 @@ export function StockTab({
                     </div>
                     <div className="mt-3 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
                       <span>Updated {item.last_updated ? new Date(item.last_updated).toLocaleDateString() : "not recorded"}</span>
-                      {canEditItems && <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => onEdit(item)}><Pencil className="h-3.5 w-3.5" />Edit</Button>}
+                      {canEditItems && <div className="flex gap-1.5"><Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => onEdit(item)}><Pencil className="h-3.5 w-3.5" />Edit</Button>{onDelete && <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onDelete(item)} aria-label={`Remove ${item.name}`}><Trash2 className="h-4 w-4" /></Button>}</div>}
                     </div>
                   </div>
                 );

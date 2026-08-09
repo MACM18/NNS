@@ -205,10 +205,10 @@ function createFixture(options: { includeMissingItem?: boolean } = {}) {
   return { tx, getStock: () => inventoryCurrentStock, invoices, invoiceItems, inventoryItems, stockEvents };
 }
 
-const dailyValues = (issued: number, itemName = "C-Hook(NOS)") => [
+const dailyValues = (issued: number, itemName = "C-Hook(NOS)", unit = "NOS") => [
   ["Title", null, "Date:", "2026-08-01", null, null, "Total"],
   ["Item", "Unit", "Previous Day balance", "Issued", "Usage", "Balance Return", "Issued", "Usage", "Return", "Final Balance"],
-  [itemName, "NOS", 4, issued, 1, 0, issued, 1, 0, 5],
+  [itemName, unit, 4, issued, 1, 0, issued, 1, 0, 5],
 ];
 
 const monthlyValues = (endingWip: number, itemName = "C-Hook(NOS)") => [
@@ -328,5 +328,42 @@ describe("Material Balance stock import", () => {
     ]));
     expect(fixture.getStock()).toBe(2);
     expect(fixture.invoices).toHaveLength(0);
+  });
+
+  it("skips a missing sheet row when both month-end and issued values are zero", async () => {
+    const fixture = createFixture();
+    mockPrisma.materialBalanceImport.findUnique.mockResolvedValueOnce(null);
+    mockPrisma.$transaction.mockImplementationOnce(async (callback: (value: unknown) => unknown) => callback(fixture.tx));
+
+    const result = await importMaterialBalanceValues({
+      connectionId: "connection-zero-only",
+      month: 8,
+      year: 2026,
+      values: dailyValues(0, "Missing Zero Item(NOS)"),
+      monthlyValues: monthlyValues(0, "Missing Zero Item(NOS)"),
+      createdById: "profile-1",
+    });
+
+    expect(fixture.tx.materialBalanceItem.create).not.toHaveBeenCalled();
+    expect(fixture.inventoryItems.some((item) => item.name === "Missing Zero Item")).toBe(false);
+    expect(fixture.invoices).toHaveLength(0);
+  });
+
+  it("keeps a same-name material with a different unit separate", async () => {
+    const fixture = createFixture();
+    mockPrisma.materialBalanceImport.findUnique.mockResolvedValueOnce(null);
+    mockPrisma.$transaction.mockImplementationOnce(async (callback: (value: unknown) => unknown) => callback(fixture.tx));
+
+    await importMaterialBalanceValues({
+      connectionId: "connection-unit-variant",
+      month: 8,
+      year: 2026,
+      values: dailyValues(2, "C-Hook(M)", "M"),
+      monthlyValues: monthlyValues(5, "C-Hook(M)"),
+      createdById: "profile-1",
+    });
+
+    expect(fixture.inventoryItems.some((item) => item.name === "C-Hook (M)" && item.unit === "M")).toBe(true);
+    expect(fixture.inventoryItems.find((item) => item.name === "C-Hook")?.currentStock).toBe(2);
   });
 });

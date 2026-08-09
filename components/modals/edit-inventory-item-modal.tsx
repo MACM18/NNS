@@ -50,7 +50,7 @@ const formSchema = z.object({
     .min(0, { message: "Reorder level cannot be negative." }),
   current_stock: z.coerce
     .number({ invalid_type_error: "Current stock must be a number." })
-    .min(0, { message: "Current stock cannot be negative." }),
+    .finite({ message: "Current stock must be a finite number." }),
 });
 
 export function EditInventoryItemModal({
@@ -167,6 +167,7 @@ export function EditInventoryItemModal({
                     <FormControl>
                       <Input
                         type='number'
+                        step='any'
                         placeholder='e.g., 100'
                         {...field}
                         disabled={!stockEditable}
@@ -181,6 +182,7 @@ export function EditInventoryItemModal({
                       {stockEditable ? "Lock" : "Edit"}
                     </Button>
                   </div>
+                  <p className='text-xs text-muted-foreground'>Negative values are allowed for opening balances and corrected source records.</p>
                   <FormMessage />
                 </FormItem>
               )}
