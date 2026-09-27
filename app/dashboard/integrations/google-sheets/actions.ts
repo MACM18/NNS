@@ -83,7 +83,8 @@ export async function createConnection(payload: {
     });
 
     try {
-      const period = currentSheetPeriod("Asia/Colombo");
+      const syncSettings = await prisma.googleSheetSyncSettings.findUnique({ where: { id: "default" } });
+      const period = currentSheetPeriod(syncSettings?.timeZone || "Asia/Colombo");
       const isCurrentPeriod = Number(month) === period.month && Number(year) === period.year;
       const created = await prisma.$transaction(async (tx) => {
         if (isCurrentPeriod) {

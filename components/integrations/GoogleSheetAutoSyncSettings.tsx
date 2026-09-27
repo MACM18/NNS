@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Clock3, RefreshCw, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input";
 
 type AutoSyncData = {
   enabled: boolean;
+  schedulerConfigured: boolean;
   dailyTime: string;
   timeZone: string;
   newestConnection: { id: string; sheetName: string | null; month: number; year: number; autoSyncEnabled: boolean } | null;
@@ -17,13 +19,14 @@ type AutoSyncData = {
 };
 
 export default function GoogleSheetAutoSyncSettings() {
+  const router = useRouter();
   const [data, setData] = useState<AutoSyncData | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [dailyTime, setDailyTime] = useState("02:00");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const response = await fetch("/api/integrations/google-sheets/auto-sync", { cache: "no-store" });
       const result = await response.json();
@@ -34,9 +37,14 @@ export default function GoogleSheetAutoSyncSettings() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load settings");
     }
-  }
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    const refresh = () => { void load(); };
+    window.addEventListener("google-sheet-auto-sync-changed", refresh);
+    return () => window.removeEventListener("google-sheet-auto-sync-changed", refresh);
+  }, [load]);
 
   async function save() {
     setBusy(true);
@@ -71,6 +79,7 @@ export default function GoogleSheetAutoSyncSettings() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not update selection");
       await load();
+      router.refresh();
       setMessage(checked ? "Latest sheet selected for auto-sync." : "Auto-sync disabled for this sheet.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not update selection");
@@ -91,6 +100,7 @@ export default function GoogleSheetAutoSyncSettings() {
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
+        {data && !data.schedulerConfigured && <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">Automatic imports are unavailable until CRON_SECRET is set in the Dokploy application environment and the app is redeployed.</p>}
         <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 p-4">
           <div><Label htmlFor="sheet-auto-enabled">Daily import</Label><p className="text-sm text-muted-foreground">Run the selected sheet automatically.</p></div>
           <Switch id="sheet-auto-enabled" checked={enabled} onCheckedChange={setEnabled} disabled={busy || !data} />

@@ -21,6 +21,7 @@ export async function GET() {
   const lastRun = await prisma.googleSheetAutoSyncRun.findFirst({ orderBy: { startedAt: "desc" } });
   return NextResponse.json({
     enabled: settings.enabled,
+    schedulerConfigured: Boolean(process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET),
     dailyTime: settings.dailyTime,
     timeZone: settings.timeZone,
     localDate: clock.localDate,

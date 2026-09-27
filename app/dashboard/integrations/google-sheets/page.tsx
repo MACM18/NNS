@@ -21,6 +21,9 @@ import { FileSpreadsheet, ExternalLink, Calendar } from "lucide-react";
 import Link from "next/link";
 import ConnectionActions from "./components/ConnectionActions";
 import type { PageProps } from "@/types/common";
+import { reconcileSheetAutoSync } from "@/lib/google-sheet-auto-sync";
+import GoogleSheetAutoSyncSettings from "@/components/integrations/GoogleSheetAutoSyncSettings";
+import AutoSyncConnectionToggle from "./components/AutoSyncConnectionToggle";
 
 interface SheetConnectionRow {
   id: string;
@@ -32,6 +35,7 @@ interface SheetConnectionRow {
   last_synced: string | null;
   status: string | null;
   record_count: number | null;
+  auto_sync_enabled: boolean;
   created_at: string;
   material_balance_import: {
     imported_at: string;
@@ -60,7 +64,7 @@ async function fetchConnections(page = 1, pageSize = 10) {
 
   const [rows, total] = await Promise.all([
     prisma.googleSheetConnection.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ year: "desc" }, { month: "desc" }, { createdAt: "desc" }],
       skip,
       take: pageSize,
       select: {
@@ -73,6 +77,7 @@ async function fetchConnections(page = 1, pageSize = 10) {
         lastSynced: true,
         status: true,
         recordCount: true,
+        autoSyncEnabled: true,
         createdAt: true,
         materialBalanceImports: {
           orderBy: { importedAt: "desc" },
@@ -94,6 +99,7 @@ async function fetchConnections(page = 1, pageSize = 10) {
     last_synced: r.lastSynced,
     status: r.status,
     record_count: r.recordCount,
+    auto_sync_enabled: r.autoSyncEnabled,
     created_at: (r.createdAt as Date)?.toISOString?.() || r.createdAt,
     material_balance_import: r.materialBalanceImports?.[0]
       ? {
@@ -125,7 +131,7 @@ function getStatusBadge(status: string | null) {
   switch ((status || "").toLowerCase()) {
     case "active":
       return (
-        <Badge variant='default' className='bg-green-500'>
+        <Badge variant='default'>
           Active
         </Badge>
       );
@@ -144,6 +150,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
     parseInt((resolvedSearchParams?.page as string) || "1", 10) || 1;
   const pageSize = 10;
 
+  const { newestConnection } = await reconcileSheetAutoSync();
   const { rows, total } = await fetchConnections(currentPage, pageSize);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -167,7 +174,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
         <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
           <div>
             <h1 className='text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-3'>
-              <FileSpreadsheet className='h-6 w-6 md:h-8 md:w-8 text-green-600' />
+              <FileSpreadsheet className='h-6 w-6 md:h-8 md:w-8 text-primary' />
               Google Sheets Integration
             </h1>
             <p className='text-muted-foreground mt-2 text-sm md:text-base'>
@@ -190,6 +197,8 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
           </div>
         </div>
       </div>
+
+      <div className='mb-6'><GoogleSheetAutoSyncSettings /></div>
 
       {/* Connections List */}
       <Card>
@@ -227,6 +236,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                       <TableHead className='min-w-[200px]'>Sheet</TableHead>
                       <TableHead className='w-[120px]'>Status</TableHead>
                       <TableHead className='w-[100px]'>Records</TableHead>
+                      <TableHead className='w-[125px]'>Auto-sync</TableHead>
                       <TableHead className='w-[180px]'>Last Synced</TableHead>
                       <TableHead className='w-[120px] text-right'>
                         Actions
@@ -254,7 +264,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                               href={connection.sheet_url}
                               target='_blank'
                               rel='noopener noreferrer'
-                              className='flex items-center gap-2 hover:underline text-blue-600'
+                              className='flex items-center gap-2 hover:underline text-primary'
                             >
                               <span className='truncate max-w-[250px]'>
                                 {"Link to Sheet"}
@@ -273,6 +283,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                           <TableCell className='text-center'>
                             {connection.record_count ?? 0}
                           </TableCell>
+                          <TableCell><AutoSyncConnectionToggle connectionId={connection.id} checked={connection.auto_sync_enabled} eligible={newestConnection?.id === connection.id} /></TableCell>
                           <TableCell className='text-muted-foreground text-sm'>
                             {formatDate(connection.last_synced)}
                           </TableCell>
@@ -315,7 +326,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                                 href={connection.sheet_url}
                                 target='_blank'
                                 rel='noopener noreferrer'
-                                className='flex items-center gap-1 hover:underline text-blue-600 text-xs'
+                                className='flex items-center gap-1 hover:underline text-primary text-xs'
                               >
                                 View Sheet
                                 <ExternalLink className='h-3 w-3' />
@@ -325,6 +336,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                           <TableCell>
                             <div className='space-y-1'>
                               {getStatusBadge(connection.status)}
+                              <AutoSyncConnectionToggle connectionId={connection.id} checked={connection.auto_sync_enabled} eligible={newestConnection?.id === connection.id} />
                               <div className='text-[11px] text-muted-foreground'>
                                 Material: {connection.material_balance_import?.status || "Not imported"}
                               </div>
@@ -367,6 +379,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                           </div>
                           {getStatusBadge(connection.status)}
                         </div>
+                        <AutoSyncConnectionToggle connectionId={connection.id} checked={connection.auto_sync_enabled} eligible={newestConnection?.id === connection.id} />
                         <div className='flex items-center justify-between text-sm'>
                           <span className='text-muted-foreground'>Material Balance:</span>
                           <span className='font-medium'>
@@ -378,7 +391,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                             href={connection.sheet_url}
                             target='_blank'
                             rel='noopener noreferrer'
-                            className='flex items-center gap-2 hover:underline text-blue-600 text-sm break-all'
+                            className='flex items-center gap-2 hover:underline text-primary text-sm break-all'
                           >
                             {connection.sheet_name ?? connection.sheet_url}
                             <ExternalLink className='h-3 w-3 flex-shrink-0' />
