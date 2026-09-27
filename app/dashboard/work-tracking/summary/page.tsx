@@ -231,7 +231,7 @@ export default function WorkTrackingSummaryPage() {
   };
 
   return (
-    <div className='space-y-6'>
+    <div className='min-w-0 space-y-4 2xl:space-y-6'>
       <WorkTrackingHeader />
 
       <Card className='p-4 shadow-sm'>
@@ -243,7 +243,7 @@ export default function WorkTrackingSummaryPage() {
               period.
             </p>
           </div>
-          <div className='flex gap-2'>
+          <div className='flex w-full flex-wrap gap-2 sm:w-auto'>
             <Select
               value={selectedEmployee}
               onValueChange={setSelectedEmployee}

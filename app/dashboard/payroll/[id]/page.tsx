@@ -467,7 +467,7 @@ export default function PayrollPeriodDetailPage({
 
   if (!period) {
     return (
-      <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+      <div className='min-w-0 flex-1 space-y-4 p-0 2xl:p-8'>
         <div className='text-center py-12'>
           <h2 className='text-xl font-semibold'>Payroll Period Not Found</h2>
           <p className='text-muted-foreground mt-2'>
@@ -490,7 +490,7 @@ export default function PayrollPeriodDetailPage({
   };
 
   return (
-    <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+    <div className='min-w-0 flex-1 space-y-4 p-0 2xl:p-8'>
       <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
         <div className='flex items-center gap-4'>
           <Button variant='ghost' size='icon' asChild>

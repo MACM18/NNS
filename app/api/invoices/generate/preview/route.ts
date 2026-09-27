@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     const profile = await prisma.profile.findUnique({ where: { userId: session.user.id }, select: { role: true } });
     if (!["admin", "moderator", "superadmin"].includes((profile?.role || "").toLowerCase())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const body = await request.json();
-    const pricing = await calculateInvoicePricingPreview({ lineDetailsIds: body.lineDetailsIds, invoiceType: body.invoiceType });
+    const pricing = await calculateInvoicePricingPreview({ lineDetailsIds: body.lineDetailsIds, invoiceType: body.invoiceType, optionalItems: body.optionalItems });
     return NextResponse.json({ data: pricing });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to calculate invoice pricing";

@@ -524,7 +524,7 @@ export default function PayrollPage() {
   // if (loading) { ... }
 
   return (
-    <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+    <div className='min-w-0 flex-1 space-y-4 p-0 2xl:p-8'>
       <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
         <div>
           <h2 className='text-3xl font-bold tracking-tight'>Payroll</h2>

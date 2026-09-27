@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createPricingSchedule, listPricingSchedules } from "@/lib/pricing-service";
+import { createPricingSchedule, listPricingSchedules, DEFAULT_DATA_TIERS, DEFAULT_PEO_TV_RATE } from "@/lib/pricing-service";
 import { prisma } from "@/lib/prisma";
+import { OPTIONAL_ITEM_RATES } from "@/lib/service-pricing-types";
 
 const MANAGEMENT_ROLES = ["admin", "superadmin"];
 const VIEW_ROLES = ["admin", "moderator", "superadmin"];
@@ -20,12 +21,21 @@ function formatSchedule(schedule: Awaited<ReturnType<typeof listPricingSchedules
     status: schedule.status,
     locked_at: schedule.lockedAt?.toISOString() || null,
     created_at: schedule.createdAt.toISOString(),
-    tiers: schedule.tiers.map((tier) => ({
+    peo_tv_rate: Number(schedule.peoTvRate ?? DEFAULT_PEO_TV_RATE),
+    optional_rates: { ...OPTIONAL_ITEM_RATES, ...(schedule.optionalRates as Record<string, number> || {}) },
+    tiers: schedule.tiers.filter((tier) => tier.serviceType !== "DATA").map((tier) => ({
       id: tier.id,
       min_length: Number(tier.minLength),
       max_length: tier.maxLength == null ? null : Number(tier.maxLength),
       rate: Number(tier.rate),
     })),
+    data_tiers: (schedule.tiers.some((tier) => tier.serviceType === "DATA")
+      ? schedule.tiers.filter((tier) => tier.serviceType === "DATA")
+      : DEFAULT_DATA_TIERS).map((tier) => ({
+        min_length: Number(tier.minLength),
+        max_length: tier.maxLength == null ? null : Number(tier.maxLength),
+        rate: Number(tier.rate),
+      })),
   };
 }
 
@@ -53,6 +63,7 @@ export async function POST(request: NextRequest) {
     }
     const body = await request.json();
     const tiers = Array.isArray(body.tiers) ? body.tiers : [];
+    const dataTiers = Array.isArray(body.data_tiers) ? body.data_tiers : [];
     const schedule = await createPricingSchedule({
       name: String(body.name || ""),
       effectiveFrom: String(body.effective_from || body.effectiveFrom || ""),
@@ -61,12 +72,19 @@ export async function POST(request: NextRequest) {
         maxLength: tier.max_length == null || String(tier.max_length) === "" ? null : Number(tier.max_length ?? tier.maxLength),
         rate: Number(tier.rate),
       })),
+      dataTiers: dataTiers.map((tier: Record<string, unknown>) => ({
+        minLength: Number(tier.min_length ?? tier.minLength),
+        maxLength: tier.max_length == null || String(tier.max_length) === "" ? null : Number(tier.max_length ?? tier.maxLength),
+        rate: Number(tier.rate),
+      })),
+      peoTvRate: Number(body.peo_tv_rate),
+      optionalRates: body.optional_rates,
       createdById: profile.id,
     });
     return NextResponse.json({ data: formatSchedule(schedule) }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create pricing schedule";
-    const status = message.includes("already exists") || message.includes("required") || message.includes("tier") || message.includes("ordered") ? 400 : 500;
+    const status = message.includes("already exists") || message.includes("required") || message.includes("tier") || message.includes("ordered") || message.includes("rate") || message.includes("positive") ? 400 : 500;
     console.error("Error creating pricing schedule:", error);
     return NextResponse.json({ error: message }, { status });
   }

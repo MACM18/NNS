@@ -67,6 +67,7 @@ export async function GET(req: NextRequest) {
       pricing_schedule_id: inv.pricingScheduleId || null,
       pricing_snapshot: inv.pricingSnapshot || null,
       line_details_snapshot: inv.lineDetailsSnapshot || null,
+      optional_items_snapshot: inv.optionalItemsSnapshot || null,
       status: inv.status || null,
       paid_amount: Number(inv.paidAmount || 0),
       payment_status: inv.paymentStatus,
@@ -137,6 +138,7 @@ export async function POST(req: NextRequest) {
           jobMonth,
           invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
           lineDetailsIds,
+          optionalItems: body.optional_items ?? body.optionalItems,
           status,
           createdById: profile!.id,
         })
@@ -170,6 +172,7 @@ export async function POST(req: NextRequest) {
       pricing_schedule_id: invoice.pricingScheduleId || null,
       pricing_snapshot: invoice.pricingSnapshot || null,
       line_details_snapshot: invoice.lineDetailsSnapshot || null,
+      optional_items_snapshot: invoice.optionalItemsSnapshot || null,
       status: invoice.status || null,
       paid_amount: Number(invoice.paidAmount || 0),
       payment_status: invoice.paymentStatus,

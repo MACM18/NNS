@@ -151,7 +151,7 @@ export default function BankAccountsPage() {
   };
 
   return (
-    <div className='p-4'>
+    <div className='min-w-0 p-0 2xl:p-4'>
       <div className='flex items-center justify-between mb-4'>
         <h2 className='text-2xl font-bold'>Bank Accounts</h2>
         <div>

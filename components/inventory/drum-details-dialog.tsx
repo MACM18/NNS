@@ -175,8 +175,8 @@ export function DrumDetailsDialog({
       <DialogContent className="sm:max-w-[1100px] max-h-[90vh] p-0 overflow-hidden">
         {/* Compact Header */}
         <DialogHeader className="px-5 pt-4 pb-3 border-b bg-muted/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <Package className="h-4 w-4 text-primary" />
               </div>
@@ -210,9 +210,9 @@ export function DrumDetailsDialog({
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="flex flex-col md:flex-row h-[calc(90vh-90px)] min-h-[450px]">
+          <div className="flex flex-col md:flex-row md:h-[calc(90dvh-90px)] md:min-h-[450px]">
             {/* LEFT PANEL — Compact Stats & Visualization */}
-            <div className="w-full md:w-[360px] md:border-r border-b md:border-b-0 overflow-y-auto shrink-0">
+            <div className="w-full md:w-[360px] md:border-r border-b md:border-b-0 md:overflow-y-auto shrink-0">
               <div className="p-4 space-y-3">
                 {/* Inline Stats Row */}
                 <div className="grid grid-cols-3 gap-2">
@@ -363,7 +363,7 @@ export function DrumDetailsDialog({
                 )}
               </div>
 
-              <ScrollArea className="flex-1">
+              <ScrollArea className="h-[min(24rem,60dvh)] md:h-auto md:flex-1">
                 <div className="p-3 space-y-2">
                   {usageRecords.length === 0 ? (
                     <div className="text-center py-16 text-muted-foreground">

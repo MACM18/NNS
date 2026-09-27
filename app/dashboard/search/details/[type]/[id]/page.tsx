@@ -335,7 +335,7 @@ export default async function SearchDetailsPage({ params }: any) {
   }
 
   return (
-    <div className='container mx-auto p-6 space-y-6'>
+    <div className='container mx-auto min-w-0 p-0 space-y-4 2xl:space-y-6 2xl:p-6'>
       <Card>
         <CardHeader>
           <CardTitle className='flex items-center gap-3'>

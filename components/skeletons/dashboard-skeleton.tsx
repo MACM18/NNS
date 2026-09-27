@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function DashboardSkeleton() {
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-4">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-4">
       {/* Header skeleton */}
       <div className="flex flex-col gap-4">
         <Skeleton className="h-8 w-48" />
@@ -15,15 +15,15 @@ export function DashboardSkeleton() {
       </div>
 
       {/* Stats Grid skeleton */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:gap-4">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Card key={i}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3.5 pb-2 2xl:p-5 2xl:pb-2">
               <Skeleton className="h-4 w-24" />
               <Skeleton className="h-4 w-4 rounded-full" />
             </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-20 mb-2" />
+            <CardContent className="p-3.5 pt-0 2xl:p-5 2xl:pt-0">
+              <Skeleton className="h-7 w-20 mb-2" />
               <Skeleton className="h-3 w-32" />
             </CardContent>
           </Card>
@@ -31,9 +31,9 @@ export function DashboardSkeleton() {
       </div>
 
       {/* Content Grid skeleton */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-12">
         {/* Recent Activities skeleton */}
-        <Card className="lg:col-span-4">
+        <Card className="min-w-0 xl:col-span-8">
           <CardHeader>
             <Skeleton className="h-6 w-40 mb-2" />
             <Skeleton className="h-4 w-64" />
@@ -54,7 +54,7 @@ export function DashboardSkeleton() {
         </Card>
 
         {/* Quick Actions skeleton */}
-        <Card className="lg:col-span-3">
+        <Card className="min-w-0 xl:col-span-4">
           <CardHeader>
             <Skeleton className="h-6 w-32 mb-2" />
             <Skeleton className="h-4 w-48" />

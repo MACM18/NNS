@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { OPTIONAL_ITEM_DESCRIPTIONS, OPTIONAL_ITEM_RATES, type OptionalItemCode, type OptionalItemInput } from "@/lib/service-pricing-types";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -18,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -52,7 +53,8 @@ interface InvoicePreview {
   lines: LineDetail[];
   totalAmount: number;
   invoiceNumber: string;
-  linePricing: Record<string, { baseRate: number; invoiceAmount: number }>;
+  linePricing: Record<string, { baseRate: number; invoiceAmount: number; description: string }>;
+  optionalPricing: Array<{ code: OptionalItemCode; description: string; quantity: number; unitRate: number; invoiceAmount: number }>;
 }
 
 export function GenerateMonthlyInvoicesModal({
@@ -62,13 +64,22 @@ export function GenerateMonthlyInvoicesModal({
 }: GenerateMonthlyInvoicesModalProps) {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(() => (new Date().getMonth() + 1).toString().padStart(2, "0"));
   const [selectedYear, setSelectedYear] = useState(
     new Date().getFullYear().toString()
   );
   const [lineDetails, setLineDetails] = useState<LineDetail[]>([]);
   const [invoicePreviews, setInvoicePreviews] = useState<InvoicePreview[]>([]);
-  const [companySettings, setCompanySettings] = useState<any>(null);
+  const [optionalItems, setOptionalItems] = useState<Record<OptionalItemCode, number>>({ POLE_56: 0, POLE_67: 0, POLE_8: 0, HIGH_RISE: 0 });
+  const [optionalRateOverrides, setOptionalRateOverrides] = useState<Record<OptionalItemCode, string>>({ POLE_56: "", POLE_67: "", POLE_8: "", HIGH_RISE: "" });
+  const previewRequest = useRef(0);
+  const lineFetchRequest = useRef(0);
+  const selectedOptionalItems = (): OptionalItemInput => Object.fromEntries(
+    (Object.keys(OPTIONAL_ITEM_RATES) as OptionalItemCode[]).map((code) => [code, {
+      quantity: optionalItems[code],
+      ...(optionalRateOverrides[code].trim() ? { unitRate: Number(optionalRateOverrides[code]) } : {}),
+    }]),
+  );
 
   const { addNotification } = useNotification();
 
@@ -95,79 +106,35 @@ export function GenerateMonthlyInvoicesModal({
   );
 
   useEffect(() => {
+    if (!open) {
+      lineFetchRequest.current += 1;
+      previewRequest.current += 1;
+      return;
+    }
     if (open) {
-      // Set default to current month
-      const currentMonth = new Date().getMonth() + 1;
-      setSelectedMonth(currentMonth.toString().padStart(2, "0"));
+      setLineDetails([]);
+      setInvoicePreviews([]);
+      setOptionalItems({ POLE_56: 0, POLE_67: 0, POLE_8: 0, HIGH_RISE: 0 });
+      setOptionalRateOverrides({ POLE_56: "", POLE_67: "", POLE_8: "", HIGH_RISE: "" });
     }
   }, [open]);
 
   useEffect(() => {
-    if (selectedMonth && selectedYear) {
+    if (open && selectedMonth && selectedYear) {
       fetchLineDetails();
     }
-  }, [selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedYear, open]);
 
-  const fetchCompanySettings = async () => {
-    try {
-      const response = await fetch("/api/settings/company");
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch company settings");
-      }
-
-      const { data } = await response.json();
-
-      let parsedData = data;
-      if (!parsedData) parsedData = {};
-
-      // Normalize pricing_tiers into array with numeric fields
-      const normalizeTiers = (tiers: any) => {
-        if (!tiers) return [];
-        if (typeof tiers === "string") {
-          try {
-            tiers = JSON.parse(tiers);
-          } catch {
-            return [];
-          }
-        }
-        if (typeof tiers === "object" && !Array.isArray(tiers)) {
-          return Object.entries(tiers).map(([range, rate]) => {
-            if (range === "500+")
-              return {
-                min_length: 501,
-                max_length: 999999,
-                rate: Number(rate) || 0,
-              };
-            const [min, max] = range.split("-").map(Number);
-            return {
-              min_length: Number(min) || 0,
-              max_length: Number(max) || 999999,
-              rate: Number(rate) || 0,
-            };
-          });
-        }
-        if (Array.isArray(tiers)) {
-          return tiers.map((t: any) => ({
-            min_length: Number(t.min_length) || 0,
-            max_length:
-              t.max_length === 999999 || String(t.max_length) === ""
-                ? 999999
-                : Number(t.max_length) || 999999,
-            rate: Number(t.rate) || 0,
-          }));
-        }
-        return [];
-      };
-
-      parsedData.pricing_tiers = normalizeTiers(parsedData.pricing_tiers);
-      setCompanySettings(parsedData);
-    } catch (error) {
-      console.error("Error fetching company settings:", error);
-    }
-  };
+  useEffect(() => {
+    if (lineDetails.length === 0) return;
+    generateInvoicePreviews(lineDetails).catch((error) => addNotification({ title: "Unable to price optional items", message: error instanceof Error ? error.message : "Try again", type: "error", category: "system" }));
+  }, [lineDetails, optionalItems, optionalRateOverrides]);
 
   const fetchLineDetails = async () => {
+    const requestId = ++lineFetchRequest.current;
+    previewRequest.current += 1;
+    setLineDetails([]);
+    setInvoicePreviews([]);
     setLoading(true);
     try {
       const response = await fetch(
@@ -179,11 +146,12 @@ export function GenerateMonthlyInvoicesModal({
       }
 
       const { data } = await response.json();
+      if (requestId !== lineFetchRequest.current) return;
 
       const nextLines = (data as unknown as LineDetail[]) || [];
       setLineDetails(nextLines);
-      await generateInvoicePreviews(nextLines);
     } catch (error: any) {
+      if (requestId !== lineFetchRequest.current) return;
       addNotification({
         title: "Error",
         message: "Failed to fetch line details",
@@ -191,29 +159,8 @@ export function GenerateMonthlyInvoicesModal({
         category: "system",
       });
     } finally {
-      setLoading(false);
+      if (requestId === lineFetchRequest.current) setLoading(false);
     }
-  };
-
-  const calculateRate = (cableLength: number): number => {
-    if (
-      !companySettings?.pricing_tiers ||
-      !Array.isArray(companySettings.pricing_tiers)
-    ) {
-      // Default pricing if no settings
-      if (cableLength <= 100) return 6000;
-      if (cableLength <= 200) return 6500;
-      if (cableLength <= 300) return 7200;
-      if (cableLength <= 400) return 7800;
-      if (cableLength <= 500) return 8200;
-      return 8400;
-    }
-
-    const tier = companySettings.pricing_tiers.find(
-      (t: any) => cableLength >= t.min_length && cableLength <= t.max_length
-    );
-
-    return tier ? tier.rate : 8400;
   };
 
   const generateInvoicePreviews = async (lines: LineDetail[]) => {
@@ -222,17 +169,21 @@ export function GenerateMonthlyInvoicesModal({
       return;
     }
 
+    const requestId = ++previewRequest.current;
+    setInvoicePreviews([]);
     const lineDetailsIds = lines.map((line) => line.id);
     const pricingResponses = await Promise.all(["A", "B"].map(async (invoiceType) => {
       const response = await fetch("/api/invoices/generate/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineDetailsIds, invoiceType }),
+        body: JSON.stringify({ lineDetailsIds, invoiceType, optionalItems: selectedOptionalItems() }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Unable to calculate invoice preview");
       return result.data;
     }));
+
+    if (requestId !== previewRequest.current) return;
 
     // Generate invoice numbers
     const monthName =
@@ -249,7 +200,8 @@ export function GenerateMonthlyInvoicesModal({
         lines: lines, // All lines
         totalAmount: Number(pricingResponses[0].totalAmount),
         invoiceNumber: `${baseInvoiceNumber}/A`,
-        linePricing: Object.fromEntries(pricingResponses[0].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount }])),
+        linePricing: Object.fromEntries(pricingResponses[0].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number; description: string }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount, description: line.description }])),
+        optionalPricing: pricingResponses[0].optionalItemsSnapshot || [],
       },
       {
         type: "B" as const,
@@ -257,7 +209,8 @@ export function GenerateMonthlyInvoicesModal({
         lines: lines, // All lines
         totalAmount: Number(pricingResponses[1].totalAmount),
         invoiceNumber: `${baseInvoiceNumber}/B`,
-        linePricing: Object.fromEntries(pricingResponses[1].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount }])),
+        linePricing: Object.fromEntries(pricingResponses[1].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number; description: string }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount, description: line.description }])),
+        optionalPricing: pricingResponses[1].optionalItemsSnapshot || [],
       },
     ];
 
@@ -299,6 +252,7 @@ export function GenerateMonthlyInvoicesModal({
         total_amount: preview.totalAmount,
         line_count: preview.lines.length,
         line_details_ids: preview.lines.map((line) => line.id),
+        optional_items: selectedOptionalItems(),
         status: "generated",
       }));
 
@@ -469,6 +423,20 @@ export function GenerateMonthlyInvoicesModal({
             </Card>
           )}
 
+          <Card>
+            <CardHeader><CardTitle>Optional invoice items</CardTitle><CardDescription>Enter quantities to add these charges. Recorded pole counts are not billed automatically. Rates can be adjusted in Pricing schedules.</CardDescription></CardHeader>
+            <CardContent className='grid gap-4 sm:grid-cols-2'>
+              {(Object.keys(OPTIONAL_ITEM_RATES) as OptionalItemCode[]).map((code) => (
+                <div key={code} className='space-y-1'>
+                  <Label htmlFor={`invoice-item-${code}`}>{OPTIONAL_ITEM_DESCRIPTIONS[code]} quantity</Label>
+                  <input id={`invoice-item-${code}`} type='number' min='0' step='1' value={optionalItems[code]} onChange={(event) => { setInvoicePreviews([]); setOptionalItems((items) => ({ ...items, [code]: Number(event.target.value) })); }} className='flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm' />
+                  <Label htmlFor={`invoice-rate-${code}`}>Unit rate override (LKR, optional)</Label>
+                  <input id={`invoice-rate-${code}`} type='number' min='0' step='0.01' value={optionalRateOverrides[code]} onChange={(event) => { setInvoicePreviews([]); setOptionalRateOverrides((rates) => ({ ...rates, [code]: event.target.value })); }} placeholder='Use rate from pricing settings' className='flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm' />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
           {/* Invoice Previews */}
           {invoicePreviews.length > 0 && (
             <div className='space-y-4'>
@@ -519,6 +487,7 @@ export function GenerateMonthlyInvoicesModal({
                           <TableRow>
                             <TableHead>Customer</TableHead>
                             <TableHead>Phone</TableHead>
+                            <TableHead>Service</TableHead>
                             <TableHead>Cable Length</TableHead>
                             <TableHead>Rate</TableHead>
                             <TableHead>Amount</TableHead>
@@ -529,6 +498,7 @@ export function GenerateMonthlyInvoicesModal({
                             <TableRow key={line.id}>
                               <TableCell>{line.name}</TableCell>
                               <TableCell>{line.phone_number}</TableCell>
+                              <TableCell>{preview.linePricing[line.id]?.description || "—"}</TableCell>
                               <TableCell>
                                 {Number(line.total_cable || 0).toFixed(2)}m
                               </TableCell>
@@ -546,10 +516,20 @@ export function GenerateMonthlyInvoicesModal({
                               </TableCell>
                             </TableRow>
                           ))}
+                          {preview.optionalPricing.map((item) => (
+                            <TableRow key={item.code}>
+                              <TableCell>Optional</TableCell>
+                              <TableCell>—</TableCell>
+                              <TableCell>{item.description}</TableCell>
+                              <TableCell>Qty {item.quantity}</TableCell>
+                              <TableCell>LKR {item.unitRate.toLocaleString()}</TableCell>
+                              <TableCell>LKR {item.invoiceAmount.toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))}
                           {preview.lines.length > 5 && (
                             <TableRow>
                               <TableCell
-                                colSpan={5}
+                                colSpan={6}
                                 className='text-center text-muted-foreground'
                               >
                                 ... and {preview.lines.length - 5} more lines

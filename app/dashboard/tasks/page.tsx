@@ -119,7 +119,7 @@ export default function TasksPage() {
   };
 
   return (
-    <div className='space-y-6'>
+    <div className='min-w-0 space-y-4 2xl:space-y-6'>
       {loading ? (
         <TasksSkeleton />
       ) : (

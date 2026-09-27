@@ -135,7 +135,7 @@ export default function TransactionsPage() {
     await loadTransactions(form.financialYearId);
   };
 
-  return <div className='flex-1 space-y-6 p-4 pt-6 md:p-8'>
+  return <div className='min-w-0 flex-1 space-y-4 p-0 2xl:space-y-6 2xl:p-8'>
     <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
       <div><h1 className='text-3xl font-bold tracking-tight'>Business transactions</h1><p className='text-muted-foreground'>Capture income, expenses, partner drawings, and internal cash movements.</p></div>
       <div className='flex gap-2'><Button variant='outline' onClick={() => void load()}><RefreshCw className='mr-2 h-4 w-4' />Refresh</Button><Button onClick={() => setShowForm((value) => !value)}><Plus className='mr-2 h-4 w-4' />New transaction</Button></div>

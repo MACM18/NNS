@@ -226,7 +226,7 @@ export default function PaymentsPage() {
 
   if (loading) {
     return (
-      <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+      <div className='min-w-0 flex-1 space-y-4 p-0 2xl:p-8'>
         <h2 className='text-3xl font-bold tracking-tight'>Payments</h2>
         <TableSkeleton rows={10} columns={7} />
       </div>
@@ -234,7 +234,7 @@ export default function PaymentsPage() {
   }
 
   return (
-    <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+    <div className='min-w-0 flex-1 space-y-4 p-0 2xl:p-8'>
       <div className='flex items-center justify-between space-y-2'>
         <div>
           <h2 className='text-3xl font-bold tracking-tight'>Payments</h2>

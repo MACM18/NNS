@@ -11,8 +11,8 @@ COPY package.json pnpm-lock.yaml* package-lock.json* ./
 
 # Install all dependencies (including devDependencies)
 RUN \
-  if [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm i --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci; \
+  if [ -f package-lock.json ]; then npm ci; \
+  elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm i --frozen-lockfile; \
   else npm install; \
   fi
 
@@ -24,7 +24,8 @@ RUN DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npx prisma genera
 
 # Build Next.js app
 RUN \
-  if [ -f pnpm-lock.yaml ]; then npm install -g pnpm && DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy pnpm run build; \
+  if [ -f package-lock.json ]; then DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npm run build; \
+  elif [ -f pnpm-lock.yaml ]; then DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy pnpm run build; \
   else DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npm run build; \
   fi
 

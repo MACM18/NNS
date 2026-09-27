@@ -201,10 +201,10 @@ export function ManageWorkersModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0">
-        <div className="p-6 pb-4 border-b">
+      <DialogContent className="max-w-5xl max-h-[92vh] md:overflow-hidden block md:flex md:flex-col p-0 gap-0">
+        <div className="p-4 sm:p-6 pb-4 border-b">
           <DialogHeader>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <DialogTitle className="text-xl font-bold">Manage Workers</DialogTitle>
                 <DialogDescription className="mt-1">
@@ -226,7 +226,7 @@ export function ManageWorkersModal({
           </DialogHeader>
         </div>
 
-        <div className="flex-1 flex flex-col min-h-0 p-4 md:p-6 overflow-hidden bg-muted/20">
+        <div className="flex-1 flex flex-col min-h-0 p-4 md:p-6 md:overflow-hidden bg-muted/20">
           {/* Mobile Tab Switcher */}
           <div className="flex md:hidden bg-muted p-1 rounded-xl mb-4 border shadow-sm">
             <button
@@ -251,10 +251,10 @@ export function ManageWorkersModal({
             </button>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-[1fr,400px] lg:grid-cols-[1fr,420px] flex-1 overflow-hidden min-h-0">
+          <div className="grid gap-6 md:grid-cols-[1fr,400px] lg:grid-cols-[1fr,420px] flex-1 md:overflow-hidden min-h-0">
             {/* Workers List Column */}
             <div className={cn(
-              "flex-1 flex flex-col min-h-0 bg-background border rounded-2xl shadow-sm overflow-hidden",
+              "flex-1 flex flex-col min-h-0 bg-background border rounded-2xl shadow-sm md:overflow-hidden",
               activeTab !== "list" && "hidden md:flex"
             )}>
               <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
@@ -265,7 +265,7 @@ export function ManageWorkersModal({
                 </h3>
               </div>
 
-              <div className='flex-1 overflow-auto p-3 space-y-3 custom-scrollbar'>
+              <div className='flex-1 md:overflow-auto p-3 space-y-3 custom-scrollbar'>
                 {loading ? (
                   <div className='flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground'>
                     <Loader2 className='h-8 w-8 animate-spin text-primary opacity-50' />
@@ -401,7 +401,7 @@ export function ManageWorkersModal({
               "flex-1 flex flex-col min-h-0",
               activeTab !== "form" && "hidden md:flex"
             )}>
-              <div className='flex-1 flex flex-col bg-background border rounded-2xl shadow-lg border-primary/10 overflow-hidden'>
+              <div className='flex-1 flex flex-col bg-background border rounded-2xl shadow-lg border-primary/10 md:overflow-hidden'>
                 <div className="p-5 border-b bg-gradient-to-r from-primary/5 to-transparent flex items-center justify-between">
                   <div className="space-y-0.5">
                     <h3 className='font-black text-foreground flex items-center gap-2 tracking-tight uppercase text-xs'>
@@ -422,7 +422,7 @@ export function ManageWorkersModal({
                 </div>
 
                 <form onSubmit={handleSubmit} className='flex-1 flex flex-col min-h-0'>
-                  <div className="flex-1 overflow-auto p-5 space-y-8 custom-scrollbar">
+                  <div className="flex-1 md:overflow-auto p-5 space-y-8 custom-scrollbar">
                     {/* Basic Info Group */}
                     <div className="space-y-4">
                       <h4 className="text-[10px] uppercase font-black tracking-[0.2em] text-primary/60 flex items-center gap-2">
@@ -447,7 +447,7 @@ export function ManageWorkersModal({
                           />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor='employee_no' className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">ID Number</Label>
                             <Input

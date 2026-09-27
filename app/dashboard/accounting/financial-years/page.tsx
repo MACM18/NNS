@@ -146,7 +146,7 @@ export default function FinancialYearsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-6 p-4 pt-6 md:p-8">
+    <div className="min-w-0 flex-1 space-y-4 p-0 2xl:space-y-6 2xl:p-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Financial years and opening conversion</h1>
         <p className="text-muted-foreground">Start clean accounting on April 1, carry forward unpaid service invoices, and preserve old records as legacy history.</p>

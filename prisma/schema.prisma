@@ -174,6 +174,8 @@ model PricingSchedule {
   name          String
   effectiveFrom DateTime  @map("effective_from") @db.Date
   status        String    @default("active")
+  peoTvRate     Decimal   @default(1800) @map("peo_tv_rate") @db.Decimal(14, 2)
+  optionalRates Json     @default("{}") @map("optional_rates")
   createdById   String?   @map("created_by")
   lockedAt      DateTime? @map("locked_at")
   createdAt     DateTime  @default(now()) @map("created_at")
@@ -191,13 +193,14 @@ model PricingSchedule {
 model PricingTier {
   id                String   @id @default(uuid())
   pricingScheduleId String   @map("pricing_schedule_id")
+  serviceType       String   @default("FTTH") @map("service_type")
   minLength         Decimal  @map("min_length") @db.Decimal(10, 2)
   maxLength         Decimal? @map("max_length") @db.Decimal(10, 2)
   rate              Decimal  @db.Decimal(14, 2)
 
   pricingSchedule PricingSchedule @relation(fields: [pricingScheduleId], references: [id], onDelete: Cascade)
 
-  @@index([pricingScheduleId, minLength, maxLength])
+  @@index([pricingScheduleId, serviceType, minLength, maxLength], map: "pricing_tiers_schedule_type_length_idx")
   @@map("pricing_tiers")
 }
 
@@ -627,6 +630,7 @@ model GeneratedInvoice {
   pricingScheduleId String? @map("pricing_schedule_id")
   pricingSnapshot Json? @map("pricing_snapshot")
   lineDetailsSnapshot Json? @map("line_details_snapshot")
+  optionalItemsSnapshot Json? @map("optional_items_snapshot")
   
   createdAt      DateTime @default(now()) @map("created_at")
 
@@ -773,6 +777,7 @@ model GoogleSheetConnection {
   lastSynced  DateTime? @map("last_synced")
   status      String    @default("active")
   recordCount Int       @default(0) @map("record_count")
+  autoSyncEnabled Boolean @default(false) @map("auto_sync_enabled")
   metadata    Json      @default("{}")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
@@ -784,6 +789,29 @@ model GoogleSheetConnection {
 
   @@index([year, month])
   @@map("google_sheet_connections")
+}
+
+model GoogleSheetSyncSettings {
+  id          String    @id @default("default")
+  enabled     Boolean   @default(true)
+  dailyTime   String    @default("02:00") @map("daily_time")
+  timeZone    String    @default("Asia/Colombo") @map("time_zone")
+  activePeriod String?  @map("active_period")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("google_sheet_sync_settings")
+}
+
+model GoogleSheetAutoSyncRun {
+  id           String    @id @default(uuid())
+  localDate    String    @unique @map("local_date")
+  connectionId String    @map("connection_id")
+  status       String    @default("running")
+  error        String?
+  startedAt    DateTime  @default(now()) @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+
+  @@map("google_sheet_auto_sync_runs")
 }
 
 // ==========================================

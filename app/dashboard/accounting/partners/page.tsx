@@ -171,7 +171,7 @@ export default function PartnersPage() {
   };
 
   return (
-    <div className='flex-1 space-y-6 p-4 pt-6 md:p-8'>
+    <div className='min-w-0 flex-1 space-y-4 p-0 2xl:space-y-6 2xl:p-8'>
       <div><h1 className='text-3xl font-bold tracking-tight'>Partnership settings</h1><p className='text-muted-foreground'>Configure partner capital, drawings, and financial-year profit allocation.</p></div>
       <Card>
         <CardHeader><CardTitle className='flex items-center gap-2'><Users className='h-5 w-5' />Partners</CardTitle><CardDescription>Archived partners stay attached to historical accounting records but cannot be selected for new drawings.</CardDescription></CardHeader>

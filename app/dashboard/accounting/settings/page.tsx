@@ -500,7 +500,7 @@ export default function AccountingSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="min-w-0 flex-1 space-y-4 p-0 2xl:p-8">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -510,7 +510,7 @@ export default function AccountingSettingsPage() {
 
   if (!isInitialized) {
     return (
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="min-w-0 flex-1 space-y-4 p-0 2xl:p-8">
         <Card className="max-w-lg mx-auto">
           <CardHeader className="text-center">
             <Settings className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -545,7 +545,7 @@ export default function AccountingSettingsPage() {
   }
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+    <div className="min-w-0 flex-1 space-y-4 p-0 2xl:p-8">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Accounting Settings</h2>

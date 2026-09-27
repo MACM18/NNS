@@ -283,7 +283,7 @@ export default function WorkTrackingCalendarPage() {
   };
 
   return (
-    <div className='space-y-6'>
+    <div className='min-w-0 space-y-4 2xl:space-y-6'>
       <WorkTrackingHeader />
 
       <Card className='p-4 shadow-sm'>
@@ -294,7 +294,7 @@ export default function WorkTrackingCalendarPage() {
               Assign team members to the lines they worked on.
             </p>
           </div>
-          <div className='flex gap-2'>
+          <div className='flex w-full flex-wrap gap-2 sm:w-auto'>
             {canManageWorkers && (
               <Button
                 variant='outline'
@@ -366,12 +366,25 @@ export default function WorkTrackingCalendarPage() {
             <div
               key={key}
               className={cn(
-                "min-h-[120px] bg-background p-2 border-border border-t",
+                "min-w-0 min-h-[72px] sm:min-h-[120px] bg-background p-1 sm:p-2 border-border border-t",
                 !isCurrentMonth && "bg-muted/40 text-muted-foreground",
                 "cursor-pointer transition hover:bg-muted",
               )}
               onClick={() => handleOpenDay(day)}
             >
+              <button
+                type='button'
+                className='flex min-h-16 w-full flex-col items-center justify-center gap-1 rounded text-xs sm:hidden'
+                aria-label={`${format(day, "EEEE, d MMMM yyyy")}: ${dayLines.length} lines`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleOpenDay(day);
+                }}
+              >
+                <span className='font-semibold'>{format(day, "d")}</span>
+                {dayLines.length > 0 && <span className='rounded-full bg-primary/10 px-1 text-[10px] text-primary'>{dayLines.length}</span>}
+              </button>
+              <div className='hidden sm:block'>
               <div className='flex items-center justify-between text-xs font-semibold mb-2'>
                 <span>{format(day, "d")}</span>
                 {dayLines.length > 0 && (
@@ -410,6 +423,7 @@ export default function WorkTrackingCalendarPage() {
                     +{dayLines.length - 3} more
                   </div>
                 )}
+              </div>
               </div>
             </div>
           );

@@ -1,6 +1,8 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { timingSafeEqual } from "node:crypto";
+import { currentSheetPeriod } from "@/lib/google-sheet-auto-sync";
 import prisma from "@/lib/prisma";
 import { google } from "googleapis";
 import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
@@ -81,17 +83,29 @@ export async function createConnection(payload: {
     });
 
     try {
-      const created = await prisma.googleSheetConnection.create({
-        data: {
-          month: Number(month),
-          year: Number(year),
-          sheetUrl: sheet_url,
-          sheetName: sheet_name,
-          sheetTab: sheet_tab,
-          sheetId: spreadsheetId,
-          createdById: profile?.id || null,
-        },
-        select: { id: true },
+      const syncSettings = await prisma.googleSheetSyncSettings.findUnique({ where: { id: "default" } });
+      const period = currentSheetPeriod(syncSettings?.timeZone || "Asia/Colombo");
+      const isCurrentPeriod = Number(month) === period.month && Number(year) === period.year;
+      const created = await prisma.$transaction(async (tx) => {
+        if (isCurrentPeriod) {
+          await tx.googleSheetConnection.updateMany({
+            where: { autoSyncEnabled: true },
+            data: { autoSyncEnabled: false },
+          });
+        }
+        return tx.googleSheetConnection.create({
+          data: {
+            month: Number(month),
+            year: Number(year),
+            sheetUrl: sheet_url,
+            sheetName: sheet_name,
+            sheetTab: sheet_tab,
+            sheetId: spreadsheetId,
+            createdById: profile?.id || null,
+            autoSyncEnabled: isCurrentPeriod,
+          },
+          select: { id: true },
+        });
       });
 
       if (!created?.id) {
@@ -203,6 +217,26 @@ export async function syncConnection(
   connectionId: string,
   onProgress?: (message: string) => void
 ) {
+  const authCtx = await authorize();
+  return syncConnectionCore(connectionId, authCtx.userId, onProgress);
+}
+
+// This server action fails closed unless the cron route supplies the configured secret.
+export async function syncConnectionForCron(connectionId: string, suppliedSecret: string) {
+  const expected = process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET;
+  if (!expected || !suppliedSecret ||
+      Buffer.byteLength(expected) !== Buffer.byteLength(suppliedSecret) ||
+      !timingSafeEqual(Buffer.from(expected), Buffer.from(suppliedSecret))) {
+    throw new Error("Unauthorized scheduled import");
+  }
+  return syncConnectionCore(connectionId, null);
+}
+
+async function syncConnectionCore(
+  connectionId: string,
+  actorUserId: string | null,
+  onProgress?: (message: string) => void
+) {
   const skippedRows: any[] = [];
   try {
     const progress = (m: string) => {
@@ -210,9 +244,6 @@ export async function syncConnection(
         onProgress?.(m);
       } catch { }
     };
-
-    progress("Authorizing");
-    const authCtx = await authorize();
 
     if (!connectionId) {
       throw new Error("connectionId is required");
@@ -328,10 +359,12 @@ export async function syncConnection(
       const materialBalanceValues = materialBalanceRes.data.values || [];
       const monthlyMaterialBalanceValues = monthlyMaterialBalanceRes.data.values || [];
       if (materialBalanceValues.length > 0) {
-        const profile = await prisma.profile.findUnique({
-          where: { userId: authCtx.userId },
-          select: { id: true },
-        });
+        const profile = actorUserId
+          ? await prisma.profile.findUnique({
+              where: { userId: actorUserId },
+              select: { id: true },
+            })
+          : null;
         progress(`Importing ${MATERIAL_BALANCE_TAB} stock`);
         try {
           materialBalanceResult = await importMaterialBalanceValues({
@@ -1519,6 +1552,9 @@ function getHighestDP(dp1: string | null | undefined, dp2: string | null | undef
   
   if (!clean1) return clean2;
   if (!clean2) return clean1;
+  // A Peo TV marker is the service classification and must survive sheet merges.
+  if (/^peo[\s-]*tv$/i.test(clean2)) return clean2;
+  if (/^peo[\s-]*tv$/i.test(clean1)) return clean1;
 
   // Extract trailing/embedded numbers to compare numerically if possible
   const num1 = parseInt(clean1.replace(/\D/g, ""), 10);

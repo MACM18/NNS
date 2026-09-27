@@ -33,7 +33,10 @@ interface GeneratedInvoice {
     cableLength: number;
     baseRate: number;
     invoiceAmount: number;
+    description?: string;
+    serviceType?: string;
   }> | null;
+  optional_items_snapshot?: Array<{ code: string; description: string; quantity: number; unitRate: number; invoiceAmount: number }> | null;
   pricing_snapshot?: unknown;
   status: string;
   created_at: string;
@@ -54,6 +57,8 @@ interface LineDetail {
   address: string;
   base_rate?: number | null;
   invoice_amount?: number | null;
+  description?: string;
+  service_type?: string;
 }
 
 interface CompanySettings {
@@ -109,6 +114,8 @@ export function InvoicePDFModal({
           address: line.address,
           base_rate: line.baseRate,
           invoice_amount: line.invoiceAmount,
+          description: line.description,
+          service_type: line.serviceType,
         }));
       } else if (Array.isArray(invoice.line_details_ids) && invoice.line_details_ids.length > 0) {
         // Legacy invoices may still show current operational line details, but
@@ -169,31 +176,24 @@ export function InvoicePDFModal({
   });
 
   const groupLinesByRate = () => {
-    const groups: {
-      [key: string]: { count: number; rate: number | null; amount: number | null };
-    } = {};
+    const groups: Record<string, { description: string; count: number; rate: number | null; amount: number | null }> = {};
 
     lineDetails.forEach((line) => {
-      const rate = line.base_rate == null ? 0 : Number(line.base_rate);
-      let rangeKey = "";
-
-      if (line.base_rate == null) rangeKey = "Historical rate unavailable";
-      else if (line.total_cable <= 100) rangeKey = "0-100";
-      else if (line.total_cable <= 200) rangeKey = "101-200";
-      else if (line.total_cable <= 300) rangeKey = "201-300";
-      else if (line.total_cable <= 400) rangeKey = "301-400";
-      else if (line.total_cable <= 500) rangeKey = "401-500";
-      else rangeKey = "Over 500";
-
-      if (!groups[rangeKey]) {
-        groups[rangeKey] = { count: 0, rate: line.base_rate == null ? null : rate, amount: line.invoice_amount == null ? null : 0 };
-      }
-
-      groups[rangeKey].count += 1;
-      if (line.invoice_amount != null) groups[rangeKey].amount = (groups[rangeKey].amount || 0) + Number(line.invoice_amount);
+      let range = "Over 500";
+      if (line.total_cable <= 100) range = "0-100";
+      else if (line.total_cable <= 200) range = "101-200";
+      else if (line.total_cable <= 300) range = "201-300";
+      else if (line.total_cable <= 400) range = "301-400";
+      else if (line.total_cable <= 500) range = "401-500";
+      const description = line.description || (line.base_rate == null ? "Historical rate unavailable" : `FTTH - DW length (${range})`);
+      const rate = line.base_rate == null ? null : Number(line.base_rate);
+      const key = `${description}|${rate ?? "unknown"}`;
+      if (!groups[key]) groups[key] = { description, count: 0, rate, amount: line.invoice_amount == null ? null : 0 };
+      groups[key].count += 1;
+      if (line.invoice_amount != null) groups[key].amount = (groups[key].amount || 0) + Number(line.invoice_amount);
     });
 
-    return groups;
+    return Object.values(groups);
   };
 
   const handleDownload = () => {
@@ -280,12 +280,12 @@ export function InvoicePDFModal({
             </tr>
         </thead>
         <tbody>
-            ${Object.entries(groupedLines)
+            ${groupedLines
               .map(
-                ([range, data], index) => `
+                (data, index) => `
                 <tr>
                     <td>${index + 1}</td>
-                    <td>FTTH Wirings-DW Length- (${range})</td>
+                    <td>${data.description}</td>
                     <td></td>
                     <td></td>
                     <td>${data.count}</td>
@@ -295,24 +295,14 @@ export function InvoicePDFModal({
             `
               )
               .join("")}
+            ${(invoice.optional_items_snapshot || []).map((item, index) => `
             <tr>
-                <td>7</td>
-                <td>5.6m Pole Installations</td>
-                <td></td>
-                <td></td>
-                <td>0</td>
-                <td>700.00</td>
-                <td class="amount">-</td>
-            </tr>
-            <tr>
-                <td>8</td>
-                <td>6.7m Pole Installations</td>
-                <td></td>
-                <td></td>
-                <td>0</td>
-                <td>800.00</td>
-                <td class="amount">-</td>
-            </tr>
+              <td>${groupedLines.length + index + 1}</td>
+              <td>${item.description}</td><td></td><td></td>
+              <td>${item.quantity}</td>
+              <td>${Number(item.unitRate).toLocaleString()}.00</td>
+              <td class="amount">${Number(item.invoiceAmount).toLocaleString()}.00</td>
+            </tr>`).join("")}
             <tr class="total-row">
                 <td colspan="6"><strong>Grand Total (Rs.)</strong></td>
                 <td class="amount"><strong>${Number(
@@ -438,14 +428,14 @@ export function InvoicePDFModal({
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(groupLinesByRate()).map(
-                        ([range, data], index) => (
-                          <tr key={range}>
+                      {groupLinesByRate().map(
+                        (data, index) => (
+                          <tr key={`${data.description}-${data.rate}`}>
                             <td className='border border-gray-300 p-2'>
                               {index + 1}
                             </td>
                             <td className='border border-gray-300 p-2'>
-                              FTTH Wirings-DW Length- ({range})
+                              {data.description}
                             </td>
                             <td className='border border-gray-300 p-2'>
                               {data.count}
@@ -459,6 +449,15 @@ export function InvoicePDFModal({
                           </tr>
                         )
                       )}
+                      {(invoice.optional_items_snapshot || []).map((item, index) => (
+                        <tr key={item.code}>
+                          <td className='border border-gray-300 p-2'>{groupLinesByRate().length + index + 1}</td>
+                          <td className='border border-gray-300 p-2'>{item.description}</td>
+                          <td className='border border-gray-300 p-2'>{item.quantity}</td>
+                          <td className='border border-gray-300 p-2'>{Number(item.unitRate).toLocaleString()}.00</td>
+                          <td className='border border-gray-300 p-2 text-right'>{Number(item.invoiceAmount).toLocaleString()}.00</td>
+                        </tr>
+                      ))}
                       <tr className='font-bold'>
                         <td className='border border-gray-300 p-2' colSpan={4}>
                           Grand Total (Rs.)

@@ -51,7 +51,9 @@ pnpm tsx scripts/create-admin.ts
 - `/api/invoices`, `/api/invoices/stats`
 - `/api/integrations/google-sheets/*`
 
-All routes enforce server-side auth with NextAuth; admin-only routes check `session.user.role`.
+Google Sheets automatic import on Dokploy: see [setup instructions](docs/google-sheet-auto-sync.md). Set `CRON_SECRET` in the Dokploy application environment before enabling the daily schedule.
+
+User-facing routes enforce server-side auth with NextAuth; admin-only routes check `session.user.role`. The scheduled import endpoint uses `CRON_SECRET`.
 
 ## Deployment (Coolify)
 

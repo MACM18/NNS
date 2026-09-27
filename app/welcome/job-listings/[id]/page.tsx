@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { PublicLayout } from "@/components/layout/public-layout";
 import {
   Card,
   CardContent,
@@ -58,7 +57,7 @@ export default async function JobDetailsPage({ params }: any) {
 
   if (!job) {
     return (
-      <PublicLayout>
+      <>
         <section className='py-12 md:py-24 lg:py-32 text-center'>
           <div className='container px-4 md:px-6'>
             <h1 className='text-3xl font-bold tracking-tighter sm:text-5xl'>
@@ -73,12 +72,12 @@ export default async function JobDetailsPage({ params }: any) {
             </Button>
           </div>
         </section>
-      </PublicLayout>
+      </>
     );
   }
 
   return (
-    <PublicLayout>
+    <>
       <section className='py-12 md:py-24 lg:py-32'>
         <div className='container px-4 md:px-6 max-w-3xl mx-auto'>
           <Card>
@@ -133,6 +132,6 @@ export default async function JobDetailsPage({ params }: any) {
           </Card>
         </div>
       </section>
-    </PublicLayout>
+    </>
   );
 }

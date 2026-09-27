@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { GenerateMonthlyInvoicesModal } from "@/components/modals/generate-monthly-invoices-modal";
 import { CompanySettingsModal } from "@/components/modals/company-settings-modal";
+import { PricingSchedulePanel } from "@/components/settings/pricing-schedule-panel";
 import { InvoicePDFModal } from "@/components/modals/invoice-pdf-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
@@ -69,7 +70,10 @@ interface GeneratedInvoice {
     cableLength: number;
     baseRate: number;
     invoiceAmount: number;
+    description?: string;
+    serviceType?: string;
   }> | null;
+  optional_items_snapshot?: Array<{ code: string; description: string; quantity: number; unitRate: number; invoiceAmount: number }> | null;
   pricing_snapshot?: unknown;
   status: string;
   paid_amount?: number;
@@ -108,44 +112,6 @@ export default function InvoicesPage() {
   const { addNotification } = useNotification();
   const { cache, updateCache } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [pricingTiers, setPricingTiers] = useState<
-    Array<{
-      rate: number;
-      max_length: number;
-      min_length: number;
-    }>
-  >([
-    {
-      rate: 6000,
-      max_length: 100,
-      min_length: 0,
-    },
-    {
-      rate: 6500,
-      max_length: 200,
-      min_length: 101,
-    },
-    {
-      rate: 7200,
-      max_length: 300,
-      min_length: 201,
-    },
-    {
-      rate: 7800,
-      max_length: 400,
-      min_length: 301,
-    },
-    {
-      rate: 8200,
-      max_length: 500,
-      min_length: 401,
-    },
-    {
-      rate: 8400,
-      max_length: Infinity,
-      min_length: 501,
-    },
-  ]);
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
     new Set(COLUMNS.map((c) => c.id))
@@ -211,15 +177,6 @@ export default function InvoicesPage() {
         updateCache("invoices", { stats });
       }
 
-      // Get pricing tiers from company settings
-      const settingsResponse = await fetch("/api/settings/company");
-
-      if (settingsResponse.ok) {
-        const { data: settings } = await settingsResponse.json();
-        if (settings?.pricing_tiers && Array.isArray(settings.pricing_tiers)) {
-          setPricingTiers(settings.pricing_tiers);
-        }
-      }
     } catch (error: unknown) {
       console.error("Error fetching stats:", error);
     }
@@ -355,7 +312,7 @@ export default function InvoicesPage() {
   const canEditSettings = ["admin", "moderator"].includes(normalizedRole);
 
   return (
-    <div className='space-y-6'>
+    <div className='min-w-0 space-y-4 2xl:space-y-6'>
       {/* Page Header */}
       <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
         <div>
@@ -485,7 +442,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* Main Content */}
-      <Tabs defaultValue='invoices' className='space-y-6'>
+      <Tabs defaultValue='invoices' className='space-y-4 2xl:space-y-6'>
         <TabsList>
           <TabsTrigger value='invoices'>Generated Invoices</TabsTrigger>
           {canEditSettings && (
@@ -611,38 +568,11 @@ export default function InvoicesPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value='settings'>
-          <Card>
-            <CardHeader>
-              <CardTitle>Pricing & Company Settings</CardTitle>
-              <CardDescription>
-                Configure pricing tiers and company information
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className='space-y-4'>
-                <div className='grid grid-cols-2 md:grid-cols-3 gap-4'>
-                  {pricingTiers.map((tier, index) => (
-                    <div key={index} className='p-4 border rounded-lg'>
-                      <div className='font-medium'>
-                        {tier.min_length}-{tier.max_length}m
-                      </div>
-                      <div className='text-2xl font-bold'>
-                        LKR {Number(tier.rate || 0).toLocaleString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <Button
-                  onClick={() => setSettingsModalOpen(true)}
-                  className='gap-2'
-                >
-                  <Settings className='h-4 w-4' />
-                  Edit Settings
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value='settings' className='space-y-4'>
+          <PricingSchedulePanel canManage={["admin", "superadmin"].includes(String(role || "").toLowerCase())} />
+          <Button onClick={() => setSettingsModalOpen(true)} variant='outline' className='gap-2'>
+            <Settings className='h-4 w-4' />Edit company information
+          </Button>
         </TabsContent>
       </Tabs>
 
