@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { CookieConsentBanner } from "@/components/public/cookie-consent-banner";
+import { OPEN_COOKIE_SETTINGS_EVENT } from "@/lib/cookie-consent";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -44,12 +46,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
     { name: "Services", href: "/welcome/services" },
   ];
 
-  const footerSupportLinks = [
-    { name: "FAQs", href: "#" }, // Placeholder for FAQs
-  ];
-
   const footerLegalLinks = [
     { name: "Privacy Policy", href: "/welcome/privacy" },
+    { name: "Cookie Policy", href: "/welcome/cookies" },
     { name: "Terms of Service", href: "/welcome/terms" },
   ];
 
@@ -192,20 +191,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </ul>
             </div>
             <div>
-              <h3 className='text-sm font-semibold'>Support</h3>
-              <ul className='mt-4 space-y-2'>
-                {footerSupportLinks.map((item) => (
-                  <li key={item.name}>
-                    <Link
-                      href={item.href}
-                      className='text-sm text-muted-foreground hover:text-foreground'
-                    >
-                      {item.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <h3 className='text-sm font-semibold mt-6'>Legal</h3>
+              <h3 className='text-sm font-semibold'>Legal</h3>
               <ul className='mt-4 space-y-2'>
                 {footerLegalLinks.map((item) => (
                   <li key={item.name}>
@@ -218,15 +204,26 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   </li>
                 ))}
               </ul>
+              <button
+                type='button'
+                onClick={() => window.dispatchEvent(new Event(OPEN_COOKIE_SETTINGS_EVENT))}
+                className='mt-3 text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
+              >
+                Cookie settings
+              </button>
             </div>
           </div>
-          <div className='mt-8 border-t pt-8 text-center'>
+          <div className='mt-8 flex flex-col items-center justify-between gap-2 border-t pt-8 text-center sm:flex-row sm:text-left'>
             <p className='text-sm text-muted-foreground'>
-              © 2024 NNS Enterprise. All rights reserved.
+              © {new Date().getUTCFullYear()} NNS Enterprise. All rights reserved.
+            </p>
+            <p className='text-xs text-muted-foreground'>
+              Built by <a href='https://macm.lk/' target='_blank' rel='noopener noreferrer' className='font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline'>macm.lk</a>
             </p>
           </div>
         </div>
       </footer>
+      <CookieConsentBanner />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { PWAInitializer } from "@/components/pwa/pwa-initializer";
 
 export default function DashboardSegmentLayout({
   children,
@@ -21,6 +22,7 @@ export default function DashboardSegmentLayout({
         </main>
       </div>
       <MobileBottomNav />
+      <PWAInitializer />
     </SidebarProvider>
   );
 }

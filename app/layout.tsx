@@ -7,8 +7,7 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { NotificationProvider } from "@/contexts/notification-context";
 import { DataCacheProvider } from "@/contexts/data-cache-context";
 import { Toaster } from "sonner";
-import { PWAInitializer } from "@/components/pwa/pwa-initializer";
-import { SpeedInsights } from "@vercel/speed-insights/next";
+import { ConsentAwareSpeedInsights } from "@/components/public/consent-aware-speed-insights";
 
 export const metadata: Metadata = {
   title: {
@@ -85,7 +84,7 @@ export default function RootLayout({
   return (
     <html lang='en' suppressHydrationWarning>
       <body className='min-h-screen bg-background font-sans antialiased'>
-        <SpeedInsights />
+        <ConsentAwareSpeedInsights />
         <ThemeProvider
           attribute='class'
           defaultTheme='system'
@@ -98,7 +97,6 @@ export default function RootLayout({
                 <DataCacheProvider>
                   {children}
                   <Toaster />
-                  <PWAInitializer />
                 </DataCacheProvider>
               </NotificationProvider>
             </AuthProvider>
