@@ -1061,7 +1061,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
   }
 
   return (
-    <div className='space-y-6'>
+    <div className='min-w-0 space-y-4 2xl:space-y-6'>
       {loading ? (
         <PageSkeleton />
       ) : (

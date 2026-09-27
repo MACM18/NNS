@@ -51,23 +51,23 @@ const CustomTooltip = ({ active, payload }: any) => {
 
 export function TopWorkersChart({ data, isLoading = false }: TopWorkersChartProps) {
   return (
-    <Card className="glass-card hover:shadow-md transition-shadow duration-300">
-      <CardHeader className="pb-2">
+    <Card className="glass-card min-w-0 hover:shadow-md transition-shadow duration-300">
+      <CardHeader className="p-4 pb-2 2xl:p-6 2xl:pb-2">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-base">Top Workers</CardTitle>
+          <CardTitle className="text-sm 2xl:text-base">Top Workers</CardTitle>
         </div>
-        <CardDescription>By completed lines this month</CardDescription>
+        <CardDescription className="text-xs 2xl:text-sm">By completed lines this month</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0 p-4 pt-0 2xl:p-6 2xl:pt-0">
         {isLoading ? (
-          <div className="h-[240px] bg-muted/30 animate-pulse rounded-lg" />
+          <div className="h-[195px] 2xl:h-[240px] bg-muted/30 animate-pulse rounded-lg" />
         ) : data.length === 0 ? (
-          <div className="h-[240px] flex items-center justify-center text-sm text-muted-foreground">
+          <div className="h-[195px] 2xl:h-[240px] flex items-center justify-center text-sm text-muted-foreground">
             No worker data available
           </div>
         ) : (
-          <div className="h-[240px] w-full">
+          <div className="h-[195px] 2xl:h-[240px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={data}
@@ -86,7 +86,7 @@ export function TopWorkersChart({ data, isLoading = false }: TopWorkersChartProp
                   tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
                   axisLine={false}
                   tickLine={false}
-                  width={80}
+                  width={72}
                 />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.3)" }} />
                 <Bar dataKey="lines" radius={[0, 6, 6, 0]} barSize={20}>

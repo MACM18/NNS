@@ -470,7 +470,7 @@ export default function InventoryPage() {
   const canManageItems = ["admin", "moderator", "superadmin"].includes((role || "").toLowerCase());
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-4 2xl:space-y-6">
       <InventoryWorkspaceHeader
         totalItems={inventoryItems.length || stats.totalItems}
         attentionCount={inventoryItems.length > 0 ? attentionCount : stats.lowStockAlerts}
@@ -502,7 +502,7 @@ export default function InventoryPage() {
       )}
 
       {/* Main Content Tabs */}
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-4 2xl:space-y-6">
         <InventorySectionNav counts={tabCounts} />
 
         <TabsContent value="stock" className="animate-fade-in-up space-y-4">

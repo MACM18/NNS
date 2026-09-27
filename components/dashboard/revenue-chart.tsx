@@ -61,22 +61,22 @@ export function RevenueChart({ data, isLoading = false }: RevenueChartProps) {
   };
 
   return (
-    <Card className="glass-card hover:shadow-md transition-shadow duration-300">
-      <CardHeader className="pb-2 flex flex-row items-center justify-between gap-4">
-        <div>
-          <CardTitle className="text-base">
+    <Card className="glass-card min-w-0 hover:shadow-md transition-shadow duration-300">
+      <CardHeader className="flex flex-col gap-2 p-4 pb-2 sm:flex-row sm:items-center sm:justify-between 2xl:p-6 2xl:pb-2">
+        <div className="min-w-0">
+          <CardTitle className="text-sm 2xl:text-base">
             {isRevenue ? "Revenue Trend" : "Cable Deployed"}
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs 2xl:text-sm">
             {isRevenue ? "Monthly revenue projection (90%)" : "Meters of cable installed"}
           </CardDescription>
         </div>
         
         {/* Toggle Switch */}
-        <div className="flex items-center border border-border/50 rounded-lg p-0.5 bg-muted/40 text-xs shrink-0 h-8 self-center">
+        <div className="flex items-center border border-border/50 rounded-lg p-0.5 bg-muted/40 text-[11px] shrink-0 h-7 self-start sm:self-center 2xl:h-8 2xl:text-xs">
           <button
             onClick={() => setActiveTab("revenue")}
-            className={`px-3 py-1 rounded-md transition-all font-semibold ${
+            className={`px-2.5 py-1 rounded-md transition-all font-semibold ${
               isRevenue
                 ? "bg-background shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -86,7 +86,7 @@ export function RevenueChart({ data, isLoading = false }: RevenueChartProps) {
           </button>
           <button
             onClick={() => setActiveTab("cable")}
-            className={`px-3 py-1 rounded-md transition-all font-semibold ${
+            className={`px-2.5 py-1 rounded-md transition-all font-semibold ${
               !isRevenue
                 ? "bg-background shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -96,11 +96,11 @@ export function RevenueChart({ data, isLoading = false }: RevenueChartProps) {
           </button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0 2xl:p-6 2xl:pt-0">
         {isLoading ? (
-          <div className="h-[280px] bg-muted/30 animate-pulse rounded-lg" />
+          <div className="h-[210px] 2xl:h-[260px] bg-muted/30 animate-pulse rounded-lg" />
         ) : (
-          <div className="h-[280px] w-full">
+          <div className="h-[210px] 2xl:h-[260px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                 <defs>
@@ -120,13 +120,13 @@ export function RevenueChart({ data, isLoading = false }: RevenueChartProps) {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
                 <XAxis
                   dataKey="month"
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   tickFormatter={(val) => formatValue(val, isRevenue)}
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
                   axisLine={false}
                   tickLine={false}
                 />

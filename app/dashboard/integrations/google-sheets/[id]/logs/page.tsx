@@ -164,7 +164,7 @@ export default function ConnectionLogsPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-4 md:p-6 space-y-4">
+      <div className="container mx-auto min-w-0 space-y-4 p-0 2xl:p-6">
         <div className="h-6 w-32 bg-muted animate-pulse rounded"></div>
         <TableSkeleton />
       </div>
@@ -173,7 +173,7 @@ export default function ConnectionLogsPage() {
 
   if (!connection) {
     return (
-      <div className="container mx-auto p-6 text-center py-16">
+      <div className="container mx-auto min-w-0 p-0 text-center py-16 2xl:p-6">
         <XCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
         <h3 className="text-xl font-bold mb-2">Connection Not Found</h3>
         <p className="text-muted-foreground mb-6">The Google Sheet connection logs you are looking for do not exist.</p>
@@ -259,7 +259,7 @@ export default function ConnectionLogsPage() {
     : [];
 
   return (
-    <div className="container mx-auto p-3 md:p-5 space-y-4 max-w-7xl">
+    <div className="container mx-auto min-w-0 max-w-7xl space-y-4 p-0 2xl:p-5">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b">
         <div className="space-y-1">

@@ -10,7 +10,7 @@ export default function AccountLedgerPage() {
   const accountId = params.id as string;
 
   return (
-    <div className='flex-1 space-y-4 p-4 md:p-8 pt-6'>
+    <div className='min-w-0 flex-1 space-y-4 p-0 2xl:p-8'>
       <AccountLedger
         accountId={accountId}
         onBack={() => router.push("/dashboard/accounting/accounts")}

@@ -42,23 +42,23 @@ const CustomTooltip = ({ active, payload }: any) => {
 export function StatusDonut({ data, isLoading = false }: StatusDonutProps) {
   const total = data.completed + data.inProgress + data.pending;
   const chartData = [
-    { name: "Completed", value: data.completed },
-    { name: "In Progress", value: data.inProgress },
-    { name: "Pending", value: data.pending },
+    { name: "Completed", value: data.completed, color: COLORS[0] },
+    { name: "In Progress", value: data.inProgress, color: COLORS[1] },
+    { name: "Pending", value: data.pending, color: COLORS[2] },
   ].filter((d) => d.value > 0);
 
   return (
-    <Card className="glass-card hover:shadow-md transition-shadow duration-300">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">Status Breakdown</CardTitle>
-        <CardDescription>Line completion overview</CardDescription>
+    <Card className="glass-card min-w-0 hover:shadow-md transition-shadow duration-300">
+      <CardHeader className="p-4 pb-2 2xl:p-6 2xl:pb-2">
+        <CardTitle className="text-sm 2xl:text-base">Status Breakdown</CardTitle>
+        <CardDescription className="text-xs 2xl:text-sm">Line completion overview</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0 p-4 pt-0 2xl:p-6 2xl:pt-0">
         {isLoading ? (
-          <div className="h-[280px] bg-muted/30 animate-pulse rounded-lg" />
+          <div className="h-[210px] 2xl:h-[260px] bg-muted/30 animate-pulse rounded-lg" />
         ) : (
-          <div className="h-[280px] w-full flex flex-col items-center">
-            <div className="relative flex-1 w-full">
+          <div className="h-[210px] 2xl:h-[260px] w-full flex flex-col items-center">
+            <div className="relative min-h-0 w-full flex-1">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -71,8 +71,8 @@ export function StatusDonut({ data, isLoading = false }: StatusDonutProps) {
                     dataKey="value"
                     strokeWidth={0}
                   >
-                    {chartData.map((_entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    {chartData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip content={<CustomTooltip />} />
@@ -80,19 +80,19 @@ export function StatusDonut({ data, isLoading = false }: StatusDonutProps) {
               </ResponsiveContainer>
               {/* Center text */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-3xl font-bold">{total}</span>
-                <span className="text-xs text-muted-foreground">Total Lines</span>
+                <span className="text-2xl font-bold 2xl:text-3xl">{total}</span>
+                <span className="text-[11px] text-muted-foreground 2xl:text-xs">Total Lines</span>
               </div>
             </div>
             {/* Legend */}
-            <div className="flex items-center justify-center gap-4 mt-2">
-              {chartData.map((entry, index) => (
-                <div key={entry.name} className="flex items-center gap-1.5">
+            <div className="mt-1 flex w-full flex-wrap items-center justify-center gap-x-2.5 gap-y-1 2xl:gap-x-4">
+              {chartData.map((entry) => (
+                <div key={entry.name} className="flex min-w-0 items-center gap-1">
                   <div
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: entry.color }}
                   />
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground 2xl:text-xs">
                     {entry.name} ({entry.value})
                   </span>
                 </div>

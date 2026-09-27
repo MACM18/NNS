@@ -19,7 +19,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className='space-y-6'>
+    <div className='min-w-0 space-y-4 2xl:space-y-6'>
       <h1 className='text-2xl sm:text-3xl font-bold'>Users Management</h1>
       <UserManagementTabs />
     </div>

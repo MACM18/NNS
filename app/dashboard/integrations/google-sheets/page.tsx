@@ -158,7 +158,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
   const endIndex = Math.min(currentPage * pageSize, total || rows.length);
 
   return (
-    <div className='container mx-auto p-4 md:p-6'>
+    <div className='container mx-auto min-w-0 p-0 2xl:p-6'>
       {/* Header */}
       <div className='mb-6'>
         <div className='flex items-center gap-2 text-sm text-muted-foreground mb-2'>

@@ -32,15 +32,15 @@ export function SystemAlerts({
   const totalAlerts = lowStockCount + pendingTasksCount + unpaidInvoicesCount;
 
   return (
-    <Card className="glass-card hover:shadow-md transition-shadow duration-300 h-full flex flex-col">
-      <CardHeader className="pb-3 shrink-0">
-        <CardTitle className="text-base flex items-center gap-2">
+    <Card className="glass-card flex h-full min-w-0 flex-col hover:shadow-md transition-shadow duration-300">
+      <CardHeader className="shrink-0 p-4 pb-2 2xl:p-6 2xl:pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm 2xl:text-base">
           <AlertCircle className="h-4.5 w-4.5 text-muted-foreground" />
           System Operational Alerts
         </CardTitle>
-        <CardDescription>Critical warnings across NNS modules</CardDescription>
+        <CardDescription className="text-xs 2xl:text-sm">Critical warnings across NNS modules</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto">
+      <CardContent className="max-h-[260px] min-h-0 flex-1 overflow-y-auto p-4 pt-0 2xl:max-h-[320px] 2xl:p-6 2xl:pt-0">
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2].map((i) => (
@@ -54,11 +54,11 @@ export function SystemAlerts({
             <p className="text-xs mt-1">No active stock or billing alerts found</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2">
             {lowStockCount > 0 && (
               <div
                 onClick={() => router.push("/dashboard/inventory")}
-                className="flex items-start gap-3 p-3 rounded-xl border border-red-500/10 bg-red-500/5 hover:bg-red-500/10 transition-colors duration-200 cursor-pointer"
+                className="flex items-start gap-2.5 p-2.5 2xl:p-3 rounded-xl border border-red-500/10 bg-red-500/5 hover:bg-red-500/10 transition-colors duration-200 cursor-pointer"
               >
                 <AlertTriangle className="h-4.5 w-4.5 text-red-500 shrink-0 mt-0.5" />
                 <div className="min-w-0">
@@ -73,7 +73,7 @@ export function SystemAlerts({
             {unpaidInvoicesCount > 0 && (
               <div
                 onClick={() => router.push("/dashboard/accounting")}
-                className="flex items-start gap-3 p-3 rounded-xl border border-amber-500/10 bg-amber-500/5 hover:bg-amber-500/10 transition-colors duration-200 cursor-pointer"
+                className="flex items-start gap-2.5 p-2.5 2xl:p-3 rounded-xl border border-amber-500/10 bg-amber-500/5 hover:bg-amber-500/10 transition-colors duration-200 cursor-pointer"
               >
                 <FileText className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />
                 <div className="min-w-0">
@@ -88,7 +88,7 @@ export function SystemAlerts({
             {pendingTasksCount > 0 && (
               <div
                 onClick={() => router.push("/dashboard/tasks")}
-                className="flex items-start gap-3 p-3 rounded-xl border border-purple-500/10 bg-purple-500/5 hover:bg-purple-500/10 transition-colors duration-200 cursor-pointer"
+                className="flex items-start gap-2.5 p-2.5 2xl:p-3 rounded-xl border border-purple-500/10 bg-purple-500/5 hover:bg-purple-500/10 transition-colors duration-200 cursor-pointer"
               >
                 <ClipboardList className="h-4.5 w-4.5 text-purple-500 shrink-0 mt-0.5" />
                 <div className="min-w-0">

@@ -32,7 +32,7 @@ export default function IntegrationsPage() {
 
   if (loading) {
     return (
-      <div className='container mx-auto p-4 md:p-6'>
+      <div className='container mx-auto min-w-0 p-0 2xl:p-6'>
         <div className='animate-pulse'>
           <div className='h-8 bg-muted rounded w-3/4 sm:w-1/4 mb-4'></div>
           <div className='h-4 bg-muted rounded w-full sm:w-1/2 mb-8'></div>
@@ -49,7 +49,7 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className='space-y-8'>
+    <div className='min-w-0 space-y-4 2xl:space-y-8'>
       <div>
         <h1 className='text-2xl sm:text-3xl font-bold tracking-tight'>
           Integrations

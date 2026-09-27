@@ -200,6 +200,12 @@ export default function Dashboard() {
     return `${diffInDays} days ago`;
   };
 
+  const formatCompactCurrency = (amount: number) =>
+    `Rs ${new Intl.NumberFormat("en-LK", {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(amount)}`;
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-LK", {
       style: "currency",
@@ -212,25 +218,26 @@ export default function Dashboard() {
     totalLines > 0 ? Math.round((completedLines / totalLines) * 100) : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-4 2xl:space-y-6">
       {loading ? (
         <DashboardSkeleton />
       ) : (
         <>
           {/* Header section with Picker and actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground">
+          <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-extrabold tracking-tight 2xl:text-3xl bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground">
                 Dashboard
-              </h2>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              </h1>
+              <p className="mt-0.5 text-xs text-muted-foreground 2xl:text-sm">
                 Overview and statistics for NNS Telecom operations
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <MonthYearPicker
                 date={selectedDate}
                 onDateChange={setSelectedDate}
+                className="h-9 w-full text-xs sm:w-[170px] 2xl:w-[190px]"
               />
               <div className="flex items-center gap-2">
                 <Button
@@ -259,7 +266,7 @@ export default function Dashboard() {
           </div>
 
           {/* Premium KPI Cards Row (5 Cards) */}
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:gap-4">
             <KpiCard
               title="Completed"
               value={completedLines.toLocaleString()}
@@ -271,11 +278,11 @@ export default function Dashboard() {
               delay={0}
             />
             <KpiCard
-              title="Installations Queue"
+              title="Install Queue"
               value={(pendingLines + inProgressLines).toLocaleString()}
               icon={Clock}
               color="amber"
-              subtitle={`${pendingLines} Pending • ${inProgressLines} In-Progress`}
+              subtitle={`${pendingLines} pending · ${inProgressLines} active`}
               isLoading={isRefreshing}
               delay={100}
             />
@@ -284,7 +291,7 @@ export default function Dashboard() {
               value={`${Math.round(drumStats.totalRemainingCable).toLocaleString()}m`}
               icon={Cable}
               color="blue"
-              subtitle={`${drumStats.activeDrumsCount} Active Drums`}
+              subtitle={`${drumStats.activeDrumsCount} active drums`}
               isLoading={isRefreshing}
               delay={200}
             />
@@ -293,48 +300,49 @@ export default function Dashboard() {
               value={(taskStats.activeTasksCount + taskStats.pendingTasksCount).toLocaleString()}
               icon={AlertTriangle}
               color="purple"
-              subtitle={`${taskStats.pendingTasksCount} Pending • ${taskStats.activeTasksCount} Active`}
+              subtitle={`${taskStats.pendingTasksCount} pending · ${taskStats.activeTasksCount} active`}
               isLoading={isRefreshing}
               delay={300}
             />
             <KpiCard
               title="Monthly Revenue"
-              value={formatCurrency(monthlyRevenueValue)}
+              value={formatCompactCurrency(monthlyRevenueValue)}
+              fullValue={formatCurrency(monthlyRevenueValue)}
               change={stats.revenueChange}
               icon={TrendingUp}
               color="purple"
-              subtitle="90% invoice A projection"
+              subtitle="90% invoice A estimate"
               isLoading={isRefreshing}
               delay={400}
             />
           </div>
 
           {/* Bento Grid layout for charts & logs */}
-          <div className="grid gap-6 grid-cols-1 lg:grid-cols-12">
+          <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-12 2xl:gap-6">
             {/* Row 1: Interactive Charts */}
-            <div className="lg:col-span-8 animate-fade-in-up" style={{ animationDelay: "200ms" }}>
+            <div className="min-w-0 xl:col-span-8 animate-fade-in-up" style={{ animationDelay: "200ms" }}>
               <RevenueChart data={revenueTrend} isLoading={isRefreshing} />
             </div>
 
-            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
+            <div className="min-w-0 xl:col-span-4 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
               <StatusDonut data={statusBreakdown} isLoading={isRefreshing} />
             </div>
 
             {/* Row 2: Active Inventory & Activity Feed */}
-            <div className="lg:col-span-6 animate-fade-in-up" style={{ animationDelay: "400ms" }}>
+            <div className="min-w-0 xl:col-span-6 animate-fade-in-up" style={{ animationDelay: "400ms" }}>
               <ActiveDrums data={activeDrumsList} isLoading={isRefreshing} />
             </div>
 
-            <div className="lg:col-span-6 animate-fade-in-up" style={{ animationDelay: "500ms" }}>
+            <div className="min-w-0 xl:col-span-6 animate-fade-in-up" style={{ animationDelay: "500ms" }}>
               <ActivityFeed activities={recentActivities} isLoading={isRefreshing} />
             </div>
 
             {/* Row 3: Top Workers, System Alerts & Quick Actions */}
-            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "600ms" }}>
+            <div className="min-w-0 xl:col-span-4 animate-fade-in-up" style={{ animationDelay: "600ms" }}>
               <TopWorkersChart data={topWorkers} isLoading={isRefreshing} />
             </div>
 
-            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "700ms" }}>
+            <div className="min-w-0 xl:col-span-4 animate-fade-in-up" style={{ animationDelay: "700ms" }}>
               <SystemAlerts
                 drumStats={drumStats}
                 taskStats={taskStats}
@@ -343,7 +351,7 @@ export default function Dashboard() {
               />
             </div>
 
-            <div className="lg:col-span-4 animate-fade-in-up" style={{ animationDelay: "800ms" }}>
+            <div className="min-w-0 xl:col-span-4 animate-fade-in-up" style={{ animationDelay: "800ms" }}>
               <QuickActions />
             </div>
           </div>

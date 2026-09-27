@@ -59,9 +59,9 @@ export function InventoryWorkspaceHeader({
     <section className="relative overflow-hidden rounded-3xl border border-border/50 bg-card shadow-sm">
       <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-28 left-1/3 h-60 w-60 rounded-full bg-blue-500/10 blur-3xl" />
-      <div className="relative grid gap-6 p-5 sm:p-7 xl:grid-cols-[minmax(0,1fr)_220px] xl:items-center">
-        <div className="min-w-0 space-y-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <div className="relative grid gap-4 p-4 2xl:gap-6 2xl:p-7 2xl:grid-cols-[minmax(0,1fr)_220px] 2xl:items-center">
+        <div className="min-w-0 space-y-4 2xl:space-y-6">
+          <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-start 2xl:justify-between">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="gap-1.5 border-primary/20 bg-primary/5 px-2.5 py-1 text-primary">
@@ -90,7 +90,7 @@ export function InventoryWorkspaceHeader({
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-wrap gap-2 lg:max-w-[330px] lg:justify-end">
+            <div className="flex shrink-0 flex-wrap gap-2 2xl:max-w-[330px] 2xl:justify-end">
               <Button onClick={onAddReceipt} className="gap-2 shadow-sm">
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add receipt

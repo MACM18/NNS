@@ -172,7 +172,7 @@ export default function SearchPage() {
   };
 
   return (
-    <div className='space-y-6'>
+    <div className='min-w-0 space-y-4 2xl:space-y-6'>
       {/* Page Header with Back Button */}
       <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
         <div className='flex items-center gap-2'>

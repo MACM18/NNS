@@ -203,7 +203,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className='container mx-auto p-6 space-y-6'>
+    <div className='container mx-auto min-w-0 p-0 space-y-4 2xl:space-y-6 2xl:p-6'>
       <div className='flex justify-between items-center'>
         <div>
           <h1 className='text-3xl font-bold'>Reports & Analytics</h1>
@@ -221,7 +221,7 @@ export default function ReportsPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue='reports' className='space-y-6'>
+      <Tabs defaultValue='reports' className='min-w-0 space-y-4 2xl:space-y-6'>
         <TabsList>
           <TabsTrigger value='reports'>Monthly Reports</TabsTrigger>
           <TabsTrigger value='analytics'>Analytics</TabsTrigger>

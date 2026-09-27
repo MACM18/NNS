@@ -23,23 +23,23 @@ export function ActiveDrums({ data, isLoading = false }: ActiveDrumsProps) {
   const router = useRouter();
 
   return (
-    <Card className="glass-card hover:shadow-md transition-shadow duration-300 h-full flex flex-col">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between shrink-0">
-        <div>
-          <CardTitle className="text-base flex items-center gap-2">
+    <Card className="glass-card flex h-full min-w-0 flex-col hover:shadow-md transition-shadow duration-300">
+      <CardHeader className="flex shrink-0 flex-row items-center justify-between gap-2 p-4 pb-2 2xl:p-6 2xl:pb-3">
+        <div className="min-w-0">
+          <CardTitle className="flex items-center gap-2 text-sm 2xl:text-base">
             <Package className="h-4.5 w-4.5 text-muted-foreground" />
             Active Drum Inventory
           </CardTitle>
-          <CardDescription>Status of currently deployed cable drums</CardDescription>
+          <CardDescription className="text-xs 2xl:text-sm">Status of currently deployed cable drums</CardDescription>
         </div>
         <button
           onClick={() => router.push("/dashboard/inventory")}
-          className="text-xs text-primary font-semibold hover:underline"
+          className="shrink-0 text-xs font-semibold text-primary hover:underline"
         >
           View All
         </button>
       </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto">
+      <CardContent className="max-h-[260px] min-h-0 flex-1 overflow-y-auto p-4 pt-0 2xl:max-h-[320px] 2xl:p-6 2xl:pt-0">
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
@@ -53,7 +53,7 @@ export function ActiveDrums({ data, isLoading = false }: ActiveDrumsProps) {
             <p className="text-xs mt-1">Drums appear here when added to inventory</p>
           </div>
         ) : (
-          <div className="space-y-3.5">
+          <div className="space-y-2.5 2xl:space-y-3.5">
             {data.map((drum) => {
               const remainingPercent = drum.initial_quantity > 0
                 ? (drum.current_quantity / drum.initial_quantity) * 100
@@ -72,7 +72,7 @@ export function ActiveDrums({ data, isLoading = false }: ActiveDrumsProps) {
                 <div
                   key={drum.id}
                   onClick={() => router.push("/dashboard/inventory")}
-                  className="p-3 rounded-xl border border-border/40 bg-card/40 hover:bg-muted/30 hover:border-border/80 transition-all duration-200 cursor-pointer flex flex-col gap-2.5"
+                  className="p-2.5 2xl:p-3 rounded-xl border border-border/40 bg-card/40 hover:bg-muted/30 hover:border-border/80 transition-all duration-200 cursor-pointer flex flex-col gap-2.5"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">

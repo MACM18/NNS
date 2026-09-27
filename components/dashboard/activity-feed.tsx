@@ -31,15 +31,15 @@ const statusConfig: Record<string, { variant: "default" | "secondary" | "destruc
 
 export function ActivityFeed({ activities, isLoading = false }: ActivityFeedProps) {
   return (
-    <Card className="glass-card hover:shadow-md transition-shadow duration-300">
-      <CardHeader className="pb-3">
+    <Card className="glass-card flex h-full min-w-0 flex-col hover:shadow-md transition-shadow duration-300">
+      <CardHeader className="p-4 pb-2 2xl:p-6 2xl:pb-3">
         <div className="flex items-center gap-2">
           <Activity className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-base">Recent Activity</CardTitle>
+          <CardTitle className="text-sm 2xl:text-base">Recent Activity</CardTitle>
         </div>
-        <CardDescription>Latest telecom operations</CardDescription>
+        <CardDescription className="text-xs 2xl:text-sm">Latest telecom operations</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="max-h-[260px] min-h-0 flex-1 overflow-y-auto p-4 pt-0 2xl:max-h-[320px] 2xl:p-6 2xl:pt-0">
         {isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -64,7 +64,7 @@ export function ActivityFeed({ activities, isLoading = false }: ActivityFeedProp
               return (
                 <div
                   key={activity.id}
-                  className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors group"
+                  className="flex items-start gap-2.5 rounded-lg p-2 2xl:p-2.5 hover:bg-muted/50 transition-colors group"
                   style={{ animationDelay: `${index * 80}ms` }}
                 >
                   {/* Timeline dot */}

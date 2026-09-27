@@ -283,7 +283,7 @@ export default function WorkTrackingCalendarPage() {
   };
 
   return (
-    <div className='space-y-6'>
+    <div className='min-w-0 space-y-4 2xl:space-y-6'>
       <WorkTrackingHeader />
 
       <Card className='p-4 shadow-sm'>

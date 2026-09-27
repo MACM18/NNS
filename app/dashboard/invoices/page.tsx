@@ -312,7 +312,7 @@ export default function InvoicesPage() {
   const canEditSettings = ["admin", "moderator"].includes(normalizedRole);
 
   return (
-    <div className='space-y-6'>
+    <div className='min-w-0 space-y-4 2xl:space-y-6'>
       {/* Page Header */}
       <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
         <div>
@@ -442,7 +442,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* Main Content */}
-      <Tabs defaultValue='invoices' className='space-y-6'>
+      <Tabs defaultValue='invoices' className='space-y-4 2xl:space-y-6'>
         <TabsList>
           <TabsTrigger value='invoices'>Generated Invoices</TabsTrigger>
           {canEditSettings && (

@@ -9,6 +9,7 @@ import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 interface KpiCardProps {
   title: string;
   value: string | number;
+  fullValue?: string;
   change?: number; // percentage change
   icon: LucideIcon;
   color: "blue" | "green" | "amber" | "red" | "purple";
@@ -59,6 +60,7 @@ const colorMap = {
 export function KpiCard({
   title,
   value,
+  fullValue,
   change,
   icon: Icon,
   color,
@@ -81,33 +83,33 @@ export function KpiCard({
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
       } transition-all duration-500`}
     >
-      <CardContent className="p-4 sm:p-5">
+      <CardContent className="p-3.5 2xl:p-5">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <div className={`p-1.5 rounded-lg ${colors.bg}`}>
-                <Icon className={`h-4 w-4 ${colors.icon}`} />
+            <div className="mb-1 flex min-w-0 items-center gap-1.5 2xl:gap-2">
+              <div className={`shrink-0 rounded-lg p-1.5 ${colors.bg}`}>
+                <Icon className={`h-3.5 w-3.5 2xl:h-4 2xl:w-4 ${colors.icon}`} />
               </div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">
+              <p title={title} className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-normal text-muted-foreground 2xl:text-xs 2xl:tracking-wide">
                 {title}
               </p>
             </div>
-            <div className="mt-2">
+            <div className="mt-1.5 min-w-0">
               {isLoading ? (
                 <div className="h-8 w-24 bg-muted animate-pulse rounded" />
               ) : (
-                <p className="text-xl sm:text-2xl lg:text-3xl font-extrabold tabular-nums tracking-tight whitespace-nowrap">
+                <p title={fullValue ?? String(value)} aria-label={fullValue ?? String(value)} className="truncate text-xl font-extrabold tabular-nums tracking-tight 2xl:text-2xl">
                   {value}
                 </p>
               )}
             </div>
             {subtitle && (
-              <p className="text-xs text-muted-foreground mt-1 truncate">
+              <p title={subtitle} className="mt-1 truncate text-[11px] text-muted-foreground 2xl:text-xs">
                 {subtitle}
               </p>
             )}
             {change !== undefined && (
-              <div className="flex items-center gap-1 mt-2">
+              <div className="mt-1.5 flex min-w-0 items-center gap-1">
                 {change >= 0 ? (
                   <ArrowUpRight className="h-3.5 w-3.5 text-green-500 shrink-0" />
                 ) : (
@@ -121,15 +123,15 @@ export function KpiCard({
                   {change >= 0 ? "+" : ""}
                   {change.toFixed(1)}%
                 </span>
-                <span className="text-[10px] text-muted-foreground/80 whitespace-nowrap">vs last month</span>
+                <span className="hidden truncate text-[10px] text-muted-foreground/80 2xl:inline">vs last month</span>
               </div>
             )}
           </div>
           {ringValue !== undefined && (
-            <div className="flex-shrink-0 ml-2 mt-1">
+            <div className="ml-1 mt-1 flex-shrink-0 2xl:ml-2">
               <ProgressRing
                 value={ringValue}
-                size={52}
+                size={42}
                 strokeWidth={4}
                 color={colors.ring}
               />

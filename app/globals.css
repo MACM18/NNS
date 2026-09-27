@@ -170,3 +170,23 @@ body {
 .safe-area-inset-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* Keep dashboard pages readable within a 1280px desktop viewport. */
+@media (min-width: 1024px) and (max-width: 1535px) {
+  .dashboard-viewport .text-3xl { font-size: 1.5rem; line-height: 2rem; }
+  .dashboard-viewport .text-4xl { font-size: 1.75rem; line-height: 2.25rem; }
+  .dashboard-viewport .text-5xl { font-size: 2rem; line-height: 2.5rem; }
+  .dashboard-viewport .grid > * { min-width: 0; }
+  .dashboard-viewport :is(input, select, textarea) { max-width: 100%; }
+  .dashboard-viewport :is(table, thead, tbody, tr, th, td) { max-width: 100%; }
+  .dashboard-viewport table { width: 100%; table-layout: fixed; font-size: 0.75rem; }
+  .dashboard-viewport td :is(button, [role="combobox"]) { max-width: 100%; }
+  .dashboard-viewport :is(th, td) {
+    padding: 0.5rem;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .dashboard-viewport table [class*="min-w-"] { min-width: 0; }
+  .dashboard-viewport th { height: 2.5rem; }
+  .dashboard-viewport :is(th, td) > .flex { flex-wrap: wrap; }
+}
