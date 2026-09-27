@@ -256,9 +256,9 @@ export function AddWasteModal({
                 {wasteItems.map((item, index) => (
                   <div
                     key={item.id}
-                    className='grid grid-cols-12 gap-2 items-end'
+                    className='grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-2 items-end rounded-lg border p-3 sm:border-0 sm:p-0'
                   >
-                    <div className='col-span-3'>
+                    <div className='sm:col-span-3'>
                       <Label>Item</Label>
                       <Select
                         value={item.item_id}
@@ -278,7 +278,7 @@ export function AddWasteModal({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className='col-span-2'>
+                    <div className='sm:col-span-2'>
                       <Label>Quantity</Label>
                       <Input
                         type='number'
@@ -297,7 +297,7 @@ export function AddWasteModal({
                         placeholder='Waste qty'
                       />
                     </div>
-                    <div className='col-span-6'>
+                    <div className='sm:col-span-6'>
                       <Label>Waste Reason</Label>
                       <Input
                         value={item.waste_reason}
@@ -311,11 +311,12 @@ export function AddWasteModal({
                         placeholder='Reason for waste (damaged, expired, etc.)'
                       />
                     </div>
-                    <div className='col-span-1'>
+                    <div className='sm:col-span-1'>
                       <Button
                         type='button'
                         variant='outline'
                         size='sm'
+                        aria-label={`Remove waste item ${index + 1}`}
                         onClick={() => removeRow(index)}
                         disabled={wasteItems.length === 1}
                       >

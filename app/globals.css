@@ -190,3 +190,103 @@ body {
   .dashboard-viewport th { height: 2.5rem; }
   .dashboard-viewport :is(th, td) > .flex { flex-wrap: wrap; }
 }
+
+/* Dialogs are portalled outside the dashboard, so they have their own scope. */
+@media (max-width: 767px) {
+  [data-responsive-dialog] {
+    left: max(0.5rem, env(safe-area-inset-left));
+    right: max(0.5rem, env(safe-area-inset-right));
+    top: calc(var(--dialog-viewport-top, 0px) + var(--dialog-viewport-height, 100dvh) / 2);
+    width: auto;
+    max-width: none;
+    max-height: calc(var(--dialog-viewport-height, 100dvh) - 1rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    transform: translateY(-50%);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 3rem;
+    border-radius: 1rem;
+    animation-name: mobile-dialog-fade;
+  }
+  [data-responsive-dialog]:not(.p-0) { padding: 1rem; }
+  [data-mobile-popup] {
+    max-width: calc(100vw - 1rem);
+    overscroll-behavior: contain;
+  }
+  [data-mobile-popup="popover"] {
+    max-height: var(--radix-popover-content-available-height, 80dvh);
+    overflow-y: auto;
+  }
+  [data-mobile-popup="menu"] {
+    max-height: var(--radix-dropdown-menu-content-available-height, 80dvh);
+    overflow-y: auto;
+  }
+  [data-mobile-popup="select"] { max-height: var(--radix-select-content-available-height, 80dvh); }
+  [data-mobile-popup] :is([role="option"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) { min-height: 2.75rem; }
+
+  [data-responsive-dialog][data-state="closed"] { animation-direction: reverse; }
+  [data-responsive-sheet] {
+    max-height: var(--dialog-viewport-height, 100dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  [data-responsive-sheet="left"], [data-responsive-sheet="right"] {
+    top: var(--dialog-viewport-top, 0px);
+    bottom: auto;
+    height: var(--dialog-viewport-height, 100dvh);
+    max-width: calc(100vw - 2rem);
+  }
+  [data-responsive-sheet="top"] { top: var(--dialog-viewport-top, 0px); }
+  [data-responsive-sheet="bottom"] { bottom: var(--dialog-viewport-bottom, 0px); }
+  [data-responsive-sheet]:not(.p-0) {
+    padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+  }
+  :is(.dashboard-viewport, [data-mobile-surface]) .grid > * { min-width: 0; }
+  :is(.dashboard-viewport, [data-mobile-surface]) :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea, [role="combobox"]) {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+  :is(.dashboard-viewport, [data-mobile-surface]) button:not([role="checkbox"]):not([role="switch"]):not([role="radio"]) {
+    min-height: 2.75rem;
+    touch-action: manipulation;
+  }
+  [data-mobile-surface] [data-dialog-header] { padding-right: 2.75rem; }
+  [data-mobile-surface] [data-dialog-footer] { gap: 0.5rem; }
+  [data-mobile-surface] [data-dialog-footer] > button { width: 100%; }
+  :is(.dashboard-viewport, [data-mobile-surface]) [role="tablist"] {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  :is(.dashboard-viewport, [data-mobile-surface]) [role="tab"] { flex-shrink: 0; }
+  :is(.dashboard-viewport, [data-mobile-surface]) [data-card-header].p-6 { padding: 1rem; }
+  :is(.dashboard-viewport, [data-mobile-surface]) :is([data-card-content], [data-card-footer]).p-6 {
+    padding-inline: 1rem;
+    padding-bottom: 1rem;
+  }
+  :is(.dashboard-viewport, [data-mobile-surface]) [data-card-title].text-2xl { font-size: 1.125rem; line-height: 1.5rem; }
+  .dashboard-viewport h1 { font-size: 1.375rem; line-height: 1.75rem; overflow-wrap: anywhere; }
+  :is(.dashboard-viewport, [data-mobile-surface]) table { font-size: 0.75rem; }
+  :is(.dashboard-viewport, [data-mobile-surface]) :is(th, td) { padding: 0.625rem; }
+  :is(.dashboard-viewport, [data-mobile-surface]) [data-table-scroll] { border-radius: 0.5rem; }
+}
+
+@media (max-width: 1023px) {
+  .dashboard-viewport { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+}
+
+@keyframes mobile-dialog-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-responsive-dialog], [data-responsive-sheet] { animation: none; transition: none; }
+}

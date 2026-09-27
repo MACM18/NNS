@@ -163,7 +163,7 @@ export function AddJobVacancyModal({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className='space-y-4'>
-          <div className='grid grid-cols-2 gap-4'>
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
             <div className='space-y-2'>
               <Label htmlFor='title'>Title *</Label>
               <Input
@@ -186,7 +186,7 @@ export function AddJobVacancyModal({
               />
             </div>
           </div>
-          <div className='grid grid-cols-2 gap-4'>
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
             <div className='space-y-2'>
               <Label htmlFor='location'>Location</Label>
               <Input
@@ -217,7 +217,7 @@ export function AddJobVacancyModal({
               </Select>
             </div>
           </div>
-          <div className='grid grid-cols-2 gap-4'>
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
             <div className='space-y-2'>
               <Label htmlFor='salary_range'>Salary Range</Label>
               <Input

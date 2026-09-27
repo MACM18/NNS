@@ -1097,7 +1097,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
             >
               <TabsTrigger value='profile' className='flex items-center gap-2'>
                 <User className='h-4 w-4' />
-                <span className='hidden sm:inline'>Profile</span>
+                <span>Profile</span>
               </TabsTrigger>
               <TabsTrigger
                 value='company'
@@ -1109,36 +1109,36 @@ If you lose access to your authenticator app, you can use these codes to sign in
                 }
               >
                 <Building className='h-4 w-4' />
-                <span className='hidden sm:inline'>Company</span>
+                <span>Company</span>
               </TabsTrigger>
               <TabsTrigger
                 value='notifications'
                 className='flex items-center gap-2'
               >
                 <Bell className='h-4 w-4' />
-                <span className='hidden sm:inline'>Notifications</span>
+                <span>Notifications</span>
               </TabsTrigger>
               <TabsTrigger value='security' className='flex items-center gap-2'>
                 <Shield className='h-4 w-4' />
-                <span className='hidden sm:inline'>Security</span>
+                <span>Security</span>
               </TabsTrigger>
               <TabsTrigger
                 value='appearance'
                 className='flex items-center gap-2'
               >
                 <Palette className='h-4 w-4' />
-                <span className='hidden sm:inline'>Appearance</span>
+                <span>Appearance</span>
               </TabsTrigger>
               <TabsTrigger value='data' className='flex items-center gap-2'>
                 <Database className='h-4 w-4' />
-                <span className='hidden sm:inline'>Data</span>
+                <span>Data</span>
               </TabsTrigger>
               {["admin", "moderator", "superadmin"].includes(
                 (profile?.role || "").toLowerCase()
               ) && (
                 <TabsTrigger value='email' className='flex items-center gap-2'>
                   <Mail className='h-4 w-4' />
-                  <span className='hidden sm:inline'>Email</span>
+                  <span>Email</span>
                 </TabsTrigger>
               )}
             </TabsList>

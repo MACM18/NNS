@@ -155,7 +155,7 @@ export function AssigneeManagementModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-2xl max-h-[80vh] overflow-hidden flex flex-col'>
+      <DialogContent className='space-y-4 md:space-y-0 max-w-2xl max-h-[80vh] md:overflow-hidden block md:flex md:flex-col'>
         <DialogHeader>
           <DialogTitle>Manage Line Assignees</DialogTitle>
           <DialogDescription>
@@ -163,7 +163,7 @@ export function AssigneeManagementModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className='flex-1 overflow-hidden flex flex-col space-y-4'>
+        <div className='flex-1 md:overflow-hidden flex flex-col space-y-4'>
           {/* Search */}
           <div className='relative'>
             <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
@@ -199,7 +199,7 @@ export function AssigneeManagementModal({
           )}
 
           {/* User List */}
-          <div className='flex-1 overflow-y-auto space-y-2'>
+          <div className='flex-1 md:overflow-y-auto space-y-2'>
             {filteredUsers.map((user) => (
               <div
                 key={user.id}

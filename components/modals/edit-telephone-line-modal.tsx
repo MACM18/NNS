@@ -217,13 +217,13 @@ export function EditTelephoneLineModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="space-y-4 md:space-y-0 max-w-4xl max-h-[90vh] block md:flex md:flex-col">
         <DialogHeader>
           <DialogTitle>Edit Line Details: {formData.telephone_no || formData.line_number}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
-          <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
+        <form onSubmit={handleSubmit} className="flex-1 md:overflow-hidden flex flex-col">
+          <Tabs defaultValue="details" className="flex-1 flex flex-col md:overflow-hidden">
             <div className="flex justify-between items-center pr-1">
               <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
                 <TabsTrigger value="details">Line Details</TabsTrigger>
@@ -231,7 +231,7 @@ export function EditTelephoneLineModal({
               </TabsList>
             </div>
 
-            <div className="flex-1 overflow-y-auto mt-4 px-1 pr-2">
+            <div className="flex-1 md:overflow-y-auto mt-4 px-1 pr-2">
               <TabsContent value="details" className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">

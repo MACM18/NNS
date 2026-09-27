@@ -49,8 +49,8 @@ export function MobileBottomNav() {
     : baseNavItems;
 
   return (
-    <nav className='fixed bottom-0 left-0 right-0 z-50 border-t bg-background lg:hidden'>
-      <div className='flex h-16 items-center justify-around px-2 safe-area-inset-bottom'>
+    <nav className='fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur safe-area-inset-bottom lg:hidden'>
+      <div className='grid h-16 grid-cols-5 items-center px-1'>
         {navItems.map((item) => {
           // normalize paths by removing trailing slash (but keep root "/")
           const normalize = (p?: string) => {
@@ -58,7 +58,8 @@ export function MobileBottomNav() {
             return p === "/" ? "/" : p.replace(/\/+$/, "");
           };
 
-          const isActive = normalize(pathname) === normalize(item.href);
+          const isActive = normalize(pathname) === normalize(item.href) ||
+            (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
           const Icon = item.icon;
 
           return (
@@ -66,12 +67,13 @@ export function MobileBottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 px-3 py-2 text-xs transition-colors",
+                "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isActive
                   ? "text-primary font-medium"
                   : "text-muted-foreground hover:text-foreground"
               )}
               aria-label={item.label}
+              aria-current={isActive ? "page" : undefined}
             >
               <Icon className={cn("h-5 w-5", isActive && "fill-current")} />
               <span>{item.label}</span>

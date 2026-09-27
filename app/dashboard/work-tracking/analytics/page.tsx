@@ -263,7 +263,7 @@ export default function WorkTrackingAnalyticsPage() {
               Deep insights into employee productivity and trends.
             </p>
           </div>
-          <div className='flex gap-2'>
+          <div className='flex w-full flex-wrap gap-2 sm:w-auto'>
             <Select
               value={selectedEmployee}
               onValueChange={setSelectedEmployee}
