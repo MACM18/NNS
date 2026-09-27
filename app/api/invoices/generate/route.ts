@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
         jobMonth: invoice.job_month,
         invoiceDate: new Date(invoice.invoice_date),
         lineDetailsIds,
+        optionalItems: invoice.optional_items,
         status: invoice.status || "issued",
         createdById: profile!.id,
       });
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest) {
       pricing_schedule_id: inv.pricingScheduleId || null,
       pricing_snapshot: inv.pricingSnapshot || null,
       line_details_snapshot: inv.lineDetailsSnapshot || null,
+      optional_items_snapshot: inv.optionalItemsSnapshot || null,
       status: inv.status || null,
       paid_amount: Number(inv.paidAmount || 0),
       payment_status: inv.paymentStatus,

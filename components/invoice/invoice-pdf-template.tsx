@@ -24,8 +24,10 @@ interface InvoiceData {
     date: string;
     baseRate?: number | null;
     invoiceAmount?: number | null;
+    description?: string;
   }>;
   totalAmount: number;
+  optionalItems?: Array<{ code: string; description: string; quantity: number; unitRate: number; invoiceAmount: number }>;
   companySettings: {
     company_name: string;
     address: string;
@@ -141,6 +143,7 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
               <TableHead className='w-[50px]'>S.No</TableHead>
               <TableHead>Customer Name</TableHead>
               <TableHead>Phone Number</TableHead>
+              <TableHead>Service</TableHead>
               <TableHead>Installation Date</TableHead>
               <TableHead className='text-right'>Cable Length (m)</TableHead>
               <TableHead className='text-right'>Rate (LKR)</TableHead>
@@ -155,6 +158,7 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
                   <TableCell>{index + 1}</TableCell>
                   <TableCell>{line.name}</TableCell>
                   <TableCell>{line.phone_number}</TableCell>
+                  <TableCell>{line.description || "FTTH"}</TableCell>
                   <TableCell>
                     {new Date(line.date).toLocaleDateString()}
                   </TableCell>
@@ -170,6 +174,18 @@ export function InvoicePDFTemplate({ data }: InvoicePDFTemplateProps) {
                 </TableRow>
               );
             })}
+            {(data.optionalItems || []).map((item) => (
+              <TableRow key={item.code}>
+                <TableCell>—</TableCell>
+                <TableCell>—</TableCell>
+                <TableCell>—</TableCell>
+                <TableCell>{item.description}</TableCell>
+                <TableCell>—</TableCell>
+                <TableCell className='text-right'>Qty {item.quantity}</TableCell>
+                <TableCell className='text-right'>{Number(item.unitRate).toLocaleString()}</TableCell>
+                <TableCell className='text-right'>{Number(item.invoiceAmount).toLocaleString()}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
 

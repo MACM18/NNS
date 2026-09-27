@@ -51,3 +51,59 @@ describe("historical pricing", () => {
     expect(result.lineDetailsSnapshot.reduce((sum, line) => sum + line.invoiceAmount, 0)).toBe(result.totalAmount);
   });
 });
+
+describe("service type and optional invoice pricing", () => {
+  it("classifies mixed imported and manually entered lines, and bills only selected optional items", async () => {
+    const schedule = {
+      id: "rates-2026",
+      name: "Current rates",
+      effectiveFrom: new Date("2026-09-01T00:00:00Z"),
+      status: "active",
+      peoTvRate: 1800,
+      optionalRates: { POLE_56: 700, POLE_67: 800, POLE_8: 900, HIGH_RISE: 3800 },
+      tiers: [
+        { serviceType: "FTTH", minLength: 0, maxLength: 100, rate: 6650 },
+        { serviceType: "DATA", minLength: 0, maxLength: 100, rate: 5000 },
+        { serviceType: "DATA", minLength: 201, maxLength: 300, rate: 6800 },
+      ],
+    };
+    const tx = {
+      pricingSchedule: {
+        findFirst: jest.fn(() => schedule),
+        findUnique: jest.fn(() => schedule),
+      },
+      lineDetails: {
+        findMany: jest.fn(() => [
+          { id: "ftth", date: new Date("2026-09-15T00:00:00Z"), dp: "HR-PKJ-0536-021-05", telephoneNo: "0342217442", name: "FTTH", cableStart: 0, cableMiddle: 50, cableEnd: 100 },
+          { id: "data", date: new Date("2026-09-15T00:00:00Z"), dp: "HR-PKJ-0536-021-06", telephoneNo: "E0342217443", name: "Data", cableStart: 0, cableMiddle: 50, cableEnd: 100 },
+          { id: "data-250", date: new Date("2026-09-15T00:00:00Z"), dp: "HR-PKJ-0536-021-07", telephoneNo: "E0342217445", name: "Data 250", cableStart: 0, cableMiddle: 125, cableEnd: 250 },
+          { id: "peo", date: new Date("2026-09-15T00:00:00Z"), dp: "pEo Tv", telephoneNo: "0342217444", name: "TV", cableStart: 0, cableMiddle: 50, cableEnd: 100 },
+        ]),
+      },
+    };
+
+    const input = { lineDetailsIds: ["ftth", "data", "data-250", "peo"], optionalItems: { POLE_56: 2 } };
+    const invoiceA = await calculateInvoicePricing(tx as never, { ...input, invoiceType: "A" });
+    const invoiceB = await calculateInvoicePricing(tx as never, { ...input, invoiceType: "B" });
+
+    expect(invoiceA.lineDetailsSnapshot.map((line) => [line.serviceType, line.baseRate])).toEqual([
+      ["FTTH", 6650], ["DATA", 5000], ["DATA", 6800], ["PEO_TV", 1800],
+    ]);
+    expect(invoiceA.optionalItemsSnapshot).toEqual([expect.objectContaining({ code: "POLE_56", quantity: 2, unitRate: 700 })]);
+    expect(invoiceA.totalAmount).toBe(19485);
+    expect(invoiceB.totalAmount).toBe(2165);
+    expect(invoiceA.lineDetailsSnapshot.reduce((sum, line) => sum + line.invoiceAmount, 0)
+      + invoiceA.optionalItemsSnapshot.reduce((sum, item) => sum + item.invoiceAmount, 0)).toBe(invoiceA.totalAmount);
+
+    const customized = await calculateInvoicePricing(tx as never, {
+      lineDetailsIds: ["ftth", "data", "data-250", "peo"],
+      optionalItems: { POLE_56: { quantity: 2, unitRate: 750 } },
+    });
+    expect(customized.totalAmount).toBe(21750);
+    expect(customized.optionalItemsSnapshot[0].unitRate).toBe(750);
+
+    const withoutOptional = await calculateInvoicePricing(tx as never, { lineDetailsIds: ["ftth", "data", "data-250", "peo"] });
+    expect(withoutOptional.optionalItemsSnapshot).toEqual([]);
+    expect(withoutOptional.totalAmount).toBe(20250);
+  });
+});

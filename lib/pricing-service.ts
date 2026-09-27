@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { computeCableMeasurements } from "@/lib/db";
 import { prisma } from "@/lib/prisma";
+import { classifyService, serviceDescription, OPTIONAL_ITEM_DESCRIPTIONS, OPTIONAL_ITEM_RATES, type OptionalItemCode, type OptionalItemInput, type ServiceType } from "@/lib/service-pricing-types";
 
 type Tx = Prisma.TransactionClient;
 
@@ -17,20 +18,33 @@ export interface PricingLineSnapshot {
   address: string;
   serviceDate: string;
   cableLength: number;
+  serviceType: ServiceType;
+  description: string;
   baseRate: number;
   invoiceAmount: number;
   pricingScheduleId: string;
   pricingScheduleName: string;
 }
 
-const DEFAULT_TIERS: PricingTierInput[] = [
-  { minLength: 0, maxLength: 100, rate: 6000 },
-  { minLength: 101, maxLength: 200, rate: 6500 },
-  { minLength: 201, maxLength: 300, rate: 7200 },
-  { minLength: 301, maxLength: 400, rate: 7800 },
-  { minLength: 401, maxLength: 500, rate: 8200 },
-  { minLength: 501, maxLength: null, rate: 8400 },
+export const DEFAULT_FTTH_TIERS: PricingTierInput[] = [
+  { minLength: 0, maxLength: 100, rate: 6650 },
+  { minLength: 101, maxLength: 200, rate: 7000 },
+  { minLength: 201, maxLength: 300, rate: 7800 },
+  { minLength: 301, maxLength: 400, rate: 8400 },
+  { minLength: 401, maxLength: 500, rate: 8800 },
+  { minLength: 501, maxLength: null, rate: 9000 },
 ];
+
+export const DEFAULT_DATA_TIERS: PricingTierInput[] = [
+  { minLength: 0, maxLength: 100, rate: 5000 },
+  { minLength: 101, maxLength: 200, rate: 5500 },
+  { minLength: 201, maxLength: 300, rate: 6800 },
+  { minLength: 301, maxLength: 400, rate: 6800 },
+  { minLength: 401, maxLength: 500, rate: 7200 },
+  { minLength: 501, maxLength: null, rate: 7400 },
+];
+
+export const DEFAULT_PEO_TV_RATE = 1800;
 
 function dateOnly(value: Date | string): Date {
   const date = value instanceof Date ? value : new Date(value);
@@ -77,6 +91,12 @@ function parseLegacyTiers(value: unknown): PricingTierInput[] {
   return [];
 }
 
+function validMoney(value: number): boolean {
+  const cents = value * 100;
+  return Number.isFinite(value) && value > 0 && Number.isSafeInteger(Math.round(cents))
+    && Math.abs(cents - Math.round(cents)) < 1e-7;
+}
+
 export function validatePricingTiers(input: PricingTierInput[]): PricingTierInput[] {
   if (!Array.isArray(input) || input.length === 0) {
     throw new Error("At least one pricing tier is required");
@@ -92,7 +112,7 @@ export function validatePricingTiers(input: PricingTierInput[]): PricingTierInpu
     if (maxLength !== null && (!Number.isFinite(maxLength) || maxLength < minLength)) {
       throw new Error(`Tier ${index + 1} has an invalid maximum length`);
     }
-    if (!Number.isFinite(rate) || rate <= 0) throw new Error(`Tier ${index + 1} must have a positive rate`);
+    if (!validMoney(rate)) throw new Error(`Tier ${index + 1} must have a positive rate with at most two decimal places`);
     if (previousMax !== null && minLength <= previousMax) {
       throw new Error("Pricing tiers must be ordered and non-overlapping");
     }
@@ -113,19 +133,25 @@ function tierToJson(tier: PricingTierInput) {
 }
 
 async function ensureInitialPricingSchedule(tx: Tx = prisma as unknown as Tx) {
-  const existing = await tx.pricingSchedule.findFirst({ orderBy: { effectiveFrom: "desc" } });
-  if (existing) return tx.pricingSchedule.findUniqueOrThrow({ where: { id: existing.id }, include: { tiers: true } });
+  const initialDate = new Date(Date.UTC(1970, 0, 1));
+  const existing = await tx.pricingSchedule.findUnique({ where: { effectiveFrom: initialDate }, include: { tiers: true } });
+  if (existing) return existing;
 
   const settings = await tx.companySettings.findFirst({ select: { pricingTiers: true } });
-  const tiers = validatePricingTiers(parseLegacyTiers(settings?.pricingTiers).length ? parseLegacyTiers(settings?.pricingTiers) : DEFAULT_TIERS);
-  const effectiveFrom = new Date(Date.UTC(1970, 0, 1));
+  const tiers = validatePricingTiers(parseLegacyTiers(settings?.pricingTiers).length ? parseLegacyTiers(settings?.pricingTiers) : DEFAULT_FTTH_TIERS);
+  const effectiveFrom = initialDate;
   try {
     return await tx.pricingSchedule.create({
       data: {
         name: "Initial pricing schedule",
         effectiveFrom,
         status: "active",
-        tiers: { create: tiers.map(tierToJson).map((tier) => ({ minLength: tier.min_length, maxLength: tier.max_length, rate: tier.rate })) },
+        peoTvRate: DEFAULT_PEO_TV_RATE,
+        optionalRates: OPTIONAL_ITEM_RATES,
+        tiers: { create: [
+          ...tiers.map(tierToJson).map((tier) => ({ serviceType: "FTTH", minLength: tier.min_length, maxLength: tier.max_length, rate: tier.rate })),
+          ...DEFAULT_DATA_TIERS.map((tier) => ({ serviceType: "DATA", minLength: tier.minLength, maxLength: tier.maxLength, rate: tier.rate })),
+        ] },
       },
       include: { tiers: true },
     });
@@ -149,12 +175,19 @@ export async function createPricingSchedule(input: {
   name: string;
   effectiveFrom: Date | string;
   tiers: PricingTierInput[];
+  dataTiers: PricingTierInput[];
+  peoTvRate: number;
+  optionalRates: Record<OptionalItemCode, number>;
   createdById: string;
 }) {
   const name = input.name.trim();
   if (!name) throw new Error("Pricing schedule name is required");
   const effectiveFrom = dateOnly(input.effectiveFrom);
   const tiers = validatePricingTiers(input.tiers);
+  const dataTiers = validatePricingTiers(input.dataTiers);
+  const peoTvRate = Number(input.peoTvRate);
+  if (!validMoney(peoTvRate)) throw new Error("Peo TV rate must be positive with at most two decimal places");
+  const optionalRates = validateOptionalRates(input.optionalRates);
 
   return prisma.$transaction(async (tx) => {
     const previous = await tx.pricingSchedule.findFirst({
@@ -170,7 +203,12 @@ export async function createPricingSchedule(input: {
         effectiveFrom,
         status: "active",
         createdById: input.createdById,
-        tiers: { create: tiers.map((tier) => ({ minLength: tier.minLength, maxLength: tier.maxLength, rate: tier.rate })) },
+        peoTvRate,
+        optionalRates,
+        tiers: { create: [
+          ...tiers.map((tier) => ({ serviceType: "FTTH", minLength: tier.minLength, maxLength: tier.maxLength, rate: tier.rate })),
+          ...dataTiers.map((tier) => ({ serviceType: "DATA", minLength: tier.minLength, maxLength: tier.maxLength, rate: tier.rate })),
+        ] },
       },
       include: { tiers: { orderBy: { minLength: "asc" } } },
     });
@@ -196,13 +234,55 @@ async function scheduleForDate(tx: Tx, serviceDate: Date) {
   return schedule;
 }
 
-function rateForLength(length: number, tiers: Array<{ minLength: Prisma.Decimal; maxLength: Prisma.Decimal | null; rate: Prisma.Decimal }>) {
-  const tier = tiers.find((item) => length >= Number(item.minLength) && (item.maxLength == null || length <= Number(item.maxLength)));
-  if (!tier) throw new Error(`No pricing tier applies to cable length ${length}`);
-  return Number(tier.rate);
+export function validateOptionalRates(input: unknown): Record<OptionalItemCode, number> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Optional item rates are required");
+  const rates = input as Record<string, unknown>;
+  const result = {} as Record<OptionalItemCode, number>;
+  for (const code of Object.keys(OPTIONAL_ITEM_RATES) as OptionalItemCode[]) {
+    const value = Number(rates[code]);
+    if (!validMoney(value)) throw new Error(`${OPTIONAL_ITEM_DESCRIPTIONS[code]} rate must be positive with at most two decimal places`);
+    result[code] = value;
+  }
+  return result;
 }
 
-export async function calculateInvoicePricing(tx: Tx, input: { lineDetailsIds: string[]; invoiceType?: string }) {
+function optionalRatesForSchedule(value: unknown): Record<OptionalItemCode, number> {
+  const stored = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return { ...OPTIONAL_ITEM_RATES, ...Object.fromEntries(
+    (Object.keys(OPTIONAL_ITEM_RATES) as OptionalItemCode[])
+      .filter((code) => Number.isFinite(Number(stored[code])) && Number(stored[code]) > 0)
+      .map((code) => [code, Number(stored[code])]),
+  ) } as Record<OptionalItemCode, number>;
+}
+
+function validateOptionalItems(input: unknown): Array<{ code: OptionalItemCode; quantity: number; unitRate?: number }> {
+  if (input == null) return [];
+  if (typeof input !== "object" || Array.isArray(input)) throw new Error("Invalid optional invoice items");
+  const items = input as Record<string, unknown>;
+  for (const code of Object.keys(items)) {
+    if (!(code in OPTIONAL_ITEM_RATES)) throw new Error(`Unknown optional invoice item: ${code}`);
+  }
+  return (Object.keys(OPTIONAL_ITEM_RATES) as OptionalItemCode[]).flatMap((code) => {
+    const selection = items[code];
+    const isDetail = selection != null && typeof selection === "object" && !Array.isArray(selection);
+    const detail = isDetail ? selection as Record<string, unknown> : null;
+    const quantity = Number(detail ? detail.quantity : selection ?? 0);
+    if (!Number.isSafeInteger(quantity) || quantity < 0) throw new Error(`${OPTIONAL_ITEM_DESCRIPTIONS[code]} quantity must be a nonnegative whole number`);
+    if (!quantity) return [];
+    const unitRate = detail?.unitRate == null ? undefined : Number(detail.unitRate);
+    if (unitRate !== undefined && !validMoney(unitRate)) throw new Error(`${OPTIONAL_ITEM_DESCRIPTIONS[code]} unit rate must be positive with at most two decimal places`);
+    return [{ code, quantity, unitRate }];
+  });
+}
+
+function tierForLength(length: number, tiers: Array<{ minLength: Prisma.Decimal | number; maxLength?: Prisma.Decimal | number | null; rate: Prisma.Decimal | number }>, serviceType: ServiceType) {
+  const billableLength = Math.ceil(length);
+  const tier = tiers.find((item) => billableLength >= Number(item.minLength) && (item.maxLength == null || billableLength <= Number(item.maxLength)));
+  if (!tier) throw new Error(`No ${serviceType} pricing tier applies to cable length ${length} m. Set this rate in a pricing schedule before invoicing.`);
+  return tier;
+}
+
+export async function calculateInvoicePricing(tx: Tx, input: { lineDetailsIds: string[]; invoiceType?: string; optionalItems?: OptionalItemInput }) {
   const ids = input.lineDetailsIds;
   if (!Array.isArray(ids) || ids.length === 0) throw new Error("At least one line is required");
   if (new Set(ids).size !== ids.length) throw new Error("Invoice lines cannot be duplicated");
@@ -211,26 +291,42 @@ export async function calculateInvoicePricing(tx: Tx, input: { lineDetailsIds: s
   const byId = new Map(lines.map((line) => [line.id, line]));
   if (lines.length !== ids.length) throw new Error("One or more invoice lines no longer exist");
 
+  const optionalItems = validateOptionalItems(input.optionalItems);
   const baseSnapshots: Array<PricingLineSnapshot & { baseCents: number }> = [];
-  const schedules = new Map<string, { id: string; name: string; effectiveFrom: string; tiers: Array<{ minLength: number; maxLength: number | null; rate: number }> }>();
+  const schedules = new Map<string, { id: string; name: string; effectiveFrom: string; peoTvRate: number; optionalRates: Record<OptionalItemCode, number>; tiers: Array<{ serviceType: string; minLength: number; maxLength: number | null; rate: number }> }>();
   for (const id of ids) {
     const line = byId.get(id)!;
     const schedule = await scheduleForDate(tx, line.date);
     const cableLength = computeCableMeasurements(Number(line.cableStart), Number(line.cableMiddle), Number(line.cableEnd)).totalCable;
-    const baseRate = rateForLength(cableLength, schedule.tiers);
+    const telephoneNo = line.telephoneNo || line.phoneNumber || "";
+    const serviceType = classifyService(line.dp, telephoneNo);
+    const applicableTiers = serviceType === "DATA"
+      ? schedule.tiers.filter((tier) => tier.serviceType === "DATA")
+      : schedule.tiers.filter((tier) => tier.serviceType !== "DATA");
+    const rateTiers = serviceType === "DATA" && applicableTiers.length === 0 ? DEFAULT_DATA_TIERS : applicableTiers;
+    const tier = serviceType === "PEO_TV" ? null : tierForLength(cableLength, rateTiers, serviceType);
+    const baseRate = tier ? Number(tier.rate) : Number(schedule.peoTvRate ?? DEFAULT_PEO_TV_RATE);
+    const description = serviceDescription(serviceType, tier ? Number(tier.minLength) : undefined, tier?.maxLength == null ? null : Number(tier.maxLength));
     schedules.set(schedule.id, {
       id: schedule.id,
       name: schedule.name,
       effectiveFrom: dateKey(schedule.effectiveFrom),
-      tiers: schedule.tiers.map((tier) => ({ minLength: Number(tier.minLength), maxLength: tier.maxLength == null ? null : Number(tier.maxLength), rate: Number(tier.rate) })),
+      peoTvRate: Number(schedule.peoTvRate ?? DEFAULT_PEO_TV_RATE),
+      optionalRates: optionalRatesForSchedule(schedule.optionalRates),
+      tiers: [
+        ...schedule.tiers.map((tier) => ({ serviceType: tier.serviceType || "FTTH", minLength: Number(tier.minLength), maxLength: tier.maxLength == null ? null : Number(tier.maxLength), rate: Number(tier.rate) })),
+        ...(schedule.tiers.some((tier) => tier.serviceType === "DATA") ? [] : DEFAULT_DATA_TIERS.map((tier) => ({ serviceType: "DATA", minLength: tier.minLength, maxLength: tier.maxLength ?? null, rate: tier.rate }))),
+      ],
     });
     baseSnapshots.push({
       lineId: line.id,
       customerName: line.name || "",
-      telephoneNo: line.telephoneNo || line.phoneNumber || "",
+      telephoneNo,
       address: line.address || "",
       serviceDate: dateKey(line.date),
       cableLength,
+      serviceType,
+      description,
       baseRate,
       invoiceAmount: baseRate,
       pricingScheduleId: schedule.id,
@@ -239,18 +335,51 @@ export async function calculateInvoicePricing(tx: Tx, input: { lineDetailsIds: s
     });
   }
 
-  const totalCents = baseSnapshots.reduce((sum, line) => sum + line.baseCents, 0);
+  const optionalSchedule = optionalItems.length
+    ? await scheduleForDate(tx, new Date(Math.max(...lines.map((line) => line.date.getTime()))))
+    : null;
+  const optionalRates = optionalRatesForSchedule(optionalSchedule?.optionalRates);
+  const optionalSnapshots = optionalItems.map(({ code, quantity, unitRate }) => {
+    const rate = unitRate ?? optionalRates[code];
+    const baseAmount = rate * quantity;
+    if (!Number.isSafeInteger(Math.round(baseAmount * 100))) throw new Error(`${OPTIONAL_ITEM_DESCRIPTIONS[code]} amount is too large`);
+    return {
+      code,
+      description: OPTIONAL_ITEM_DESCRIPTIONS[code],
+      quantity,
+      unitRate: rate,
+      baseAmount,
+      invoiceAmount: baseAmount,
+      pricingScheduleId: optionalSchedule!.id,
+    };
+  });
+  if (optionalSchedule) schedules.set(optionalSchedule.id, {
+    id: optionalSchedule.id,
+    name: optionalSchedule.name,
+    effectiveFrom: dateKey(optionalSchedule.effectiveFrom),
+    peoTvRate: Number(optionalSchedule.peoTvRate ?? DEFAULT_PEO_TV_RATE),
+    optionalRates,
+    tiers: [
+      ...optionalSchedule.tiers.map((tier) => ({ serviceType: tier.serviceType || "FTTH", minLength: Number(tier.minLength), maxLength: tier.maxLength == null ? null : Number(tier.maxLength), rate: Number(tier.rate) })),
+      ...(optionalSchedule.tiers.some((tier) => tier.serviceType === "DATA") ? [] : DEFAULT_DATA_TIERS.map((tier) => ({ serviceType: "DATA", minLength: tier.minLength, maxLength: tier.maxLength ?? null, rate: tier.rate }))),
+    ],
+  });
+
+  const totalCents = baseSnapshots.reduce((sum, line) => sum + line.baseCents, 0)
+    + optionalSnapshots.reduce((sum, item) => sum + Math.round(item.baseAmount * 100), 0);
   const type = String(input.invoiceType || "").toUpperCase();
   const targetCents = type === "A" ? Math.round(totalCents * 0.9) : type === "B" ? totalCents - Math.round(totalCents * 0.9) : totalCents;
   let assigned = 0;
-  baseSnapshots.forEach((line, index) => {
-    if (index === baseSnapshots.length - 1) {
-      line.invoiceAmount = (targetCents - assigned) / 100;
-    } else {
-      const share = type === "A" ? Math.round(line.baseCents * 0.9) : type === "B" ? line.baseCents - Math.round(line.baseCents * 0.9) : line.baseCents;
-      line.invoiceAmount = share / 100;
-      assigned += share;
-    }
+  const chargeRows: Array<{ baseCents: number; setAmount: (value: number) => void }> = [
+    ...baseSnapshots.map((line) => ({ baseCents: line.baseCents, setAmount: (value: number) => { line.invoiceAmount = value; } })),
+    ...optionalSnapshots.map((item) => ({ baseCents: Math.round(item.baseAmount * 100), setAmount: (value: number) => { item.invoiceAmount = value; } })),
+  ];
+  chargeRows.forEach((row, index) => {
+    const share = index === chargeRows.length - 1
+      ? targetCents - assigned
+      : type === "A" ? Math.round(row.baseCents * 0.9) : type === "B" ? row.baseCents - Math.round(row.baseCents * 0.9) : row.baseCents;
+    row.setAmount(share / 100);
+    assigned += share;
   });
 
   return {
@@ -258,12 +387,13 @@ export async function calculateInvoicePricing(tx: Tx, input: { lineDetailsIds: s
     lineCount: ids.length,
     lineDetailsIds: ids,
     lineDetailsSnapshot: baseSnapshots.map(({ baseCents: _baseCents, ...line }) => line),
+    optionalItemsSnapshot: optionalSnapshots,
     pricingSnapshot: Array.from(schedules.values()),
     pricingScheduleId: schedules.size === 1 ? Array.from(schedules.keys())[0] : null,
   };
 }
 
-export async function calculateInvoicePricingPreview(input: { lineDetailsIds: string[]; invoiceType?: string }) {
+export async function calculateInvoicePricingPreview(input: { lineDetailsIds: string[]; invoiceType?: string; optionalItems?: OptionalItemInput }) {
   return prisma.$transaction((tx) => calculateInvoicePricing(tx, input));
 }
 

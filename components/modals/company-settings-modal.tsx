@@ -411,8 +411,8 @@ export function CompanySettingsModal({
             </CardContent>
           </Card>
 
-          {/* Pricing Tiers */}
-          <Card>
+          {/* Historical company pricing is retained for compatibility; active rates are in Pricing schedules. */}
+          <Card className='hidden'>
             <CardHeader>
               <CardTitle>Pricing Tiers (by Cable Length)</CardTitle>
             </CardHeader>

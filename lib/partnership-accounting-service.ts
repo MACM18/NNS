@@ -1,3 +1,4 @@
+import type { OptionalItemInput } from "@/lib/service-pricing-types";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { encrypt } from "@/lib/encryption";
@@ -433,6 +434,7 @@ export async function createIssuedInvoiceFromLines(input: {
   jobMonth?: string;
   invoiceDate?: Date;
   lineDetailsIds: string[];
+  optionalItems?: OptionalItemInput;
   status?: string;
   createdById: string;
 }) {
@@ -450,6 +452,7 @@ export async function createIssuedInvoiceFromLines(input: {
     const pricing = await calculateInvoicePricing(tx, {
       lineDetailsIds: input.lineDetailsIds,
       invoiceType: input.invoiceType,
+      optionalItems: input.optionalItems,
     });
     const invoice = await tx.generatedInvoice.create({
       data: {
@@ -465,6 +468,7 @@ export async function createIssuedInvoiceFromLines(input: {
         pricingScheduleId: pricing.pricingScheduleId,
         pricingSnapshot: pricing.pricingSnapshot as Prisma.InputJsonValue,
         lineDetailsSnapshot: pricing.lineDetailsSnapshot as Prisma.InputJsonValue,
+        optionalItemsSnapshot: pricing.optionalItemsSnapshot as Prisma.InputJsonValue,
         status: input.status || "issued",
       },
     });

@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/command";
 
 import { cn } from "@/lib/utils";
+import { classifyService } from "@/lib/service-pricing-types";
 import type { TaskRecord } from "@/types/tasks";
 
 interface AddTaskModalProps {
@@ -240,6 +241,7 @@ export function AddTaskModal({
   };
 
   const validateDP = (dp: string): boolean => {
+    if (classifyService(dp, "") === "PEO_TV") { setDpValidationError(""); return true; }
     const dpPattern = /^[A-Z]{1,4}-[A-Z]{1,4}-\d{4}-\d{3}-0[1-8]$/;
 
     if (!dpPattern.test(dp)) {
@@ -253,6 +255,7 @@ export function AddTaskModal({
     return true;
   };
   const checkDPUniqueness = async (dp: string): Promise<boolean> => {
+    if (classifyService(dp, "") === "PEO_TV") return true;
     const parts = dp.split("-");
     if (parts.length !== 5) return false;
 
