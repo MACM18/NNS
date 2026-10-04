@@ -60,13 +60,13 @@ async function writeRange(sheets: sheets_v4.Sheets, fileId: string, range: strin
   await sheets.spreadsheets.values.update({ spreadsheetId: fileId, range, valueInputOption: "USER_ENTERED", requestBody: { values } });
 }
 
-export async function provisionMonthlySheet(period: string, secret: string) {
+export async function provisionMonthlySheet(period: string, secret: string, options: { manual?: boolean } = {}) {
+  const manual = options.manual === true;
   const settings = await prisma.googleSheetMonthlySettings.findUnique({ where: { id: "default" } });
-  if (!settings?.enabled || !settings.templateFileId || !settings.destinationFolderId) throw new Error("Monthly sheet automation is not fully configured.");
-  if (!settings.encryptedRefreshToken) throw new Error("Connect the admin Google Drive account first.");
+  if (!manual && !settings?.enabled) throw new Error("Monthly sheet automation is not enabled.");
   const [yearText, monthText] = period.split("-");
   const year = Number(yearText), month = Number(monthText);
-  const name = settings.namePattern.replaceAll("{Month}", new Intl.DateTimeFormat("en", { month: "long", timeZone: MONTHLY_SHEET_TIME_ZONE }).format(new Date(Date.UTC(year, month - 1, 1)))).replaceAll("{Year}", yearText).replaceAll("{MM}", monthText);
+  const name = (settings?.namePattern || "NNS Telecom - {Month} {Year}").replaceAll("{Month}", new Intl.DateTimeFormat("en", { month: "long", timeZone: MONTHLY_SHEET_TIME_ZONE }).format(new Date(Date.UTC(year, month - 1, 1)))).replaceAll("{Year}", yearText).replaceAll("{MM}", monthText.padStart(2, "0"));
 
   let run = await prisma.googleSheetMonthlyRun.findUnique({ where: { period } });
   if (run?.status === "success") return { skipped: true, fileUrl: run.fileUrl };
@@ -90,16 +90,22 @@ export async function provisionMonthlySheet(period: string, secret: string) {
   if (!run) throw new Error("Could not claim the monthly provisioning run.");
 
   try {
-    const secretConfigured = process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET;
-    if (secretConfigured !== secret) throw new Error("Scheduled request secret mismatch.");
+    if (!settings) throw new Error("Save the monthly sheet setup before creating a sheet.");
+    if (!settings.templateFileId || !settings.destinationFolderId) throw new Error("Choose a master template and destination folder before creating a sheet.");
+    if (!settings.encryptedRefreshToken) throw new Error("Connect the admin Google Drive account first.");
+    if (!manual) {
+      const secretConfigured = process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET;
+      if (!secretConfigured || secretConfigured !== secret) throw new Error("Scheduled request secret mismatch.");
+    }
     const { drive, sheets } = await getMonthlyGoogleClients();
     const priorDate = new Date(Date.UTC(year, month - 2, 1));
     const prior = await prisma.googleSheetConnection.findFirst({ where: { year: priorDate.getUTCFullYear(), month: priorDate.getUTCMonth() + 1 }, orderBy: [{ createdAt: "desc" }] });
     if (!prior?.sheetId) throw new Error(`No connected Google Sheet was found for the previous month (${priorDate.getUTCFullYear()}-${String(priorDate.getUTCMonth() + 1).padStart(2, "0")}), so balances cannot be carried forward.`);
     if (!run.previousSyncAt) {
       if (prior) {
-        const { syncConnectionForCron } = await import("@/app/dashboard/integrations/google-sheets/actions");
-        await syncConnectionForCron(prior.id, secret);
+        const actions = await import("@/app/dashboard/integrations/google-sheets/actions");
+        if (manual) await actions.syncConnection(prior.id);
+        else await actions.syncConnectionForCron(prior.id, secret);
       }
       run = await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { previousSyncAt: new Date() } });
     }
