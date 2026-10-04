@@ -56,6 +56,49 @@ export async function getMonthlyGoogleClients() {
   return { drive: google.drive({ version: "v3", auth: oauth }), sheets: google.sheets({ version: "v4", auth: oauth }), settings, accessToken: token };
 }
 
+/** Uses the same service account that completed the previous-month sync.
+ * The admin OAuth connection is intentionally limited to drive.file and may
+ * not have API access to older sheets that were connected manually.
+ */
+async function getServiceAccountSheetsClient() {
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!email || !keyRaw) {
+    throw new Error("Google service account credentials are not configured for reading previous-month balances.");
+  }
+
+  let key: string;
+  try {
+    const credentials = JSON.parse(keyRaw);
+    if (!credentials.private_key) throw new Error("Missing private_key");
+    key = String(credentials.private_key).replace(/\\n/g, "\n");
+  } catch {
+    key = keyRaw.replace(/\\n/g, "\n");
+    if (!key.includes("-----BEGIN PRIVATE KEY-----") && !key.includes("-----BEGIN RSA PRIVATE KEY-----")) {
+      throw new Error("Google service account key is not valid JSON credentials or a PEM private key.");
+    }
+  }
+
+  const client = new google.auth.JWT({ email, key, scopes: ["https://www.googleapis.com/auth/spreadsheets"] });
+  await client.authorize();
+  return google.sheets({ version: "v4", auth: client });
+}
+
+function googleApiFailure(error: unknown, operation: string, details: Record<string, string | number | boolean | null>) {
+  const cause = error as { message?: string; code?: number | string; response?: { status?: number; data?: { error?: { status?: string; errors?: Array<{ reason?: string }> } } } };
+  const apiReason = cause.response?.data?.error?.errors?.map(item => item.reason).filter(Boolean).join(", ");
+  throw new MonthlyProvisioningStageError(
+    "prepare_sheet",
+    `${operation}: ${redactProviderText(cause.message || "Google Sheets API request failed.")}`,
+    {
+      ...details,
+      ...(cause.code ? { httpStatus: Number(cause.code) || null } : cause.response?.status ? { httpStatus: cause.response.status } : {}),
+      ...(cause.response?.data?.error?.status ? { googleStatus: cause.response.data.error.status } : {}),
+      ...(apiReason ? { googleReason: apiReason } : {}),
+    },
+  );
+}
+
 
 async function writeRange(sheets: sheets_v4.Sheets, fileId: string, range: string, values: unknown[][]) {
   await sheets.spreadsheets.values.update({ spreadsheetId: fileId, range, valueInputOption: "USER_ENTERED", requestBody: { values } });
@@ -247,12 +290,34 @@ export async function provisionMonthlySheet(period: string, secret: string, opti
     await runMonthlyStage(run.id, "prepare_sheet", "Update month and invoice cells and carry opening balances forward", async () => {
       if (run!.sheetPreparedAt) return { updatedRanges: 0, balancesCopied: 0, resumed: true };
       const updates = monthlyTemplateUpdates(period);
-      for (const update of updates) await writeRange(sheets, copied.fileId, update.range, update.values);
-      const previous = await sheets.spreadsheets.values.get({ spreadsheetId: prior.sheetId!, range: "'Material Balance - Month'!H8:H", valueRenderOption: "UNFORMATTED_VALUE" });
-      const balances = previous.data.values || [];
-      for (const update of monthlyBalanceDestinations(balances as unknown[][])) await writeRange(sheets, copied.fileId, update.range, update.values);
+      let balances: unknown[][];
+      try {
+        const sourceSheets = await getServiceAccountSheetsClient();
+        const previous = await sourceSheets.spreadsheets.values.get({
+          spreadsheetId: prior.sheetId!,
+          range: "'Material Balance - Month'!H8:H",
+          valueRenderOption: "UNFORMATTED_VALUE",
+        });
+        balances = (previous.data.values || []) as unknown[][];
+      } catch (error) {
+        googleApiFailure(error, `Could not read ending balances from the previous sheet (${prior.period})`, {
+          operation: "read_previous_month_balances",
+          sourcePeriod: prior.period,
+          sourceTab: "Material Balance - Month",
+          sourceRange: "H8:H",
+          reader: "Google Sheets importer service account",
+        });
+      }
+      for (const update of updates) {
+        try { await writeRange(sheets, copied.fileId, update.range, update.values); }
+        catch (error) { googleApiFailure(error, `Could not update ${update.range} on the new sheet`, { operation: "write_template_cell", targetRange: update.range }); }
+      }
+      for (const update of monthlyBalanceDestinations(balances!)) {
+        try { await writeRange(sheets, copied.fileId, update.range, update.values); }
+        catch (error) { googleApiFailure(error, `Could not write carried balances to ${update.range} on the new sheet`, { operation: "write_opening_balances", targetRange: update.range, openingBalanceRows: balances!.length }); }
+      }
       run = await prisma.googleSheetMonthlyRun.update({ where: { id: run!.id }, data: { sheetPreparedAt: new Date() } });
-      return { updatedRanges: updates.length, balancesCopied: balances.length, resumed: false };
+      return { updatedRanges: updates.length, balancesCopied: balances!.length, resumed: false };
     }, result => ({
       message: result.resumed ? "Template updates were completed in an earlier attempt." : "Template cells updated and opening balances copied.",
       details: { templateRangesUpdated: result.updatedRanges, openingBalanceRowsCopied: result.balancesCopied },
