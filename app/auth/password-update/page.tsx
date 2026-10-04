@@ -19,6 +19,7 @@ export default function PasswordUpdatePage() {
   const router = useRouter();
   const { toast } = useToast();
   const [codeParam, setCodeParam] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -41,7 +42,8 @@ export default function PasswordUpdatePage() {
   }, [password]);
 
   useEffect(() => {
-    // No email-based reset supported via NextAuth here.
+    const token = new URLSearchParams(window.location.search).get("token");
+    setCodeParam(token);
     setLoading(false);
   }, []);
 
@@ -60,8 +62,17 @@ export default function PasswordUpdatePage() {
       toast({ title: "Passwords do not match", variant: "destructive" });
       return;
     }
-    // Not implemented for NextAuth flow.
-    setUpdating(false);
+    setUpdating(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/auth/password-reset", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: codeParam, password }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to update the password.");
+      setMessage(result.message || "Password updated. You can sign in now.");
+      setTimeout(() => router.replace("/login"), 1800);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update the password.");
+    } finally { setUpdating(false); }
   };
 
   return (
@@ -80,11 +91,8 @@ export default function PasswordUpdatePage() {
             </div>
           ) : (
             <form onSubmit={onSubmit} className='space-y-4'>
-              <div className='text-sm p-3 rounded border bg-muted/30'>
-                Password update via email link is not available. Please contact
-                your administrator or update your password in account settings
-                if supported.
-              </div>
+              {!codeParam && <div className='text-sm p-3 rounded border bg-muted/30' role='alert'>This reset link is missing or invalid. Request a new link.</div>}
+              {message && <div className='text-sm p-3 rounded border bg-muted/30' role='status'>{message}</div>}
               <div>
                 <Label htmlFor='password'>New Password</Label>
                 <div className='relative'>
@@ -131,8 +139,8 @@ export default function PasswordUpdatePage() {
                   required
                 />
               </div>
-              <Button type='submit' className='w-full' disabled>
-                Disabled
+              <Button type='submit' className='w-full' disabled={updating || !codeParam || strength < 3 || password !== confirm}>
+                {updating ? "Updating…" : "Update Password"}
               </Button>
               <div className='text-center'>
                 <Button asChild variant='link' className='text-sm'>

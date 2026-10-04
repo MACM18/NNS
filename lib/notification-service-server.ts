@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { broadcastToUser } from "@/lib/sse-manager";
-import { sendEmail } from "@/lib/email-service";
+import { escapeEmailHtml, sendEmail } from "@/lib/email-service";
 
 export type NotificationType = "info" | "success" | "warning" | "error";
 export type NotificationCategory =
@@ -78,12 +78,12 @@ export async function notifyAllAdmins(params: {
           html: params.html || `
             <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; border: 1px solid #e5e7eb; border-radius: 8px;">
               <h2 style="color: ${params.type === 'error' ? '#dc2626' : params.type === 'warning' ? '#d97706' : '#2563eb'}; margin-top: 0;">
-                ${params.title}
+                ${escapeEmailHtml(params.title)}
               </h2>
-              <p style="font-size: 16px; line-height: 1.5; color: #374151;">${params.message}</p>
+              <p style="font-size: 16px; line-height: 1.5; color: #374151;">${escapeEmailHtml(params.message)}</p>
               ${params.actionUrl ? `
                 <div style="margin-top: 25px;">
-                  <a href="${process.env.NEXTAUTH_URL || 'https://nns.lk'}${params.actionUrl}" 
+                  <a href="${escapeEmailHtml(process.env.NEXTAUTH_URL || 'https://nns.lk')}${escapeEmailHtml(params.actionUrl)}"
                      style="background: #2563eb; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 500;">
                     View Details
                   </a>
@@ -167,9 +167,9 @@ export async function checkStockLevelsAndNotify() {
   for (const item of lowItems) {
     htmlMessage += `
       <tr style="border-bottom: 1px solid #f3f4f6;">
-        <td style="padding: 8px; color: #111827;">${item.name}</td>
-        <td style="padding: 8px; color: #dc2626; font-weight: 600; text-align: right;">${item.currentStock} ${item.unit}</td>
-        <td style="padding: 8px; color: #4b5563; text-align: right;">${item.reorderLevel} ${item.unit}</td>
+        <td style="padding: 8px; color: #111827;">${escapeEmailHtml(item.name)}</td>
+        <td style="padding: 8px; color: #dc2626; font-weight: 600; text-align: right;">${escapeEmailHtml(item.currentStock)} ${escapeEmailHtml(item.unit)}</td>
+        <td style="padding: 8px; color: #4b5563; text-align: right;">${escapeEmailHtml(item.reorderLevel)} ${escapeEmailHtml(item.unit)}</td>
       </tr>
     `;
   }

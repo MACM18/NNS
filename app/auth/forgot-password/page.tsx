@@ -16,13 +16,20 @@ import Link from "next/link";
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // NextAuth-managed accounts do not support email resets here.
-    // Direct users to contact an admin or use account settings.
     setLoading(true);
-    setTimeout(() => setLoading(false), 600);
+    setMessage("");
+    try {
+      const response = await fetch("/api/auth/password-reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to request a reset link.");
+      setMessage(result.message || "If an eligible account exists, a reset link will arrive shortly.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to request a reset link.");
+    } finally { setLoading(false); }
   };
 
   return (
@@ -46,12 +53,10 @@ export default function ForgotPasswordPage() {
                 required
               />
             </div>
-            <div className='text-sm p-3 rounded border bg-muted/30'>
-              Password reset by email isn’t available. Please contact your
-              administrator to reset your password.
-            </div>
-            <Button type='submit' className='w-full' disabled>
-              Disabled
+            <p className='text-sm text-muted-foreground'>For security, we’ll show the same confirmation whether or not an eligible account exists.</p>
+            {message && <div className='text-sm p-3 rounded border bg-muted/30' role='status'>{message}</div>}
+            <Button type='submit' className='w-full' disabled={loading}>
+              {loading ? "Sending…" : "Send reset link"}
             </Button>
             <div className='text-center'>
               <Button asChild variant='link' className='text-sm'>

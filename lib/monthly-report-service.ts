@@ -10,7 +10,9 @@ import {
   generateInvoiceBackPdf,
   generateInvoicePdf,
   generateMonthlyMaterialBalancePdf,
+  MONTHLY_REPORT_PDF_DESIGN_VERSION,
   type InvoiceBackRow,
+  type InvoiceCompanyDetails,
   type InvoiceSnapshotLine,
   type OptionalInvoiceSnapshot,
 } from "@/lib/monthly-report-pdf";
@@ -44,6 +46,78 @@ function optionalItemsInput(value: Prisma.JsonValue | null) {
     if (typeof item.code !== "string") return [];
     return [[item.code, { quantity: Number(item.quantity || 0), unitRate: Number(item.unitRate || 0) }]];
   }));
+}
+
+type ReportInvoice = {
+  invoiceNumber: string;
+  invoiceDate: Date | string | null;
+  jobMonth: string | null;
+  invoiceType: string | null;
+  totalAmount: number;
+  lines: InvoiceSnapshotLine[];
+  optionalItems: OptionalInvoiceSnapshot[];
+};
+
+type MonthlyPdfData = {
+  year: number;
+  month: number;
+  dailyItems: Array<{ sourceItemName: string; sourceUnit: string | null; dailyEntries: Array<{ date: string; previousBalance: number; issued: number; usage: number; balanceReturn: number }> }>;
+  monthlyRows: Array<{ item: string; opening: number; issued: number; inHand: number; used: number; endingWip: number }>;
+  invoiceBackRows: InvoiceBackRow[];
+  drumRows: Array<{ telephoneNo: string; cableStart: number; cableMiddle: number; cableEnd: number; drumNumber: string; wastage: number }>;
+  invoiceBackNumber: string;
+  invoices: [ReportInvoice, ReportInvoice];
+  company: InvoiceCompanyDetails;
+};
+
+function stringField(value: unknown) { return typeof value === "string" ? value : ""; }
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+function arrayField<T>(record: Record<string, unknown>, key: string): T[] {
+  const value = record[key];
+  return Array.isArray(value) ? value as T[] : [];
+}
+function invoiceCompanyDetails(settings: { companyName: string; address: string | null; contactNumbers: string[]; website: string | null; registeredNumber: string | null; bankDetails: Prisma.JsonValue | null } | null): InvoiceCompanyDetails {
+  const bank = asRecord(settings?.bankDetails);
+  return {
+    name: settings?.companyName || "NNS Enterprise",
+    address: settings?.address || "",
+    contacts: settings?.contactNumbers || [],
+    registeredNumber: settings?.registeredNumber || "",
+    website: settings?.website || "",
+    bank: {
+      bankName: stringField(bank?.bank_name),
+      accountTitle: stringField(bank?.account_title),
+      accountNumber: stringField(bank?.account_number),
+      branchCode: stringField(bank?.branch_code),
+      iban: stringField(bank?.iban),
+    },
+  };
+}
+function buildMonthlyReportPdfs(data: MonthlyPdfData) {
+  const label = monthLabel(data.month, data.year);
+  const invoiceReports = data.invoices.map(invoice => ({
+    type: invoice.invoiceType === "A" ? "invoice-a" as const : "invoice-b" as const,
+    bytes: generateInvoicePdf({
+      invoice: { invoiceNumber: invoice.invoiceNumber, invoiceDate: invoice.invoiceDate, jobMonth: invoice.jobMonth, invoiceType: invoice.invoiceType, totalAmount: invoice.totalAmount },
+      lines: invoice.lines,
+      optionalItems: invoice.optionalItems,
+      company: data.company,
+    }),
+  }));
+  return [
+    { type: "daily-material-balance" as const, bytes: generateDailyMaterialBalancePdf({ monthLabel: label, items: data.dailyItems }) },
+    { type: "monthly-material-balance" as const, bytes: generateMonthlyMaterialBalancePdf({ monthLabel: label, year: data.year, rows: data.monthlyRows }) },
+    ...invoiceReports,
+    { type: "invoice-back" as const, bytes: generateInvoiceBackPdf({ monthLabel: label, invoiceNumber: data.invoiceBackNumber, rows: data.invoiceBackRows }) },
+    { type: "drum-number" as const, bytes: generateDrumNumberPdf({ monthLabel: label, rows: data.drumRows }) },
+  ];
+}
+
+function monthlyInvoiceBackNumber(year: number, month: number) {
+  const monthName = new Intl.DateTimeFormat("en", { month: "long", timeZone: "Asia/Colombo" }).format(new Date(Date.UTC(year, month - 1, 1))).toUpperCase();
+  return `NNS/WPS/HR/NC/${String(year).slice(-2)}/${monthName}/001`;
 }
 
 async function ensureInvoicePair(year: number, month: number, createdById: string) {
@@ -165,24 +239,34 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
     drumNumber: line.drumNumber || line.drumNumberNew || "",
     wastage: decimal(line.wastage),
   }));
-  const monthName = new Intl.DateTimeFormat("en", { month: "long", timeZone: "Asia/Colombo" }).format(new Date(Date.UTC(input.year, input.month - 1, 1))).toUpperCase();
-  const invoiceBackNumber = `NNS/WPS/HR/NC/${String(input.year).slice(-2)}/${monthName}/001`;
   const invoiceLines = (invoice: typeof invoiceA): InvoiceSnapshotLine[] => Array.isArray(invoice.lineDetailsSnapshot)
     ? (invoice.lineDetailsSnapshot as unknown as InvoiceSnapshotLine[])
     : [];
   const optionalLines = (invoice: typeof invoiceA): OptionalInvoiceSnapshot[] => Array.isArray(invoice.optionalItemsSnapshot)
     ? (invoice.optionalItemsSnapshot as unknown as OptionalInvoiceSnapshot[])
     : [];
-  const reports = [
-    { type: "daily-material-balance" as const, bytes: generateDailyMaterialBalancePdf({ monthLabel: monthLabel(input.month, input.year), items: dailyItems }) },
-    { type: "monthly-material-balance" as const, bytes: generateMonthlyMaterialBalancePdf({ monthLabel: new Intl.DateTimeFormat("en", { month: "long", timeZone: "Asia/Colombo" }).format(new Date(Date.UTC(input.year, input.month - 1, 1))), year: input.year, rows: monthlyRows }) },
-    { type: "invoice-a" as const, bytes: generateInvoicePdf({ invoice: { invoiceNumber: invoiceA.invoiceNumber, invoiceDate: invoiceA.invoiceDate, jobMonth: invoiceA.jobMonth, invoiceType: invoiceA.invoiceType, totalAmount: decimal(invoiceA.totalAmount) }, lines: invoiceLines(invoiceA), optionalItems: optionalLines(invoiceA), company: { name: companySettings?.companyName || "NNS Enterprise", address: companySettings?.address || "No 89, Welikala, Pokunuwita", contacts: companySettings?.contactNumbers || [], registeredNumber: companySettings?.registeredNumber || "" } }) },
-    { type: "invoice-b" as const, bytes: generateInvoicePdf({ invoice: { invoiceNumber: invoiceB.invoiceNumber, invoiceDate: invoiceB.invoiceDate, jobMonth: invoiceB.jobMonth, invoiceType: invoiceB.invoiceType, totalAmount: decimal(invoiceB.totalAmount) }, lines: invoiceLines(invoiceB), optionalItems: optionalLines(invoiceB), company: { name: companySettings?.companyName || "NNS Enterprise", address: companySettings?.address || "No 89, Welikala, Pokunuwita", contacts: companySettings?.contactNumbers || [], registeredNumber: companySettings?.registeredNumber || "" } }) },
-    { type: "invoice-back" as const, bytes: generateInvoiceBackPdf({ monthLabel: monthLabel(input.month, input.year), invoiceNumber: invoiceBackNumber, rows: invoiceBackRows }) },
-    { type: "drum-number" as const, bytes: generateDrumNumberPdf({ monthLabel: monthLabel(input.month, input.year), rows: drumRows }) },
-  ];
+  const reportPdfs = buildMonthlyReportPdfs({
+    year: input.year,
+    month: input.month,
+    dailyItems,
+    monthlyRows,
+    invoiceBackRows,
+    drumRows,
+    invoiceBackNumber: monthlyInvoiceBackNumber(input.year, input.month),
+    invoices: [invoiceA, invoiceB].map(invoice => ({
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceDate: invoice.invoiceDate,
+      jobMonth: invoice.jobMonth,
+      invoiceType: invoice.invoiceType,
+      totalAmount: decimal(invoice.totalAmount),
+      lines: invoiceLines(invoice),
+      optionalItems: optionalLines(invoice),
+    })) as [ReportInvoice, ReportInvoice],
+    company: invoiceCompanyDetails(companySettings),
+  });
   const sourceSnapshot = {
     month: input.month, year: input.year,
+    pdfDesignVersion: MONTHLY_REPORT_PDF_DESIGN_VERSION,
     sourceImport: { id: imported.id, importedAt: imported.importedAt.toISOString(), status: imported.status, sourceTab: imported.sourceTab, sourceChecksum: imported.sourceChecksum },
     lineIds: lines.map(line => line.id),
     invoiceIds: invoiceRecords.map(invoice => invoice.id),
@@ -201,7 +285,7 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
     });
     const previous = await tx.monthlyReportVersion.findFirst({ where: { reportId: report.id }, orderBy: { version: "desc" }, select: { version: true } });
     const version = await tx.monthlyReportVersion.create({ data: { reportId: report.id, version: (previous?.version || 0) + 1, sourceImportId: imported.id, sourceSnapshot: jsonValue(sourceSnapshot), createdById: input.createdById }, select: { id: true } });
-    await tx.monthlyReportDocument.createMany({ data: reports.map(document => ({
+    await tx.monthlyReportDocument.createMany({ data: reportPdfs.map(document => ({
       versionId: version.id,
       reportType: document.type,
       publicId: createReportDocumentId(),
@@ -212,6 +296,87 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
     return report.id;
   });
   return { requiresInvoiceGeneration: false as const, reportId, version: await prisma.monthlyReportVersion.findFirstOrThrow({ where: { reportId, sourceImportId: imported.id }, orderBy: { version: "desc" }, include: { documents: { select: { id: true, reportType: true, title: true, fileName: true, publicId: true } } } }) };
+}
+
+export async function regenerateMonthlyReportDesign(reportId: string, createdById: string) {
+  const target = await prisma.monthlyReport.findUnique({ where: { id: reportId }, select: { year: true, month: true } });
+  if (!target) throw new Error("This monthly report was not found.");
+  const periodKey = `${target.year}-${String(target.month).padStart(2, "0")}`;
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-report:${periodKey}`}))`;
+    const report = await tx.monthlyReport.findUnique({
+      where: { id: reportId },
+      select: { id: true, year: true, month: true, versions: { orderBy: { version: "desc" }, take: 1, select: { id: true, version: true, sourceImportId: true, sourceSnapshot: true } } },
+    });
+    if (!report) throw new Error("This monthly report was not found.");
+    const sourceVersion = report.versions[0];
+    if (!sourceVersion) throw new Error("This month has no saved report snapshot to redesign.");
+    const snapshot = asRecord(sourceVersion.sourceSnapshot);
+    if (!snapshot) throw new Error("The saved report snapshot is invalid and cannot be redesigned.");
+    if (snapshot.pdfDesignVersion === MONTHLY_REPORT_PDF_DESIGN_VERSION) {
+      return { status: "skipped" as const, version: sourceVersion.version };
+    }
+
+    const dailyItems = arrayField<MonthlyPdfData["dailyItems"][number]>(snapshot, "dailyItems");
+    const monthlyRows = arrayField<MonthlyPdfData["monthlyRows"][number]>(snapshot, "monthlyRows");
+    const invoiceBackRows = arrayField<InvoiceBackRow>(snapshot, "invoiceBackRows");
+    const drumRows = arrayField<MonthlyPdfData["drumRows"][number]>(snapshot, "drumRows");
+    const invoiceSnapshots = arrayField<Record<string, unknown>>(snapshot, "invoiceSnapshots");
+    const invoiceA = invoiceSnapshots.find(invoice => invoice.type === "A");
+    const invoiceB = invoiceSnapshots.find(invoice => invoice.type === "B");
+    if (!invoiceA || !invoiceB) throw new Error("The saved snapshot is missing Invoice A or Invoice B details.");
+    if (!Array.isArray(snapshot.dailyItems) || !Array.isArray(snapshot.monthlyRows) || !Array.isArray(snapshot.invoiceBackRows) || !Array.isArray(snapshot.drumRows)) {
+      throw new Error("The saved snapshot is missing material or invoice-back rows.");
+    }
+
+    const invoiceIds = invoiceSnapshots.map(invoice => invoice.id).filter((id): id is string => typeof id === "string");
+    const savedInvoices = invoiceIds.length ? await tx.generatedInvoice.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, invoiceDate: true, jobMonth: true } }) : [];
+    const invoiceById = new Map(savedInvoices.map(invoice => [invoice.id, invoice]));
+    const companySettings = await tx.companySettings.findFirst({ orderBy: { createdAt: "asc" } });
+    const fallbackDate = new Date(Date.UTC(report.year, report.month, 2));
+    const jobMonth = monthLabel(report.month, report.year);
+    const convertInvoice = (raw: Record<string, unknown>): ReportInvoice => {
+      const id = stringField(raw.id);
+      const saved = invoiceById.get(id);
+      const type = raw.type === "B" ? "B" : "A";
+      return {
+        invoiceNumber: stringField(raw.number),
+        invoiceDate: saved?.invoiceDate || fallbackDate,
+        jobMonth: saved?.jobMonth || jobMonth,
+        invoiceType: type,
+        totalAmount: decimal(raw.total),
+        lines: Array.isArray(raw.lines) ? raw.lines as InvoiceSnapshotLine[] : [],
+        optionalItems: Array.isArray(raw.optionalItems) ? raw.optionalItems as OptionalInvoiceSnapshot[] : [],
+      };
+    };
+    const documents = buildMonthlyReportPdfs({
+      year: report.year, month: report.month, dailyItems, monthlyRows, invoiceBackRows, drumRows,
+      invoiceBackNumber: monthlyInvoiceBackNumber(report.year, report.month),
+      invoices: [convertInvoice(invoiceA), convertInvoice(invoiceB)],
+      company: invoiceCompanyDetails(companySettings),
+    });
+
+    const latest = await tx.monthlyReportVersion.findFirst({ where: { reportId }, orderBy: { version: "desc" }, select: { version: true, sourceSnapshot: true } });
+    const latestSnapshot = asRecord(latest?.sourceSnapshot);
+    if (latestSnapshot?.pdfDesignVersion === MONTHLY_REPORT_PDF_DESIGN_VERSION) {
+      return { status: "skipped" as const, version: latest!.version };
+    }
+    const nextVersion = (latest?.version || 0) + 1;
+    const nextSnapshot = { ...snapshot, pdfDesignVersion: MONTHLY_REPORT_PDF_DESIGN_VERSION };
+    const created = await tx.monthlyReportVersion.create({
+      data: { reportId, version: nextVersion, sourceImportId: sourceVersion.sourceImportId, sourceSnapshot: jsonValue(nextSnapshot), createdById },
+      select: { id: true, version: true },
+    });
+    await tx.monthlyReportDocument.createMany({ data: documents.map(document => ({
+      versionId: created.id,
+      reportType: document.type,
+      publicId: createReportDocumentId(),
+      title: MONTHLY_REPORT_TITLES[document.type],
+      fileName: `${document.type}-${report.year}-${String(report.month).padStart(2, "0")}.pdf`,
+      pdfBytes: Buffer.from(document.bytes),
+    })) });
+    return { status: "created" as const, version: created.version };
+  });
 }
 
 export async function createOrGetMonthlyShare(reportId: string) {
@@ -226,8 +391,20 @@ export async function createOrGetMonthlyShare(reportId: string) {
   });
 }
 
+export async function getActiveMonthlyShare(reportId: string) {
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-share:${reportId}`}))`;
+    const report = await tx.monthlyReport.findUnique({ where: { id: reportId } });
+    if (!report?.shareActive || !report.encryptedShareToken || !report.currentVersionId) return null;
+    return { token: decrypt(report.encryptedShareToken), report };
+  });
+}
+
 export async function revokeMonthlyShare(reportId: string) {
-  return prisma.monthlyReport.update({ where: { id: reportId }, data: { shareActive: false, shareTokenHash: null, encryptedShareToken: null, shareRevokedAt: new Date() } });
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-share:${reportId}`}))`;
+    return tx.monthlyReport.update({ where: { id: reportId }, data: { shareActive: false, shareTokenHash: null, encryptedShareToken: null, shareRevokedAt: new Date() } });
+  });
 }
 
 export async function publishMonthlyReportVersion(reportId: string, versionId: string) {

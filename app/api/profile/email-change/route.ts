@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       await tx.emailChangeRequest.create({ data: { userId: user.id, newEmail, tokenHash, expiresAt } });
     });
 
-    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const baseUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || "https://nns.lk").replace(/\/+$/, "");
     const confirmationUrl = `${baseUrl}/dashboard/settings?email_change_token=${rawToken}`;
     const message = {
       subject: "Confirm your NNS Enterprise email change",

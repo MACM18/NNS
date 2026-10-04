@@ -2743,6 +2743,18 @@ If you lose access to your authenticator app, you can use these codes to sign in
                       </div>
                     </div>
 
+                    <div className='rounded-lg border border-primary/20 bg-primary/[0.035] p-4'>
+                      <h4 className='font-medium text-primary'>Improve inbox delivery</h4>
+                      <p className='mt-1 text-sm text-muted-foreground'>A polished layout helps recipients recognize NNS, but it cannot by itself prevent spam placement. Authenticate the sender domain with the provider you selected.</p>
+                      <ol className='mt-3 list-decimal space-y-1 pl-5 text-sm text-muted-foreground'>
+                        <li>Verify your sender domain in Resend, or use an SMTP provider that authorizes your domain.</li>
+                        <li>Publish the exact SPF and DKIM DNS records supplied by that provider. Avoid creating duplicate SPF records.</li>
+                        <li>Publish a DMARC record for the sender domain and align its policy with your organization’s mail setup.</li>
+                        <li>Keep the From Email on the verified domain, send a test to your inbox, and inspect the message headers for SPF, DKIM, and DMARC pass results.</li>
+                      </ol>
+                      <p className='mt-3 text-xs text-muted-foreground'>DNS records must be added with your domain host or email provider. Delivery still depends on recipient filtering and sender reputation.</p>
+                    </div>
+
                     {/* Test Email */}
                     <div className='p-4 border rounded-lg bg-muted/50'>
                       <div className='flex items-center justify-between'>

@@ -39,6 +39,7 @@ model User {
   lineEntries   LineEntry[]
   loginHistory  LoginHistory[]
   emailChangeRequests EmailChangeRequest[]
+  passwordResetRequests PasswordResetRequest[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -99,6 +100,21 @@ model EmailChangeRequest {
   @@index([userId, expiresAt])
   @@index([newEmail, expiresAt])
   @@map("email_change_requests")
+}
+
+model PasswordResetRequest {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("password_reset_requests")
 }
 
 // ==========================================

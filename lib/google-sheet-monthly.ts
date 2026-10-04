@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { google, type sheets_v4 } from "googleapis";
 import { encrypt, decrypt } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
-import { sendEmail } from "@/lib/email-service";
+import { escapeEmailHtml, sendEmail } from "@/lib/email-service";
 import { currentSheetPeriod } from "@/lib/google-sheet-auto-sync";
 
 export const MONTHLY_SHEET_TIME = "00:05";
@@ -205,13 +205,57 @@ function emailFailureDetails(mail: Awaited<ReturnType<typeof sendEmail>>) {
   };
 }
 
+type SharingOutcome = { recipient: string; kind: "user" | "group"; status: "added" | "already_shared" | "failed"; error?: string };
+type MonthlySheetRecipient = { emailAddress: string; type: "user" | "group" };
+export async function grantMonthlySheetPermissions(
+  recipients: MonthlySheetRecipient[],
+  existingPermissions: Array<{ type?: string | null; emailAddress?: string | null }>,
+  addPermission: (recipient: MonthlySheetRecipient) => Promise<void>,
+): Promise<SharingOutcome[]> {
+  const alreadyShared = new Set(existingPermissions.map(permission => `${permission.type}:${permission.emailAddress?.toLowerCase()}`));
+  const outcomes: SharingOutcome[] = [];
+  for (const recipient of recipients) {
+    if (alreadyShared.has(`${recipient.type}:${recipient.emailAddress}`)) {
+      outcomes.push({ recipient: recipient.emailAddress, kind: recipient.type, status: "already_shared" });
+      continue;
+    }
+    try {
+      await addPermission(recipient);
+      outcomes.push({ recipient: recipient.emailAddress, kind: recipient.type, status: "added" });
+    } catch (error) {
+      outcomes.push({ recipient: recipient.emailAddress, kind: recipient.type, status: "failed", error: redactProviderText(error instanceof Error ? error.message : String(error)) });
+    }
+  }
+  return outcomes;
+}
+function maskRecipient(email: string) {
+  const [name, domain] = email.split("@");
+  return domain ? `${name.slice(0, 1)}***@${domain}` : "[recipient]";
+}
+
+export async function sendSheetSharingReport(period: string, fileUrl: string, name: string, adminEmail: string | null, outcomes: SharingOutcome[]) {
+  if (!adminEmail) return { sent: false, reason: "Connected Google admin email is unavailable." };
+  const labels = { added: "Access granted", already_shared: "Already had access", failed: "Access failed" };
+  const rows = outcomes.map(outcome => `<tr><td style="padding:9px 8px;border-bottom:1px solid #e4ebef">${escapeEmailHtml(outcome.recipient)}</td><td style="padding:9px 8px;border-bottom:1px solid #e4ebef">${outcome.kind === "group" ? "Google Group" : "User"}</td><td style="padding:9px 8px;border-bottom:1px solid #e4ebef;color:${outcome.status === "failed" ? "#a73535" : "#285d43"}">${labels[outcome.status]}${outcome.error ? ` — ${escapeEmailHtml(outcome.error)}` : ""}</td></tr>`).join("");
+  const counts = outcomes.reduce((result, outcome) => { result[outcome.status] += 1; return result; }, { added: 0, already_shared: 0, failed: 0 });
+  const mail = await sendEmail({
+    to: adminEmail,
+    subject: `Sheet sharing report: ${period}`,
+    preheader: `Google Drive access results for ${name}.`,
+    text: `Google Sheet sharing results for ${period} (${name})\n${fileUrl}\n\n${outcomes.map(outcome => `${outcome.recipient} (${outcome.kind}): ${labels[outcome.status]}${outcome.error ? ` — ${redactProviderText(outcome.error)}` : ""}`).join("\n")}\n\nTotals: ${counts.added} granted, ${counts.already_shared} already shared, ${counts.failed} failed.`,
+    html: `<h2 style="margin:0 0 12px;color:#134160">Google Sheet access report</h2><p>Sharing results for <strong>${escapeEmailHtml(name)}</strong> (${escapeEmailHtml(period)}).</p><p style="margin:18px 0"><a href="${escapeEmailHtml(fileUrl)}" style="color:#135c83">Open the sheet</a></p><table role="presentation" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#e1f1f9;color:#134160;text-align:left"><th style="padding:9px 8px">Recipient</th><th style="padding:9px 8px">Type</th><th style="padding:9px 8px">Google Drive result</th></tr></thead><tbody>${rows || "<tr><td colspan=\"3\" style=\"padding:9px 8px\">No editor permissions were configured.</td></tr>"}</tbody></table><p style="margin-top:16px;font-size:12px;color:#607383">${counts.added} granted · ${counts.already_shared} already shared · ${counts.failed} failed. These results describe Drive permissions; they do not confirm delivery of Google invitation emails.</p>`,
+  });
+  return { sent: mail.success, mail, recipientCount: outcomes.length, counts };
+}
+
 async function sendMonthlySummaryEmail(period: string, fileUrl: string, settings: MonthlyConfig & { adminEmail?: string | null }, name: string) {
   const to = [...new Set([...settings.editors.map(e => e.replace(/^group:/i, "")), settings.adminEmail || ""].map(e => e.trim()).filter(Boolean))];
   const mail = await sendEmail({
     to,
     subject: `New Google Sheet ready: ${name}`,
+    preheader: `The ${period} monthly sheet is ready for your team.`,
     text: `The monthly Google Sheet for ${period} is ready: ${fileUrl}`,
-    html: `<p>The monthly Google Sheet is ready.</p><p><a href="${fileUrl}">${name}</a></p>`,
+    html: `<h2 style="margin:0 0 12px;color:#134160">Monthly sheet ready</h2><p>The shared Google Sheet for <strong>${escapeEmailHtml(period)}</strong> is ready.</p><p style="margin:22px 0"><a href="${escapeEmailHtml(fileUrl)}" style="display:inline-block;background:#134160;color:#fff;padding:12px 18px;border-radius:5px;text-decoration:none">Open ${escapeEmailHtml(name)}</a></p><p style="font-size:12px;color:#607383">This sheet is shared with the editors configured for monthly operations.</p>`,
   });
   return { mail, recipientCount: to.length };
 }
@@ -391,22 +435,42 @@ export async function provisionMonthlySheet(period: string, secret: string, opti
       return [value.replace(/^group:/i, "").trim().toLowerCase(), group ? "group" : "user"] as const;
     }), ...(serviceAccount ? [[serviceAccount, "user"] as const] : [])]).entries()];
 
+    let sharingOutcomes: SharingOutcome[] = [];
     await runMonthlyStage(run.id, "share_sheet", "Share the new sheet with configured editors", async () => {
-      if (run!.accessGrantedAt) return { permissionCount: recipients.length, resumed: true };
       const existing = await drive.permissions.list({ fileId: copied.fileId, fields: "permissions(id,emailAddress,type,role)" });
-      const alreadyShared = new Set((existing.data.permissions || []).map(permission => `${permission.type}:${permission.emailAddress?.toLowerCase()}`));
-      let granted = 0;
-      for (const [emailAddress, type] of recipients) {
-        if (alreadyShared.has(`${type}:${emailAddress}`)) continue;
+      const recipientEntries = recipients.map(([emailAddress, type]) => ({ emailAddress, type }));
+      sharingOutcomes = await grantMonthlySheetPermissions(recipientEntries, existing.data.permissions || [], async ({ emailAddress, type }) => {
         await drive.permissions.create({ fileId: copied.fileId, sendNotificationEmail: emailAddress !== serviceAccount, requestBody: { type, role: "writer", emailAddress }, fields: "id" });
-        granted++;
+      });
+      if (sharingOutcomes.every(outcome => outcome.status !== "failed")) {
+        run = await prisma.googleSheetMonthlyRun.update({ where: { id: run!.id }, data: { accessGrantedAt: new Date() } });
       }
-      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run!.id }, data: { accessGrantedAt: new Date() } });
-      return { permissionCount: granted, resumed: false };
+      return { outcomes: sharingOutcomes };
+    }, result => {
+      const failed = result.outcomes.filter(outcome => outcome.status === "failed").length;
+      return {
+        status: failed ? "warning" : "success",
+        message: failed ? `Google Drive granted access to ${result.outcomes.length - failed} of ${result.outcomes.length} recipients.` : "Google Drive access is present for every configured recipient.",
+        details: {
+          configuredRecipients: result.outcomes.length,
+          permissionsAdded: result.outcomes.filter(outcome => outcome.status === "added").length,
+          permissionsAlreadyPresent: result.outcomes.filter(outcome => outcome.status === "already_shared").length,
+          permissionsFailed: failed,
+          recipientResults: JSON.stringify(result.outcomes.map(outcome => ({ recipient: maskRecipient(outcome.recipient), type: outcome.kind, status: outcome.status, ...(outcome.error ? { error: outcome.error } : {}) }))),
+        },
+      };
+    });
+
+    await runMonthlyStage(run.id, "sharing_report", "Email the Google Drive sharing results to the connected administrator", async () => {
+      return sendSheetSharingReport(period, copied.fileUrl, name, settings!.adminEmail, sharingOutcomes);
     }, result => ({
-      message: result.resumed ? "Sheet sharing was completed in an earlier attempt." : "Editor access granted.",
-      details: { configuredRecipients: recipients.length, permissionsAdded: result.permissionCount },
+      status: !result.sent || result.mail?.configWarning ? "warning" : "success",
+      message: result.sent ? `Sharing report sent to the connected Google administrator (${result.mail?.provider || "email provider"}).` : result.reason || `Sharing report delivery failed: ${result.mail?.error || "email provider error"}`,
+      details: { reportSent: result.sent, reportRecipient: settings!.adminEmail ? maskRecipient(settings!.adminEmail) : "not configured", ...(result.counts || {}), ...(result.mail ? { provider: result.mail.provider || "unknown", configSource: result.mail.configSource || "unknown", ...(result.mail.configWarning ? { configWarning: result.mail.configWarning } : {}), ...(result.mail.error ? { providerError: redactProviderText(result.mail.error) } : {}), ...(result.mail.messageId ? { messageId: result.mail.messageId } : {}) } : {}) },
     }));
+    if (sharingOutcomes.some(outcome => outcome.status === "failed")) {
+      throw new MonthlyProvisioningStageError("share_sheet", "Some Google Drive editor permissions could not be granted. Review the access report and run details.", { permissionsFailed: sharingOutcomes.filter(outcome => outcome.status === "failed").length });
+    }
 
     await runMonthlyStage(run.id, "register_connection", "Select the new sheet for the current month’s import", async () => {
       if (run!.connectionRegisteredAt) return { resumed: true };

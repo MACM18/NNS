@@ -19,7 +19,7 @@ import type {
 } from "@/types/payroll";
 import { Prisma } from "@prisma/client";
 import { notifyAllAdmins } from "@/lib/notification-service-server";
-import { sendEmail } from "@/lib/email-service";
+import { escapeEmailHtml, sendEmail } from "@/lib/email-service";
 import { generateSalarySlipPDF } from "@/lib/salary-slip-pdf";
 import {
   ensureFinancialYear,
@@ -1188,9 +1188,9 @@ export async function approvePayrollPeriod(id: string): Promise<PayrollPeriod> {
           html: `
             <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; border: 1px solid #e5e7eb; border-radius: 8px;">
               <h2 style="color: #2563eb; margin-top: 0;">Salary Payslip</h2>
-              <p style="font-size: 16px; color: #374151;">Hello <strong>${payment.worker.fullName}</strong>,</p>
+              <p style="font-size: 16px; color: #374151;">Hello <strong>${escapeEmailHtml(payment.worker.fullName)}</strong>,</p>
               <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">
-                Your payslip for the payroll period <strong>${typedPeriod.name}</strong> is now ready.
+                Your payslip for the payroll period <strong>${escapeEmailHtml(typedPeriod.name)}</strong> is now ready.
                 A detailed PDF breakdown of your earnings and adjustments has been attached to this email.
               </p>
               <div style="background: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0;">

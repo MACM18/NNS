@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email-service";
+import { escapeEmailHtml, sendEmail } from "@/lib/email-service";
 
 export async function GET(req: NextRequest) {
   try {
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
               ${lowStockItems
                 .map(
                   (item) =>
-                    `<li>${item.name}: ${item.currentStock} ${item.unit} remaining</li>`
+                    `<li>${escapeEmailHtml(item.name)}: ${escapeEmailHtml(item.currentStock)} ${escapeEmailHtml(item.unit)} remaining</li>`
                 )
                 .join("")}
             </ul>
