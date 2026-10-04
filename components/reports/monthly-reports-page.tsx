@@ -10,7 +10,7 @@ import { Mail } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { GenerateMonthlyInvoicesModal } from "@/components/modals/generate-monthly-invoices-modal";
-import { Download, FileText, Link2, Loader2, RefreshCw, ShieldOff } from "lucide-react";
+import { Download, FileText, Link2, Loader2, RefreshCw, ShieldOff, Trash2 } from "lucide-react";
 
 type Document = { id: string; reportType: string; title: string; fileName: string };
 type Version = { id: string; version: number; status: string; createdAt: string; publishedAt: string | null; documents: Document[] };
@@ -101,6 +101,13 @@ export function MonthlyReportsPage() {
     else toast.success(`Redesign finished: ${progress.created} drafts created; ${progress.skipped} months already had the new design.`);
   };
 
+  const deleteVersion = async (report: Report, version: Version) => {
+    const month = format(new Date(report.year, report.month - 1, 1), "MMMM yyyy");
+    if (!window.confirm(`Delete version ${version.version} from ${month} and all ${version.documents.length} PDFs stored in it? This cannot be undone. The currently published version is protected.`)) return;
+    const result = await act(`delete-${version.id}`, `/api/monthly-reports/${report.id}/versions/${version.id}`, "DELETE");
+    if (result) { toast.success(`Version ${version.version} and its PDFs were deleted.`); await refresh(); }
+  };
+
   const publish = async (report: Report, version: Version) => {
     const result = await act(`publish-${version.id}`, `/api/monthly-reports/${report.id}/publish`, "POST", { versionId: version.id });
     if (result) { toast.success("Reviewed report version published."); await refresh(); }
@@ -148,7 +155,7 @@ export function MonthlyReportsPage() {
         const label = format(new Date(report.year, report.month - 1, 1), "MMMM yyyy");
         return <section key={report.id} className="rounded-lg border"><div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 p-4"><div><h2 className="font-semibold">{label}</h2><p className="text-xs text-muted-foreground">{current ? `Published v${current.version}` : "Not published"}{draft ? ` · Draft v${draft.version} awaiting review` : ""}{report.shareActive ? " · Shared" : report.shareRevokedAt ? " · Sharing revoked" : " · Private"}</p></div>{manager && <div className="flex flex-wrap gap-2">{draft && <Button size="sm" variant="outline" onClick={() => void publish(report, draft)} disabled={Boolean(busy)}>{busy === `publish-${draft.id}` ? "Publishing…" : "Publish reviewed update"}</Button>}{current && report.shareActive && <Button size="sm" variant="outline" onClick={() => { setEmailRecipients(""); setEmailReportId(report.id); }} disabled={Boolean(busy) || emailBusy}><Mail className="mr-1.5 h-4 w-4" />Email link</Button>}{current && !report.shareActive && <Button size="sm" onClick={() => void share(report)} disabled={Boolean(busy)}><Link2 className="mr-1.5 h-4 w-4" />Share report</Button>}{report.shareActive && <><Button size="sm" variant="outline" onClick={() => void share(report)} disabled={Boolean(busy)}><Link2 className="mr-1.5 h-4 w-4" />Copy link</Button><Button size="sm" variant="destructive" onClick={() => void revoke(report)} disabled={Boolean(busy)}><ShieldOff className="mr-1.5 h-4 w-4" />Stop sharing</Button></> }</div>}</div>
           {report.shareActive && shareUrls[report.id] && <div className="border-b px-4 py-3"><input aria-label={`${label} share link`} readOnly value={shareUrls[report.id]} onFocus={event => event.currentTarget.select()} className="w-full rounded border bg-background px-3 py-2 text-sm" /></div>}
-          {report.versions.map(version => <div key={version.id} className="border-b p-4 last:border-0"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-medium">Version {version.version} · {version.status === "draft" ? "Draft for review" : version.status === "published" ? "Published" : "Archived"}<span className="ml-2 text-xs font-normal text-muted-foreground">{format(new Date(version.createdAt), "PPp")}</span></div></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{version.documents.map(doc => <a key={doc.id} href={`/api/monthly-reports/documents/${doc.id}`} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-2 rounded-md border p-3 text-sm hover:bg-muted"><FileText className="h-4 w-4 shrink-0 text-primary" /><span className="min-w-0 flex-1 truncate">{doc.title}</span><Download className="h-4 w-4 shrink-0 text-muted-foreground" /></a>)}</div></div>)}
+          {report.versions.map(version => <div key={version.id} className="border-b p-4 last:border-0"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-medium">Version {version.version} · {version.status === "draft" ? "Draft for review" : version.status === "published" ? "Published" : "Archived"}<span className="ml-2 text-xs font-normal text-muted-foreground">{format(new Date(version.createdAt), "PPp")}</span></div>{manager && version.id !== report.currentVersionId && <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => void deleteVersion(report, version)} disabled={Boolean(busy)}><Trash2 className="mr-1.5 h-4 w-4" />{busy === `delete-${version.id}` ? "Deleting…" : "Delete version"}</Button>}</div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{version.documents.map(doc => <a key={doc.id} href={`/api/monthly-reports/documents/${doc.id}`} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-2 rounded-md border p-3 text-sm hover:bg-muted"><FileText className="h-4 w-4 shrink-0 text-primary" /><span className="min-w-0 flex-1 truncate">{doc.title}</span><Download className="h-4 w-4 shrink-0 text-muted-foreground" /></a>)}</div></div>)}
         </section>;
       })}
     </CardContent></Card>
