@@ -452,42 +452,6 @@ export function generateInvoicePdf(input: {
     });
     y += rowHeight;
   }
-  const optionalByCode = new Map(input.optionalItems.map(item => [
-    String(item.code || (item.description?.includes("8m") ? "POLE_8" : item.description?.toLowerCase().includes("high rise") ? "HIGH_RISE" : item.description?.includes("5.6m") ? "POLE_56" : item.description?.includes("6.7m") ? "POLE_67" : "")), item,
-  ]));
-  const getOptional = (code: string) => optionalByCode.get(code);
-  const lines: PdfCell[][] = [];
-  const addFixedService = (type: "FTTH" | "DATA", bandIndex: number, description: string) => {
-    const key = `${type}:${bandIndex}`;
-    const aggregate = quantities.get(key) || { quantity: 0, baseTotal: 0 };
-    const unitRate = aggregate.quantity ? aggregate.baseTotal / aggregate.quantity : catalogTierRate(rates, type, invoiceBands[bandIndex]);
-    lines.push([lines.length + 1, description, "", aggregate.quantity, amountCell(unitRate), amountCell(aggregate.baseTotal)]);
-  };
-  invoiceBands.forEach((band, index) => addFixedService("FTTH", index, `FTTH Wirings-DW Length- (${band.label})`));
-  const addPole = (code: "POLE_56" | "POLE_67", description: string, fallback: number) => {
-    const item = getOptional(code);
-    const quantity = Number(item?.quantity || 0);
-    const amount = Number(item?.baseAmount ?? (Number(item?.unitRate || catalogOptionalRate(rates, code, fallback)) * quantity));
-    const rate = quantity ? amount / quantity : catalogOptionalRate(rates, code, fallback);
-    lines.push([lines.length + 1, description, "", quantity, amountCell(rate), amountCell(amount)]);
-  };
-  addPole("POLE_56", "5.6m Pole Installations", 700);
-  addPole("POLE_67", "6.7m Pole Installations", 800);
-  invoiceBands.forEach((band, index) => addFixedService("DATA", index, `DATA - DW length- (${band.dataLabel})`));
-  const peo = quantities.get("PEO_TV") || { quantity: 0, baseTotal: 0 };
-  const peoRate = peo.quantity ? peo.baseTotal / peo.quantity : Number([...rates].reverse().find(item => Number(item.peoTvRate) > 0)?.peoTvRate || 1800);
-  lines.push([lines.length + 1, "IPTV- Second visit", "", peo.quantity, amountCell(peoRate), amountCell(peo.baseTotal)]);
-  const addOptional = (code: "POLE_8" | "HIGH_RISE", description: string, fallback: number) => {
-    const item = getOptional(code);
-    const quantity = Number(item?.quantity || 0);
-    if (quantity <= 0) return;
-    const rate = Number(item?.unitRate || catalogOptionalRate(rates, code, fallback));
-    const amount = Number(item?.baseAmount ?? rate * quantity);
-    lines.push([lines.length + 1, description, "", quantity, amountCell(rate), amountCell(amount)]);
-  };
-  addOptional("POLE_8", "8m Pole Installation", 900);
-  addOptional("HIGH_RISE", "FTTH - High Rise Building (Configuration only)", 3800);
-
   y += 2.2;
   const bank = input.company.bank || {};
   const fullWidth = width - margin * 2;
