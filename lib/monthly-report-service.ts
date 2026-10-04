@@ -10,6 +10,7 @@ import {
   generateInvoiceBackPdf,
   generateInvoicePdf,
   generateMonthlyMaterialBalancePdf,
+  formatMonthlyInvoiceDisplayNumber,
   MONTHLY_REPORT_PDF_DESIGN_VERSION,
   type InvoiceBackRow,
   type InvoiceCompanyDetails,
@@ -56,6 +57,7 @@ type ReportInvoice = {
   totalAmount: number;
   lines: InvoiceSnapshotLine[];
   optionalItems: OptionalInvoiceSnapshot[];
+  pricingSnapshot?: unknown;
 };
 
 type MonthlyPdfData = {
@@ -101,6 +103,10 @@ function buildMonthlyReportPdfs(data: MonthlyPdfData) {
     type: invoice.invoiceType === "A" ? "invoice-a" as const : "invoice-b" as const,
     bytes: generateInvoicePdf({
       invoice: { invoiceNumber: invoice.invoiceNumber, invoiceDate: invoice.invoiceDate, jobMonth: invoice.jobMonth, invoiceType: invoice.invoiceType, totalAmount: invoice.totalAmount },
+      displayNumber: formatMonthlyInvoiceDisplayNumber(data.year, data.month),
+      year: data.year,
+      month: data.month,
+      pricingSnapshot: invoice.pricingSnapshot,
       lines: invoice.lines,
       optionalItems: invoice.optionalItems,
       company: data.company,
@@ -261,6 +267,7 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
       totalAmount: decimal(invoice.totalAmount),
       lines: invoiceLines(invoice),
       optionalItems: optionalLines(invoice),
+      pricingSnapshot: invoice.pricingSnapshot,
     })) as [ReportInvoice, ReportInvoice],
     company: invoiceCompanyDetails(companySettings),
   });
@@ -271,7 +278,7 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
     lineIds: lines.map(line => line.id),
     invoiceIds: invoiceRecords.map(invoice => invoice.id),
     dailyItems, monthlyRows, invoiceBackRows, drumRows,
-    invoiceSnapshots: invoiceRecords.map(invoice => ({ id: invoice.id, number: invoice.invoiceNumber, type: invoice.invoiceType, total: decimal(invoice.totalAmount), lines: invoice.lineDetailsSnapshot, optionalItems: invoice.optionalItemsSnapshot })),
+    invoiceSnapshots: invoiceRecords.map(invoice => ({ id: invoice.id, number: invoice.invoiceNumber, type: invoice.invoiceType, total: decimal(invoice.totalAmount), lines: invoice.lineDetailsSnapshot, optionalItems: invoice.optionalItemsSnapshot, pricingSnapshot: invoice.pricingSnapshot })),
   };
 
   const reportId = await prisma.$transaction(async tx => {
@@ -330,7 +337,7 @@ export async function regenerateMonthlyReportDesign(reportId: string, createdByI
     }
 
     const invoiceIds = invoiceSnapshots.map(invoice => invoice.id).filter((id): id is string => typeof id === "string");
-    const savedInvoices = invoiceIds.length ? await tx.generatedInvoice.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, invoiceDate: true, jobMonth: true } }) : [];
+    const savedInvoices = invoiceIds.length ? await tx.generatedInvoice.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, invoiceDate: true, jobMonth: true, pricingSnapshot: true } }) : [];
     const invoiceById = new Map(savedInvoices.map(invoice => [invoice.id, invoice]));
     const companySettings = await tx.companySettings.findFirst({ orderBy: { createdAt: "asc" } });
     const fallbackDate = new Date(Date.UTC(report.year, report.month, 2));
@@ -347,6 +354,7 @@ export async function regenerateMonthlyReportDesign(reportId: string, createdByI
         totalAmount: decimal(raw.total),
         lines: Array.isArray(raw.lines) ? raw.lines as InvoiceSnapshotLine[] : [],
         optionalItems: Array.isArray(raw.optionalItems) ? raw.optionalItems as OptionalInvoiceSnapshot[] : [],
+        pricingSnapshot: raw.pricingSnapshot ?? saved?.pricingSnapshot,
       };
     };
     const documents = buildMonthlyReportPdfs({
