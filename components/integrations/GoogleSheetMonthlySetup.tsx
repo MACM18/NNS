@@ -31,6 +31,10 @@ export default function GoogleSheetMonthlySetup() {
   const [message, setMessage] = useState("");
   const [pickerKind, setPickerKind] = useState<PickerKind | null>(null);
   const [pickerAuth, setPickerAuth] = useState<PickerAuth | null>(null);
+  const [setupCollapsed, setSetupCollapsed] = useState(false);
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualMessage, setManualMessage] = useState("");
+  const [manualLink, setManualLink] = useState("");
   const pickerHost = useRef<HTMLDivElement>(null);
   const currentParts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Colombo", year: "numeric", month: "2-digit" }).formatToParts(new Date());
   const currentPeriod = `${currentParts.find(part => part.type === "year")?.value}-${currentParts.find(part => part.type === "month")?.value}`;
