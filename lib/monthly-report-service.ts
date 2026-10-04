@@ -407,6 +407,18 @@ export async function revokeMonthlyShare(reportId: string) {
   });
 }
 
+export async function deleteMonthlyReportVersion(reportId: string, versionId: string) {
+  return prisma.$transaction(async tx => {
+    const report = await tx.monthlyReport.findUnique({ where: { id: reportId }, select: { currentVersionId: true } });
+    if (!report) throw new Error("This monthly report was not found.");
+    if (report.currentVersionId === versionId) throw new Error("The currently published version cannot be deleted. Publish another version first.");
+    const version = await tx.monthlyReportVersion.findFirst({ where: { id: versionId, reportId }, select: { id: true, version: true } });
+    if (!version) throw new Error("This report version was not found for this month.");
+    await tx.monthlyReportVersion.delete({ where: { id: version.id } });
+    return { deleted: true as const, version: version.version };
+  });
+}
+
 export async function publishMonthlyReportVersion(reportId: string, versionId: string) {
   return prisma.$transaction(async tx => {
     const version = await tx.monthlyReportVersion.findFirst({ where: { id: versionId, reportId }, select: { id: true } });

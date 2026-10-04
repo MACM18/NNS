@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 
-export const MONTHLY_REPORT_PDF_DESIGN_VERSION = "nns-blue-compact-v2";
+export const MONTHLY_REPORT_PDF_DESIGN_VERSION = "nns-blue-compact-v3";
 
 export type PdfCell = string | number | null | undefined;
 type TableOptions = { widths: number[]; rowHeight?: number; headerHeight?: number; fontSize?: number; headerSize?: number; font?: "normal" | "bold"; alignments?: Array<"left" | "center" | "right"> };
@@ -113,12 +113,22 @@ function drawRows(doc: jsPDF, rows: PdfCell[][], headers: PdfCell[], opts: Table
       doc.setFontSize(opts.fontSize ?? 8);
     }
     const isTotal = row.some(cell => typeof cell === "string" && cell.toLowerCase().includes("grand total"));
-    doc.setFillColor(...(isTotal ? PALE_BLUE : rowIndex % 2 === 1 ? [248, 251, 253] as [number, number, number] : [255, 255, 255] as [number, number, number]));
+    const rowFill: [number, number, number] = isTotal
+      ? PALE_BLUE
+      : rowIndex % 2 === 1
+        ? [248, 251, 253]
+        : [255, 255, 255];
     let x = margin;
     row.forEach((cell, index) => {
       const w = opts.widths[index];
-      doc.rect(x, y, w, rowHeight, "FD");
+      // Set the fill per cell. jsPDF keeps graphics state between drawing calls;
+      // setting it here avoids a prior dark header/background color leaking into rows.
+      doc.setFillColor(...rowFill);
+      doc.rect(x, y, w, rowHeight, "F");
+      doc.setDrawColor(...GRID);
+      doc.rect(x, y, w, rowHeight, "S");
       doc.setFont("helvetica", isTotal ? "bold" : opts.font ?? "normal");
+      doc.setTextColor(34, 48, 58);
       const value = textFit(doc, cell, w - 1.5);
       const align = opts.alignments?.[index] ?? (typeof cell === "number" ? "right" : "left");
       doc.text(value, align === "left" ? x + 1 : align === "right" ? x + w - 1 : x + w / 2, y + rowHeight / 2 + 1.1, { align });
