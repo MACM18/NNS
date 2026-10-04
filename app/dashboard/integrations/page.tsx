@@ -108,7 +108,7 @@ export default function IntegrationsPage() {
           </CardHeader>
         </Card>
       </div>
-      <GoogleSheetAutoSyncSettings />
+      <GoogleSheetAutoSyncSettings canManageMonthly={["admin", "superadmin"].includes(role.toLowerCase())} />
     </div>
   );
 }

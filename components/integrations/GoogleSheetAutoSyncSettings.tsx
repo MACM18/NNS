@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import GoogleSheetMonthlySetup from "@/components/integrations/GoogleSheetMonthlySetup";
 
 type AutoSyncData = {
   enabled: boolean;
@@ -18,7 +19,7 @@ type AutoSyncData = {
   lastRun: { status: string; startedAt: string; error: string | null } | null;
 };
 
-export default function GoogleSheetAutoSyncSettings() {
+export default function GoogleSheetAutoSyncSettings({ canManageMonthly = false }: { canManageMonthly?: boolean }) {
   const router = useRouter();
   const [data, setData] = useState<AutoSyncData | null>(null);
   const [enabled, setEnabled] = useState(true);
@@ -89,6 +90,7 @@ export default function GoogleSheetAutoSyncSettings() {
   }
 
   return (
+    <>
     <Card className="border-border/80 shadow-sm">
       <CardHeader>
         <div className="flex items-center gap-3">
@@ -126,5 +128,7 @@ export default function GoogleSheetAutoSyncSettings() {
         </div>
       </CardContent>
     </Card>
+    {canManageMonthly && <div className="mt-5"><GoogleSheetMonthlySetup /></div>}
+    </>
   );
 }
