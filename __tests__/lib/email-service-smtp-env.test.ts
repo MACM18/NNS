@@ -8,7 +8,7 @@ jest.mock("resend", () => ({ Resend: jest.fn() }));
 jest.mock("@/lib/prisma", () => ({ __esModule: true, prisma: { emailSettings: { findFirst: () => mockFindFirst() } } }));
 jest.mock("@/lib/encryption", () => ({ decrypt: jest.fn() }));
 
-import { clearEmailConfigCache, sendEmail } from "@/lib/email-service";
+import { clearEmailConfigCache, renderBrandedEmail, sendEmail } from "@/lib/email-service";
 
 describe("SMTP environment email fallback", () => {
   const envKeys = ["EMAIL_PROVIDER", "EMAIL_FROM", "EMAIL_FROM_NAME", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURE", "SMTP_USER", "SMTP_PASSWORD"] as const;
@@ -34,6 +34,15 @@ describe("SMTP environment email fallback", () => {
     process.env.SMTP_SECURE = "false";
     process.env.SMTP_USER = "smtp-user";
     process.env.SMTP_PASSWORD = "smtp-password";
+  });
+
+  it("renders NNS-branded responsive HTML and a plain-text fallback", async () => {
+    const rendered = await renderBrandedEmail({ html: "<p>Sheet ready</p>", preheader: "October sheet" });
+    expect(rendered.html).toContain("background:#134160");
+    expect(rendered.html).toContain("October sheet");
+    expect(rendered.html).toContain("Sheet ready");
+    expect(rendered.text).toContain("Sheet ready");
+    expect(rendered.text).toContain("NNS Enterprise");
   });
 
   it("sends via SMTP when environment settings are selected", async () => {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
+import { escapeEmailHtml, sendEmail } from "@/lib/email-service";
 import { z } from "zod";
 
 // Zod schema for contact form validation
@@ -27,7 +27,6 @@ const contactFormSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy");
     const body = await request.json();
 
     // Validate the request body using Zod
@@ -51,40 +50,22 @@ export async function POST(request: NextRequest) {
 
     const { name, email, subject, message } = validationResult.data;
 
-    // Send email using Resend
-    const { data, error } = await resend.emails.send({
-      from: "NNS Enterprise <noreply@macm.dev>",
-      to: ["hello@macm.dev"],
+    const result = await sendEmail({
+      to: process.env.CONTACT_EMAIL_TO || "hello@macm.dev",
+      replyTo: email,
       subject: `Contact Form: ${subject}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">NNS | New Contact Form Submission</h2>
-          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>Name:</strong> ${name}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Subject:</strong> ${subject}</p>
-            <p><strong>Message:</strong></p>
-            <div style="background-color: white; padding: 15px; border-radius: 4px; border-left: 4px solid #007bff;">
-              ${message.replace(/\n/g, "<br>")}
-            </div>
-          </div>
-          <p style="color: #666; font-size: 12px;">
-            This message was sent from the NNS Enterprise contact form.
-          </p>
-        </div>
-      `,
+      preheader: `New message from ${name}`,
+      text: `New contact form message\n\nName: ${name}\nEmail: ${email}\nSubject: ${subject}\n\n${message}`,
+      html: `<h2 style="margin:0 0 16px;color:#134160">New contact message</h2><table role="presentation" style="width:100%;border-collapse:collapse"><tr><td style="padding:7px 0;color:#607383">Name</td><td style="padding:7px 0">${escapeEmailHtml(name)}</td></tr><tr><td style="padding:7px 0;color:#607383">Email</td><td style="padding:7px 0"><a href="mailto:${escapeEmailHtml(email)}">${escapeEmailHtml(email)}</a></td></tr><tr><td style="padding:7px 0;color:#607383">Subject</td><td style="padding:7px 0">${escapeEmailHtml(subject)}</td></tr></table><div style="margin-top:16px;padding:14px;background:#f3f7fa;border-left:3px solid #1384b8;white-space:pre-wrap">${escapeEmailHtml(message)}</div>`,
     });
 
-    if (error) {
-      console.error("Resend error:", error);
-      return NextResponse.json(
-        { error: "Failed to send email" },
-        { status: 500 }
-      );
+    if (!result.success) {
+      console.error("Contact email provider error:", result.error);
+      return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
     }
 
     return NextResponse.json(
-      { message: "Email sent successfully", data },
+      { message: "Email sent successfully", messageId: result.messageId },
       { status: 200 }
     );
   } catch (error) {

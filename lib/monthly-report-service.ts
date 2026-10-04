@@ -391,8 +391,20 @@ export async function createOrGetMonthlyShare(reportId: string) {
   });
 }
 
+export async function getActiveMonthlyShare(reportId: string) {
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-share:${reportId}`}))`;
+    const report = await tx.monthlyReport.findUnique({ where: { id: reportId } });
+    if (!report?.shareActive || !report.encryptedShareToken || !report.currentVersionId) return null;
+    return { token: decrypt(report.encryptedShareToken), report };
+  });
+}
+
 export async function revokeMonthlyShare(reportId: string) {
-  return prisma.monthlyReport.update({ where: { id: reportId }, data: { shareActive: false, shareTokenHash: null, encryptedShareToken: null, shareRevokedAt: new Date() } });
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-share:${reportId}`}))`;
+    return tx.monthlyReport.update({ where: { id: reportId }, data: { shareActive: false, shareTokenHash: null, encryptedShareToken: null, shareRevokedAt: new Date() } });
+  });
 }
 
 export async function publishMonthlyReportVersion(reportId: string, versionId: string) {

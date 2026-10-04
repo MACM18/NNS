@@ -1,4 +1,4 @@
-import { monthlyBalanceDestinations, monthlyProvisioningDue, monthlyTemplateUpdates, resolveMonthlyTemplateRanges } from "@/lib/google-sheet-monthly";
+import { grantMonthlySheetPermissions, monthlyBalanceDestinations, monthlyProvisioningDue, monthlyTemplateUpdates, resolveMonthlyTemplateRanges } from "@/lib/google-sheet-monthly";
 import { monthlyInvoiceNumber } from "@/lib/monthly-invoice-number";
 
 describe("monthly Google Sheet provisioning", () => {
@@ -54,4 +54,22 @@ describe("monthly Google Sheet provisioning", () => {
     expect(monthlyInvoiceNumber(2026, 10, "A")).toBe("NNS/WPS/HR/NC/26/OCTOBER/A");
     expect(monthlyInvoiceNumber(2026, 10, "B")).toBe("NNS/WPS/HR/NC/26/OCTOBER/B");
   });
+  it("records each Drive editor permission as added, already shared, or failed", async () => {
+    const recipients = [
+      { emailAddress: "new@example.com", type: "user" as const },
+      { emailAddress: "existing@example.com", type: "user" as const },
+      { emailAddress: "invalid@example.com", type: "user" as const },
+      { emailAddress: "ops-group@example.com", type: "group" as const },
+    ];
+    const addPermission = jest.fn(async ({ emailAddress }: { emailAddress: string }) => {
+      if (emailAddress === "invalid@example.com") throw new Error("Invalid recipient");
+    });
+    const outcomes = await grantMonthlySheetPermissions(recipients, [
+      { type: "user", emailAddress: "existing@example.com" },
+    ], addPermission);
+    expect(outcomes.map(outcome => outcome.status)).toEqual(["added", "already_shared", "failed", "added"]);
+    expect(outcomes[2]).toMatchObject({ recipient: "invalid@example.com", error: "Invalid recipient" });
+    expect(addPermission).toHaveBeenCalledTimes(3);
+  });
+
 });

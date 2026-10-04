@@ -22,6 +22,7 @@ export interface EmailOptions {
   text?: string;
   replyTo?: string;
   attachments?: EmailAttachment[];
+  preheader?: string;
 }
 
 export interface EmailResult {
@@ -57,6 +58,8 @@ type ResolvedEmailConfig = {
 
 let cachedConfig: ResolvedEmailConfig | null = null;
 let configCacheTime: number = 0;
+let cachedBranding: { name: string; address: string; website: string; contacts: string[] } | null = null;
+let brandingCacheTime = 0;
 const CONFIG_CACHE_TTL = 60000; // 1 minute cache
 
 /**
@@ -133,6 +136,8 @@ async function getEmailConfig(): Promise<ResolvedEmailConfig> {
 export function clearEmailConfigCache(): void {
   cachedConfig = null;
   configCacheTime = 0;
+  cachedBranding = null;
+  brandingCacheTime = 0;
 }
 
 /**
@@ -213,14 +218,48 @@ async function sendViaSMTP(
   }
 }
 
+export function escapeEmailHtml(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character] || character);
+}
+
+function plainTextFromHtml(value: string): string {
+  return value.replace(/<br\s*\/?>(?=.)/gi, "\n").replace(/<\/p\s*>/gi, "\n\n").replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+async function getEmailBranding() {
+  if (cachedBranding && Date.now() - brandingCacheTime < CONFIG_CACHE_TTL) return cachedBranding;
+  try {
+    const settings = await prisma.companySettings.findFirst({ orderBy: { createdAt: "asc" }, select: { companyName: true, address: true, website: true, contactNumbers: true } });
+    cachedBranding = { name: settings?.companyName || "NNS Enterprise", address: settings?.address || "", website: settings?.website || "nns.lk", contacts: settings?.contactNumbers || [] };
+  } catch {
+    cachedBranding = { name: "NNS Enterprise", address: "", website: "nns.lk", contacts: [] };
+  }
+  brandingCacheTime = Date.now();
+  return cachedBranding;
+}
+
+export async function renderBrandedEmail(options: Pick<EmailOptions, "html" | "text" | "preheader">) {
+  const brand = await getEmailBranding();
+  const name = escapeEmailHtml(brand.name);
+  const websiteText = brand.website.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  const websiteHref = /^https?:\/\//i.test(brand.website) ? brand.website : `https://${websiteText}`;
+  const website = escapeEmailHtml(websiteText);
+  const contacts = [brand.address, ...brand.contacts].map(escapeEmailHtml).filter(Boolean).join(" · ");
+  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f3f6f8;font-family:Arial,Helvetica,sans-serif;color:#263746"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${options.preheader ? escapeEmailHtml(options.preheader) : ""}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6f8;padding:24px 10px"><tr><td align="center"><table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #dce5eb;border-radius:8px;overflow:hidden"><tr><td style="background:#134160;padding:20px 24px;border-bottom:4px solid #1384b8"><div style="font-size:20px;line-height:26px;font-weight:bold;color:#ffffff">${name}</div><div style="margin-top:3px;font-size:11px;letter-spacing:1px;color:#d9edf6">ENTERPRISE SERVICES</div></td></tr><tr><td style="padding:24px;font-size:14px;line-height:1.6;color:#263746">${options.html}</td></tr><tr><td style="padding:15px 24px;background:#f7fafc;border-top:1px solid #e2eaf0;text-align:center;font-size:11px;line-height:1.5;color:#607383">${contacts ? `${contacts}<br>` : ""}<a href="${escapeEmailHtml(websiteHref)}" style="color:#135c83;text-decoration:underline">${website}</a><br>This is an automated message from ${name}.</td></tr></table></td></tr></table></body></html>`;
+  const text = [options.text || plainTextFromHtml(options.html), "", brand.name, websiteText, contacts].filter(Boolean).join("\n");
+  return { html, text };
+}
+
 /**
  * Main email sending function
  */
 export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   const resolved = await getEmailConfig();
+  const branded = await renderBrandedEmail(options);
+  const resultOptions = { ...options, ...branded };
   const result = resolved.config.provider === "smtp"
-    ? await sendViaSMTP(resolved.config, options)
-    : await sendViaResend(resolved.config, options);
+    ? await sendViaSMTP(resolved.config, resultOptions)
+    : await sendViaResend(resolved.config, resultOptions);
 
   return {
     ...result,
@@ -268,11 +307,13 @@ export async function testEmailConfig(
     }\nSent at: ${new Date().toISOString()}`,
   };
 
+  const branded = await renderBrandedEmail(testOptions);
+  const brandedOptions = { ...testOptions, ...branded };
   if (testConfig.provider === "smtp") {
-    return sendViaSMTP(testConfig, testOptions);
+    return sendViaSMTP(testConfig, brandedOptions);
   }
 
-  return sendViaResend(testConfig, testOptions);
+  return sendViaResend(testConfig, brandedOptions);
 }
 
 /**
