@@ -1,13 +1,14 @@
 import jsPDF from "jspdf";
 
-export const MONTHLY_REPORT_PDF_DESIGN_VERSION = "nns-blue-compact-v4";
+export const MONTHLY_REPORT_PDF_DESIGN_VERSION = "nns-blue-compact-v5";
 
 export type PdfCell = string | number | null | undefined;
-type TableOptions = { widths: number[]; rowHeight?: number; headerHeight?: number; fontSize?: number; headerSize?: number; font?: "normal" | "bold"; alignments?: Array<"left" | "center" | "right">; headerFill?: [number, number, number]; headerText?: [number, number, number] };
+type TableOptions = { widths: number[]; rowHeight?: number; headerHeight?: number; fontSize?: number; headerSize?: number; font?: "normal" | "bold"; alignments?: Array<"left" | "center" | "right">; headerFill?: [number, number, number]; headerText?: [number, number, number]; cellFills?: Array<[number, number, number] | undefined>; separatorAfter?: number[] };
 const BRAND_NAVY: [number, number, number] = [19, 65, 96];
 const BRAND_BLUE: [number, number, number] = [19, 132, 184];
 const PALE_BLUE: [number, number, number] = [225, 241, 249];
 const GRID: [number, number, number] = [190, 208, 218];
+const DAILY_COLUMN_FILLS: [number, number, number][] = [[230, 242, 255], [229, 245, 234], [255, 243, 214], [242, 234, 254]];
 
 function newPdf(orientation: "portrait" | "landscape" = "portrait", format: "a4" | "a3" = "a4") {
   return new jsPDF({ orientation, unit: "mm", format, compress: true });
@@ -77,20 +78,26 @@ function drawDailyHeader(doc: jsPDF, dates: string[], x: number, y: number, item
     doc.text(label, label === "Item Name" ? left + 1 : left + width / 2, y + totalHeight / 2 + 1, { align: label === "Item Name" ? "left" : "center" });
     left += width;
   }
-  dates.forEach(date => {
+  dates.forEach((date, dateIndex) => {
     const groupWidth = dayWidth * 4;
     doc.setFillColor(...BRAND_NAVY);
     doc.rect(left, y, groupWidth, groupHeight, "FD");
     doc.setFont("helvetica", "bold"); doc.setFontSize(5.5); doc.setTextColor(255, 255, 255);
     const dateLabel = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
     doc.text(dateLabel, left + groupWidth / 2, y + 3.7, { align: "center" });
-    ["Prev", "Issued", "Usage", "Return"].forEach(label => {
-      doc.setFillColor(...PALE_BLUE);
+    ["Prev", "Issued", "Usage", "Return"].forEach((label, measureIndex) => {
+      doc.setFillColor(...DAILY_COLUMN_FILLS[measureIndex]);
       doc.rect(left, y + groupHeight, dayWidth, labelHeight, "FD");
       doc.setFont("helvetica", "bold"); doc.setFontSize(4.7); doc.setTextColor(...BRAND_NAVY);
       doc.text(textFit(doc, label, dayWidth - 0.8), left + dayWidth / 2, y + groupHeight + 3.6, { align: "center" });
       left += dayWidth;
     });
+    if (dateIndex < dates.length - 1) {
+      doc.setDrawColor(...BRAND_NAVY);
+      doc.setLineWidth(0.65);
+      doc.line(left, y, left, y + totalHeight);
+      doc.setLineWidth(0.1);
+    }
   });
   return y + totalHeight;
 }
@@ -123,7 +130,7 @@ function drawRows(doc: jsPDF, rows: PdfCell[][], headers: PdfCell[], opts: Table
       const w = opts.widths[index];
       // Set the fill per cell. jsPDF keeps graphics state between drawing calls;
       // setting it here avoids a prior dark header/background color leaking into rows.
-      doc.setFillColor(...rowFill);
+      doc.setFillColor(...(!isTotal && opts.cellFills?.[index] ? opts.cellFills[index]! : rowFill));
       doc.rect(x, y, w, rowHeight, "F");
       doc.setDrawColor(...GRID);
       doc.rect(x, y, w, rowHeight, "S");
@@ -133,6 +140,12 @@ function drawRows(doc: jsPDF, rows: PdfCell[][], headers: PdfCell[], opts: Table
       const align = opts.alignments?.[index] ?? (typeof cell === "number" ? "right" : "left");
       doc.text(value, align === "left" ? x + 1 : align === "right" ? x + w - 1 : x + w / 2, y + rowHeight / 2 + 1.1, { align });
       x += w;
+      if (opts.separatorAfter?.includes(index)) {
+        doc.setDrawColor(...BRAND_NAVY);
+        doc.setLineWidth(0.65);
+        doc.line(x, y, x, y + rowHeight);
+        doc.setLineWidth(0.1);
+      }
     });
     rowIndex += 1;
     y += rowHeight;
@@ -172,7 +185,11 @@ export function generateDailyMaterialBalancePdf(input: { monthLabel: string; ite
     const headers = ["Item Name", "Unit", ...slice.flatMap(() => ["Prev. Day", "Issued", "Usage", "Balance Return"])];
     const widths = [itemWidth, unitWidth, ...groupedWidths];
     const alignments = ["left", "center", ...slice.flatMap(() => ["right", "right", "right", "right"])] as TableOptions["alignments"];
-    const options: TableOptions = { widths, rowHeight: 5.8, fontSize: 5.4, headerSize: 5.1, alignments };
+    const options: TableOptions = {
+      widths, rowHeight: 5.8, fontSize: 5.4, headerSize: 5.1, alignments,
+      cellFills: [undefined, undefined, ...slice.flatMap(() => DAILY_COLUMN_FILLS)],
+      separatorAfter: slice.slice(0, -1).map((_, index) => 5 + index * 4),
+    };
     const y = reportHeader(doc, "NNS Enterprise - Daily Material Balance", input.monthLabel, margin, offset > 0);
     const tableY = drawDailyHeader(doc, slice, margin, y, itemWidth, unitWidth, dayWidth);
     const rows: PdfCell[][] = input.items.map(item => [item.sourceItemName, item.sourceUnit || "", ...slice.flatMap<PdfCell>(date => {
@@ -354,7 +371,7 @@ export function generateInvoicePdf(input: {
   const tableY = labelY + 27;
   const headers = ["Ser.No", "Description", "RTOM", "Qty", "Unit Rate", "Amount"];
   const usableWidth = width - margin * 2;
-  const widths = [13, 92, 20, 16, 27, usableWidth - 168];
+  const widths = [13, 72, 20, 16, 44, usableWidth - 165];
   const options: TableOptions = { widths, rowHeight: 5.2, headerHeight: 6, fontSize: 6.1, headerSize: 6.1, alignments: ["center", "left", "center", "right", "right", "right"] };
   const headerY = drawTableHeader(doc, headers, tableX, tableY, options);
   const rates = snapshotRates(input.pricingSnapshot);
@@ -394,7 +411,7 @@ export function generateInvoicePdf(input: {
   invoiceBands.forEach((band, index) => addFixedService("DATA", index, `DATA - DW length- (${band.dataLabel})`));
   const peo = quantities.get("PEO_TV") || { quantity: 0, baseTotal: 0 };
   const peoRate = peo.quantity ? peo.baseTotal / peo.quantity : Number([...rates].reverse().find(item => Number(item.peoTvRate) > 0)?.peoTvRate || 1800);
-  lines.push([lines.length + 1, "IPTV- Second visit", "", peo.quantity, amountCell(peoRate), amountCell(peo.baseTotal)]);
+  lines.push([lines.length + 1, "PEO TV - Second visit", "", peo.quantity, amountCell(peoRate), amountCell(peo.baseTotal)]);
   const addOptional = (code: "POLE_8" | "HIGH_RISE", description: string, fallback: number) => {
     const item = getOptional(code);
     const quantity = Number(item?.quantity || 0);
@@ -435,53 +452,117 @@ export function generateInvoicePdf(input: {
     });
     y += rowHeight;
   }
-
-  y += 2.4;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(34, 48, 58);
-  doc.text("I do hereby certify that the above details are true and correct", margin + 1, y);
-  y += 5;
-  const separator = width / 2 + 1;
-  doc.setFontSize(6.1);
-  doc.text("Prepared By:", margin + 1, y);
-  doc.text("Received By: (Sign/Date)", separator, y);
-  y += 4;
-  doc.text(input.company.name || "NNS Enterprise", margin + 1, y);
-  doc.text("Should be Sign by SLTS officer", separator, y);
-  y += 6;
-  const bank = input.company.bank || {};
-  doc.text(`Checque should be drawn in favour of ${bank.accountTitle || ""}`.trim(), margin + 1, y); y += 4;
-  doc.text(`Account No:${bank.accountNumber ? ` ${bank.accountNumber}` : ""}`, margin + 1, y);
-  doc.text(`Bank:${bank.bankName ? ` ${bank.bankName}` : ""}`, width / 2, y); y += 4;
-  doc.text(`Branch:${bank.branchCode ? ` ${bank.branchCode}` : ""}`, margin + 1, y); y += 5;
-  doc.setFillColor(...BRAND_NAVY); doc.rect(margin, y, width - margin * 2, 4.5, "F");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(255, 255, 255);
-  doc.text("SLTS Use Only:", margin + 1.5, y + 3.1); y += 5;
-  const fullWidth = width - margin * 2;
-  const halfWidth = fullWidth / 2;
-  const thirdWidth = fullWidth / 3;
-  const sixthWidth = fullWidth / 6;
-  const footerText = (text: string, x: number, lineY: number, maxWidth: number, bold = false) => {
-    doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(5.5); doc.setTextColor(34, 48, 58);
-    doc.text(textFit(doc, text, maxWidth), x, lineY);
+  const optionalByCode = new Map(input.optionalItems.map(item => [
+    String(item.code || (item.description?.includes("8m") ? "POLE_8" : item.description?.toLowerCase().includes("high rise") ? "HIGH_RISE" : item.description?.includes("5.6m") ? "POLE_56" : item.description?.includes("6.7m") ? "POLE_67" : "")), item,
+  ]));
+  const getOptional = (code: string) => optionalByCode.get(code);
+  const lines: PdfCell[][] = [];
+  const addFixedService = (type: "FTTH" | "DATA", bandIndex: number, description: string) => {
+    const key = `${type}:${bandIndex}`;
+    const aggregate = quantities.get(key) || { quantity: 0, baseTotal: 0 };
+    const unitRate = aggregate.quantity ? aggregate.baseTotal / aggregate.quantity : catalogTierRate(rates, type, invoiceBands[bandIndex]);
+    lines.push([lines.length + 1, description, "", aggregate.quantity, amountCell(unitRate), amountCell(aggregate.baseTotal)]);
   };
-  const signY = y + 4;
-  footerText("Regional Signature", margin + halfWidth + 2, signY, thirdWidth - 4);
-  footerText("Head Office Signature", margin + halfWidth + thirdWidth + 2, signY, thirdWidth - 4);
-  footerText("Finance", margin + fullWidth - sixthWidth + 1, signY, sixthWidth - 2);
+  invoiceBands.forEach((band, index) => addFixedService("FTTH", index, `FTTH Wirings-DW Length- (${band.label})`));
+  const addPole = (code: "POLE_56" | "POLE_67", description: string, fallback: number) => {
+    const item = getOptional(code);
+    const quantity = Number(item?.quantity || 0);
+    const amount = Number(item?.baseAmount ?? (Number(item?.unitRate || catalogOptionalRate(rates, code, fallback)) * quantity));
+    const rate = quantity ? amount / quantity : catalogOptionalRate(rates, code, fallback);
+    lines.push([lines.length + 1, description, "", quantity, amountCell(rate), amountCell(amount)]);
+  };
+  addPole("POLE_56", "5.6m Pole Installations", 700);
+  addPole("POLE_67", "6.7m Pole Installations", 800);
+  invoiceBands.forEach((band, index) => addFixedService("DATA", index, `DATA - DW length- (${band.dataLabel})`));
+  const peo = quantities.get("PEO_TV") || { quantity: 0, baseTotal: 0 };
+  const peoRate = peo.quantity ? peo.baseTotal / peo.quantity : Number([...rates].reverse().find(item => Number(item.peoTvRate) > 0)?.peoTvRate || 1800);
+  lines.push([lines.length + 1, "IPTV- Second visit", "", peo.quantity, amountCell(peoRate), amountCell(peo.baseTotal)]);
+  const addOptional = (code: "POLE_8" | "HIGH_RISE", description: string, fallback: number) => {
+    const item = getOptional(code);
+    const quantity = Number(item?.quantity || 0);
+    if (quantity <= 0) return;
+    const rate = Number(item?.unitRate || catalogOptionalRate(rates, code, fallback));
+    const amount = Number(item?.baseAmount ?? rate * quantity);
+    lines.push([lines.length + 1, description, "", quantity, amountCell(rate), amountCell(amount)]);
+  };
+  addOptional("POLE_8", "8m Pole Installation", 900);
+  addOptional("HIGH_RISE", "FTTH - High Rise Building (Configuration only)", 3800);
+
+  y += 2.2;
+  const bank = input.company.bank || {};
+  const fullWidth = width - margin * 2;
+  const ink: [number, number, number] = [32, 42, 48];
+  const border = (x: number, top: number, w: number, h: number, lineWidth = 0.35) => {
+    doc.setDrawColor(...ink);
+    doc.setLineWidth(lineWidth);
+    doc.rect(x, top, w, h, "S");
+  };
+  const cell = (x: number, top: number, w: number, h: number, text: string, opts: { bold?: boolean; align?: "left" | "center" | "right"; fontSize?: number; padding?: number; lineWidth?: number } = {}) => {
+    border(x, top, w, h, opts.lineWidth);
+    doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+    doc.setFontSize(opts.fontSize ?? 6.1);
+    doc.setTextColor(...ink);
+    const pad = opts.padding ?? 1.2;
+    const value = textFit(doc, text, w - pad * 2);
+    const align = opts.align ?? "left";
+    const tx = align === "center" ? x + w / 2 : align === "right" ? x + w - pad : x + pad;
+    doc.text(value, tx, top + h / 2 + 1, { align });
+  };
+  const gap = 2;
+
+  // Template certification and side-by-side signoff fields.
+  cell(margin, y, fullWidth, 7, "I do hereby certify that the above details are true and correct", { bold: true, fontSize: 7, padding: 1.4 });
   y += 9;
-  footerText("Checked by:", margin + 1, y, halfWidth - 3);
-  footerText("Recommended By:", margin + halfWidth + 2, y, halfWidth - 3);
+  const half = fullWidth / 2;
+  cell(margin, y, half, 15, `Prepared By:\n${input.company.name || "NNS Enterprise"}`, { bold: true, align: "center", fontSize: 7 });
+  cell(margin + half, y, half, 15, "Received By: (Sign/Date)\nShould be Sign by SLTS officer", { bold: true, align: "center", fontSize: 6.7 });
+  y += 15 + gap;
+
+  // Bank/cheque information uses the current Company Settings values only.
+  cell(margin, y, fullWidth, 5, `Checque should be drawn in favour of "${bank.accountTitle || ""}"`, { fontSize: 6.3 });
   y += 5;
-  footerText("Certified By:", margin + 1, y, halfWidth - 3);
-  y += 5;
-  footerText("Approved By:", margin + 1, y, halfWidth - 3);
-  y += 5;
-  footerText("Office Use Only", margin + sixthWidth, y, sixthWidth - 2);
-  footerText("Yes/No", margin + sixthWidth * 2, y, sixthWidth - 2);
-  footerText("Sign/Date", margin + sixthWidth * 3, y, sixthWidth - 2);
-  y += 5;
-  footerText("Material Balance Sheet's received", margin + sixthWidth, y, sixthWidth * 2 - 2);
-  footerText("Yes", margin + sixthWidth * 3, y, sixthWidth - 2);
+  const detailLeft = fullWidth * 0.48;
+  cell(margin, y, detailLeft, 4.5, `Account No: ${bank.accountNumber || ""}`, { fontSize: 6.1 });
+  cell(margin + detailLeft, y, fullWidth - detailLeft, 4.5, `Bank: ${bank.bankName || ""}`, { fontSize: 6.1 });
+  y += 4.5;
+  cell(margin, y, detailLeft, 4.5, `Branch: ${bank.branchCode || ""}`, { fontSize: 6.1 });
+  cell(margin + detailLeft, y, fullWidth - detailLeft, 4.5, "", { fontSize: 6.1 });
+  y += 4.5 + gap;
+
+  // SLTS approval grid mirrors the template's bordered review area.
+  cell(margin, y, fullWidth, 5.5, "SLTS Use Only:", { bold: true, fontSize: 7, lineWidth: 0.6 });
+  y += 5.5;
+  const labelW = 22;
+  const financeW = 36;
+  const regionalW = (fullWidth - labelW - financeW) * 0.48;
+  const headOfficeW = fullWidth - labelW - financeW - regionalW;
+  cell(margin, y, labelW, 6.5, "", { lineWidth: 0.55 });
+  cell(margin + labelW, y, regionalW, 6.5, "Regional Signature", { bold: true, align: "center", fontSize: 6.5, lineWidth: 0.55 });
+  cell(margin + labelW + regionalW, y, headOfficeW, 6.5, "Head Office Signature", { bold: true, align: "center", fontSize: 6.5, lineWidth: 0.55 });
+  cell(margin + fullWidth - financeW, y, financeW, 6.5, "Finance", { bold: true, align: "center", fontSize: 6.5, lineWidth: 0.55 });
+  y += 6.5;
+  const approvalRowH = 10;
+  ["Checked by:", "Certified By:", "Approved By:"].forEach((label, index) => {
+    const rowY = y + index * approvalRowH;
+    cell(margin, rowY, labelW, approvalRowH, label, { bold: true, fontSize: 5.8, lineWidth: 0.55 });
+    cell(margin + labelW, rowY, regionalW, approvalRowH, "", { lineWidth: 0.55 });
+    cell(margin + labelW + regionalW, rowY, headOfficeW, approvalRowH, "", { lineWidth: 0.55 });
+  });
+  cell(margin + fullWidth - financeW, y, financeW, approvalRowH * 3, "Recommended By:", { bold: true, fontSize: 5.8, lineWidth: 0.55 });
+  y += approvalRowH * 3;
+  const officeLabelW = labelW;
+  const officeDescW = regionalW;
+  const yesNoW = 14;
+  const signDateW = fullWidth - officeLabelW - officeDescW - yesNoW - financeW;
+  cell(margin, y, officeLabelW, 6, "", { lineWidth: 0.55 });
+  cell(margin + officeLabelW, y, officeDescW, 6, "Office Use Only", { bold: true, fontSize: 5.8, lineWidth: 0.55 });
+  cell(margin + officeLabelW + officeDescW, y, yesNoW, 6, "Yes/No", { bold: true, align: "center", fontSize: 5.5, lineWidth: 0.55 });
+  cell(margin + officeLabelW + officeDescW + yesNoW, y, signDateW, 6, "Sign/Date", { bold: true, align: "center", fontSize: 5.8, lineWidth: 0.55 });
+  y += 6;
+  cell(margin, y, officeLabelW, 12, "", { lineWidth: 0.55 });
+  cell(margin + officeLabelW, y, officeDescW, 12, "Material Balance Sheet's received", { align: "center", fontSize: 5.7, lineWidth: 0.55 });
+  cell(margin + officeLabelW + officeDescW, y, yesNoW, 12, "Yes", { fontSize: 5.8, lineWidth: 0.55 });
+  cell(margin + officeLabelW + officeDescW + yesNoW, y, signDateW, 12, "", { lineWidth: 0.55 });
   return new Uint8Array(doc.output("arraybuffer"));
 }
 

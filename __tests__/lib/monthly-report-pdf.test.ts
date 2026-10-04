@@ -77,7 +77,7 @@ describe("monthly report PDF generation", () => {
       expect(content).toContain(percent);
       expect(content).toContain(actual);
       expect(content).toContain("I do hereby certify that the above details are true and correct");
-      expect(content).toContain("Checque should be drawn in favour of NNS Test Beneficiary");
+      expect(content).toContain("Checque should be drawn in favour of \"NNS Test Beneficiary\"");
       expect(content).toContain("SLTS Use Only:");
       expect(content).not.toContain("PAYMENT DETAILS");
     },
@@ -99,7 +99,8 @@ describe("monthly report PDF generation", () => {
     }));
     const pole = content.indexOf("5.6m Pole Installations");
     const data = content.indexOf("DATA - DW length-");
-    const peo = content.indexOf("IPTV- Second visit");
+    const peo = content.indexOf("PEO TV - Second visit");
+    expect(content).not.toContain("IPTV");
     const pole8 = content.indexOf("8m Pole Installation");
     const highRise = content.indexOf("High Rise Building");
     expect(pole).toBeGreaterThan(-1);
@@ -112,6 +113,34 @@ describe("monthly report PDF generation", () => {
       optionalItems: [{ code: "POLE_8", description: "8m Pole Installation", quantity: 0, unitRate: 900, baseAmount: 0 }],
     }));
     expect(withoutOptional).not.toContain("8m Pole Installation");
+  });
+
+  it("uses four distinct daily measure fills and strong separators between days", () => {
+    const bytes = generateDailyMaterialBalancePdf({
+      monthLabel: "October 2026",
+      items: [{ sourceItemName: "Fiber", sourceUnit: "m", dailyEntries: [
+        { date: "2026-10-01", previousBalance: 12, issued: 4, usage: 2, balanceReturn: 1 },
+        { date: "2026-10-02", previousBalance: 11, issued: 3, usage: 1, balanceReturn: 0 },
+      ] }],
+    });
+    const content = pdfText(bytes);
+    expect(content).toContain("0.9 0.95 1. rg");
+    expect(content).toContain("0.9 0.96 0.92 rg");
+    expect(content).toContain("1. 0.95 0.84 rg");
+    expect(content).toContain("0.95 0.92 1. rg");
+    expect(content).toContain("1.8425196850393704 w");
+  });
+
+  it("draws bordered invoice signoff panels with configured bank details", () => {
+    const content = pdfText(generateInvoicePdf(invoiceInput("A")));
+    expect(content).toContain("Prepared By:");
+    expect(content).toContain("Received By: \\(Sign/Date\\)");
+    expect(content).toContain("Regional Signature");
+    expect(content).toContain("Head Office Signature");
+    expect(content).toContain("Account No: 12345678");
+    expect(content).toContain("Bank: NNS Test Bank");
+    expect(content).toContain("Branch: Horana");
+    expect((content.match(/ re\nS/g) || []).length).toBeGreaterThan(30);
   });
 
   it("formats the shared A/B display number and preserves invoice-back numbering", () => {
