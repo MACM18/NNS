@@ -101,14 +101,26 @@ async function getEmailConfig(): Promise<ResolvedEmailConfig> {
     fallbackWarning = "Saved email settings could not be read. Environment email settings were used instead.";
   }
 
+  const requestedProvider = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
+  const smtpPort = Number.parseInt(process.env.SMTP_PORT || "", 10);
+  const smtpSecureValue = process.env.SMTP_SECURE?.trim().toLowerCase();
+  const environmentProvider: EmailProvider = requestedProvider === "smtp" || (!requestedProvider && Boolean(process.env.SMTP_HOST))
+    ? "smtp"
+    : "resend";
+
   cachedConfig = {
     source: "environment",
     warning: fallbackWarning,
     config: {
-      provider: "resend",
+      provider: environmentProvider,
       fromEmail: process.env.EMAIL_FROM || "noreply@nns.lk",
       fromName: process.env.EMAIL_FROM_NAME || "NNS Enterprise",
       resendApiKey: process.env.RESEND_API_KEY,
+      smtpHost: process.env.SMTP_HOST,
+      smtpPort: Number.isFinite(smtpPort) && smtpPort > 0 ? smtpPort : 587,
+      smtpSecure: smtpSecureValue ? smtpSecureValue === "true" : smtpPort === 465,
+      smtpUser: process.env.SMTP_USER,
+      smtpPassword: process.env.SMTP_PASSWORD,
     },
   };
   configCacheTime = now;
