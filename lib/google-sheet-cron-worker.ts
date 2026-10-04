@@ -15,13 +15,11 @@ if (!globalThis.googleSheetCronStarted) {
     cron.schedule("* * * * *", async () => {
       try {
         const port = Number(process.env.PORT || 3000);
-        const response = await fetch(`http://127.0.0.1:${port}/api/cron/google-sheet-import`, {
-          headers: { authorization: `Bearer ${secret}` },
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          console.error("[google-sheet-cron] Import check failed:", response.status, await response.text());
-        }
+        const headers = { authorization: `Bearer ${secret}` };
+        const monthly = await fetch(`http://127.0.0.1:${port}/api/cron/google-sheet-monthly`, { headers, cache: "no-store" });
+        if (!monthly.ok) console.error("[google-sheet-cron] Monthly setup check failed:", monthly.status, await monthly.text());
+        const response = await fetch(`http://127.0.0.1:${port}/api/cron/google-sheet-import`, { headers, cache: "no-store" });
+        if (!response.ok) console.error("[google-sheet-cron] Import check failed:", response.status, await response.text());
       } catch (error) {
         console.error("[google-sheet-cron] Import check failed:", error);
       }

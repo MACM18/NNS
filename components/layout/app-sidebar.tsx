@@ -70,6 +70,11 @@ const operationsItems: NavItem[] = [
     icon: FileText,
   },
   {
+    title: "Monthly Reports",
+    url: "/dashboard/reports",
+    icon: FileText,
+  },
+  {
     title: "Tasks",
     url: "/dashboard/tasks",
     icon: ClipboardList,
@@ -134,7 +139,7 @@ const accountingItems: NavItem[] = [
     icon: BarChart3,
   },
   {
-    title: "Reports",
+    title: "Financial Reports",
     url: "/dashboard/accounting/reports",
     icon: BarChart3,
   },

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { OPTIONAL_ITEM_DESCRIPTIONS, OPTIONAL_ITEM_RATES, type OptionalItemCode, type OptionalItemInput } from "@/lib/service-pricing-types";
+import { monthlyInvoiceNumber } from "@/lib/monthly-invoice-number";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,6 +37,8 @@ interface GenerateMonthlyInvoicesModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  initialMonth?: number;
+  initialYear?: number;
 }
 
 interface LineDetail {
@@ -61,12 +64,14 @@ export function GenerateMonthlyInvoicesModal({
   open,
   onOpenChange,
   onSuccess,
+  initialMonth,
+  initialYear,
 }: GenerateMonthlyInvoicesModalProps) {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(() => (new Date().getMonth() + 1).toString().padStart(2, "0"));
+  const [selectedMonth, setSelectedMonth] = useState(() => String(initialMonth ?? (new Date().getMonth() + 1)).padStart(2, "0"));
   const [selectedYear, setSelectedYear] = useState(
-    new Date().getFullYear().toString()
+    String(initialYear ?? new Date().getFullYear())
   );
   const [lineDetails, setLineDetails] = useState<LineDetail[]>([]);
   const [invoicePreviews, setInvoicePreviews] = useState<InvoicePreview[]>([]);
@@ -112,12 +117,14 @@ export function GenerateMonthlyInvoicesModal({
       return;
     }
     if (open) {
+      if (initialMonth) setSelectedMonth(String(initialMonth).padStart(2, "0"));
+      if (initialYear) setSelectedYear(String(initialYear));
       setLineDetails([]);
       setInvoicePreviews([]);
       setOptionalItems({ POLE_56: 0, POLE_67: 0, POLE_8: 0, HIGH_RISE: 0 });
       setOptionalRateOverrides({ POLE_56: "", POLE_67: "", POLE_8: "", HIGH_RISE: "" });
     }
-  }, [open]);
+  }, [open, initialMonth, initialYear]);
 
   useEffect(() => {
     if (open && selectedMonth && selectedYear) {
@@ -186,12 +193,6 @@ export function GenerateMonthlyInvoicesModal({
     if (requestId !== previewRequest.current) return;
 
     // Generate invoice numbers
-    const monthName =
-      months.find((m) => m.value === selectedMonth)?.label || "Unknown";
-    const baseInvoiceNumber = `S/Southern/HR/NC/${selectedYear.slice(
-      -2
-    )}/${monthName}`;
-
     // Always generate 2 invoices: A (90%), B (10%)
     const previews: InvoicePreview[] = [
       {
@@ -199,7 +200,7 @@ export function GenerateMonthlyInvoicesModal({
         percentage: 90,
         lines: lines, // All lines
         totalAmount: Number(pricingResponses[0].totalAmount),
-        invoiceNumber: `${baseInvoiceNumber}/A`,
+        invoiceNumber: monthlyInvoiceNumber(selectedYear, selectedMonth, "A"),
         linePricing: Object.fromEntries(pricingResponses[0].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number; description: string }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount, description: line.description }])),
         optionalPricing: pricingResponses[0].optionalItemsSnapshot || [],
       },
@@ -208,19 +209,13 @@ export function GenerateMonthlyInvoicesModal({
         percentage: 10,
         lines: lines, // All lines
         totalAmount: Number(pricingResponses[1].totalAmount),
-        invoiceNumber: `${baseInvoiceNumber}/B`,
+        invoiceNumber: monthlyInvoiceNumber(selectedYear, selectedMonth, "B"),
         linePricing: Object.fromEntries(pricingResponses[1].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number; description: string }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount, description: line.description }])),
         optionalPricing: pricingResponses[1].optionalItemsSnapshot || [],
       },
     ];
 
     setInvoicePreviews(previews);
-  };
-
-  const generateInvoiceNumber = (type: "A" | "B"): string => {
-    const monthName =
-      months.find((m) => m.value === selectedMonth)?.label || "Unknown";
-    return `S/Southern/HR/NC/${selectedYear.slice(-2)}/${monthName}/${type}`;
   };
 
   const getInvoiceDate = (): string => {

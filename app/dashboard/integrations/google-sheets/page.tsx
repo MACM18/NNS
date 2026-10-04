@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 import {
   Card,
@@ -145,7 +146,7 @@ function getStatusBadge(status: string | null) {
 }
 
 export default async function GoogleSheetsPage({ searchParams }: PageProps) {
-  const resolvedSearchParams = await searchParams;
+  const [resolvedSearchParams, session] = await Promise.all([searchParams, auth()]);
   const currentPage =
     parseInt((resolvedSearchParams?.page as string) || "1", 10) || 1;
   const pageSize = 10;
@@ -198,7 +199,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <div className='mb-6'><GoogleSheetAutoSyncSettings /></div>
+      <div className='mb-6'><GoogleSheetAutoSyncSettings canManageMonthly={["admin", "superadmin"].includes(String(session?.user?.role || "").toLowerCase())} /></div>
 
       {/* Connections List */}
       <Card>

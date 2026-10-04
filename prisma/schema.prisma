@@ -145,6 +145,8 @@ model Profile {
   financialYearsCreated     FinancialYear[]          @relation("FinancialYearCreatedBy")
   businessTransactionsCreated BusinessTransaction[]  @relation("BusinessTransactionCreatedBy")
   pricingSchedulesCreated   PricingSchedule[]        @relation("PricingScheduleCreatedBy")
+  monthlyReportsCreated    MonthlyReport[]           @relation("MonthlyReportCreatedBy")
+  monthlyReportVersionsCreated MonthlyReportVersion[] @relation("MonthlyReportVersionCreatedBy")
 
   @@map("profiles")
 }
@@ -640,6 +642,62 @@ model GeneratedInvoice {
   @@map("generated_invoices")
 }
 
+model MonthlyReport {
+  id                   String                @id @default(uuid())
+  year                 Int
+  month                Int
+  shareActive          Boolean               @default(false) @map("share_active")
+  shareTokenHash       String?               @unique @map("share_token_hash")
+  encryptedShareToken  String?               @map("encrypted_share_token")
+  shareRevokedAt       DateTime?             @map("share_revoked_at")
+  currentVersionId     String?               @unique @map("current_version_id")
+  createdById          String?               @map("created_by")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  createdBy            Profile?              @relation("MonthlyReportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  versions             MonthlyReportVersion[] @relation("MonthlyReportVersions")
+  currentVersion       MonthlyReportVersion? @relation("MonthlyReportCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([year, month])
+  @@index([year, month])
+  @@map("monthly_reports")
+}
+
+model MonthlyReportVersion {
+  id          String                 @id @default(uuid())
+  reportId    String                 @map("report_id")
+  version     Int
+  status      String                 @default("draft")
+  sourceImportId String?              @map("source_import_id")
+  sourceSnapshot Json                 @default("{}") @map("source_snapshot")
+  createdById String?                @map("created_by")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  publishedAt DateTime?              @map("published_at")
+  report      MonthlyReport          @relation("MonthlyReportVersions", fields: [reportId], references: [id], onDelete: Cascade)
+  currentFor  MonthlyReport?         @relation("MonthlyReportCurrentVersion")
+  createdBy   Profile?               @relation("MonthlyReportVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  documents   MonthlyReportDocument[]
+
+  @@unique([reportId, version])
+  @@index([reportId, createdAt])
+  @@map("monthly_report_versions")
+}
+
+model MonthlyReportDocument {
+  id         String              @id @default(uuid())
+  versionId  String              @map("version_id")
+  reportType String              @map("report_type")
+  publicId   String              @unique @map("public_id")
+  title      String
+  fileName   String              @map("file_name")
+  pdfBytes   Bytes               @map("pdf_bytes")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  version    MonthlyReportVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, reportType])
+  @@map("monthly_report_documents")
+}
+
 // ==========================================
 // WASTAGE TRACKING
 // ==========================================
@@ -812,6 +870,42 @@ model GoogleSheetAutoSyncRun {
   finishedAt   DateTime? @map("finished_at")
 
   @@map("google_sheet_auto_sync_runs")
+}
+
+model GoogleSheetMonthlySettings {
+  id                   String   @id @default("default")
+  enabled              Boolean  @default(false)
+  templateFileId       String?  @map("template_file_id")
+  destinationFolderId  String?  @map("destination_folder_id")
+  namePattern          String   @default("NNS Telecom - {Month} {Year}") @map("name_pattern")
+  clearRanges          Json     @default("[]") @map("clear_ranges")
+  monthCell            String?  @map("month_cell")
+  balanceMappings      Json     @default("[]") @map("balance_mappings")
+  editors              Json     @default("[]")
+  adminEmail           String?  @map("admin_email")
+  encryptedRefreshToken String? @map("encrypted_refresh_token")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("google_sheet_monthly_settings")
+}
+
+model GoogleSheetMonthlyRun {
+  id        String    @id @default(uuid())
+  period    String    @unique
+  status    String    @default("running")
+  fileId    String?   @map("file_id")
+  fileUrl   String?   @map("file_url")
+  error     String?
+  previousSyncAt DateTime? @map("previous_sync_at")
+  sheetPreparedAt DateTime? @map("sheet_prepared_at")
+  accessGrantedAt DateTime? @map("access_granted_at")
+  connectionRegisteredAt DateTime? @map("connection_registered_at")
+  summaryEmailSentAt DateTime? @map("summary_email_sent_at")
+  startedAt DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("google_sheet_monthly_runs")
 }
 
 // ==========================================
