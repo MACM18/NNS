@@ -83,8 +83,8 @@ body {
     --muted: 210 40% 96.1%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 32 95% 60%;         /* Energetic Orange */
-    --accent-foreground: 210 40% 98%;
+    --accent: 210 40% 93%;       /* Soft blue hover surface */
+    --accent-foreground: 222 47% 11%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
@@ -130,7 +130,7 @@ body {
     --muted: 217 32% 17%;
     --muted-foreground: 215 20% 65%;
 
-    --accent: 32 95% 60%;
+    --accent: 217 32% 25%;       /* Muted blue hover surface */
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
