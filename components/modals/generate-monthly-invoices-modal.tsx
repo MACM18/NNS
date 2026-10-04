@@ -37,6 +37,8 @@ interface GenerateMonthlyInvoicesModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  initialMonth?: number;
+  initialYear?: number;
 }
 
 interface LineDetail {
@@ -62,12 +64,14 @@ export function GenerateMonthlyInvoicesModal({
   open,
   onOpenChange,
   onSuccess,
+  initialMonth,
+  initialYear,
 }: GenerateMonthlyInvoicesModalProps) {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(() => (new Date().getMonth() + 1).toString().padStart(2, "0"));
+  const [selectedMonth, setSelectedMonth] = useState(() => String(initialMonth ?? (new Date().getMonth() + 1)).padStart(2, "0"));
   const [selectedYear, setSelectedYear] = useState(
-    new Date().getFullYear().toString()
+    String(initialYear ?? new Date().getFullYear())
   );
   const [lineDetails, setLineDetails] = useState<LineDetail[]>([]);
   const [invoicePreviews, setInvoicePreviews] = useState<InvoicePreview[]>([]);
@@ -113,12 +117,14 @@ export function GenerateMonthlyInvoicesModal({
       return;
     }
     if (open) {
+      if (initialMonth) setSelectedMonth(String(initialMonth).padStart(2, "0"));
+      if (initialYear) setSelectedYear(String(initialYear));
       setLineDetails([]);
       setInvoicePreviews([]);
       setOptionalItems({ POLE_56: 0, POLE_67: 0, POLE_8: 0, HIGH_RISE: 0 });
       setOptionalRateOverrides({ POLE_56: "", POLE_67: "", POLE_8: "", HIGH_RISE: "" });
     }
-  }, [open]);
+  }, [open, initialMonth, initialYear]);
 
   useEffect(() => {
     if (open && selectedMonth && selectedYear) {

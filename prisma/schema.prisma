@@ -145,6 +145,8 @@ model Profile {
   financialYearsCreated     FinancialYear[]          @relation("FinancialYearCreatedBy")
   businessTransactionsCreated BusinessTransaction[]  @relation("BusinessTransactionCreatedBy")
   pricingSchedulesCreated   PricingSchedule[]        @relation("PricingScheduleCreatedBy")
+  monthlyReportsCreated    MonthlyReport[]           @relation("MonthlyReportCreatedBy")
+  monthlyReportVersionsCreated MonthlyReportVersion[] @relation("MonthlyReportVersionCreatedBy")
 
   @@map("profiles")
 }
@@ -638,6 +640,62 @@ model GeneratedInvoice {
   pricingSchedule PricingSchedule? @relation(fields: [pricingScheduleId], references: [id], onDelete: SetNull)
 
   @@map("generated_invoices")
+}
+
+model MonthlyReport {
+  id                   String                @id @default(uuid())
+  year                 Int
+  month                Int
+  shareActive          Boolean               @default(false) @map("share_active")
+  shareTokenHash       String?               @unique @map("share_token_hash")
+  encryptedShareToken  String?               @map("encrypted_share_token")
+  shareRevokedAt       DateTime?             @map("share_revoked_at")
+  currentVersionId     String?               @unique @map("current_version_id")
+  createdById          String?               @map("created_by")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  createdBy            Profile?              @relation("MonthlyReportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  versions             MonthlyReportVersion[] @relation("MonthlyReportVersions")
+  currentVersion       MonthlyReportVersion? @relation("MonthlyReportCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([year, month])
+  @@index([year, month])
+  @@map("monthly_reports")
+}
+
+model MonthlyReportVersion {
+  id          String                 @id @default(uuid())
+  reportId    String                 @map("report_id")
+  version     Int
+  status      String                 @default("draft")
+  sourceImportId String?              @map("source_import_id")
+  sourceSnapshot Json                 @default("{}") @map("source_snapshot")
+  createdById String?                @map("created_by")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  publishedAt DateTime?              @map("published_at")
+  report      MonthlyReport          @relation("MonthlyReportVersions", fields: [reportId], references: [id], onDelete: Cascade)
+  currentFor  MonthlyReport?         @relation("MonthlyReportCurrentVersion")
+  createdBy   Profile?               @relation("MonthlyReportVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  documents   MonthlyReportDocument[]
+
+  @@unique([reportId, version])
+  @@index([reportId, createdAt])
+  @@map("monthly_report_versions")
+}
+
+model MonthlyReportDocument {
+  id         String              @id @default(uuid())
+  versionId  String              @map("version_id")
+  reportType String              @map("report_type")
+  publicId   String              @unique @map("public_id")
+  title      String
+  fileName   String              @map("file_name")
+  pdfBytes   Bytes               @map("pdf_bytes")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  version    MonthlyReportVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, reportType])
+  @@map("monthly_report_documents")
 }
 
 // ==========================================

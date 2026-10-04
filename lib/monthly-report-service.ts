@@ -1,0 +1,269 @@
+import { Prisma } from "@prisma/client";
+import { encrypt, decrypt } from "@/lib/encryption";
+import prisma from "@/lib/prisma";
+import { computeCableMeasurements } from "@/lib/db";
+import { createIssuedInvoiceFromLines } from "@/lib/partnership-accounting-service";
+import { monthlyInvoiceNumber } from "@/lib/monthly-invoice-number";
+import {
+  generateDailyMaterialBalancePdf,
+  generateDrumNumberPdf,
+  generateInvoiceBackPdf,
+  generateInvoicePdf,
+  generateMonthlyMaterialBalancePdf,
+  type InvoiceBackRow,
+  type InvoiceSnapshotLine,
+  type OptionalInvoiceSnapshot,
+} from "@/lib/monthly-report-pdf";
+import {
+  canManageMonthlyReports,
+  createMonthlyShareToken,
+  createReportDocumentId,
+  hashMonthlyShareToken,
+  monthDateBounds,
+  MONTHLY_REPORT_TITLES,
+  type MonthlyReportType,
+} from "@/lib/monthly-report-sharing";
+
+function jsonValue(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function decimal(value: unknown) { return Number(value ?? 0); }
+function dayKey(value: Date) { return value.toISOString().slice(0, 10); }
+function monthLabel(month: number, year: number) {
+  return new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "Asia/Colombo" }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+function lineIds(value: Prisma.JsonValue | null): string[] {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+}
+function optionalItemsInput(value: Prisma.JsonValue | null) {
+  if (!Array.isArray(value)) return {};
+  return Object.fromEntries(value.flatMap(raw => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const item = raw as Record<string, unknown>;
+    if (typeof item.code !== "string") return [];
+    return [[item.code, { quantity: Number(item.quantity || 0), unitRate: Number(item.unitRate || 0) }]];
+  }));
+}
+
+async function ensureInvoicePair(year: number, month: number, createdById: string) {
+  const findPair = () => prisma.generatedInvoice.findMany({ where: { year, month, invoiceType: { in: ["A", "B"] } }, orderBy: { createdAt: "asc" } });
+  let invoices = await findPair();
+  const invoiceA = invoices.find(invoice => invoice.invoiceType === "A");
+  const invoiceB = invoices.find(invoice => invoice.invoiceType === "B");
+  if (!invoiceA && !invoiceB) return { requiresInvoiceGeneration: true as const };
+  if (Boolean(invoiceA) !== Boolean(invoiceB)) {
+    const existing = invoiceA || invoiceB!;
+    const type = invoiceA ? "B" : "A";
+    const ids = lineIds(existing.lineDetailsIds);
+    if (!ids.length) throw new Error(`The saved Invoice ${existing.invoiceType} has no line snapshot, so its missing counterpart cannot be created safely.`);
+    const nextMonthDate = new Date(Date.UTC(year, month, 2));
+    const jobMonth = monthLabel(month, year);
+    const number = monthlyInvoiceNumber(year, month, type);
+    try {
+      await createIssuedInvoiceFromLines({
+        invoiceNumber: number,
+        invoiceType: type,
+        month,
+        year,
+        jobMonth,
+        invoiceDate: existing.invoiceDate || nextMonthDate,
+        lineDetailsIds: ids,
+        optionalItems: optionalItemsInput(existing.optionalItemsSnapshot),
+        status: "generated",
+        createdById,
+      });
+    } catch (error) {
+      const found = await prisma.generatedInvoice.findFirst({ where: { year, month, invoiceType: type } });
+      if (!found) throw error;
+    }
+    invoices = await findPair();
+  }
+  const a = invoices.find(invoice => invoice.invoiceType === "A");
+  const b = invoices.find(invoice => invoice.invoiceType === "B");
+  if (!a || !b) throw new Error("Both monthly invoices must be available before creating the report set.");
+  return { requiresInvoiceGeneration: false as const, invoices: [a, b] as const };
+}
+
+export async function generateMonthlyReportVersion(input: { year: number; month: number; createdById: string }) {
+  const bounds = monthDateBounds(input.year, input.month);
+
+  const connection = await prisma.googleSheetConnection.findFirst({
+    where: { year: input.year, month: input.month, status: "active" },
+    orderBy: [{ autoSyncEnabled: "desc" }, { createdAt: "desc" }],
+  });
+  if (!connection) throw new Error("No connected Google Sheet was found for this month.");
+  const imported = await prisma.materialBalanceImport.findFirst({
+    where: { connectionId: connection.id, status: { in: ["success", "warning"] } },
+    orderBy: { importedAt: "desc" },
+    include: {
+      items: {
+        orderBy: { sourceRow: "asc" },
+        include: {
+          dailyEntries: {
+            where: { balanceDate: { gte: bounds.start, lt: bounds.endExclusive } },
+            orderBy: { balanceDate: "asc" },
+          },
+        },
+      },
+    },
+  });
+  if (!imported) throw new Error("No successful material balance import exists for this month. Sync the month’s sheet, then try again.");
+
+  const invoicePair = await ensureInvoicePair(input.year, input.month, input.createdById);
+  if (invoicePair.requiresInvoiceGeneration) return invoicePair;
+
+  const lines = await prisma.lineDetails.findMany({
+    where: { date: { gte: bounds.start, lt: bounds.endExclusive } },
+    orderBy: [{ date: "asc" }, { telephoneNo: "asc" }],
+  });
+  const companySettings = await prisma.companySettings.findFirst({ orderBy: { createdAt: "asc" } });
+  const invoiceRecords = invoicePair.invoices;
+  const invoiceA = invoiceRecords.find(invoice => invoice.invoiceType === "A")!;
+  const invoiceB = invoiceRecords.find(invoice => invoice.invoiceType === "B")!;
+  const dailyItems = imported.items.map(item => ({
+    sourceItemName: item.sourceItemName,
+    sourceUnit: item.sourceUnit,
+    dailyEntries: item.dailyEntries.map(entry => ({
+      date: dayKey(entry.balanceDate), previousBalance: decimal(entry.previousBalance), issued: decimal(entry.issued), usage: decimal(entry.usage), balanceReturn: decimal(entry.balanceReturn),
+    })),
+  }));
+  const monthlyRows = imported.items.map(item => ({
+    item: item.sourceItemName,
+    opening: decimal(item.monthOpeningBalance ?? item.openingBalance),
+    issued: decimal(item.monthStockIssued),
+    inHand: decimal(item.monthInHand),
+    used: decimal(item.monthMaterialUsed),
+    endingWip: decimal(item.monthEndingWip ?? item.finalBalance),
+  }));
+  const invoiceBackRows: InvoiceBackRow[] = lines.map(line => {
+    const cable = computeCableMeasurements(decimal(line.cableStart), decimal(line.cableMiddle), decimal(line.cableEnd));
+    return {
+      telephoneNo: line.telephoneNo,
+      status: line.status,
+      completeDate: line.completedDate ? dayKey(line.completedDate) : dayKey(line.date),
+      f1: cable.f1,
+      g1: cable.g1,
+      lHook: line.lHook,
+      cHook: line.cHook,
+      retainers: line.retainers,
+      internalWire: decimal(line.internalWire),
+      cat5: decimal(line.cat5),
+      fac: line.fac,
+      fiberRosette: line.fiberRosette,
+      topBolt: line.topBolt,
+      conduit: decimal(line.conduit),
+      casing: decimal(line.casing),
+      poleDetails: [line.pole67 ? `${line.pole67} × 6.7m` : "", line.pole ? `${line.pole} × 5.6m` : ""].filter(Boolean).join(", "),
+    };
+  });
+  const drumRows = lines.filter(line => Boolean(line.drumNumber || line.drumNumberNew)).map(line => ({
+    telephoneNo: line.telephoneNo,
+    cableStart: decimal(line.cableStart),
+    cableMiddle: decimal(line.cableMiddle),
+    cableEnd: decimal(line.cableEnd),
+    drumNumber: line.drumNumber || line.drumNumberNew || "",
+    wastage: decimal(line.wastage),
+  }));
+  const monthName = new Intl.DateTimeFormat("en", { month: "long", timeZone: "Asia/Colombo" }).format(new Date(Date.UTC(input.year, input.month - 1, 1))).toUpperCase();
+  const invoiceBackNumber = `NNS/WPS/HR/NC/${String(input.year).slice(-2)}/${monthName}/001`;
+  const invoiceLines = (invoice: typeof invoiceA): InvoiceSnapshotLine[] => Array.isArray(invoice.lineDetailsSnapshot)
+    ? (invoice.lineDetailsSnapshot as unknown as InvoiceSnapshotLine[])
+    : [];
+  const optionalLines = (invoice: typeof invoiceA): OptionalInvoiceSnapshot[] => Array.isArray(invoice.optionalItemsSnapshot)
+    ? (invoice.optionalItemsSnapshot as unknown as OptionalInvoiceSnapshot[])
+    : [];
+  const reports = [
+    { type: "daily-material-balance" as const, bytes: generateDailyMaterialBalancePdf({ monthLabel: monthLabel(input.month, input.year), items: dailyItems }) },
+    { type: "monthly-material-balance" as const, bytes: generateMonthlyMaterialBalancePdf({ monthLabel: new Intl.DateTimeFormat("en", { month: "long", timeZone: "Asia/Colombo" }).format(new Date(Date.UTC(input.year, input.month - 1, 1))), year: input.year, rows: monthlyRows }) },
+    { type: "invoice-a" as const, bytes: generateInvoicePdf({ invoice: { invoiceNumber: invoiceA.invoiceNumber, invoiceDate: invoiceA.invoiceDate, jobMonth: invoiceA.jobMonth, invoiceType: invoiceA.invoiceType, totalAmount: decimal(invoiceA.totalAmount) }, lines: invoiceLines(invoiceA), optionalItems: optionalLines(invoiceA), company: { name: companySettings?.companyName || "NNS Enterprise", address: companySettings?.address || "No 89, Welikala, Pokunuwita", contacts: companySettings?.contactNumbers || [], registeredNumber: companySettings?.registeredNumber || "" } }) },
+    { type: "invoice-b" as const, bytes: generateInvoicePdf({ invoice: { invoiceNumber: invoiceB.invoiceNumber, invoiceDate: invoiceB.invoiceDate, jobMonth: invoiceB.jobMonth, invoiceType: invoiceB.invoiceType, totalAmount: decimal(invoiceB.totalAmount) }, lines: invoiceLines(invoiceB), optionalItems: optionalLines(invoiceB), company: { name: companySettings?.companyName || "NNS Enterprise", address: companySettings?.address || "No 89, Welikala, Pokunuwita", contacts: companySettings?.contactNumbers || [], registeredNumber: companySettings?.registeredNumber || "" } }) },
+    { type: "invoice-back" as const, bytes: generateInvoiceBackPdf({ monthLabel: monthLabel(input.month, input.year), invoiceNumber: invoiceBackNumber, rows: invoiceBackRows }) },
+    { type: "drum-number" as const, bytes: generateDrumNumberPdf({ monthLabel: monthLabel(input.month, input.year), rows: drumRows }) },
+  ];
+  const sourceSnapshot = {
+    month: input.month, year: input.year,
+    sourceImport: { id: imported.id, importedAt: imported.importedAt.toISOString(), status: imported.status, sourceTab: imported.sourceTab, sourceChecksum: imported.sourceChecksum },
+    lineIds: lines.map(line => line.id),
+    invoiceIds: invoiceRecords.map(invoice => invoice.id),
+    dailyItems, monthlyRows, invoiceBackRows, drumRows,
+    invoiceSnapshots: invoiceRecords.map(invoice => ({ id: invoice.id, number: invoice.invoiceNumber, type: invoice.invoiceType, total: decimal(invoice.totalAmount), lines: invoice.lineDetailsSnapshot, optionalItems: invoice.optionalItemsSnapshot })),
+  };
+
+  const reportId = await prisma.$transaction(async tx => {
+    const periodKey = `${input.year}-${String(input.month).padStart(2, "0")}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-report:${periodKey}`}))`;
+    const report = await tx.monthlyReport.upsert({
+      where: { year_month: { year: input.year, month: input.month } },
+      update: {},
+      create: { year: input.year, month: input.month, createdById: input.createdById },
+      select: { id: true },
+    });
+    const previous = await tx.monthlyReportVersion.findFirst({ where: { reportId: report.id }, orderBy: { version: "desc" }, select: { version: true } });
+    const version = await tx.monthlyReportVersion.create({ data: { reportId: report.id, version: (previous?.version || 0) + 1, sourceImportId: imported.id, sourceSnapshot: jsonValue(sourceSnapshot), createdById: input.createdById }, select: { id: true } });
+    await tx.monthlyReportDocument.createMany({ data: reports.map(document => ({
+      versionId: version.id,
+      reportType: document.type,
+      publicId: createReportDocumentId(),
+      title: MONTHLY_REPORT_TITLES[document.type],
+      fileName: `${document.type}-${input.year}-${String(input.month).padStart(2, "0")}.pdf`,
+      pdfBytes: Buffer.from(document.bytes),
+    })) });
+    return report.id;
+  });
+  return { requiresInvoiceGeneration: false as const, reportId, version: await prisma.monthlyReportVersion.findFirstOrThrow({ where: { reportId, sourceImportId: imported.id }, orderBy: { version: "desc" }, include: { documents: { select: { id: true, reportType: true, title: true, fileName: true, publicId: true } } } }) };
+}
+
+export async function createOrGetMonthlyShare(reportId: string) {
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-share:${reportId}`}))`;
+    const report = await tx.monthlyReport.findUnique({ where: { id: reportId } });
+    if (!report?.currentVersionId) throw new Error("Publish a reviewed report version before creating a share link.");
+    if (report.shareActive && report.encryptedShareToken) return { token: decrypt(report.encryptedShareToken), report };
+    const token = createMonthlyShareToken();
+    const updated = await tx.monthlyReport.update({ where: { id: reportId }, data: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token), encryptedShareToken: encrypt(token), shareRevokedAt: null } });
+    return { token, report: updated };
+  });
+}
+
+export async function revokeMonthlyShare(reportId: string) {
+  return prisma.monthlyReport.update({ where: { id: reportId }, data: { shareActive: false, shareTokenHash: null, encryptedShareToken: null, shareRevokedAt: new Date() } });
+}
+
+export async function publishMonthlyReportVersion(reportId: string, versionId: string) {
+  return prisma.$transaction(async tx => {
+    const version = await tx.monthlyReportVersion.findFirst({ where: { id: versionId, reportId }, select: { id: true } });
+    if (!version) throw new Error("Report version was not found for this month.");
+    await tx.monthlyReportVersion.updateMany({ where: { reportId, status: "published", id: { not: versionId } }, data: { status: "archived" } });
+    await tx.monthlyReportVersion.update({ where: { id: versionId }, data: { status: "published", publishedAt: new Date() } });
+    return tx.monthlyReport.update({ where: { id: reportId }, data: { currentVersionId: versionId } });
+  });
+}
+
+export async function getPublicMonthlyReport(token: string) {
+  if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
+  return prisma.monthlyReport.findFirst({
+    where: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token), currentVersionId: { not: null } },
+    select: {
+      year: true, month: true,
+      currentVersion: { select: { version: true, documents: { orderBy: { reportType: "asc" }, select: { publicId: true, reportType: true, title: true, fileName: true } } } },
+    },
+  });
+}
+
+export async function getPublicMonthlyReportDocument(token: string, publicId: string) {
+  if (!/^[A-Za-z0-9_-]{40,50}$/.test(token) || !/^[A-Za-z0-9_-]{30,40}$/.test(publicId)) return null;
+  const report = await prisma.monthlyReport.findFirst({
+    where: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token), currentVersionId: { not: null } },
+    select: { currentVersionId: true },
+  });
+  if (!report?.currentVersionId) return null;
+  return prisma.monthlyReportDocument.findFirst({
+    where: { publicId, versionId: report.currentVersionId },
+    select: { pdfBytes: true, fileName: true },
+  });
+}
+
+export async function getPrivateMonthlyReportDocument(documentId: string) {
+  return prisma.monthlyReportDocument.findUnique({ where: { id: documentId }, select: { pdfBytes: true, fileName: true } });
+}
