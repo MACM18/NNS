@@ -30,6 +30,9 @@ importers:
       '@auth/prisma-adapter':
         specifier: ^2.11.3
         version: 2.11.3(@prisma/client@7.8.0(prisma@7.9.1(@types/react-dom@19.0.0)(@types/react@19.0.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(typescript@5.9.3))(typescript@5.9.3))(nodemailer@9.0.1)
+      '@googleworkspace/drive-picker-react':
+        specifier: 0.2.0
+        version: 0.2.0(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@hookform/resolvers':
         specifier: latest
         version: 5.9.1(@sinclair/typebox@0.34.49)(@standard-schema/spec@1.1.0)(ajv@8.20.0)(effect@3.20.0)(react-hook-form@7.85.0(react@19.0.0))(valibot@1.4.2(typescript@5.9.3))(zod@3.25.67)
@@ -621,6 +624,15 @@ packages:
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
+
+  '@googleworkspace/drive-picker-element@0.7.3':
+    resolution: {integrity: sha512-z1hZh1HsPAQ19lencw2x3FcUVoymWYexcWgq66iXum4mUfWWaQ37oGtQ6hGvM8dyrC81G79P26gq7HhRtbGb2Q==}
+
+  '@googleworkspace/drive-picker-react@0.2.0':
+    resolution: {integrity: sha512-3CIEZ7U+HDKd8UoXG3l/fPSZFhxajC3MYNIqAZQSba2totuYKVTQMOJsgonO7OnnJq88YD35n7whCF4i5QUyvA==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
 
   '@hookform/resolvers@5.9.1':
     resolution: {integrity: sha512-7b7vsbraJxKgjVSA1Nur9tLwj539WGJUBLA7QNvXnFoT2pM5Z7G+6rlukk4B2/QrTZy6huRtH6wKeESPKuIr6w==}
@@ -5622,6 +5634,14 @@ snapshots:
       react-dom: 19.0.0(react@19.0.0)
 
   '@floating-ui/utils@0.2.12': {}
+
+  '@googleworkspace/drive-picker-element@0.7.3': {}
+
+  '@googleworkspace/drive-picker-react@0.2.0(react-dom@19.0.0(react@19.0.0))(react@19.0.0)':
+    dependencies:
+      '@googleworkspace/drive-picker-element': 0.7.3
+      react: 19.0.0
+      react-dom: 19.0.0(react@19.0.0)
 
   '@hookform/resolvers@5.9.1(@sinclair/typebox@0.34.49)(@standard-schema/spec@1.1.0)(ajv@8.20.0)(effect@3.20.0)(react-hook-form@7.85.0(react@19.0.0))(valibot@1.4.2(typescript@5.9.3))(zod@3.25.67)':
     dependencies:
