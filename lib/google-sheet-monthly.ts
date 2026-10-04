@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { google, type sheets_v4 } from "googleapis";
 import { encrypt, decrypt } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
@@ -60,111 +61,311 @@ async function writeRange(sheets: sheets_v4.Sheets, fileId: string, range: strin
   await sheets.spreadsheets.values.update({ spreadsheetId: fileId, range, valueInputOption: "USER_ENTERED", requestBody: { values } });
 }
 
+type MonthlyRunEvent = {
+  id: string;
+  at: string;
+  stage: string;
+  status: "running" | "success" | "warning" | "failed";
+  message: string;
+  durationMs?: number;
+  details?: Record<string, string | number | boolean | null>;
+};
+
+class MonthlyProvisioningStageError extends Error {
+  constructor(
+    readonly stage: string,
+    message: string,
+    readonly details?: Record<string, string | number | boolean | null>,
+  ) {
+    super(message);
+    this.name = "MonthlyProvisioningStageError";
+  }
+}
+
+async function recordMonthlyRunEvent(runId: string, event: Omit<MonthlyRunEvent, "id" | "at">) {
+  const current = await prisma.googleSheetMonthlyRun.findUnique({ where: { id: runId }, select: { events: true } });
+  const events = Array.isArray(current?.events) ? current.events as MonthlyRunEvent[] : [];
+  const nextEvent: MonthlyRunEvent = { id: randomUUID(), at: new Date().toISOString(), ...event };
+  await prisma.googleSheetMonthlyRun.update({ where: { id: runId }, data: { events: [...events, nextEvent] } });
+}
+
+async function runMonthlyStage<T>(
+  runId: string,
+  stage: string,
+  message: string,
+  action: () => Promise<T>,
+  summarize?: (result: T) => { status?: "success" | "warning"; message?: string; details?: Record<string, string | number | boolean | null> },
+): Promise<T> {
+  const started = Date.now();
+  await recordMonthlyRunEvent(runId, { stage, status: "running", message });
+  try {
+    const result = await action();
+    const summary = summarize?.(result);
+    await recordMonthlyRunEvent(runId, {
+      stage,
+      status: summary?.status || "success",
+      message: summary?.message || `Completed: ${message}`,
+      durationMs: Date.now() - started,
+      ...(summary?.details ? { details: summary.details } : {}),
+    });
+    return result;
+  } catch (error) {
+    const messageText = redactProviderText(error instanceof Error ? error.message : String(error));
+    await recordMonthlyRunEvent(runId, {
+      stage,
+      status: "failed",
+      message: messageText,
+      durationMs: Date.now() - started,
+      ...(error instanceof MonthlyProvisioningStageError && error.details ? { details: error.details } : {}),
+    });
+    if (error instanceof MonthlyProvisioningStageError) throw error;
+    throw new MonthlyProvisioningStageError(stage, messageText);
+  }
+}
+
+function redactProviderText(value: string) {
+  return value
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email address]")
+    .replace(/\b(?:re|rk|key|sk)_[A-Za-z0-9_-]{12,}\b/g, "[redacted credential]")
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/(access_token|refresh_token|api[_-]?key|password)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]");
+}
+
+function emailFailureDetails(mail: Awaited<ReturnType<typeof sendEmail>>) {
+  return {
+    provider: mail.provider || "unknown",
+    configSource: mail.configSource || "unknown",
+    recipientCount: 0,
+    ...(mail.configWarning ? { configWarning: mail.configWarning } : {}),
+    ...(mail.error ? { providerError: redactProviderText(mail.error) } : {}),
+  };
+}
+
+async function sendMonthlySummaryEmail(period: string, fileUrl: string, settings: MonthlyConfig & { adminEmail?: string | null }, name: string) {
+  const to = [...new Set([...settings.editors.map(e => e.replace(/^group:/i, "")), settings.adminEmail || ""].map(e => e.trim()).filter(Boolean))];
+  const mail = await sendEmail({
+    to,
+    subject: `New Google Sheet ready: ${name}`,
+    text: `The monthly Google Sheet for ${period} is ready: ${fileUrl}`,
+    html: `<p>The monthly Google Sheet is ready.</p><p><a href="${fileUrl}">${name}</a></p>`,
+  });
+  return { mail, recipientCount: to.length };
+}
+
 export async function provisionMonthlySheet(period: string, secret: string, options: { manual?: boolean } = {}) {
   const manual = options.manual === true;
   const settings = await prisma.googleSheetMonthlySettings.findUnique({ where: { id: "default" } });
   if (!manual && !settings?.enabled) throw new Error("Monthly sheet automation is not enabled.");
   const [yearText, monthText] = period.split("-");
   const year = Number(yearText), month = Number(monthText);
-  const name = (settings?.namePattern || "NNS Telecom - {Month} {Year}").replaceAll("{Month}", new Intl.DateTimeFormat("en", { month: "long", timeZone: MONTHLY_SHEET_TIME_ZONE }).format(new Date(Date.UTC(year, month - 1, 1)))).replaceAll("{Year}", yearText).replaceAll("{MM}", monthText.padStart(2, "0"));
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) throw new Error("Invalid monthly sheet period.");
+  const monthName = new Intl.DateTimeFormat("en", { month: "long", timeZone: MONTHLY_SHEET_TIME_ZONE }).format(new Date(Date.UTC(year, month - 1, 1)));
+  const name = (settings?.namePattern || "NNS Telecom - {Month} {Year}").replaceAll("{Month}", monthName).replaceAll("{Year}", yearText).replaceAll("{MM}", monthText.padStart(2, "0"));
 
   let run = await prisma.googleSheetMonthlyRun.findUnique({ where: { period } });
-  if (run?.status === "success") return { skipped: true, fileUrl: run.fileUrl };
+  if (run?.status === "success") return { ok: true, runId: run.id, status: run.status, skipped: true, fileUrl: run.fileUrl };
   if (!run) {
-    try { run = await prisma.googleSheetMonthlyRun.create({ data: { period, status: "running" } }); }
+    try { run = await prisma.googleSheetMonthlyRun.create({ data: { period, status: "running", events: [] } }); }
     catch (error) {
-      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") return { skipped: true, reason: "Run is already in progress" };
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") return { ok: true, skipped: true, reason: "Run is already in progress" };
       throw error;
     }
   } else {
-    if (run.status === "running" && Date.now() - run.startedAt.getTime() < 10 * 60_000) return { skipped: true, reason: "Run is already in progress" };
-    const canClaim = run.status === "failed" || run.status === "running";
-    if (!canClaim) return { skipped: true, reason: "Monthly run is already claimed" };
+    if (run.status === "running" && Date.now() - run.startedAt.getTime() < 10 * 60_000) return { ok: true, runId: run.id, status: run.status, skipped: true, reason: "Run is already in progress", fileUrl: run.fileUrl };
+    const canClaim = run.status === "failed" || run.status === "partial" || run.status === "running";
+    if (!canClaim) return { ok: true, runId: run.id, status: run.status, skipped: true, reason: "Monthly run is already claimed", fileUrl: run.fileUrl };
     const claimed = await prisma.googleSheetMonthlyRun.updateMany({
       where: { id: run.id, status: run.status, ...(run.status === "running" ? { startedAt: { lt: new Date(Date.now() - 10 * 60_000) } } : {}) },
       data: { status: "running", error: null, startedAt: new Date(), finishedAt: null },
     });
-    if (claimed.count !== 1) return { skipped: true, reason: "Run is already in progress" };
-    run = await prisma.googleSheetMonthlyRun.findUnique({ where: { period } });
+    if (claimed.count !== 1) return { ok: true, runId: run.id, status: "running", skipped: true, reason: "Run is already in progress", fileUrl: run.fileUrl };
+    run = await prisma.googleSheetMonthlyRun.findUnique({ where: { id: run.id } });
   }
   if (!run) throw new Error("Could not claim the monthly provisioning run.");
 
+  await recordMonthlyRunEvent(run.id, {
+    stage: "request",
+    status: "success",
+    message: manual ? "Manual monthly sheet preparation requested by an administrator." : "Scheduled monthly sheet preparation started.",
+  });
+
   try {
-    if (!settings) throw new Error("Save the monthly sheet setup before creating a sheet.");
-    if (!settings.templateFileId || !settings.destinationFolderId) throw new Error("Choose a master template and destination folder before creating a sheet.");
-    if (!settings.encryptedRefreshToken) throw new Error("Connect the admin Google Drive account first.");
-    if (!manual) {
-      const secretConfigured = process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET;
-      if (!secretConfigured || secretConfigured !== secret) throw new Error("Scheduled request secret mismatch.");
-    }
-    const { drive, sheets } = await getMonthlyGoogleClients();
-    const priorDate = new Date(Date.UTC(year, month - 2, 1));
-    const prior = await prisma.googleSheetConnection.findFirst({ where: { year: priorDate.getUTCFullYear(), month: priorDate.getUTCMonth() + 1 }, orderBy: [{ createdAt: "desc" }] });
-    if (!prior?.sheetId) throw new Error(`No connected Google Sheet was found for the previous month (${priorDate.getUTCFullYear()}-${String(priorDate.getUTCMonth() + 1).padStart(2, "0")}), so balances cannot be carried forward.`);
-    if (!run.previousSyncAt) {
-      if (prior) {
+    const clients = await runMonthlyStage(run.id, "authorization", "Validate setup and connect to the administrator’s Google Drive", async () => {
+      if (!settings) throw new Error("Save the monthly sheet setup before creating a sheet.");
+      if (!settings.templateFileId || !settings.destinationFolderId) throw new Error("Choose a master template and destination folder before creating a sheet.");
+      if (!settings.encryptedRefreshToken) throw new Error("Connect the admin Google Drive account first.");
+      if (!manual) {
+        const secretConfigured = process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET;
+        if (!secretConfigured || secretConfigured !== secret) throw new Error("Scheduled request secret mismatch.");
+      }
+      return getMonthlyGoogleClients();
+    }, () => ({ details: { source: manual ? "manual" : "scheduled", driveConnected: true } }));
+    const { drive, sheets } = clients;
+
+    const prior = await runMonthlyStage(run.id, "previous_month_sync", "Finish syncing the previous month’s sheet", async () => {
+      const priorDate = new Date(Date.UTC(year, month - 2, 1));
+      const connection = await prisma.googleSheetConnection.findFirst({
+        where: { year: priorDate.getUTCFullYear(), month: priorDate.getUTCMonth() + 1 },
+        orderBy: [{ createdAt: "desc" }],
+      });
+      if (!connection?.sheetId) throw new Error(`No connected Google Sheet was found for the previous month (${priorDate.getUTCFullYear()}-${String(priorDate.getUTCMonth() + 1).padStart(2, "0")}), so balances cannot be carried forward.`);
+      if (!run!.previousSyncAt) {
         const actions = await import("@/app/dashboard/integrations/google-sheets/actions");
-        if (manual) await actions.syncConnection(prior.id);
-        else await actions.syncConnectionForCron(prior.id, secret);
+        if (manual) await actions.syncConnection(connection.id);
+        else await actions.syncConnectionForCron(connection.id, secret);
+        run = await prisma.googleSheetMonthlyRun.update({ where: { id: run!.id }, data: { previousSyncAt: new Date() } });
       }
-      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { previousSyncAt: new Date() } });
-    }
+      return { ...connection, period: `${connection.year}-${String(connection.month).padStart(2, "0")}` };
+    }, result => ({
+      message: run?.previousSyncAt ? "Previous month is synced and ready for balance carryover." : "Previous month sync completed.",
+      details: { sourcePeriod: result.period, sheetId: result.sheetId || "unknown" },
+    }));
 
-    let fileId = run.fileId;
-    if (!fileId) {
-      const found = await drive.files.list({ q: `appProperties has { key='nnsMonthlyPeriod' and value='${period}' } and trashed=false`, fields: "files(id,webViewLink,name)", pageSize: 10, includeItemsFromAllDrives: true, supportsAllDrives: true });
-      fileId = found.data.files?.[0]?.id || null;
-    }
-    if (!fileId) {
-      const copied = await drive.files.copy({ fileId: settings.templateFileId, requestBody: { name, parents: [settings.destinationFolderId], appProperties: { nnsMonthlyPeriod: period, nnsMonthlyTemplateId: settings.templateFileId } }, fields: "id,webViewLink", supportsAllDrives: true });
-      fileId = copied.data.id || null;
-    }
-    if (!fileId) throw new Error("Google Drive did not return the copied sheet ID.");
-    const fileUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit`;
-    await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { fileId, fileUrl } });
-
-    const config = { editors: Array.isArray(settings.editors) ? settings.editors as string[] : [] } satisfies MonthlyConfig;
-    if (!run.sheetPreparedAt) {
-      for (const update of monthlyTemplateUpdates(period)) await writeRange(sheets, fileId, update.range, update.values);
-      if (prior?.sheetId) {
-        const old = await sheets.spreadsheets.values.get({ spreadsheetId: prior.sheetId, range: "'Material Balance - Month'!H8:H", valueRenderOption: "UNFORMATTED_VALUE" });
-        const balances = old.data.values || [];
-        for (const update of monthlyBalanceDestinations(balances as unknown[][])) await writeRange(sheets, fileId, update.range, update.values);
+    const copied = await runMonthlyStage(run.id, "copy_sheet", "Find or create the new monthly sheet", async () => {
+      let fileId = run!.fileId;
+      if (!fileId) {
+        const found = await drive.files.list({
+          q: `appProperties has { key='nnsMonthlyPeriod' and value='${period}' } and trashed=false`,
+          fields: "files(id,webViewLink,name)", pageSize: 10, includeItemsFromAllDrives: true, supportsAllDrives: true,
+        });
+        fileId = found.data.files?.[0]?.id || null;
       }
-      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { sheetPreparedAt: new Date() } });
-    }
+      if (!fileId) {
+        const created = await drive.files.copy({
+          fileId: settings!.templateFileId!,
+          requestBody: { name, parents: [settings!.destinationFolderId!], appProperties: { nnsMonthlyPeriod: period, nnsMonthlyTemplateId: settings!.templateFileId! } },
+          fields: "id,webViewLink", supportsAllDrives: true,
+        });
+        fileId = created.data.id || null;
+      }
+      if (!fileId) throw new Error("Google Drive did not return the copied sheet ID.");
+      const fileUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit`;
+      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run!.id }, data: { fileId, fileUrl } });
+      return { fileId, fileUrl };
+    }, result => ({ message: run?.fileId ? "Using the sheet copy already created for this run." : "Monthly sheet copy created.", details: { fileUrl: result.fileUrl } }));
 
+    await runMonthlyStage(run.id, "prepare_sheet", "Update month and invoice cells and carry opening balances forward", async () => {
+      if (run!.sheetPreparedAt) return { updatedRanges: 0, balancesCopied: 0, resumed: true };
+      const updates = monthlyTemplateUpdates(period);
+      for (const update of updates) await writeRange(sheets, copied.fileId, update.range, update.values);
+      const previous = await sheets.spreadsheets.values.get({ spreadsheetId: prior.sheetId!, range: "'Material Balance - Month'!H8:H", valueRenderOption: "UNFORMATTED_VALUE" });
+      const balances = previous.data.values || [];
+      for (const update of monthlyBalanceDestinations(balances as unknown[][])) await writeRange(sheets, copied.fileId, update.range, update.values);
+      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run!.id }, data: { sheetPreparedAt: new Date() } });
+      return { updatedRanges: updates.length, balancesCopied: balances.length, resumed: false };
+    }, result => ({
+      message: result.resumed ? "Template updates were completed in an earlier attempt." : "Template cells updated and opening balances copied.",
+      details: { templateRangesUpdated: result.updatedRanges, openingBalanceRowsCopied: result.balancesCopied },
+    }));
+
+    const editorEntries = Array.isArray(settings!.editors) ? settings!.editors as string[] : [];
     const serviceAccount = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim().toLowerCase();
-    const recipients = [...new Map([...config.editors.map(value => { const group = value.toLowerCase().startsWith("group:"); return [value.replace(/^group:/i, "").trim().toLowerCase(), group ? "group" : "user"] as const; }), ...(serviceAccount ? [[serviceAccount, "user"] as const] : [])]).entries()];
-    if (!run.accessGrantedAt) {
-      const existingPermissions = await drive.permissions.list({ fileId, fields: "permissions(id,emailAddress,type,role)" });
-      const alreadyShared = new Set((existingPermissions.data.permissions || []).map(permission => `${permission.type}:${permission.emailAddress?.toLowerCase()}`));
+    const recipients = [...new Map([...editorEntries.map(value => {
+      const group = value.toLowerCase().startsWith("group:");
+      return [value.replace(/^group:/i, "").trim().toLowerCase(), group ? "group" : "user"] as const;
+    }), ...(serviceAccount ? [[serviceAccount, "user"] as const] : [])]).entries()];
+
+    await runMonthlyStage(run.id, "share_sheet", "Share the new sheet with configured editors", async () => {
+      if (run!.accessGrantedAt) return { permissionCount: recipients.length, resumed: true };
+      const existing = await drive.permissions.list({ fileId: copied.fileId, fields: "permissions(id,emailAddress,type,role)" });
+      const alreadyShared = new Set((existing.data.permissions || []).map(permission => `${permission.type}:${permission.emailAddress?.toLowerCase()}`));
+      let granted = 0;
       for (const [emailAddress, type] of recipients) {
         if (alreadyShared.has(`${type}:${emailAddress}`)) continue;
-        await drive.permissions.create({ fileId, sendNotificationEmail: emailAddress !== serviceAccount, requestBody: { type, role: "writer", emailAddress }, fields: "id" });
+        await drive.permissions.create({ fileId: copied.fileId, sendNotificationEmail: emailAddress !== serviceAccount, requestBody: { type, role: "writer", emailAddress }, fields: "id" });
+        granted++;
       }
-      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { accessGrantedAt: new Date() } });
+      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run!.id }, data: { accessGrantedAt: new Date() } });
+      return { permissionCount: granted, resumed: false };
+    }, result => ({
+      message: result.resumed ? "Sheet sharing was completed in an earlier attempt." : "Editor access granted.",
+      details: { configuredRecipients: recipients.length, permissionsAdded: result.permissionCount },
+    }));
+
+    await runMonthlyStage(run.id, "register_connection", "Select the new sheet for the current month’s import", async () => {
+      if (run!.connectionRegisteredAt) return { resumed: true };
+      await prisma.$transaction(async tx => {
+        const existing = await tx.googleSheetConnection.findFirst({ where: { sheetId: copied.fileId } });
+        await tx.googleSheetConnection.updateMany({ where: { autoSyncEnabled: true }, data: { autoSyncEnabled: false } });
+        if (existing) await tx.googleSheetConnection.update({ where: { id: existing.id }, data: { month, year, sheetUrl: copied.fileUrl, sheetName: name, autoSyncEnabled: true, status: "active" } });
+        else await tx.googleSheetConnection.create({ data: { month, year, sheetUrl: copied.fileUrl, sheetId: copied.fileId, sheetName: name, autoSyncEnabled: true, status: "active" } });
+      });
+      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run!.id }, data: { connectionRegisteredAt: new Date() } });
+      return { resumed: false };
+    }, result => ({ message: result.resumed ? "The sheet was already selected for import." : "Current-month import connection registered." }));
+
+    if (!run.summaryEmailSentAt) {
+      await runMonthlyStage(run.id, "summary_email", "Email the new sheet link to configured recipients", async () => {
+        const result = await sendMonthlySummaryEmail(period, copied.fileUrl, { editors: editorEntries, adminEmail: settings!.adminEmail }, name);
+        if (!result.mail.success) {
+          throw new MonthlyProvisioningStageError(
+            "summary_email",
+            `${result.mail.provider || "Email provider"} reported: ${redactProviderText(result.mail.error || "The message was not accepted.")}`,
+            { ...emailFailureDetails(result.mail), recipientCount: result.recipientCount },
+          );
+        }
+        return result;
+      }, result => ({
+        status: result.mail.configWarning ? "warning" : "success",
+        message: result.mail.configWarning ? `Email sent, but with a configuration warning: ${result.mail.configWarning}` : `Summary email sent through ${result.mail.provider || "the configured provider"}.`,
+        details: { ...emailFailureDetails(result.mail), recipientCount: result.recipientCount, messageId: result.mail.messageId || null },
+      }));
+      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { summaryEmailSentAt: new Date() } });
+    } else {
+      await recordMonthlyRunEvent(run.id, { stage: "summary_email", status: "success", message: "Summary email was already sent in an earlier attempt." });
     }
 
-    if (!run.connectionRegisteredAt) await prisma.$transaction(async tx => {
-      const existing = await tx.googleSheetConnection.findFirst({ where: { sheetId: fileId } });
-      await tx.googleSheetConnection.updateMany({ where: { autoSyncEnabled: true }, data: { autoSyncEnabled: false } });
-      if (existing) await tx.googleSheetConnection.update({ where: { id: existing.id }, data: { month, year, sheetUrl: fileUrl, sheetName: name, autoSyncEnabled: true, status: "active" } });
-      else await tx.googleSheetConnection.create({ data: { month, year, sheetUrl: fileUrl, sheetId: fileId, sheetName: name, autoSyncEnabled: true, status: "active" } });
-    });
-    if (!run.connectionRegisteredAt) run = await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { connectionRegisteredAt: new Date() } });
-    if (!run.summaryEmailSentAt) {
-      const to = [...new Set([...config.editors.map(e => e.replace(/^group:/i, "")), settings.adminEmail || ""].map(e => e.trim()).filter(Boolean))];
-      const mail = await sendEmail({ to, subject: `New Google Sheet ready: ${name}`, text: `The monthly Google Sheet is ready: ${fileUrl}`, html: `<p>The monthly Google Sheet is ready.</p><p><a href="${fileUrl}">${name}</a></p>` });
-      if (!mail.success) throw new Error(`Sheet created and shared, but summary email failed: ${mail.error || "email provider error"}`);
-      run = await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { summaryEmailSentAt: new Date() } });
-    }
-    await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { status: "success", fileId, fileUrl, finishedAt: new Date(), error: null } });
-    return { ok: true, fileId, fileUrl, name };
+    await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { status: "success", fileId: copied.fileId, fileUrl: copied.fileUrl, finishedAt: new Date(), error: null } });
+    await recordMonthlyRunEvent(run.id, { stage: "complete", status: "success", message: "Monthly sheet is ready, shared, and selected for import.", details: { fileUrl: copied.fileUrl } });
+    return { ok: true, runId: run.id, status: "success", fileId: copied.fileId, fileUrl: copied.fileUrl, name };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { status: "failed", error: message, finishedAt: new Date() } });
+    const message = redactProviderText(error instanceof Error ? error.message : String(error));
+    const failedStage = error instanceof MonthlyProvisioningStageError ? error.stage : "provisioning";
+    const latest = await prisma.googleSheetMonthlyRun.findUnique({ where: { id: run.id } });
+    const partial = failedStage === "summary_email" && Boolean(latest?.fileUrl && latest.connectionRegisteredAt && !latest.summaryEmailSentAt);
+    await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { status: partial ? "partial" : "failed", error: message, finishedAt: new Date() } });
+    if (partial) return { ok: false, runId: run.id, status: "partial", fileId: latest?.fileId, fileUrl: latest?.fileUrl, name, error: message };
     throw error;
+  }
+}
+
+export async function retryMonthlySheetEmail(runId: string) {
+  const run = await prisma.googleSheetMonthlyRun.findUnique({ where: { id: runId } });
+  if (!run?.fileUrl || !run.connectionRegisteredAt || run.summaryEmailSentAt) throw new Error("This run does not have a ready sheet awaiting its summary email.");
+  const settings = await prisma.googleSheetMonthlySettings.findUnique({ where: { id: "default" } });
+  if (!settings) throw new Error("Monthly sheet settings were not found.");
+  const claimed = await prisma.googleSheetMonthlyRun.updateMany({ where: { id: runId, status: "partial", summaryEmailSentAt: null }, data: { status: "running", error: null, finishedAt: null } });
+  if (claimed.count !== 1) throw new Error("This run is not waiting for an email retry, or another retry is already in progress.");
+  const editors = Array.isArray(settings.editors) ? settings.editors as string[] : [];
+  const name = settings.namePattern.replaceAll("{Month}", new Intl.DateTimeFormat("en", { month: "long", timeZone: MONTHLY_SHEET_TIME_ZONE }).format(new Date(Date.UTC(Number(run.period.slice(0, 4)), Number(run.period.slice(5)) - 1, 1)))).replaceAll("{Year}", run.period.slice(0, 4)).replaceAll("{MM}", run.period.slice(5).padStart(2, "0"));
+  const started = Date.now();
+  await recordMonthlyRunEvent(run.id, { stage: "summary_email_retry", status: "running", message: "Retrying the summary email only; the sheet will not be recreated." });
+  try {
+    const result = await sendMonthlySummaryEmail(run.period, run.fileUrl, { editors, adminEmail: settings.adminEmail }, name);
+    if (!result.mail.success) {
+      throw new MonthlyProvisioningStageError("summary_email_retry", `${result.mail.provider || "Email provider"} reported: ${redactProviderText(result.mail.error || "The message was not accepted.")}`, { ...emailFailureDetails(result.mail), recipientCount: result.recipientCount });
+    }
+    await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { status: "success", summaryEmailSentAt: new Date(), finishedAt: new Date(), error: null } });
+    await recordMonthlyRunEvent(run.id, {
+      stage: "summary_email_retry",
+      status: result.mail.configWarning ? "warning" : "success",
+      message: result.mail.configWarning ? `Email sent, but with a configuration warning: ${result.mail.configWarning}` : `Summary email sent through ${result.mail.provider || "the configured provider"}.`,
+      durationMs: Date.now() - started,
+      details: { ...emailFailureDetails(result.mail), recipientCount: result.recipientCount, messageId: result.mail.messageId || null },
+    });
+    await recordMonthlyRunEvent(run.id, { stage: "complete", status: "success", message: "Monthly sheet and summary email are ready.", details: { fileUrl: run.fileUrl } });
+    return { runId: run.id, status: "success", fileUrl: run.fileUrl };
+  } catch (error) {
+    const message = redactProviderText(error instanceof Error ? error.message : String(error));
+    await recordMonthlyRunEvent(run.id, {
+      stage: "summary_email_retry",
+      status: "failed",
+      message,
+      durationMs: Date.now() - started,
+      ...(error instanceof MonthlyProvisioningStageError && error.details ? { details: error.details } : {}),
+    });
+    await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { status: "partial", error: message, finishedAt: new Date() } });
+    return { runId: run.id, status: "partial", fileUrl: run.fileUrl, error: message };
   }
 }
 

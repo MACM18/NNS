@@ -28,6 +28,9 @@ export interface EmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  provider?: EmailProvider;
+  configSource?: "database" | "environment";
+  configWarning?: string;
 }
 
 export type EmailProvider = "resend" | "smtp";
@@ -46,59 +49,69 @@ interface EmailConfig {
   smtpPassword?: string;
 }
 
-let cachedConfig: EmailConfig | null = null;
+type ResolvedEmailConfig = {
+  config: EmailConfig;
+  source: "database" | "environment";
+  warning?: string;
+};
+
+let cachedConfig: ResolvedEmailConfig | null = null;
 let configCacheTime: number = 0;
 const CONFIG_CACHE_TTL = 60000; // 1 minute cache
 
 /**
  * Get email configuration from database or environment
  */
-async function getEmailConfig(): Promise<EmailConfig> {
+async function getEmailConfig(): Promise<ResolvedEmailConfig> {
   const now = Date.now();
 
-  // Return cached config if valid
-  if (cachedConfig && now - configCacheTime < CONFIG_CACHE_TTL) {
-    return cachedConfig;
-  }
+  if (cachedConfig && now - configCacheTime < CONFIG_CACHE_TTL) return cachedConfig;
 
+  let fallbackWarning: string | undefined;
   try {
-    // Try to get config from database
-    const dbConfig = await prisma.emailSettings.findFirst({
-      where: { isActive: true },
-    });
-
+    const dbConfig = await prisma.emailSettings.findFirst({ where: { isActive: true } });
     if (dbConfig) {
-      cachedConfig = {
-        provider: dbConfig.provider as EmailProvider,
-        fromEmail: dbConfig.fromEmail,
-        fromName: dbConfig.fromName,
-        resendApiKey: dbConfig.resendApiKey
-          ? decrypt(dbConfig.resendApiKey)
-          : undefined,
-        smtpHost: dbConfig.smtpHost || undefined,
-        smtpPort: dbConfig.smtpPort || undefined,
-        smtpSecure: dbConfig.smtpSecure,
-        smtpUser: dbConfig.smtpUser || undefined,
-        smtpPassword: dbConfig.smtpPassword
-          ? decrypt(dbConfig.smtpPassword)
-          : undefined,
-      };
-      configCacheTime = now;
-      return cachedConfig;
+      try {
+        cachedConfig = {
+          source: "database",
+          config: {
+            provider: dbConfig.provider as EmailProvider,
+            fromEmail: dbConfig.fromEmail,
+            fromName: dbConfig.fromName,
+            resendApiKey: dbConfig.resendApiKey ? decrypt(dbConfig.resendApiKey) : undefined,
+            smtpHost: dbConfig.smtpHost || undefined,
+            smtpPort: dbConfig.smtpPort || undefined,
+            smtpSecure: dbConfig.smtpSecure,
+            smtpUser: dbConfig.smtpUser || undefined,
+            smtpPassword: dbConfig.smtpPassword ? decrypt(dbConfig.smtpPassword) : undefined,
+          },
+        };
+        configCacheTime = now;
+        return cachedConfig;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn("Saved email settings could not be decrypted; using environment fallback:", error);
+        fallbackWarning = /authenticate data|encrypted data format|encryption_key|auth_secret/i.test(message)
+          ? "Saved email credentials could not be decrypted with the current ENCRYPTION_KEY or AUTH_SECRET. Environment email settings were used instead."
+          : "Saved email settings could not be read. Environment email settings were used instead.";
+      }
     }
   } catch (error) {
     console.warn("Failed to fetch email config from database:", error);
+    fallbackWarning = "Saved email settings could not be read. Environment email settings were used instead.";
   }
 
-  // Fallback to environment variables
   cachedConfig = {
-    provider: "resend",
-    fromEmail: process.env.EMAIL_FROM || "noreply@nns.lk",
-    fromName: process.env.EMAIL_FROM_NAME || "NNS Enterprise",
-    resendApiKey: process.env.RESEND_API_KEY,
+    source: "environment",
+    warning: fallbackWarning,
+    config: {
+      provider: "resend",
+      fromEmail: process.env.EMAIL_FROM || "noreply@nns.lk",
+      fromName: process.env.EMAIL_FROM_NAME || "NNS Enterprise",
+      resendApiKey: process.env.RESEND_API_KEY,
+    },
   };
   configCacheTime = now;
-
   return cachedConfig;
 }
 
@@ -192,13 +205,17 @@ async function sendViaSMTP(
  * Main email sending function
  */
 export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
-  const config = await getEmailConfig();
+  const resolved = await getEmailConfig();
+  const result = resolved.config.provider === "smtp"
+    ? await sendViaSMTP(resolved.config, options)
+    : await sendViaResend(resolved.config, options);
 
-  if (config.provider === "smtp") {
-    return sendViaSMTP(config, options);
-  }
-
-  return sendViaResend(config, options);
+  return {
+    ...result,
+    provider: resolved.config.provider,
+    configSource: resolved.source,
+    ...(resolved.warning ? { configWarning: resolved.warning } : {}),
+  };
 }
 
 /**

@@ -24,7 +24,6 @@ import ConnectionActions from "./components/ConnectionActions";
 import type { PageProps } from "@/types/common";
 import { reconcileSheetAutoSync } from "@/lib/google-sheet-auto-sync";
 import GoogleSheetAutoSyncSettings from "@/components/integrations/GoogleSheetAutoSyncSettings";
-import AutoSyncConnectionToggle from "./components/AutoSyncConnectionToggle";
 
 interface SheetConnectionRow {
   id: string;
@@ -237,7 +236,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                       <TableHead className='min-w-[200px]'>Sheet</TableHead>
                       <TableHead className='w-[120px]'>Status</TableHead>
                       <TableHead className='w-[100px]'>Records</TableHead>
-                      <TableHead className='w-[125px]'>Auto-sync</TableHead>
+                      <TableHead className='w-[125px]'>Import</TableHead>
                       <TableHead className='w-[180px]'>Last Synced</TableHead>
                       <TableHead className='w-[120px] text-right'>
                         Actions
@@ -284,12 +283,12 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                           <TableCell className='text-center'>
                             {connection.record_count ?? 0}
                           </TableCell>
-                          <TableCell><AutoSyncConnectionToggle connectionId={connection.id} checked={connection.auto_sync_enabled} eligible={newestConnection?.id === connection.id} /></TableCell>
+                          <TableCell><Badge variant={connection.auto_sync_enabled ? "default" : "outline"}>{connection.auto_sync_enabled ? "Selected" : "Manual"}</Badge></TableCell>
                           <TableCell className='text-muted-foreground text-sm'>
                             {formatDate(connection.last_synced)}
                           </TableCell>
                           <TableCell className='text-right'>
-                            <ConnectionActions connectionId={connection.id} />
+                            <ConnectionActions connection={connection} eligible={newestConnection?.id === connection.id} />
                           </TableCell>
                         </TableRow>
                       );
@@ -337,7 +336,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                           <TableCell>
                             <div className='space-y-1'>
                               {getStatusBadge(connection.status)}
-                              <AutoSyncConnectionToggle connectionId={connection.id} checked={connection.auto_sync_enabled} eligible={newestConnection?.id === connection.id} />
+                              <Badge variant={connection.auto_sync_enabled ? "default" : "outline"}>{connection.auto_sync_enabled ? "Auto-sync selected" : "Manual only"}</Badge>
                               <div className='text-[11px] text-muted-foreground'>
                                 Material: {connection.material_balance_import?.status || "Not imported"}
                               </div>
@@ -354,7 +353,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                             </div>
                           </TableCell>
                           <TableCell className='text-right'>
-                            <ConnectionActions connectionId={connection.id} />
+                            <ConnectionActions connection={connection} eligible={newestConnection?.id === connection.id} />
                           </TableCell>
                         </TableRow>
                       );
@@ -363,60 +362,18 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                 </Table>
               </div>
 
-              {/* Mobile Card View */}
-              <div className='md:hidden space-y-4'>
+              {/* Mobile compact connection rows */}
+              <div className='md:hidden space-y-2'>
                 {rows.map((connection) => {
-                  const monthLabel =
-                    typeof connection.month === "number"
-                      ? MONTHS[connection.month - 1]
-                      : String(connection.month);
+                  const monthLabel = typeof connection.month === "number" ? MONTHS[connection.month - 1] : String(connection.month);
                   return (
                     <Card key={connection.id}>
-                      <CardContent className='pt-6 space-y-3'>
-                        <div className='flex items-start justify-between gap-2'>
-                          <div className='flex items-center gap-2 font-medium'>
-                            <Calendar className='h-4 w-4 text-muted-foreground' />
-                            {monthLabel} {connection.year}
-                          </div>
-                          {getStatusBadge(connection.status)}
+                      <CardContent className='flex items-center justify-between gap-3 p-3'>
+                        <div className='min-w-0'>
+                          <div className='flex items-center gap-2 font-medium'><Calendar className='h-4 w-4 shrink-0 text-muted-foreground' /><span>{monthLabel} {connection.year}</span><span className='text-xs font-normal text-muted-foreground'>· {connection.record_count ?? 0} records</span></div>
+                          <div className='mt-1 flex items-center gap-2 text-xs text-muted-foreground'><span className='truncate'>{connection.sheet_name || "Google Sheet"}</span><span>·</span><span>{connection.auto_sync_enabled ? "Auto-sync selected" : "Manual only"}</span></div>
                         </div>
-                        <AutoSyncConnectionToggle connectionId={connection.id} checked={connection.auto_sync_enabled} eligible={newestConnection?.id === connection.id} />
-                        <div className='flex items-center justify-between text-sm'>
-                          <span className='text-muted-foreground'>Material Balance:</span>
-                          <span className='font-medium'>
-                            {connection.material_balance_import?.status || "Not imported"}
-                          </span>
-                        </div>
-                        <div>
-                          <a
-                            href={connection.sheet_url}
-                            target='_blank'
-                            rel='noopener noreferrer'
-                            className='flex items-center gap-2 hover:underline text-primary text-sm break-all'
-                          >
-                            {connection.sheet_name ?? connection.sheet_url}
-                            <ExternalLink className='h-3 w-3 flex-shrink-0' />
-                          </a>
-                        </div>
-                        <div className='flex items-center justify-between text-sm'>
-                          <span className='text-muted-foreground'>
-                            Records:
-                          </span>
-                          <span className='font-medium'>
-                            {connection.record_count ?? 0}
-                          </span>
-                        </div>
-                        <div className='flex items-center justify-between text-sm'>
-                          <span className='text-muted-foreground'>
-                            Last Synced:
-                          </span>
-                          <span className='text-muted-foreground text-xs'>
-                            {formatDate(connection.last_synced)}
-                          </span>
-                        </div>
-                        <div className='pt-2 border-t'>
-                          <ConnectionActions connectionId={connection.id} />
-                        </div>
+                        <ConnectionActions connection={connection} eligible={newestConnection?.id === connection.id} />
                       </CardContent>
                     </Card>
                   );

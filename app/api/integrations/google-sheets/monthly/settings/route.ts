@@ -6,7 +6,7 @@ async function allowed() { const session = await auth(); return Boolean(session?
 export async function GET() {
   if (!(await allowed())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const value = await prisma.googleSheetMonthlySettings.findUnique({ where: { id: "default" } });
-  const recentRuns = await prisma.googleSheetMonthlyRun.findMany({ orderBy: { startedAt: "desc" }, take: 8 });
+  const recentRuns = await prisma.googleSheetMonthlyRun.findMany({ orderBy: { startedAt: "desc" }, take: 8, select: { id: true, period: true, status: true, fileUrl: true, error: true, startedAt: true, finishedAt: true } });
   return NextResponse.json({ connected: Boolean(value?.encryptedRefreshToken), accountEmail: value?.adminEmail || null, enabled: value?.enabled ?? false, templateFileId: value?.templateFileId || "", destinationFolderId: value?.destinationFolderId || "", namePattern: value?.namePattern || "NNS Telecom - {Month} {Year}", editors: value?.editors || [], lastRun: recentRuns[0] || null, recentRuns });
 }
 export async function PUT(req: NextRequest) {
