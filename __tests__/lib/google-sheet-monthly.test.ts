@@ -1,4 +1,4 @@
-import { monthlyBalanceDestinations, monthlyProvisioningDue, monthlyTemplateUpdates } from "@/lib/google-sheet-monthly";
+import { monthlyBalanceDestinations, monthlyProvisioningDue, monthlyTemplateUpdates, resolveMonthlyTemplateRanges } from "@/lib/google-sheet-monthly";
 import { monthlyInvoiceNumber } from "@/lib/monthly-invoice-number";
 
 describe("monthly Google Sheet provisioning", () => {
@@ -23,6 +23,15 @@ describe("monthly Google Sheet provisioning", () => {
       { range: "'Invoice B'!F8", values: [["OCTOBER 2026"]] },
       { range: "'Invoice back'!O1", values: [["Invoice No: NNS/WPS/HR/NC/26/OCTOBER/001"]] },
     ]);
+  });
+
+  it("matches tab titles case-insensitively and preserves the exact title when writing", () => {
+    const updates = monthlyTemplateUpdates("2026-10");
+    const resolved = resolveMonthlyTemplateRanges(updates, [
+      "Material Balance", "Material Balance - Month", "Invoice A", "Invoice B", "Invoice Back ",
+    ]);
+    expect(resolved.find(update => update.range.endsWith("!O1"))?.range).toBe("'Invoice Back '!O1");
+    expect(() => resolveMonthlyTemplateRanges(updates, ["Material Balance", "Invoice A"])).toThrow("missing required template tabs");
   });
 
   it("handles December rollover and retains two digit invoice years", () => {

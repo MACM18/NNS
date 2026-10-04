@@ -8,8 +8,9 @@ import { currentSheetPeriod } from "@/lib/google-sheet-auto-sync";
 export const MONTHLY_SHEET_TIME = "00:05";
 export const MONTHLY_SHEET_TIME_ZONE = "Asia/Colombo";
 type MonthlyConfig = { editors: string[] };
+type MonthlyCellUpdate = { range: string; values: unknown[][] };
 
-export function monthlyTemplateUpdates(period: string) {
+export function monthlyTemplateUpdates(period: string): MonthlyCellUpdate[] {
   const [yearText, monthText] = period.split("-");
   const year = Number(yearText), month = Number(monthText);
   if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) throw new Error("Invalid monthly sheet period.");
@@ -28,6 +29,26 @@ export function monthlyTemplateUpdates(period: string) {
     ]),
     { range: "'Invoice back'!O1", values: [[`Invoice No: NNS/WPS/HR/NC/${twoDigitYear}/${monthName}/001`]] },
   ];
+}
+
+/** Rewrites template ranges to use the tab titles returned by Google Sheets.
+ * Google treats surrounding whitespace as part of a tab title, so preserve it
+ * when building A1 ranges even though validation ignores case and whitespace. */
+export function resolveMonthlyTemplateRanges(updates: MonthlyCellUpdate[], tabTitles: string[]) {
+  const normalize = (title: string) => title.trim().toLocaleLowerCase();
+  const actualTitles = new Map(tabTitles.map(title => [normalize(title), title]));
+  const requiredTabs = ["Material Balance", "Material Balance - Month", "Invoice A", "Invoice B", "Invoice back"];
+  const missingTabs = requiredTabs.filter(tab => !actualTitles.has(normalize(tab)));
+  if (missingTabs.length) throw new Error(`The selected spreadsheet is missing required template tabs: ${missingTabs.join(", ")}.`);
+
+  return updates.map(update => {
+    const match = update.range.match(/^'((?:[^']|'')+)'!(.+)$/);
+    if (!match) return update;
+    const expectedTitle = match[1].replace(/''/g, "'");
+    const actualTitle = actualTitles.get(normalize(expectedTitle));
+    if (!actualTitle) throw new Error(`Could not find the spreadsheet tab '${expectedTitle}'.`);
+    return { ...update, range: `'${actualTitle.replace(/'/g, "''")}'!${match[2]}` };
+  });
 }
 
 export function monthlyBalanceDestinations(values: unknown[][]) {
@@ -267,13 +288,12 @@ export async function provisionMonthlySheet(period: string, secret: string, opti
     const copied = await runMonthlyStage(run.id, "copy_sheet", "Find or create the new monthly sheet", async () => {
       let fileId = run!.fileId;
       let reused = false;
-      const validateSpreadsheet = async (candidateId: string) => {
+      const validateSpreadsheet = async (candidateId: string): Promise<string[]> => {
         await drive.files.get({ fileId: candidateId, fields: "id,name,mimeType,trashed", supportsAllDrives: true });
         const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: candidateId, fields: "spreadsheetId,properties.title,sheets.properties.title" });
-        const tabNames = new Set((spreadsheet.data.sheets || []).map(sheet => sheet.properties?.title).filter((title): title is string => Boolean(title)));
-        const requiredTabs = ["Material Balance", "Material Balance - Month", "Invoice A", "Invoice B", "Invoice back"];
-        const missingTabs = requiredTabs.filter(tab => !tabNames.has(tab));
-        if (missingTabs.length) throw new Error(`The selected spreadsheet is missing required template tabs: ${missingTabs.join(", ")}.`);
+        const tabTitles = (spreadsheet.data.sheets || []).map(sheet => sheet.properties?.title).filter((title): title is string => Boolean(title));
+        resolveMonthlyTemplateRanges(monthlyTemplateUpdates(period), tabTitles);
+        return tabTitles;
       };
       if (fileId) {
         try {
@@ -315,12 +335,13 @@ export async function provisionMonthlySheet(period: string, secret: string, opti
       if (!fileId) throw new Error("Google Drive did not return the copied sheet ID.");
       const fileUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit`;
       run = await prisma.googleSheetMonthlyRun.update({ where: { id: run!.id }, data: { fileId, fileUrl } });
-      try { await validateSpreadsheet(fileId); }
+      let tabTitles: string[];
+      try { tabTitles = await validateSpreadsheet(fileId); }
       catch (error) {
         const cause = error as { message?: string };
         throw new MonthlyProvisioningStageError("copy_sheet", `The monthly copy exists in Drive but Google Sheets cannot open it: ${redactProviderText(cause.message || "Spreadsheet access failed.")}`, { operation: "verify_copied_spreadsheet", sheetAccessible: false });
       }
-      return { fileId, fileUrl, reused };
+      return { fileId, fileUrl, reused, tabTitles };
     }, result => ({
       message: result.reused ? "Verified the existing monthly sheet is accessible and will reuse it." : "Created and verified a new monthly sheet copy.",
       details: { fileUrl: result.fileUrl, copyReused: result.reused },
@@ -328,7 +349,7 @@ export async function provisionMonthlySheet(period: string, secret: string, opti
 
     await runMonthlyStage(run.id, "prepare_sheet", "Update month and invoice cells and carry opening balances forward", async () => {
       if (run!.sheetPreparedAt) return { updatedRanges: 0, balancesCopied: 0, resumed: true };
-      const updates = monthlyTemplateUpdates(period);
+      const updates = resolveMonthlyTemplateRanges(monthlyTemplateUpdates(period), copied.tabTitles);
       let balances: unknown[][];
       try {
         const sourceSheets = await getServiceAccountSheetsClient();
@@ -351,7 +372,8 @@ export async function provisionMonthlySheet(period: string, secret: string, opti
         try { await writeRange(sheets, copied.fileId, update.range, update.values); }
         catch (error) { googleApiFailure(error, `Could not update ${update.range} on the new sheet`, { operation: "write_template_cell", targetRange: update.range }); }
       }
-      for (const update of monthlyBalanceDestinations(balances!)) {
+      const balanceUpdates = resolveMonthlyTemplateRanges(monthlyBalanceDestinations(balances!), copied.tabTitles);
+      for (const update of balanceUpdates) {
         try { await writeRange(sheets, copied.fileId, update.range, update.values); }
         catch (error) { googleApiFailure(error, `Could not write carried balances to ${update.range} on the new sheet`, { operation: "write_opening_balances", targetRange: update.range, openingBalanceRows: balances!.length }); }
       }
