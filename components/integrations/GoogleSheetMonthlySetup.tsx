@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { CalendarDays, CheckCircle2, ExternalLink, FileSpreadsheet, FolderOpen, Loader2, Mail, RefreshCw, Save, Send, Settings2, XCircle } from "lucide-react";
 
 type PickerAuth = { accessToken: string; apiKey: string; appId: string };
@@ -15,11 +17,15 @@ type PickerSelectionEvent = CustomEvent<{ docs?: Array<{ id?: string; name?: str
 type RunEvent = { id: string; at: string; stage: string; status: "running" | "success" | "warning" | "failed"; message: string; durationMs?: number; details?: Record<string, string | number | boolean | null> };
 type MonthlyRun = { id: string; period: string; status: string; error: string | null; fileUrl: string | null; events?: RunEvent[]; startedAt: string; finishedAt: string | null };
 type Setup = { connected: boolean; accountEmail: string | null; enabled: boolean; templateFileId: string; destinationFolderId: string; namePattern: string; editors: string[] };
+type ExistingConnection = { id: string; sheetName: string | null; sheetUrl: string; status: string | null; autoSyncEnabled: boolean; createdAt: string };
+type CurrentRun = { id: string; status: string; fileUrl: string | null };
 
 export default function GoogleSheetMonthlySetup() {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<Setup | null>(null);
   const [runs, setRuns] = useState<MonthlyRun[]>([]);
+  const [currentPeriod, setCurrentPeriod] = useState("");
+  const [currentConnection, setCurrentConnection] = useState<ExistingConnection | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [templateFileId, setTemplateFileId] = useState("");
   const [destinationFolderId, setDestinationFolderId] = useState("");
@@ -28,13 +34,13 @@ export default function GoogleSheetMonthlySetup() {
   const [busy, setBusy] = useState(false);
   const [manualBusy, setManualBusy] = useState(false);
   const [retryId, setRetryId] = useState<string | null>(null);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [confirmationChecked, setConfirmationChecked] = useState(false);
   const [message, setMessage] = useState("");
   const [pickerKind, setPickerKind] = useState<PickerKind | null>(null);
   const [pickerAuth, setPickerAuth] = useState<PickerAuth | null>(null);
   const pickerHost = useRef<HTMLDivElement>(null);
-  const currentParts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Colombo", year: "numeric", month: "2-digit" }).formatToParts(new Date());
-  const currentPeriod = `${currentParts.find(part => part.type === "year")?.value}-${currentParts.find(part => part.type === "month")?.value}`;
-  const currentRun = runs.find(run => run.period === currentPeriod) || runs[0];
+  const currentRun = runs.find(run => run.period === currentPeriod) || null;
   const configured = Boolean(data?.connected && data.templateFileId && data.destinationFolderId);
   const statusText = !data ? "Loading monthly setup" : data.enabled && configured ? "Automated setup on · 00:05 Sri Lanka time" : configured ? "Ready for manual monthly setup" : "Setup needs attention";
 
@@ -54,6 +60,8 @@ export default function GoogleSheetMonthlySetup() {
     setNamePattern(settings.namePattern);
     setEditors(settings.editors.join("\n"));
     setRuns(Array.isArray(runData.runs) ? runData.runs : []);
+    setCurrentPeriod(typeof runData.currentPeriod === "string" ? runData.currentPeriod : "");
+    setCurrentConnection(runData.currentConnection || null);
   }, []);
 
   useEffect(() => { if (open) void load().catch(error => setMessage(error.message || "Could not load monthly setup")); }, [open, load]);
@@ -107,9 +115,18 @@ export default function GoogleSheetMonthlySetup() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save settings"); } finally { setBusy(false); }
   }
   async function prepare() {
+    setConfirmationOpen(false);
     setManualBusy(true); setMessage("");
     try {
-      const response = await fetch("/api/integrations/google-sheets/monthly/provision", { method: "POST" });
+      const response = await fetch("/api/integrations/google-sheets/monthly/provision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmed: true,
+          expectedConnectionId: currentConnection?.id || null,
+          expectedRunId: currentRun?.id || null,
+        }),
+      });
       const result = await response.json();
       await load();
       if (!response.ok) throw new Error(result.error || "Could not prepare this month’s sheet");
@@ -144,7 +161,33 @@ export default function GoogleSheetMonthlySetup() {
           <Button onClick={save} disabled={busy || !data}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save monthly setup</Button>
         </section>
         {pickerKind && pickerAuth && <div ref={pickerHost} data-testid="google-picker-host"><DrivePicker app-id={pickerAuth.appId} developer-key={pickerAuth.apiKey} oauth-token={pickerAuth.accessToken} origin={typeof window === "undefined" ? undefined : window.location.origin} title={pickerKind === "folder" ? "Choose destination folder" : "Choose master spreadsheet"} onPicked={handlePicked} onCanceled={() => { setPickerKind(null); setPickerAuth(null); setMessage("Selection cancelled. The current value was not changed."); }} onOauthError={event => { setPickerKind(null); setPickerAuth(null); setMessage(event.detail.error_description || event.detail.error || "Google authorization failed."); }}>{pickerKind === "folder" ? <DrivePickerDocsView view-id="FOLDERS" include-folders="true" select-folder-enabled="true" enable-drives="true" /> : <DrivePickerDocsView view-id="SPREADSHEETS" enable-drives="true" />}</DrivePicker></div>}
-        <section className="rounded-xl border border-primary/20 bg-primary/[0.025] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Prepare this month and email the link</h3><p className="text-sm text-muted-foreground">Creates the sheet, applies the template rules, shares access, and connects it for import.</p></div><Button onClick={prepare} disabled={manualBusy || !data}>{manualBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}Prepare this month</Button></div>{currentRun?.fileUrl && <a className="mt-3 inline-flex items-center gap-2 text-sm text-primary underline" href={currentRun.fileUrl} target="_blank" rel="noreferrer">Open prepared sheet <ExternalLink className="h-3.5 w-3.5" /></a>}</section>
+        <section className="rounded-xl border border-primary/20 bg-primary/[0.025] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h3 className="font-semibold">Prepare this month and email the link</h3><p className="text-sm text-muted-foreground">We check this month’s connection first. Existing monthly runs resume their saved sheet instead of making another copy.</p></div>
+            <Button onClick={() => setConfirmationOpen(true)} disabled={manualBusy || !data || !confirmationChecked}>{manualBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}Prepare this month</Button>
+          </div>
+          <div className="mt-3 flex items-start gap-2 rounded-lg border bg-background/70 p-3">
+            <Checkbox id="confirm-current-month-checked" checked={confirmationChecked} onCheckedChange={value => setConfirmationChecked(value === true)} disabled={manualBusy} className="mt-0.5" />
+            <Label htmlFor="confirm-current-month-checked" className="cursor-pointer text-sm font-normal leading-5">I’ve reviewed the current-month connection check for {currentPeriod || "this month"} and want to continue.</Label>
+          </div>
+          {currentRun?.fileUrl && <a className="mt-3 inline-flex items-center gap-2 text-sm text-primary underline" href={currentRun.fileUrl} target="_blank" rel="noreferrer">Open this month’s existing sheet <ExternalLink className="h-3.5 w-3.5" /></a>}
+        </section>
+        <AlertDialog open={confirmationOpen} onOpenChange={setConfirmationOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm {currentPeriod} sheet setup</AlertDialogTitle>
+              <AlertDialogDescription>Review the existing connection and previous attempt before continuing. The server rechecks these records before starting.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-3 text-sm">
+              {currentConnection ? <div className="rounded-lg border p-3"><p className="font-medium">Current connection found</p><p className="mt-1 break-words text-muted-foreground">{currentConnection.sheetName || "Google Sheet"} · {currentConnection.status || "status unknown"} · {currentConnection.autoSyncEnabled ? "selected for daily import" : "not selected for daily import"}</p><a className="mt-2 inline-flex items-center gap-1 text-primary underline" href={currentConnection.sheetUrl} target="_blank" rel="noreferrer">Review connected sheet <ExternalLink className="h-3 w-3" /></a></div> : <p className="rounded-lg border border-dashed p-3 text-muted-foreground">No Google Sheet connection is currently registered for {currentPeriod}.</p>}
+              {currentRun ? <div className="rounded-lg border p-3"><p className="font-medium">Existing monthly setup: {currentRun.status}</p><p className="mt-1 text-muted-foreground">{currentRun.fileUrl ? "Continuing this run will verify and reuse its existing sheet, or replace a stale inaccessible copy." : "The run has no saved sheet yet; it will check Drive for a monthly copy before creating one."}</p>{currentRun.fileUrl && <a className="mt-2 inline-flex items-center gap-1 text-primary underline" href={currentRun.fileUrl} target="_blank" rel="noreferrer">Review this run’s sheet <ExternalLink className="h-3 w-3" /></a>}</div> : currentConnection ? <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-amber-900">No monthly automation run is linked to this connection. Continuing can create a new template copy and select it for import; the existing connection will remain in history.</p> : null}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={manualBusy}>Cancel</AlertDialogCancel>
+              <AlertDialogAction disabled={!confirmationChecked || manualBusy} onClick={() => void prepare()}>{currentRun?.fileUrl ? "Continue existing setup" : "Confirm and prepare"}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <section><div className="mb-3 flex items-center justify-between gap-2"><div><h3 className="font-semibold">Provisioning activity</h3><p className="text-xs text-muted-foreground">Stage-by-stage progress and results. This history remains available after closing the dialog.</p></div><Button variant="ghost" size="sm" onClick={() => void load()} aria-label="Refresh run history"><RefreshCw className="h-4 w-4" /></Button></div>
           {runs.length ? <div className="space-y-3">{runs.map(run => <article key={run.id} className="rounded-xl border p-3 sm:p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold">{run.period}</div><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${run.status === "success" ? "bg-emerald-500/10 text-emerald-700" : run.status === "partial" ? "bg-amber-500/10 text-amber-800" : run.status === "failed" ? "bg-destructive/10 text-destructive" : "bg-blue-500/10 text-blue-700"}`}>{run.status === "partial" ? "Partial · email needed" : run.status}</span></div><p className="mt-1 text-xs text-muted-foreground">Started {new Date(run.startedAt).toLocaleString()}{run.finishedAt ? ` · Finished ${new Date(run.finishedAt).toLocaleString()}` : " · In progress"}</p>
               {run.fileUrl && <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary underline" href={run.fileUrl} target="_blank" rel="noreferrer">Open created sheet <ExternalLink className="h-3 w-3" /></a>}
