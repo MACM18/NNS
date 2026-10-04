@@ -18,17 +18,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, skipped: "Not due or no current-month sheet selected" });
     }
 
-    let run;
-    try {
-      run = await prisma.googleSheetAutoSyncRun.create({
-        data: { localDate: clock.localDate, connectionId: newestConnection.id },
-      });
-    } catch (error: unknown) {
-      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
-        return NextResponse.json({ ok: true, skipped: "Already started today" });
-      }
-      throw error;
+    // Multiple scheduler instances can hit this endpoint at once. Claim the
+    // unique local date without provoking a noisy P2002 Prisma error.
+    const claim = await prisma.googleSheetAutoSyncRun.createMany({
+      data: [{ localDate: clock.localDate, connectionId: newestConnection.id }],
+      skipDuplicates: true,
+    });
+    if (claim.count === 0) {
+      return NextResponse.json({ ok: true, skipped: "Already started today" });
     }
+    const run = await prisma.googleSheetAutoSyncRun.findUnique({ where: { localDate: clock.localDate } });
+    if (!run) throw new Error("The scheduled import run could not be loaded after claiming today’s run.");
 
     try {
       const result = await syncConnectionForCron(newestConnection.id, secret);

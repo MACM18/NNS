@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { testEmailConfig } from "@/lib/email-service";
-import { decrypt } from "@/lib/encryption";
+import { sendEmail } from "@/lib/email-service";
 
 export async function POST() {
   try {
@@ -28,58 +27,22 @@ export async function POST() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Get current email settings
-    const settings = await prisma.emailSettings.findFirst({
-      where: { isActive: true },
+    if (!user.email) {
+      return NextResponse.json({ error: "Your account does not have an email address to send the test to." }, { status: 400 });
+    }
+
+    // Use the active saved configuration (with environment fallback) and send
+    // only to the signed-in user's own address.
+    const result = await sendEmail({
+      to: user.email,
+      subject: "NNS Email Configuration Test",
+      text: `This is a test email from NNS Enterprise.\n\nSent at: ${new Date().toISOString()}`,
+      html: `<div style="font-family: Arial, sans-serif; padding: 20px;"><h2>Email Configuration Test</h2><p>This test message was sent to your signed-in NNS account.</p><p>Sent at: ${new Date().toISOString()}</p></div>`,
     });
-
-    // Build config from settings or env
-    interface EmailConfigData {
-      provider: "resend" | "smtp";
-      fromEmail: string;
-      fromName: string;
-      resendApiKey?: string;
-      smtpHost?: string;
-      smtpPort?: number;
-      smtpSecure?: boolean;
-      smtpUser?: string;
-      smtpPassword?: string;
-    }
-
-    let config: EmailConfigData;
-
-    if (settings) {
-      config = {
-        provider: settings.provider as "resend" | "smtp",
-        fromEmail: settings.fromEmail,
-        fromName: settings.fromName,
-        resendApiKey: settings.resendApiKey
-          ? decrypt(settings.resendApiKey)
-          : undefined,
-        smtpHost: settings.smtpHost || undefined,
-        smtpPort: settings.smtpPort || undefined,
-        smtpSecure: settings.smtpSecure,
-        smtpUser: settings.smtpUser || undefined,
-        smtpPassword: settings.smtpPassword
-          ? decrypt(settings.smtpPassword)
-          : undefined,
-      };
-    } else {
-      // Fall back to environment variables
-      config = {
-        provider: "resend",
-        fromEmail: process.env.EMAIL_FROM || "noreply@nns.lk",
-        fromName: process.env.EMAIL_FROM_NAME || "NNS Enterprise",
-        resendApiKey: process.env.RESEND_API_KEY,
-      };
-    }
-
-    // Test the configuration by sending a test email
-    const result = await testEmailConfig(config);
 
     if (!result.success) {
       return NextResponse.json(
-        { error: result.error || "Email configuration test failed" },
+        { error: `${result.provider || "Email provider"}: ${result.error || "Email configuration test failed"}` },
         { status: 400 }
       );
     }
@@ -87,12 +50,13 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       message: "Test email sent successfully",
-      provider: config.provider,
+      provider: result.provider,
+      sentTo: user.email,
     });
   } catch (error) {
     console.error("Error sending test email:", error);
     return NextResponse.json(
-      { error: "Failed to send test email" },
+      { error: error instanceof Error ? error.message : "Failed to send test email" },
       { status: 500 }
     );
   }

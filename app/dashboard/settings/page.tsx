@@ -2751,12 +2751,15 @@ If you lose access to your authenticator app, you can use these codes to sign in
                             Test Email Configuration
                           </h4>
                           <p className='text-sm text-muted-foreground'>
-                            Send a test email to verify your configuration
+                            {user?.email ? `A test message will be sent to ${user.email}.` : "A test message will be sent to your signed-in account email."}
                           </p>
                         </div>
                         <Button
                           variant='outline'
+                          disabled={emailSettings.testing}
                           onClick={async () => {
+                            if (emailSettings.testing) return;
+                            setEmailSettings((prev) => ({ ...prev, testing: true }));
                             try {
                               const res = await fetch(
                                 "/api/settings/email/test",
@@ -2768,8 +2771,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                               if (res.ok) {
                                 toast({
                                   title: "Test email sent",
-                                  description:
-                                    "Check your inbox for the test email.",
+                                  description: `Sent to ${data.sentTo || user?.email || "your account email"}${data.provider ? ` via ${data.provider}` : ""}. Check that inbox.`,
                                 });
                               } else {
                                 toast({
@@ -2785,12 +2787,14 @@ If you lose access to your authenticator app, you can use these codes to sign in
                                 description: "Failed to send test email",
                                 variant: "destructive",
                               });
+                            } finally {
+                              setEmailSettings((prev) => ({ ...prev, testing: false }));
                             }
                           }}
                           className='transition-all duration-200 hover:scale-105 active:scale-95'
                         >
-                          <Mail className='h-4 w-4 mr-2' />
-                          Send Test Email
+                          {emailSettings.testing ? <Loader2 className='h-4 w-4 mr-2 animate-spin' /> : <Mail className='h-4 w-4 mr-2' />}
+                          {emailSettings.testing ? "Sending test email…" : "Send Test Email"}
                         </Button>
                       </div>
                     </div>
