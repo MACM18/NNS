@@ -6,26 +6,35 @@ import { currentSheetPeriod } from "@/lib/google-sheet-auto-sync";
 
 export const MONTHLY_SHEET_TIME = "00:05";
 export const MONTHLY_SHEET_TIME_ZONE = "Asia/Colombo";
-type BalanceMapping = { sourceRange: string; destinationRange: string };
-type MonthlyConfig = { clearRanges: string[]; balanceMappings: BalanceMapping[]; editors: string[] };
+type MonthlyConfig = { editors: string[] };
 
-export function monthlyClearRequests(sheetsData: sheets_v4.Schema$Sheet[]) {
-  const requests: sheets_v4.Schema$Request[] = [];
-  for (const sheet of sheetsData) {
-    const sheetId = sheet.properties?.sheetId; if (sheetId == null) continue;
-    for (const grid of sheet.data || []) {
-      const startRow = grid.startRow || 0, startCol = grid.startColumn || 0;
-      (grid.rowData || []).forEach((row, rowOffset) => {
-        (row.values || []).forEach((cell, colOffset) => {
-          const entered = cell.userEnteredValue;
-          if (!entered || entered.formulaValue !== undefined) return;
-          if (entered.stringValue === undefined && entered.numberValue === undefined && entered.boolValue === undefined) return;
-          requests.push({ updateCells: { range: { sheetId, startRowIndex: startRow + rowOffset, endRowIndex: startRow + rowOffset + 1, startColumnIndex: startCol + colOffset, endColumnIndex: startCol + colOffset + 1 }, rows: [{ values: [{}] }], fields: "userEnteredValue" } });
-        });
-      });
-    }
-  }
-  return requests;
+export function monthlyTemplateUpdates(period: string) {
+  const [yearText, monthText] = period.split("-");
+  const year = Number(yearText), month = Number(monthText);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) throw new Error("Invalid monthly sheet period.");
+  const monthName = new Intl.DateTimeFormat("en", { month: "long", timeZone: MONTHLY_SHEET_TIME_ZONE }).format(new Date(Date.UTC(year, month - 1, 1))).toUpperCase();
+  const twoDigitYear = yearText.slice(-2);
+  const nextMonthDate = new Date(Date.UTC(year, month, 2));
+  const invoiceDate = `${nextMonthDate.getUTCFullYear()}-${String(nextMonthDate.getUTCMonth() + 1).padStart(2, "0")}-02`;
+  return [
+    { range: "'Material Balance'!DW2", values: [[month]] },
+    { range: "'Material Balance - Month'!D4", values: [[`: ${monthName}`]] },
+    { range: "'Material Balance - Month'!D5", values: [[`: ${yearText}`]] },
+    ...(["A", "B"] as const).flatMap(type => [
+      { range: `'Invoice ${type}'!F5`, values: [[`NNS/WPS/HR/NC/${twoDigitYear}/${monthName}/${type}`]] },
+      { range: `'Invoice ${type}'!F7`, values: [[invoiceDate]] },
+      { range: `'Invoice ${type}'!F8`, values: [[`${monthName} ${yearText}`]] },
+    ]),
+    { range: "'Invoice back'!O1", values: [[`Invoice No: NNS/WPS/HR/NC/${twoDigitYear}/${monthName}/001`]] },
+  ];
+}
+
+export function monthlyBalanceDestinations(values: unknown[][]) {
+  if (!values.length) return [];
+  return [
+    { range: "'Material Balance'!C3:C", values },
+    { range: "'Material Balance - Month'!C8:C", values },
+  ];
 }
 
 export function googleOAuthClient() {
@@ -46,28 +55,6 @@ export async function getMonthlyGoogleClients() {
   return { drive: google.drive({ version: "v3", auth: oauth }), sheets: google.sheets({ version: "v4", auth: oauth }), settings, accessToken: token };
 }
 
-
-async function getServiceAccountSheets() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!email || !raw) throw new Error("Google service account credentials are required to read the previous month's balance ranges.");
-  let key: string;
-  try { key = JSON.parse(raw).private_key || ""; } catch { key = raw.replace(/\\n/g, "\n"); }
-  if (!key.includes("PRIVATE KEY")) throw new Error("Google service account private key is invalid.");
-  const client = new google.auth.JWT({ email, key, scopes: ["https://www.googleapis.com/auth/spreadsheets"] });
-  await client.authorize();
-  return google.sheets({ version: "v4", auth: client });
-}
-
-
-async function clearInputValues(sheets: sheets_v4.Sheets, fileId: string, ranges: string[]) {
-  if (!ranges.length) return;
-  const doc = await sheets.spreadsheets.get({ spreadsheetId: fileId, ranges, includeGridData: true });
-  const requests = monthlyClearRequests(doc.data.sheets || []);
-  for (let offset = 0; offset < requests.length; offset += 500) {
-    await sheets.spreadsheets.batchUpdate({ spreadsheetId: fileId, requestBody: { requests: requests.slice(offset, offset + 500) } });
-  }
-}
 
 async function writeRange(sheets: sheets_v4.Sheets, fileId: string, range: string, values: unknown[][]) {
   await sheets.spreadsheets.values.update({ spreadsheetId: fileId, range, valueInputOption: "USER_ENTERED", requestBody: { values } });
@@ -108,6 +95,7 @@ export async function provisionMonthlySheet(period: string, secret: string) {
     const { drive, sheets } = await getMonthlyGoogleClients();
     const priorDate = new Date(Date.UTC(year, month - 2, 1));
     const prior = await prisma.googleSheetConnection.findFirst({ where: { year: priorDate.getUTCFullYear(), month: priorDate.getUTCMonth() + 1 }, orderBy: [{ createdAt: "desc" }] });
+    if (!prior?.sheetId) throw new Error(`No connected Google Sheet was found for the previous month (${priorDate.getUTCFullYear()}-${String(priorDate.getUTCMonth() + 1).padStart(2, "0")}), so balances cannot be carried forward.`);
     if (!run.previousSyncAt) {
       if (prior) {
         const { syncConnectionForCron } = await import("@/app/dashboard/integrations/google-sheets/actions");
@@ -129,16 +117,13 @@ export async function provisionMonthlySheet(period: string, secret: string) {
     const fileUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit`;
     await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { fileId, fileUrl } });
 
-    const config = { clearRanges: Array.isArray(settings.clearRanges) ? settings.clearRanges as string[] : [], balanceMappings: Array.isArray(settings.balanceMappings) ? settings.balanceMappings as BalanceMapping[] : [], editors: Array.isArray(settings.editors) ? settings.editors as string[] : [] } satisfies MonthlyConfig;
+    const config = { editors: Array.isArray(settings.editors) ? settings.editors as string[] : [] } satisfies MonthlyConfig;
     if (!run.sheetPreparedAt) {
-      await clearInputValues(sheets, fileId, config.clearRanges);
-      if (settings.monthCell) await writeRange(sheets, fileId, settings.monthCell, [[`${name}`]]);
-      if (prior?.sheetId && config.balanceMappings.length) {
-        const sourceSheets = await getServiceAccountSheets();
-        for (const mapping of config.balanceMappings) {
-          const old = await sourceSheets.spreadsheets.values.get({ spreadsheetId: prior.sheetId, range: mapping.sourceRange, valueRenderOption: "UNFORMATTED_VALUE" });
-          if (old.data.values?.length) await writeRange(sheets, fileId, mapping.destinationRange, old.data.values as unknown[][]);
-        }
+      for (const update of monthlyTemplateUpdates(period)) await writeRange(sheets, fileId, update.range, update.values);
+      if (prior?.sheetId) {
+        const old = await sheets.spreadsheets.values.get({ spreadsheetId: prior.sheetId, range: "'Material Balance - Month'!H8:H", valueRenderOption: "UNFORMATTED_VALUE" });
+        const balances = old.data.values || [];
+        for (const update of monthlyBalanceDestinations(balances as unknown[][])) await writeRange(sheets, fileId, update.range, update.values);
       }
       run = await prisma.googleSheetMonthlyRun.update({ where: { id: run.id }, data: { sheetPreparedAt: new Date() } });
     }

@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { FolderOpen, FileSpreadsheet, RefreshCw, Save } from "lucide-react";
 
 declare global { interface Window { gapi?: any; google?: any } }
-type Setup = { connected: boolean; accountEmail: string | null; enabled: boolean; templateFileId: string; destinationFolderId: string; namePattern: string; clearRanges: string[]; monthCell: string; balanceMappings: { sourceRange: string; destinationRange: string }[]; editors: string[]; lastRun: { period: string; status: string; error: string | null; fileUrl: string | null; startedAt: string } | null };
+type Setup = { connected: boolean; accountEmail: string | null; enabled: boolean; templateFileId: string; destinationFolderId: string; namePattern: string; editors: string[]; lastRun: { period: string; status: string; error: string | null; fileUrl: string | null; startedAt: string } | null };
 
 export default function GoogleSheetMonthlySetup() {
   const [data, setData] = useState<Setup | null>(null);
@@ -17,9 +17,6 @@ export default function GoogleSheetMonthlySetup() {
   const [templateFileId, setTemplateFileId] = useState("");
   const [destinationFolderId, setDestinationFolderId] = useState("");
   const [namePattern, setNamePattern] = useState("NNS Telecom - {Month} {Year}");
-  const [clearRanges, setClearRanges] = useState("");
-  const [monthCell, setMonthCell] = useState("");
-  const [balanceMappings, setBalanceMappings] = useState("");
   const [editors, setEditors] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -28,7 +25,7 @@ export default function GoogleSheetMonthlySetup() {
     try {
       const response = await fetch("/api/integrations/google-sheets/monthly/settings", { cache: "no-store" });
       const result = await response.json(); if (!response.ok) throw new Error(result.error || "Could not load monthly settings");
-      setData(result); setEnabled(result.enabled); setTemplateFileId(result.templateFileId); setDestinationFolderId(result.destinationFolderId); setNamePattern(result.namePattern); setClearRanges(result.clearRanges.join("\n")); setMonthCell(result.monthCell); setBalanceMappings(result.balanceMappings.map((x: any) => `${x.sourceRange} -> ${x.destinationRange}`).join("\n")); setEditors(result.editors.join("\n"));
+      setData(result); setEnabled(result.enabled); setTemplateFileId(result.templateFileId); setDestinationFolderId(result.destinationFolderId); setNamePattern(result.namePattern); setEditors(result.editors.join("\n"));
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not load monthly settings"); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -55,9 +52,7 @@ export default function GoogleSheetMonthlySetup() {
   async function save() {
     setBusy(true); setMessage("");
     try {
-      const ranges = clearRanges.split(/\n|,/).map(x => x.trim()).filter(Boolean);
-      const mappings = balanceMappings.split("\n").map(x => x.trim()).filter(Boolean).map(line => { const parts = line.split("->").map(p => p.trim()); if (parts.length !== 2) throw new Error(`Invalid balance mapping: ${line}`); return { sourceRange: parts[0], destinationRange: parts[1] }; });
-      const response = await fetch("/api/integrations/google-sheets/monthly/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled, templateFileId, destinationFolderId, namePattern, clearRanges: ranges, monthCell, balanceMappings: mappings, editors: editors.split(/\n|,/).map(x => x.trim()).filter(Boolean) }) });
+      const response = await fetch("/api/integrations/google-sheets/monthly/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled, templateFileId, destinationFolderId, namePattern, editors: editors.split(/\n|,/).map(x => x.trim()).filter(Boolean) }) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error || "Could not save settings");
       await load(); setMessage("Monthly sheet automation settings saved.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save settings"); } finally { setBusy(false); }
@@ -72,8 +67,7 @@ export default function GoogleSheetMonthlySetup() {
         <div className="space-y-2"><Label>Master template</Label><div className="flex gap-2"><Input value={templateFileId} readOnly placeholder="Choose a spreadsheet" /><Button type="button" variant="outline" onClick={() => pick("template")} disabled={!data?.connected}><FileSpreadsheet className="mr-2 h-4 w-4" />Choose</Button></div></div>
         <div className="space-y-2"><Label>Destination folder</Label><div className="flex gap-2"><Input value={destinationFolderId} readOnly placeholder="Choose a Drive folder" /><Button type="button" variant="outline" onClick={() => pick("folder")} disabled={!data?.connected}><FolderOpen className="mr-2 h-4 w-4" />Choose</Button></div></div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="monthly-name">Sheet name pattern</Label><Input id="monthly-name" value={namePattern} onChange={e => setNamePattern(e.target.value)} /><p className="text-xs text-muted-foreground">Use {"{Month}"}, {"{Year}"}, and optionally {"{MM}"}.</p></div><div className="space-y-2"><Label htmlFor="monthly-cell">Month label cell (optional)</Label><Input id="monthly-cell" placeholder="Summary!B2" value={monthCell} onChange={e => setMonthCell(e.target.value)} /></div></div>
-      <div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="monthly-clear">Input ranges to clear</Label><textarea id="monthly-clear" className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder={'Entries!A2:Z500\n'Material Balance'!A2:H100'} value={clearRanges} onChange={e => setClearRanges(e.target.value)} /><p className="text-xs text-muted-foreground">One A1 range per line. Existing formulas are preserved.</p></div><div className="space-y-2"><Label htmlFor="monthly-balances">Ending to opening balance mappings</Label><textarea id="monthly-balances" className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder={''Material Balance - Month'!H2:H30 -> 'Material Balance - Month'!B2:B30'} value={balanceMappings} onChange={e => setBalanceMappings(e.target.value)} /><p className="text-xs text-muted-foreground">Previous month source range → new month opening range, one mapping per line.</p></div></div>
+      <div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="monthly-name">Sheet name pattern</Label><Input id="monthly-name" value={namePattern} onChange={e => setNamePattern(e.target.value)} /><p className="text-xs text-muted-foreground">Use {"{Month}"}, {"{Year}"}, and optionally {"{MM}"}.</p></div><div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground"><p className="font-medium text-foreground">Template updates</p><p>Only the specified month and invoice cells are updated. Previous month balances from Material Balance - Month H8 downward are copied to both opening balance columns. All other cells and formulas are preserved.</p></div></div>
       <div className="space-y-2"><Label htmlFor="monthly-editors">Editor email addresses</Label><textarea id="monthly-editors" className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="One Google account email per line" value={editors} onChange={e => setEditors(e.target.value)} /><p className="text-xs text-muted-foreground">Use one Google email per line. For a Google Group, prefix it with group:. The importer service account is added automatically.</p></div>
       {data?.lastRun && <p className="text-sm text-muted-foreground">Last monthly setup: {data.lastRun.period} · {data.lastRun.status}{data.lastRun.fileUrl ? <> · <a className="underline" href={data.lastRun.fileUrl} target="_blank" rel="noreferrer">Open sheet</a></> : null}{data.lastRun.error ? ` · ${data.lastRun.error}` : ""}</p>}
       <div className="flex flex-wrap items-center gap-3"><Button onClick={save} disabled={busy || !data}>{busy ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save monthly setup</Button>{message && <p className="text-sm" role="status">{message}</p>}</div>

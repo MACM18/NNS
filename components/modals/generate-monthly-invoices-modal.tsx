@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { OPTIONAL_ITEM_DESCRIPTIONS, OPTIONAL_ITEM_RATES, type OptionalItemCode, type OptionalItemInput } from "@/lib/service-pricing-types";
+import { monthlyInvoiceNumber } from "@/lib/monthly-invoice-number";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -186,12 +187,6 @@ export function GenerateMonthlyInvoicesModal({
     if (requestId !== previewRequest.current) return;
 
     // Generate invoice numbers
-    const monthName =
-      months.find((m) => m.value === selectedMonth)?.label || "Unknown";
-    const baseInvoiceNumber = `S/Southern/HR/NC/${selectedYear.slice(
-      -2
-    )}/${monthName}`;
-
     // Always generate 2 invoices: A (90%), B (10%)
     const previews: InvoicePreview[] = [
       {
@@ -199,7 +194,7 @@ export function GenerateMonthlyInvoicesModal({
         percentage: 90,
         lines: lines, // All lines
         totalAmount: Number(pricingResponses[0].totalAmount),
-        invoiceNumber: `${baseInvoiceNumber}/A`,
+        invoiceNumber: monthlyInvoiceNumber(selectedYear, selectedMonth, "A"),
         linePricing: Object.fromEntries(pricingResponses[0].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number; description: string }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount, description: line.description }])),
         optionalPricing: pricingResponses[0].optionalItemsSnapshot || [],
       },
@@ -208,19 +203,13 @@ export function GenerateMonthlyInvoicesModal({
         percentage: 10,
         lines: lines, // All lines
         totalAmount: Number(pricingResponses[1].totalAmount),
-        invoiceNumber: `${baseInvoiceNumber}/B`,
+        invoiceNumber: monthlyInvoiceNumber(selectedYear, selectedMonth, "B"),
         linePricing: Object.fromEntries(pricingResponses[1].lineDetailsSnapshot.map((line: { lineId: string; baseRate: number; invoiceAmount: number; description: string }) => [line.lineId, { baseRate: line.baseRate, invoiceAmount: line.invoiceAmount, description: line.description }])),
         optionalPricing: pricingResponses[1].optionalItemsSnapshot || [],
       },
     ];
 
     setInvoicePreviews(previews);
-  };
-
-  const generateInvoiceNumber = (type: "A" | "B"): string => {
-    const monthName =
-      months.find((m) => m.value === selectedMonth)?.label || "Unknown";
-    return `S/Southern/HR/NC/${selectedYear.slice(-2)}/${monthName}/${type}`;
   };
 
   const getInvoiceDate = (): string => {
