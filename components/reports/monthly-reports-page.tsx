@@ -13,6 +13,7 @@ import { Download, FileText, Link2, Loader2, RefreshCw, ShieldOff } from "lucide
 type Document = { id: string; reportType: string; title: string; fileName: string };
 type Version = { id: string; version: number; status: string; createdAt: string; publishedAt: string | null; documents: Document[] };
 type Report = { id: string; year: number; month: number; shareActive: boolean; shareRevokedAt: string | null; currentVersionId: string | null; versions: Version[] };
+type RedesignProgress = { done: number; total: number; current: string; created: number; skipped: number; failures: string[] };
 const MANAGEMENT = new Set(["admin", "moderator", "superadmin"]);
 
 export function MonthlyReportsPage() {
@@ -25,6 +26,7 @@ export function MonthlyReportsPage() {
   const [invoiceDialog, setInvoiceDialog] = useState(false);
   const [invoiceMonth, setInvoiceMonth] = useState(new Date());
   const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
+  const [redesignProgress, setRedesignProgress] = useState<RedesignProgress | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -63,6 +65,37 @@ export function MonthlyReportsPage() {
     finally { setBusy(""); }
   };
 
+  const redesignAll = async () => {
+    if (!reports.length) { toast.info("There are no archived months to regenerate."); return; }
+    const confirmed = window.confirm(`Create a redesigned draft for all ${reports.length} archived month${reports.length === 1 ? "" : "s"}? Published PDFs and shared links will remain unchanged until you review and publish each draft.`);
+    if (!confirmed) return;
+    setBusy("redesign-all");
+    const progress: RedesignProgress = { done: 0, total: reports.length, current: "", created: 0, skipped: 0, failures: [] };
+    setRedesignProgress({ ...progress });
+    for (const report of reports) {
+      const month = format(new Date(report.year, report.month - 1, 1), "MMMM yyyy");
+      progress.current = month;
+      setRedesignProgress({ ...progress, failures: [...progress.failures] });
+      try {
+        const response = await fetch(`/api/monthly-reports/${report.id}/redesign`, { method: "POST" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Could not redesign this month.");
+        if (payload.data.status === "created") progress.created += 1;
+        else progress.skipped += 1;
+      } catch (error) {
+        progress.failures.push(`${month}: ${error instanceof Error ? error.message : "Redesign failed"}`);
+      }
+      progress.done += 1;
+      setRedesignProgress({ ...progress, failures: [...progress.failures] });
+    }
+    progress.current = "";
+    setRedesignProgress({ ...progress, failures: [...progress.failures] });
+    setBusy("");
+    await refresh();
+    if (progress.failures.length) toast.warning(`Redesign finished: ${progress.created} drafts created, ${progress.skipped} already current, ${progress.failures.length} failed. See the progress details.`);
+    else toast.success(`Redesign finished: ${progress.created} drafts created; ${progress.skipped} months already had the new design.`);
+  };
+
   const publish = async (report: Report, version: Version) => {
     const result = await act(`publish-${version.id}`, `/api/monthly-reports/${report.id}/publish`, "POST", { versionId: version.id });
     if (result) { toast.success("Reviewed report version published."); await refresh(); }
@@ -84,7 +117,8 @@ export function MonthlyReportsPage() {
   const grouped = useMemo(() => reports, [reports]);
 
   return <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold">Monthly Reports</h1><p className="mt-1 text-sm text-muted-foreground">Spreadsheet-style monthly PDFs, saved as reviewed snapshots.</p></div>{manager && <div className="flex flex-wrap items-center gap-2"><MonthYearPicker date={selectedMonth} onDateChange={setSelectedMonth} /><Button onClick={() => void prepare(selectedMonth)} disabled={Boolean(busy)}>{busy.startsWith("prepare") ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Prepare month</Button></div>}</div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold">Monthly Reports</h1><p className="mt-1 text-sm text-muted-foreground">Spreadsheet-style monthly PDFs, saved as reviewed snapshots.</p></div>{manager && <div className="flex flex-wrap items-center gap-2"><MonthYearPicker date={selectedMonth} onDateChange={setSelectedMonth} /><Button variant="outline" onClick={() => void redesignAll()} disabled={Boolean(busy) || reports.length === 0}>{busy === "redesign-all" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Regenerate all archived PDFs</Button><Button onClick={() => void prepare(selectedMonth)} disabled={Boolean(busy)}>{busy.startsWith("prepare") ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Prepare month</Button></div>}</div>
+    {manager && redesignProgress && <Card role="status" aria-live="polite"><CardContent className="space-y-2 p-4"><div className="flex flex-wrap justify-between gap-2 text-sm"><span className="font-medium">{redesignProgress.done < redesignProgress.total ? `Redesigning ${redesignProgress.current}…` : "PDF redesign finished"}</span><span className="text-muted-foreground">{redesignProgress.done} / {redesignProgress.total} months · {redesignProgress.created} drafts · {redesignProgress.skipped} already current</span></div><div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={redesignProgress.total} aria-valuenow={redesignProgress.done}><div className="h-full bg-primary transition-all" style={{ width: `${redesignProgress.total ? redesignProgress.done / redesignProgress.total * 100 : 0}%` }} /></div>{redesignProgress.failures.length > 0 && <ul className="max-h-32 list-disc space-y-1 overflow-auto pl-5 text-xs text-destructive">{redesignProgress.failures.map(failure => <li key={failure}>{failure}</li>)}</ul>}</CardContent></Card>}
     <Card><CardHeader className="pb-3"><CardTitle className="text-base">Report archive</CardTitle><CardDescription>All signed-in users can view archived PDFs. Only managers can prepare or share reports.</CardDescription></CardHeader><CardContent className="space-y-4">
       {loading ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading report archive…</div> : grouped.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No monthly report sets have been prepared yet.</p> : grouped.map(report => {
         const current = report.versions.find(version => version.id === report.currentVersionId);
