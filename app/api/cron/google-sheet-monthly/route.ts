@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const due = monthlyProvisioningDue();
     if (!settings?.enabled || !due.due) return NextResponse.json({ ok: true, skipped: "Not due or monthly setup disabled" });
     const result = await provisionMonthlySheet(due.period, secret);
-    return NextResponse.json({ ok: true, period: due.period, ...result });
+    return NextResponse.json({ period: due.period, ...result }, { status: result.ok === false && result.status !== "partial" ? 500 : 200 });
   } catch (error) {
     console.error("[cron/google-sheet-monthly] Provisioning failed", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "Monthly sheet provisioning failed" }, { status: 500 });

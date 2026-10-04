@@ -41,15 +41,17 @@ describe("Google monthly setup picker", () => {
         return jsonResponse({ ok: true });
       }
       if (url.endsWith("/settings")) return jsonResponse(savedSettings);
+      if (url.endsWith("/runs")) return jsonResponse({ runs: [] });
       if (url.endsWith("/picker-token")) return jsonResponse({ accessToken: "short-lived-admin-token", apiKey: "browser-key", appId: "project-number" });
       throw new Error(`Unexpected fetch: ${url}`);
     });
   });
 
   it("selects a spreadsheet, retains it when saved, and reloads the saved ID", async () => {
-    const { rerender } = render(<GoogleSheetMonthlySetup />);
+    render(<GoogleSheetMonthlySetup />);
+    fireEvent.click(screen.getByRole("button", { name: /Monthly sheet setup/ }));
     await screen.findByText("Connected as admin@example.com");
-    fireEvent.click(screen.getAllByRole("button", { name: "Choose" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Choose master spreadsheet" }));
 
     const picker = await screen.findByTestId("drive-picker");
     expect(picker).toHaveAttribute("data-access-token", "short-lived-admin-token");
@@ -59,15 +61,15 @@ describe("Google monthly setup picker", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save monthly setup" }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/settings"), expect.objectContaining({ method: "PUT", body: expect.stringContaining('"templateFileId":"picked-id"') })));
-    await waitFor(() => expect(screen.getByText("Monthly sheet automation settings saved.")).toBeInTheDocument());
-
-    await waitFor(() => expect(screen.getByLabelText("Master template ID")).toHaveValue("picked-id"));
+    await waitFor(() => expect(screen.getByText("Monthly sheet setup saved.")).toBeInTheDocument());
+    expect(screen.getByLabelText("Master template ID")).toHaveValue("picked-id");
   });
 
   it("selects folders from the folder view and leaves the saved value unchanged on cancel", async () => {
     render(<GoogleSheetMonthlySetup />);
+    fireEvent.click(screen.getByRole("button", { name: /Monthly sheet setup/ }));
     await screen.findByText("Connected as admin@example.com");
-    fireEvent.click(screen.getAllByRole("button", { name: "Choose" })[1]);
+    fireEvent.click(screen.getByRole("button", { name: "Choose destination folder" }));
     await screen.findByTestId("drive-picker");
     const folderView = screen.getByTestId("drive-picker-view");
     expect(folderView).toHaveAttribute("view-id", "FOLDERS");
@@ -76,7 +78,7 @@ describe("Google monthly setup picker", () => {
     fireEvent.click(screen.getByRole("button", { name: "Simulate pick" }));
     expect(screen.getByLabelText("Destination folder ID")).toHaveValue("picked-id");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Choose" })[1]);
+    fireEvent.click(screen.getByRole("button", { name: "Choose destination folder" }));
     await screen.findByTestId("drive-picker");
     fireEvent.click(screen.getByRole("button", { name: "Simulate cancel" }));
     expect(screen.getByLabelText("Destination folder ID")).toHaveValue("picked-id");

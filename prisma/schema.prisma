@@ -896,6 +896,7 @@ model GoogleSheetMonthlyRun {
   fileId    String?   @map("file_id")
   fileUrl   String?   @map("file_url")
   error     String?
+  events    Json      @default("[]")
   previousSyncAt DateTime? @map("previous_sync_at")
   sheetPreparedAt DateTime? @map("sheet_prepared_at")
   accessGrantedAt DateTime? @map("access_granted_at")
