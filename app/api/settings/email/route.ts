@@ -31,17 +31,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         success: true,
         data: {
-          provider: "resend",
+          provider: process.env.EMAIL_PROVIDER?.trim().toLowerCase() === "smtp" || (!process.env.EMAIL_PROVIDER && process.env.SMTP_HOST) ? "smtp" : "resend",
           isActive: true,
-          fromEmail: "noreply@nns.lk",
-          fromName: "NNS Enterprise",
+          fromEmail: process.env.EMAIL_FROM || "noreply@nns.lk",
+          fromName: process.env.EMAIL_FROM_NAME || "NNS Enterprise",
           resendApiKey: process.env.RESEND_API_KEY ? "***configured***" : "",
-          smtpHost: "",
-          smtpPort: 587,
-          smtpSecure: true,
-          smtpUser: "",
-          smtpPassword: "",
-          hasEnvConfig: !!process.env.RESEND_API_KEY,
+          smtpHost: process.env.SMTP_HOST || "",
+          smtpPort: Number.parseInt(process.env.SMTP_PORT || "587", 10),
+          smtpSecure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE.trim().toLowerCase() === "true" : process.env.SMTP_PORT === "465",
+          smtpUser: process.env.SMTP_USER || "",
+          smtpPassword: process.env.SMTP_PASSWORD ? "***configured***" : "",
+          hasEnvConfig: !!(process.env.RESEND_API_KEY || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD)),
         },
       });
     }
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
         smtpSecure: settings.smtpSecure,
         smtpUser: settings.smtpUser || "",
         smtpPassword: settings.smtpPassword ? "***configured***" : "",
-        hasEnvConfig: !!process.env.RESEND_API_KEY,
+        hasEnvConfig: !!(process.env.RESEND_API_KEY || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD)),
       },
     });
   } catch (error) {
