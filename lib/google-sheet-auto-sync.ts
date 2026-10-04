@@ -17,7 +17,7 @@ export function sheetLocalClock(timeZone: string, now = new Date()) {
   const year = Number(values.year);
   const month = Number(values.month);
   const localDate = `${values.year}-${values.month}-${values.day}`;
-  return { year, month, localDate, localTime: `${values.hour}:${values.minute}`, period: `${values.year}-${values.month}` };
+  return { year, month, localDate, localTime: `${values.hour}:${values.minute}`, period: `${values.year}-${values.month.padStart(2, "0")}` };
 }
 
 export function currentSheetPeriod(timeZone: string, now = new Date()) {
