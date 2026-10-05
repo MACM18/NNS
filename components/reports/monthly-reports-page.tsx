@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
-import { Download, FileText, Link2, Loader2, Mail, RefreshCw, ShieldOff, Trash2 } from "lucide-react";
+import { Download, FileText, Link2, Loader2, Mail, RefreshCw, ShieldOff, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ type Document = { id: string; reportType: string; title: string; fileName: strin
 type Version = { id: string; version: number; status: string; createdAt: string; publishedAt: string | null; shareActive: boolean; shareRevokedAt: string | null; documents: Document[] };
 type Report = { id: string; year: number; month: number; currentVersionId: string | null; versions: Version[] };
 type RedesignProgress = { done: number; total: number; current: string; created: number; skipped: number; failures: string[] };
-type Confirmation = { kind: "redesign" } | { kind: "delete" | "revoke"; report: Report; version: Version };
+type Confirmation = { kind: "redesign" } | { kind: "delete" | "revoke" | "unpublish"; report: Report; version: Version };
 const MANAGEMENT = new Set(["admin", "moderator", "superadmin"]);
 const monthLabel = (report: Report) => format(new Date(report.year, report.month - 1, 1), "MMMM yyyy");
 
@@ -147,6 +147,22 @@ export function MonthlyReportsPage() {
     await refresh();
   };
 
+  const unpublish = async (report: Report, version: Version) => {
+    const result = await act(`unpublish-${version.id}`, `/api/monthly-reports/${report.id}/unpublish`, "POST", { versionId: version.id });
+    if (!result) return;
+    refreshSequence.current += 1;
+    setReports(current => current.map(item => item.id !== report.id ? item : {
+      ...item,
+      currentVersionId: null,
+      versions: item.versions.map(candidate => candidate.id === version.id
+        ? { ...candidate, status: "archived", shareActive: false, shareRevokedAt: result.shareRevokedAt }
+        : candidate),
+    }));
+    setShareUrls(current => { const copy = { ...current }; delete copy[version.id]; return copy; });
+    toast.success(`Version ${version.version} unpublished. Its share link is disabled; you can now delete it.`);
+    await refresh();
+  };
+
   const deleteVersion = async (report: Report, version: Version) => {
     const result = await act(`delete-${version.id}`, `/api/monthly-reports/${report.id}/versions/${version.id}`, "DELETE");
     if (!result) return;
@@ -191,17 +207,20 @@ export function MonthlyReportsPage() {
     if (!selected) return;
     if (selected.kind === "redesign") await redesignAll();
     else if (selected.kind === "delete") await deleteVersion(selected.report, selected.version);
+    else if (selected.kind === "unpublish") await unpublish(selected.report, selected.version);
     else await revoke(selected.report, selected.version);
   };
 
-  const confirmTitle = confirmation?.kind === "redesign" ? "Regenerate archived PDFs?" : confirmation?.kind === "delete" ? "Delete this report version?" : "Stop sharing this version?";
+  const confirmTitle = confirmation?.kind === "redesign" ? "Regenerate archived PDFs?" : confirmation?.kind === "delete" ? "Delete this report version?" : confirmation?.kind === "unpublish" ? "Unpublish this report version?" : "Stop sharing this version?";
   const confirmDescription = confirmation?.kind === "redesign"
     ? `Create a new draft for each of the ${reports.length} archived months. Review and publish each draft separately.`
     : confirmation?.kind === "delete"
       ? `Delete version ${confirmation.version.version} from ${monthLabel(confirmation.report)} and all ${confirmation.version.documents.length} saved PDFs? This cannot be undone.`
-      : confirmation?.kind === "revoke"
-        ? `The link for version ${confirmation.version.version} of ${monthLabel(confirmation.report)} and its PDF links will stop working immediately. Other versions keep their own links.`
-        : "";
+      : confirmation?.kind === "unpublish"
+        ? `Version ${confirmation.version.version} will no longer be the published version for ${monthLabel(confirmation.report)}. Its public link and PDF links will stop working immediately. Other versions keep their own links. You can delete this version afterward.`
+        : confirmation?.kind === "revoke"
+          ? `The link for version ${confirmation.version.version} of ${monthLabel(confirmation.report)} and its PDF links will stop working immediately. Other versions keep their own links.`
+          : "";
 
   return <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -231,7 +250,7 @@ export function MonthlyReportsPage() {
           {report.versions.map(version => {
             const isCurrent = version.id === report.currentVersionId;
             const canDelete = !isCurrent && !version.shareActive;
-            const deleteReason = isCurrent ? "Publish another version before deleting this one." : version.shareActive ? "Stop sharing this version before deleting it." : undefined;
+            const deleteReason = isCurrent ? "Unpublish this version before deleting it." : version.shareActive ? "Stop sharing this version before deleting it." : undefined;
             return <div key={version.id} className="border-b p-4 last:border-0">
               <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -240,6 +259,7 @@ export function MonthlyReportsPage() {
                 </div>
                 {manager && <div className="flex flex-wrap gap-2">
                   {!isCurrent && <Button size="sm" variant="outline" onClick={() => void publish(report, version)} disabled={Boolean(busy)}>{busy === `publish-${version.id}` ? "Publishing…" : version.status === "draft" ? "Publish reviewed version" : "Make current"}</Button>}
+                  {isCurrent && <Button size="sm" variant="outline" onClick={() => setConfirmation({ kind: "unpublish", report, version })} disabled={Boolean(busy)}><Upload className="mr-1.5 h-4 w-4 rotate-180" />{busy === `unpublish-${version.id}` ? "Unpublishing…" : "Unpublish"}</Button>}
                   {version.status !== "draft" && <>
                     <Button size="sm" variant={version.shareActive ? "outline" : "default"} onClick={() => void share(report, version)} disabled={Boolean(busy)}><Link2 className="mr-1.5 h-4 w-4" />{busy === `share-${version.id}` ? "Working…" : version.shareActive ? "Copy link" : "Share version"}</Button>
                     {version.shareActive && <>
@@ -261,7 +281,7 @@ export function MonthlyReportsPage() {
 
     <AlertDialog open={confirmation !== null} onOpenChange={open => { if (!open) setConfirmation(null); }}>
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirmTitle}</AlertDialogTitle><AlertDialogDescription>{confirmDescription}</AlertDialogDescription></AlertDialogHeader>
-        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><Button variant={confirmation?.kind === "delete" || confirmation?.kind === "revoke" ? "destructive" : "default"} onClick={() => void confirmAction()}>{confirmation?.kind === "redesign" ? "Regenerate drafts" : confirmation?.kind === "delete" ? "Delete version" : "Stop sharing"}</Button></AlertDialogFooter>
+        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><Button variant={confirmation?.kind === "delete" || confirmation?.kind === "revoke" || confirmation?.kind === "unpublish" ? "destructive" : "default"} onClick={() => void confirmAction()}>{confirmation?.kind === "redesign" ? "Regenerate drafts" : confirmation?.kind === "delete" ? "Delete version" : confirmation?.kind === "unpublish" ? "Unpublish version" : "Stop sharing"}</Button></AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
 
