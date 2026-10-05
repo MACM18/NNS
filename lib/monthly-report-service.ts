@@ -439,13 +439,16 @@ export async function publishMonthlyReportVersion(reportId: string, versionId: s
 
 export async function getPublicMonthlyReport(token: string) {
   if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
-  return prisma.monthlyReport.findFirst({
+  const report = await prisma.monthlyReport.findFirst({
     where: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token), currentVersionId: { not: null } },
     select: {
       year: true, month: true,
       currentVersion: { select: { version: true, documents: { orderBy: { reportType: "asc" }, select: { publicId: true, reportType: true, title: true, fileName: true } } } },
     },
   });
+  if (!report) return null;
+  const company = await prisma.companySettings.findFirst({ orderBy: { createdAt: "asc" }, select: { companyName: true } });
+  return { ...report, companyName: company?.companyName || "NNS Enterprise" };
 }
 
 export async function getPublicMonthlyReportDocument(token: string, publicId: string) {
