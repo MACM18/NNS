@@ -228,12 +228,12 @@ export function ManageWorkersModal({
 
         <div className="flex-1 flex flex-col min-h-0 p-4 md:p-6 md:overflow-hidden bg-muted/20">
           {/* Mobile Tab Switcher */}
-          <div className="flex md:hidden bg-muted p-1 rounded-xl mb-4 border shadow-sm">
+          <div className="flex md:hidden bg-muted p-1 rounded-xl mb-4 border shadow-xs">
             <button
               onClick={() => setActiveTab("list")}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-all",
-                activeTab === "list" ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+                activeTab === "list" ? "bg-background text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
               )}
             >
               <UserCircle className="h-4 w-4" />
@@ -243,7 +243,7 @@ export function ManageWorkersModal({
               onClick={() => setActiveTab("form")}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-all",
-                activeTab === "form" ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+                activeTab === "form" ? "bg-background text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {editingWorker ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -251,10 +251,10 @@ export function ManageWorkersModal({
             </button>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-[1fr,400px] lg:grid-cols-[1fr,420px] flex-1 md:overflow-hidden min-h-0">
+          <div className="grid gap-6 md:grid-cols-[1fr_400px] lg:grid-cols-[1fr_420px] flex-1 md:overflow-hidden min-h-0">
             {/* Workers List Column */}
             <div className={cn(
-              "flex-1 flex flex-col min-h-0 bg-background border rounded-2xl shadow-sm md:overflow-hidden",
+              "flex-1 flex flex-col min-h-0 bg-background border rounded-2xl shadow-xs md:overflow-hidden",
               activeTab !== "list" && "hidden md:flex"
             )}>
               <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
@@ -273,7 +273,7 @@ export function ManageWorkersModal({
                   </div>
                 ) : workers.length === 0 ? (
                   <div className='flex flex-col items-center justify-center py-16 px-4 text-center border-2 border-dashed rounded-xl bg-muted/10'>
-                    <div className="bg-background p-4 rounded-full shadow-sm mb-4">
+                    <div className="bg-background p-4 rounded-full shadow-xs mb-4">
                       <UserCircle className="h-10 w-10 text-muted-foreground/30" />
                     </div>
                     <h4 className="font-bold text-foreground">No workers assigned</h4>
@@ -355,7 +355,7 @@ export function ManageWorkersModal({
                           <Button
                             variant='ghost'
                             size='icon'
-                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg border border-transparent hover:border-primary/20 shadow-sm transition-all"
+                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg border border-transparent hover:border-primary/20 shadow-xs transition-all"
                             onClick={() => {
                               handleEdit(worker);
                               setActiveTab("form");
@@ -365,7 +365,7 @@ export function ManageWorkersModal({
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant='ghost' size='icon' className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive rounded-lg border border-transparent hover:border-destructive/20 shadow-sm transition-all">
+                              <Button variant='ghost' size='icon' className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive rounded-lg border border-transparent hover:border-destructive/20 shadow-xs transition-all">
                                 <Trash2 className='h-4 w-4' />
                               </Button>
                             </AlertDialogTrigger>
@@ -402,7 +402,7 @@ export function ManageWorkersModal({
               activeTab !== "form" && "hidden md:flex"
             )}>
               <div className='flex-1 flex flex-col bg-background border rounded-2xl shadow-lg border-primary/10 md:overflow-hidden'>
-                <div className="p-5 border-b bg-gradient-to-r from-primary/5 to-transparent flex items-center justify-between">
+                <div className="p-5 border-b bg-linear-to-r from-primary/5 to-transparent flex items-center justify-between">
                   <div className="space-y-0.5">
                     <h3 className='font-black text-foreground flex items-center gap-2 tracking-tight uppercase text-xs'>
                       {editingWorker ? <Activity className="h-3.5 w-3.5 text-primary" /> : <Plus className="h-3.5 w-3.5 text-primary" />}
@@ -563,7 +563,7 @@ export function ManageWorkersModal({
                     </div>
                   </div>
 
-                  <div className='p-5 border-t bg-muted/10 backdrop-blur-sm sticky bottom-0 flex gap-3'>
+                  <div className='p-5 border-t bg-muted/10 backdrop-blur-xs sticky bottom-0 flex gap-3'>
                     <Button
                       type='submit'
                       disabled={submitting}

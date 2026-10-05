@@ -261,7 +261,7 @@ export default function CareersPage() {
                       <TableCell className='font-medium'>
                         <div className='flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2'>
                           <div className='flex items-center space-x-2'>
-                            <Briefcase className='h-4 w-4 text-muted-foreground flex-shrink-0' />
+                            <Briefcase className='h-4 w-4 text-muted-foreground shrink-0' />
                             <span className='font-medium'>{job.title}</span>
                           </div>
                           <div className='sm:hidden text-xs text-muted-foreground'>

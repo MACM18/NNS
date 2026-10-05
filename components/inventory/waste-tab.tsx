@@ -21,8 +21,8 @@ export function WasteTab({ wasteReports, loadingData, error, role, onDelete }: W
   const canDelete = role === "admin" || role === "superadmin";
 
   return (
-    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-sm">
-      <CardHeader className="flex flex-col gap-2 border-b border-border/40 bg-muted/[0.12] sm:flex-row sm:items-start sm:justify-between">
+    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-xs">
+      <CardHeader className="flex flex-col gap-2 border-b border-border/40 bg-muted/12 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle className="text-lg font-bold">Waste and loss</CardTitle>
           <CardDescription>Keep a clear record of scrap, damage, and other stock losses.</CardDescription>
@@ -64,7 +64,7 @@ export function WasteTab({ wasteReports, loadingData, error, role, onDelete }: W
             </div>
             <div className="grid gap-3 md:hidden">
               {wasteReports.map((waste) => (
-                <div key={waste.id} className="rounded-xl border bg-card/60 p-4 shadow-sm">
+                <div key={waste.id} className="rounded-xl border bg-card/60 p-4 shadow-xs">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{waste.item_name || "Unknown item"}</p>

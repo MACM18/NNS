@@ -78,7 +78,7 @@ export function RevenueChart({ data, isLoading = false }: RevenueChartProps) {
             onClick={() => setActiveTab("revenue")}
             className={`px-2.5 py-1 rounded-md transition-all font-semibold ${
               isRevenue
-                ? "bg-background shadow-sm text-foreground"
+                ? "bg-background shadow-xs text-foreground"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -88,7 +88,7 @@ export function RevenueChart({ data, isLoading = false }: RevenueChartProps) {
             onClick={() => setActiveTab("cable")}
             className={`px-2.5 py-1 rounded-md transition-all font-semibold ${
               !isRevenue
-                ? "bg-background shadow-sm text-foreground"
+                ? "bg-background shadow-xs text-foreground"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >

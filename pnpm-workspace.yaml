@@ -1,1 +1,11 @@
+allowBuilds:
+  '@prisma/engines': set this to true or false
+  '@vercel/speed-insights': set this to true or false
+  core-js: set this to true or false
+  prisma: set this to true or false
+  sharp: set this to true or false
+  unrs-resolver: set this to true or false
 nodeLinker: hoisted
+overrides:
+  dompurify: 3.4.16
+  mysql2: 3.23.1

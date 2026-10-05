@@ -39,7 +39,7 @@ export function CookieConsentBanner() {
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-[70] mx-auto max-w-3xl rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-2xl sm:bottom-6 sm:p-6" role="region" aria-label="Cookie and privacy choices">
+    <div className="fixed inset-x-4 bottom-4 z-70 mx-auto max-w-3xl rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-2xl sm:bottom-6 sm:p-6" role="region" aria-label="Cookie and privacy choices">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
         <div className="max-w-xl space-y-2">
           <h2 className="text-base font-semibold">Cookies & site preferences</h2>

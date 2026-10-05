@@ -234,7 +234,7 @@ export default function WorkTrackingSummaryPage() {
     <div className='min-w-0 space-y-4 2xl:space-y-6'>
       <WorkTrackingHeader />
 
-      <Card className='p-4 shadow-sm'>
+      <Card className='p-4 shadow-xs'>
         <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <h2 className='text-xl font-semibold'>Assignment summary</h2>
@@ -305,7 +305,7 @@ export default function WorkTrackingSummaryPage() {
         </div>
       </Card>
 
-      <div className='grid gap-4 md:grid-cols-[1fr,320px]'>
+      <div className='grid gap-4 md:grid-cols-[1fr_320px]'>
         <Card className='p-4'>
           <div className='flex items-center justify-between mb-4'>
             <h3 className='text-lg font-semibold'>Team activity</h3>

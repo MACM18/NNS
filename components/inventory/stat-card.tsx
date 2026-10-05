@@ -67,7 +67,7 @@ export function StatCard({
       aria-pressed={onClick ? isActive : undefined}
       aria-label={onClick ? `${title}: ${value}${subtitle ? `. ${subtitle}` : ""}` : undefined}
       className={cn(
-        "bg-gradient-to-br backdrop-blur-md border hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group",
+        "bg-linear-to-br backdrop-blur-md border hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group",
         onClick && "cursor-pointer",
         colors.bg,
         isActive && colors.activeBorder,

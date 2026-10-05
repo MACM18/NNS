@@ -21,12 +21,12 @@ const sections = [
 export function InventorySectionNav({ counts }: InventorySectionNavProps) {
   return (
     <div className="-mx-1 overflow-x-auto px-1 pb-1">
-      <TabsList className="flex h-auto min-w-max gap-1.5 rounded-2xl border border-border/50 bg-muted/30 p-1.5 shadow-sm backdrop-blur-md lg:grid lg:min-w-0 lg:grid-cols-5">
+      <TabsList className="flex h-auto min-w-max gap-1.5 rounded-2xl border border-border/50 bg-muted/30 p-1.5 shadow-xs backdrop-blur-md lg:grid lg:min-w-0 lg:grid-cols-5">
         {sections.map(({ value, label, description, icon: Icon }) => (
           <TabsTrigger
             key={value}
             value={value}
-            className="group h-auto min-w-[170px] justify-start gap-3 rounded-xl px-3 py-2.5 text-left data-[state=active]:bg-background data-[state=active]:shadow-sm lg:min-w-0"
+            className="group h-auto min-w-[170px] justify-start gap-3 rounded-xl px-3 py-2.5 text-left data-[state=active]:bg-background data-[state=active]:shadow-xs lg:min-w-0"
           >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-background/70 text-muted-foreground ring-1 ring-border/40 transition-colors group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary group-data-[state=active]:ring-primary/20">
               <Icon className="h-4 w-4" aria-hidden="true" />

@@ -99,8 +99,8 @@ export function DrumsTab({
   const isAdminOrManager = ["admin", "moderator", "superadmin"].includes((role || "").toLowerCase());
 
   return (
-    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-sm">
-      <CardHeader className="border-b border-border/40 bg-muted/[0.12]">
+    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-xs">
+      <CardHeader className="border-b border-border/40 bg-muted/12">
         <div className="flex flex-col md:flex-row justify-between gap-4">
           <div>
             <CardTitle className="text-lg font-bold">Drum inventory</CardTitle>

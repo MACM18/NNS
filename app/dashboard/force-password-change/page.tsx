@@ -90,7 +90,7 @@ export default function ForcePasswordChangePage() {
 
   if (success) {
     return (
-      <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4'>
+      <div className='min-h-screen flex items-center justify-center bg-linear-to-br from-background to-muted p-4'>
         <Card className='w-full max-w-md'>
           <CardContent className='pt-6 text-center'>
             <div className='mx-auto w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mb-4'>
@@ -107,7 +107,7 @@ export default function ForcePasswordChangePage() {
   }
 
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4'>
+    <div className='min-h-screen flex items-center justify-center bg-linear-to-br from-background to-muted p-4'>
       <Card className='w-full max-w-md'>
         <CardHeader className='text-center space-y-2'>
           <div className='mx-auto w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center'>

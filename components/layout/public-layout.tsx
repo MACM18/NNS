@@ -55,7 +55,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className='flex flex-col min-h-screen bg-background text-foreground'>
       {/* Header */}
-      <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
+      <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60'>
         <nav
           className='mx-auto flex max-w-7xl items-center justify-between p-6 lg:px-8'
           aria-label='Global'
@@ -207,7 +207,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <button
                 type='button'
                 onClick={() => window.dispatchEvent(new Event(OPEN_COOKIE_SETTINGS_EVENT))}
-                className='mt-3 text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
+                className='mt-3 text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:rounded focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
               >
                 Cookie settings
               </button>

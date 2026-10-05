@@ -128,7 +128,7 @@ export function KpiCard({
             )}
           </div>
           {ringValue !== undefined && (
-            <div className="ml-1 mt-1 flex-shrink-0 2xl:ml-2">
+            <div className="ml-1 mt-1 shrink-0 2xl:ml-2">
               <ProgressRing
                 value={ringValue}
                 size={42}

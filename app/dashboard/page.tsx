@@ -226,7 +226,7 @@ export default function Dashboard() {
           {/* Header section with Picker and actions */}
           <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <h1 className="text-2xl font-extrabold tracking-tight 2xl:text-3xl bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground">
+              <h1 className="text-2xl font-extrabold tracking-tight 2xl:text-3xl bg-clip-text text-transparent bg-linear-to-r from-foreground via-foreground/90 to-muted-foreground">
                 Dashboard
               </h1>
               <p className="mt-0.5 text-xs text-muted-foreground 2xl:text-sm">

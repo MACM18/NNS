@@ -269,7 +269,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
                               <span className='truncate max-w-[250px]'>
                                 {"Link to Sheet"}
                               </span>
-                              <ExternalLink className='h-3 w-3 flex-shrink-0' />
+                              <ExternalLink className='h-3 w-3 shrink-0' />
                             </a>
                           </TableCell>
                           <TableCell>

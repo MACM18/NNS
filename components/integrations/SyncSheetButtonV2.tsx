@@ -412,7 +412,7 @@ export default function SyncSheetButton({
                   key={index}
                   className='flex items-start gap-3 text-slate-200'
                 >
-                  <span className='text-slate-500 text-xs mt-1 w-20 flex-shrink-0'>
+                  <span className='text-slate-500 text-xs mt-1 w-20 shrink-0'>
                     {formatTime(item.timestamp)}
                   </span>
                   <div className={cn("mt-0.5", getStatusColor(item.status))}>

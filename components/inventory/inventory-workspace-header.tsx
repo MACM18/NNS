@@ -56,7 +56,7 @@ export function InventoryWorkspaceHeader({
   const healthyPercentage = totalItems > 0 ? Math.round((healthyItems / totalItems) * 100) : 0;
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-border/50 bg-card shadow-sm">
+    <section className="relative overflow-hidden rounded-3xl border border-border/50 bg-card shadow-xs">
       <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-28 left-1/3 h-60 w-60 rounded-full bg-blue-500/10 blur-3xl" />
       <div className="relative grid gap-4 p-4 2xl:gap-6 2xl:p-7 2xl:grid-cols-[minmax(0,1fr)_220px] 2xl:items-center">
@@ -91,7 +91,7 @@ export function InventoryWorkspaceHeader({
             </div>
 
             <div className="flex shrink-0 flex-wrap gap-2 2xl:max-w-[330px] 2xl:justify-end">
-              <Button onClick={onAddReceipt} className="gap-2 shadow-sm">
+              <Button onClick={onAddReceipt} className="gap-2 shadow-xs">
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add receipt
               </Button>
@@ -171,11 +171,11 @@ export function InventoryWorkspaceHeader({
 }
 
 const metricTones = {
-  primary: "border-primary/15 bg-primary/[0.045] text-primary",
-  danger: "border-red-500/20 bg-red-500/[0.055] text-red-600 dark:text-red-400",
-  success: "border-emerald-500/20 bg-emerald-500/[0.055] text-emerald-600 dark:text-emerald-400",
-  violet: "border-violet-500/20 bg-violet-500/[0.055] text-violet-600 dark:text-violet-400",
-  amber: "border-amber-500/20 bg-amber-500/[0.055] text-amber-700 dark:text-amber-400",
+  primary: "border-primary/15 bg-primary/4.5 text-primary",
+  danger: "border-red-500/20 bg-red-500/5.5 text-red-600 dark:text-red-400",
+  success: "border-emerald-500/20 bg-emerald-500/5.5 text-emerald-600 dark:text-emerald-400",
+  violet: "border-violet-500/20 bg-violet-500/5.5 text-violet-600 dark:text-violet-400",
+  amber: "border-amber-500/20 bg-amber-500/5.5 text-amber-700 dark:text-amber-400",
 };
 
 function OverviewMetric({
@@ -198,11 +198,11 @@ function OverviewMetric({
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex min-h-[92px] items-center gap-3 rounded-2xl border p-3.5 text-left transition-all hover:-translate-y-0.5 hover:bg-background/80 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "group flex min-h-[92px] items-center gap-3 rounded-2xl border p-3.5 text-left transition-all hover:-translate-y-0.5 hover:bg-background/80 hover:shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         metricTones[tone],
       )}
     >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-background/80 shadow-sm">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-background/80 shadow-xs">
         <Icon className="h-5 w-5" aria-hidden="true" />
       </span>
       <span className="min-w-0">
