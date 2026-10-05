@@ -12,9 +12,9 @@ export async function GET() {
     include: { versions: { orderBy: { version: "desc" }, include: { documents: { select: { id: true, reportType: true, title: true, fileName: true } } } } },
   });
   return NextResponse.json({ data: reports.map(report => ({
-    id: report.id, year: report.year, month: report.month, shareActive: report.shareActive, shareRevokedAt: report.shareRevokedAt,
+    id: report.id, year: report.year, month: report.month,
     currentVersionId: report.currentVersionId,
-    versions: report.versions.map(version => ({ id: version.id, version: version.version, status: version.status, createdAt: version.createdAt, publishedAt: version.publishedAt, documents: version.documents })),
+    versions: report.versions.map(version => ({ id: version.id, version: version.version, status: version.status, createdAt: version.createdAt, publishedAt: version.publishedAt, shareActive: version.shareActive, shareRevokedAt: version.shareRevokedAt, documents: version.documents })),
   })) });
 }
 

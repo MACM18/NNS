@@ -3,9 +3,9 @@
 import { useState } from "react";
 
 type SharedDocument = { publicId: string; reportType: string; title: string; fileName: string };
-type Props = { token: string; companyName: string; monthName: string; year: number; documents: SharedDocument[] };
+type Props = { token: string; companyName: string; monthName: string; year: number; versionNumber: number; documents: SharedDocument[] };
 
-export function SharedMonthlyReportViewer({ token, companyName, monthName, year, documents }: Props) {
+export function SharedMonthlyReportViewer({ token, companyName, monthName, year, versionNumber, documents }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const activeDocument = documents[activeIndex];
   const pdfUrl = activeDocument ? `/api/public/monthly-reports/${token}/documents/${activeDocument.publicId}` : "";
@@ -28,7 +28,7 @@ export function SharedMonthlyReportViewer({ token, companyName, monthName, year,
             <div className="mt-7 hidden rounded-2xl bg-[#f1f7fb] p-4 lg:block">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Report period</p>
               <p className="mt-2 text-xl font-semibold tracking-tight text-[#164568]">{monthName}</p>
-              <p className="text-sm font-medium text-slate-600">{year}</p>
+              <p className="text-sm font-medium text-slate-600">{year} · Version {versionNumber}</p>
             </div>
 
             <nav aria-label="Monthly report documents" className="mt-6">
@@ -68,7 +68,7 @@ export function SharedMonthlyReportViewer({ token, companyName, monthName, year,
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-800">{companyName} · {monthName} {year}</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{activeDocument.title}</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Published monthly report · PDF</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Published monthly report · Version {versionNumber} · PDF</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">

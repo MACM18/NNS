@@ -8,7 +8,7 @@ export const metadata = { title: "Shared Monthly Reports | NNS", robots: { index
 export default async function SharedMonthlyReportPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const report = await getPublicMonthlyReport(token);
-  if (!report?.currentVersion) notFound();
+  if (!report?.sharedVersion) notFound();
   const monthName = new Intl.DateTimeFormat("en", { month: "long", timeZone: "Asia/Colombo" }).format(new Date(Date.UTC(report.year, report.month - 1, 1)));
 
   return (
@@ -17,7 +17,8 @@ export default async function SharedMonthlyReportPage({ params }: { params: Prom
       companyName={report.companyName}
       monthName={monthName}
       year={report.year}
-      documents={report.currentVersion.documents}
+      versionNumber={report.sharedVersion.version}
+      documents={report.sharedVersion.documents}
     />
   );
 }

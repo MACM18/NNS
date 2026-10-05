@@ -662,10 +662,6 @@ model MonthlyReport {
   id                   String                @id @default(uuid())
   year                 Int
   month                Int
-  shareActive          Boolean               @default(false) @map("share_active")
-  shareTokenHash       String?               @unique @map("share_token_hash")
-  encryptedShareToken  String?               @map("encrypted_share_token")
-  shareRevokedAt       DateTime?             @map("share_revoked_at")
   currentVersionId     String?               @unique @map("current_version_id")
   createdById          String?               @map("created_by")
   createdAt            DateTime              @default(now()) @map("created_at")
@@ -689,6 +685,10 @@ model MonthlyReportVersion {
   createdById String?                @map("created_by")
   createdAt   DateTime               @default(now()) @map("created_at")
   publishedAt DateTime?              @map("published_at")
+  shareActive Boolean                @default(false) @map("share_active")
+  shareTokenHash String?             @unique @map("share_token_hash")
+  encryptedShareToken String?        @map("encrypted_share_token")
+  shareRevokedAt DateTime?           @map("share_revoked_at")
   report      MonthlyReport          @relation("MonthlyReportVersions", fields: [reportId], references: [id], onDelete: Cascade)
   currentFor  MonthlyReport?         @relation("MonthlyReportCurrentVersion")
   createdBy   Profile?               @relation("MonthlyReportVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
