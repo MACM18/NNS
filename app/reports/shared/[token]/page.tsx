@@ -3,7 +3,6 @@ import { SharedMonthlyReportViewer } from "@/components/reports/shared-monthly-r
 import { getPublicMonthlyReport } from "@/lib/monthly-report-service";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Shared Monthly Reports | NNS", robots: { index: false, follow: false } };
 
 export default async function SharedMonthlyReportPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
