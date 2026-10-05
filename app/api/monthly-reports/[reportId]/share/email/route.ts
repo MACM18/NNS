@@ -36,7 +36,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ re
         text: `NNS Enterprise monthly reports for ${label}, version ${version.version}, are ready. Anyone with this link can view the reports: ${shareUrl}`,
         html: `<h2 style="margin:0 0 12px;color:#134160">Monthly reports are ready</h2><p>The NNS Enterprise report set for <strong>${escapeEmailHtml(label)}</strong>, version ${version.version}, is available.</p><p style="margin:22px 0"><a href="${escapeEmailHtml(shareUrl)}" style="display:inline-block;background:#134160;color:#fff;padding:12px 18px;border-radius:5px;text-decoration:none">View monthly reports</a></p><p style="font-size:12px;color:#607383">Anyone with this link can view the reports. The link can be disabled by an administrator.</p>`,
       });
-      results.push({ recipient, success: result.success, ...(result.success ? {} : { error: result.error || "Email could not be sent." }) });
+      let historySaved = false;
+      if (result.success) {
+        try {
+          await prisma.monthlyReportEmailRecipient.upsert({
+            where: { email: recipient },
+            create: { email: recipient },
+            update: { lastSentAt: new Date() },
+          });
+          historySaved = true;
+        } catch {
+          // A history write failure must not misreport an email accepted by the provider as unsent.
+        }
+      }
+      results.push({
+        recipient,
+        success: result.success,
+        ...(result.success ? { historySaved } : { error: result.error || "Email could not be sent." }),
+      });
     }
     const sent = results.filter(result => result.success).length;
     return NextResponse.json({ data: { sent, failed: results.length - sent, results } }, { status: sent ? 200 : 502 });

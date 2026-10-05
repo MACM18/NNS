@@ -42,4 +42,31 @@ describe("monthly report version controls", () => {
       expect(confirmSpy).not.toHaveBeenCalled();
     } finally { confirmSpy.mockRestore(); }
   });
+  it("offers previously emailed addresses as selectable chips and sends them with typed recipients", async () => {
+    const sendBody = jest.fn();
+    (global.fetch as jest.Mock) = jest.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/monthly-reports/email-recipients") return response({ data: [{ email: "saved@example.com", lastSentAt: "2026-10-05T00:00:00.000Z" }] });
+      if (url === "/api/monthly-reports/report-1/share/email") {
+        sendBody(JSON.parse(String(init?.body)));
+        return response({ data: { sent: 2, failed: 0, results: [{ recipient: "saved@example.com", success: true, historySaved: true }, { recipient: "typed@example.com", success: true, historySaved: true }] } });
+      }
+      return response({ data: [{ id: "report-1", year: 2026, month: 10, currentVersionId: "version-2", versions: [version("version-2", 2, true)] }] });
+    });
+
+    render(<MonthlyReportsPage />);
+    await screen.findByText("Version 2");
+    fireEvent.click(screen.getByRole("button", { name: "Email link" }));
+    const suggestion = await screen.findByRole("button", { name: "+ saved@example.com" });
+    fireEvent.click(suggestion);
+    const recipients = screen.getByLabelText("Recipients") as HTMLTextAreaElement;
+    expect(recipients.value).toBe("saved@example.com");
+    const sendButton = screen.getByRole("button", { name: "Send version link" });
+    fireEvent.change(recipients, { target: { value: Array.from({ length: 11 }, (_, index) => `user${index}@example.com`).join("\n") } });
+    expect(sendButton).toBeDisabled();
+    fireEvent.change(recipients, { target: { value: "saved@example.com\ntyped@example.com" } });
+    fireEvent.click(sendButton);
+
+    await waitFor(() => expect(sendBody).toHaveBeenCalledWith({ versionId: "version-2", recipients: ["saved@example.com", "typed@example.com"] }));
+  });
+
 });
