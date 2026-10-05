@@ -115,7 +115,7 @@ describe("monthly report PDF generation", () => {
     expect(withoutOptional).not.toContain("8m Pole Installation");
   });
 
-  it("uses four distinct daily measure fills and strong separators between days", () => {
+  it("uses alternating light-blue day bands and strong separators", () => {
     const bytes = generateDailyMaterialBalancePdf({
       monthLabel: "October 2026",
       items: [{ sourceItemName: "Fiber", sourceUnit: "m", dailyEntries: [
@@ -124,10 +124,9 @@ describe("monthly report PDF generation", () => {
       ] }],
     });
     const content = pdfText(bytes);
-    expect(content).toContain("0.9 0.95 1. rg");
-    expect(content).toContain("0.9 0.96 0.92 rg");
-    expect(content).toContain("1. 0.95 0.84 rg");
-    expect(content).toContain("0.95 0.92 1. rg");
+    expect(content).toContain("0.91 0.95 0.98 rg");
+    expect(content).toContain("0.96 0.98 0.99 rg");
+    expect(content).not.toContain("1. 0.95 0.84 rg");
     expect(content).toContain("1.8425196850393704 w");
   });
 

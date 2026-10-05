@@ -8,7 +8,8 @@ const BRAND_NAVY: [number, number, number] = [19, 65, 96];
 const BRAND_BLUE: [number, number, number] = [19, 132, 184];
 const PALE_BLUE: [number, number, number] = [225, 241, 249];
 const GRID: [number, number, number] = [190, 208, 218];
-const DAILY_COLUMN_FILLS: [number, number, number][] = [[230, 242, 255], [229, 245, 234], [255, 243, 214], [242, 234, 254]];
+const DAILY_HEADER_FILL: [number, number, number] = [232, 243, 251];
+const DAILY_DAY_FILLS: [number, number, number][] = [[246, 250, 253], [232, 243, 251]];
 
 function newPdf(orientation: "portrait" | "landscape" = "portrait", format: "a4" | "a3" = "a4") {
   return new jsPDF({ orientation, unit: "mm", format, compress: true });
@@ -85,8 +86,8 @@ function drawDailyHeader(doc: jsPDF, dates: string[], x: number, y: number, item
     doc.setFont("helvetica", "bold"); doc.setFontSize(5.5); doc.setTextColor(255, 255, 255);
     const dateLabel = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
     doc.text(dateLabel, left + groupWidth / 2, y + 3.7, { align: "center" });
-    ["Prev", "Issued", "Usage", "Return"].forEach((label, measureIndex) => {
-      doc.setFillColor(...DAILY_COLUMN_FILLS[measureIndex]);
+    ["Prev", "Issued", "Usage", "Return"].forEach(label => {
+      doc.setFillColor(...DAILY_HEADER_FILL);
       doc.rect(left, y + groupHeight, dayWidth, labelHeight, "FD");
       doc.setFont("helvetica", "bold"); doc.setFontSize(4.7); doc.setTextColor(...BRAND_NAVY);
       doc.text(textFit(doc, label, dayWidth - 0.8), left + dayWidth / 2, y + groupHeight + 3.6, { align: "center" });
@@ -187,7 +188,7 @@ export function generateDailyMaterialBalancePdf(input: { monthLabel: string; ite
     const alignments = ["left", "center", ...slice.flatMap(() => ["right", "right", "right", "right"])] as TableOptions["alignments"];
     const options: TableOptions = {
       widths, rowHeight: 5.8, fontSize: 5.4, headerSize: 5.1, alignments,
-      cellFills: [undefined, undefined, ...slice.flatMap(() => DAILY_COLUMN_FILLS)],
+      cellFills: [undefined, undefined, ...slice.flatMap((_, dayIndex) => Array.from({ length: 4 }, () => DAILY_DAY_FILLS[dayIndex % 2]))],
       separatorAfter: slice.slice(0, -1).map((_, index) => 5 + index * 4),
     };
     const y = reportHeader(doc, "NNS Enterprise - Daily Material Balance", input.monthLabel, margin, offset > 0);
