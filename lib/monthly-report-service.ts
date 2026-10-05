@@ -387,41 +387,57 @@ export async function regenerateMonthlyReportDesign(reportId: string, createdByI
   });
 }
 
-export async function createOrGetMonthlyShare(reportId: string) {
+export async function createOrGetMonthlyVersionShare(reportId: string, versionId: string) {
   return prisma.$transaction(async tx => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-share:${reportId}`}))`;
-    const report = await tx.monthlyReport.findUnique({ where: { id: reportId } });
-    if (!report?.currentVersionId) throw new Error("Publish a reviewed report version before creating a share link.");
-    if (report.shareActive && report.encryptedShareToken) return { token: decrypt(report.encryptedShareToken), report };
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-version-share:${versionId}`}))`;
+    const version = await tx.monthlyReportVersion.findFirst({
+      where: { id: versionId, reportId },
+      select: { id: true, status: true, shareActive: true, shareTokenHash: true, encryptedShareToken: true },
+    });
+    if (!version) throw new Error("This report version was not found for the selected month.");
+    if (version.status !== "published" && version.status !== "archived") throw new Error("Publish this reviewed version before sharing it.");
+    if (version.shareActive && version.shareTokenHash && version.encryptedShareToken) return { token: decrypt(version.encryptedShareToken), version };
     const token = createMonthlyShareToken();
-    const updated = await tx.monthlyReport.update({ where: { id: reportId }, data: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token), encryptedShareToken: encrypt(token), shareRevokedAt: null } });
-    return { token, report: updated };
+    const updated = await tx.monthlyReportVersion.update({
+      where: { id: versionId },
+      data: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token), encryptedShareToken: encrypt(token), shareRevokedAt: null },
+      select: { id: true, version: true, shareActive: true },
+    });
+    return { token, version: updated };
   });
 }
 
-export async function getActiveMonthlyShare(reportId: string) {
-  return prisma.$transaction(async tx => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-share:${reportId}`}))`;
-    const report = await tx.monthlyReport.findUnique({ where: { id: reportId } });
-    if (!report?.shareActive || !report.encryptedShareToken || !report.currentVersionId) return null;
-    return { token: decrypt(report.encryptedShareToken), report };
+export async function getActiveMonthlyVersionShare(reportId: string, versionId: string) {
+  const version = await prisma.monthlyReportVersion.findFirst({
+    where: { id: versionId, reportId, shareActive: true },
+    select: { version: true, encryptedShareToken: true, shareTokenHash: true, report: { select: { year: true, month: true } } },
   });
+  if (!version?.encryptedShareToken || !version.shareTokenHash) return null;
+  return { token: decrypt(version.encryptedShareToken), version: { version: version.version, report: version.report } };
 }
 
-export async function revokeMonthlyShare(reportId: string) {
+export async function revokeMonthlyVersionShare(reportId: string, versionId: string) {
   return prisma.$transaction(async tx => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-share:${reportId}`}))`;
-    return tx.monthlyReport.update({ where: { id: reportId }, data: { shareActive: false, shareTokenHash: null, encryptedShareToken: null, shareRevokedAt: new Date() } });
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-version-share:${versionId}`}))`;
+    const version = await tx.monthlyReportVersion.findFirst({ where: { id: versionId, reportId }, select: { id: true } });
+    if (!version) throw new Error("This report version was not found for the selected month.");
+    return tx.monthlyReportVersion.update({
+      where: { id: versionId },
+      data: { shareActive: false, shareTokenHash: null, encryptedShareToken: null, shareRevokedAt: new Date() },
+      select: { id: true, shareActive: true, shareRevokedAt: true },
+    });
   });
 }
 
 export async function deleteMonthlyReportVersion(reportId: string, versionId: string) {
   return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-version-share:${versionId}`}))`;
     const report = await tx.monthlyReport.findUnique({ where: { id: reportId }, select: { currentVersionId: true } });
     if (!report) throw new Error("This monthly report was not found.");
-    if (report.currentVersionId === versionId) throw new Error("The currently published version cannot be deleted. Publish another version first.");
-    const version = await tx.monthlyReportVersion.findFirst({ where: { id: versionId, reportId }, select: { id: true, version: true } });
+    if (report.currentVersionId === versionId) throw new Error("Publish another version before deleting the current published version.");
+    const version = await tx.monthlyReportVersion.findFirst({ where: { id: versionId, reportId }, select: { id: true, version: true, shareActive: true } });
     if (!version) throw new Error("This report version was not found for this month.");
+    if (version.shareActive) throw new Error("Stop sharing this version before deleting it.");
     await tx.monthlyReportVersion.delete({ where: { id: version.id } });
     return { deleted: true as const, version: version.version };
   });
@@ -439,27 +455,23 @@ export async function publishMonthlyReportVersion(reportId: string, versionId: s
 
 export async function getPublicMonthlyReport(token: string) {
   if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
-  const report = await prisma.monthlyReport.findFirst({
-    where: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token), currentVersionId: { not: null } },
+  const version = await prisma.monthlyReportVersion.findFirst({
+    where: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token) },
     select: {
-      year: true, month: true,
-      currentVersion: { select: { version: true, documents: { orderBy: { reportType: "asc" }, select: { publicId: true, reportType: true, title: true, fileName: true } } } },
+      version: true,
+      report: { select: { year: true, month: true } },
+      documents: { orderBy: { reportType: "asc" }, select: { publicId: true, reportType: true, title: true, fileName: true } },
     },
   });
-  if (!report) return null;
+  if (!version) return null;
   const company = await prisma.companySettings.findFirst({ orderBy: { createdAt: "asc" }, select: { companyName: true } });
-  return { ...report, companyName: company?.companyName || "NNS Enterprise" };
+  return { year: version.report.year, month: version.report.month, sharedVersion: { version: version.version, documents: version.documents }, companyName: company?.companyName || "NNS Enterprise" };
 }
 
 export async function getPublicMonthlyReportDocument(token: string, publicId: string) {
   if (!/^[A-Za-z0-9_-]{40,50}$/.test(token) || !/^[A-Za-z0-9_-]{30,40}$/.test(publicId)) return null;
-  const report = await prisma.monthlyReport.findFirst({
-    where: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token), currentVersionId: { not: null } },
-    select: { currentVersionId: true },
-  });
-  if (!report?.currentVersionId) return null;
   return prisma.monthlyReportDocument.findFirst({
-    where: { publicId, versionId: report.currentVersionId },
+    where: { publicId, version: { shareActive: true, shareTokenHash: hashMonthlyShareToken(token) } },
     select: { pdfBytes: true, fileName: true },
   });
 }
