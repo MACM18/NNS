@@ -125,8 +125,8 @@ export function StockTab({
   };
 
   return (
-    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-sm">
-      <CardHeader className="space-y-5 border-b border-border/40 bg-muted/[0.12]">
+    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-xs">
+      <CardHeader className="space-y-5 border-b border-border/40 bg-muted/12">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <CardTitle className="text-lg font-bold">Stock on hand</CardTitle>
@@ -151,7 +151,7 @@ export function StockTab({
                 placeholder="Search materials and stock items"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                className="h-11 rounded-xl bg-background/80 pl-9 shadow-sm"
+                className="h-11 rounded-xl bg-background/80 pl-9 shadow-xs"
                 aria-label="Search inventory items"
               />
             </div>
@@ -187,7 +187,7 @@ export function StockTab({
               key={value}
               type="button"
               onClick={() => setStatusFilter(String(value))}
-              className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${statusFilter === value ? "border-primary/30 bg-background shadow-sm" : "border-border/40 bg-background/35 hover:border-border hover:bg-background/60"}`}
+              className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-all focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${statusFilter === value ? "border-primary/30 bg-background shadow-xs" : "border-border/40 bg-background/35 hover:border-border hover:bg-background/60"}`}
               aria-pressed={statusFilter === value}
             >
               <span className="min-w-0">
@@ -262,7 +262,7 @@ export function StockTab({
               {filteredItems.map((item) => {
                 const status = getStockStatusKey(item);
                 return (
-                  <div key={item.id} className="relative overflow-hidden rounded-2xl border bg-card/70 p-4 pl-5 shadow-sm">
+                  <div key={item.id} className="relative overflow-hidden rounded-2xl border bg-card/70 p-4 pl-5 shadow-xs">
                     <span className={`absolute inset-y-0 left-0 w-1 ${getStatusAccent(status)}`} aria-hidden="true" />
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">

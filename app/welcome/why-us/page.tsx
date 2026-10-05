@@ -15,11 +15,11 @@ export default function WhyUsPage() {
   return (
     <div className="relative overflow-hidden bg-background min-h-screen">
       <div className='absolute inset-0 bg-grid-pattern opacity-5'></div>
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5"></div>
+      <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-background to-accent/5"></div>
 
       {/* Hero Section */}
       <section className='relative pt-24 pb-12 md:pt-32 md:pb-16 text-center px-4'>
-        <Badge variant="outline" className="mb-6 px-4 py-2 rounded-full border-primary/20 bg-primary/5 text-primary backdrop-blur-sm">
+        <Badge variant="outline" className="mb-6 px-4 py-2 rounded-full border-primary/20 bg-primary/5 text-primary backdrop-blur-xs">
           The NNS Advantage
         </Badge>
         <h1 className='text-4xl md:text-6xl font-bold tracking-tight text-foreground mb-6'>
@@ -92,7 +92,7 @@ export default function WhyUsPage() {
 
               <div className='space-y-6 relative z-10'>
                 <div className="flex items-center gap-4 p-4 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors">
-                  <div className="h-12 w-12 rounded-full bg-background flex items-center justify-center shrink-0 shadow-sm">
+                  <div className="h-12 w-12 rounded-full bg-background flex items-center justify-center shrink-0 shadow-xs">
                     <Users className='h-6 w-6 text-accent' />
                   </div>
                   <div>
@@ -102,7 +102,7 @@ export default function WhyUsPage() {
                 </div>
 
                 <div className="flex items-center gap-4 p-4 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors">
-                  <div className="h-12 w-12 rounded-full bg-background flex items-center justify-center shrink-0 shadow-sm">
+                  <div className="h-12 w-12 rounded-full bg-background flex items-center justify-center shrink-0 shadow-xs">
                     <Rocket className='h-6 w-6 text-accent' />
                   </div>
                   <div>

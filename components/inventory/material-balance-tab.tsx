@@ -123,7 +123,7 @@ export function MaterialBalanceTab() {
 
   return (
     <div className="space-y-4">
-      <Card className="relative overflow-hidden rounded-2xl border-blue-200/70 bg-gradient-to-r from-blue-50/70 via-blue-50/30 to-transparent shadow-sm dark:border-blue-900/50 dark:from-blue-950/30 dark:via-blue-950/10">
+      <Card className="relative overflow-hidden rounded-2xl border-blue-200/70 bg-linear-to-r from-blue-50/70 via-blue-50/30 to-transparent shadow-xs dark:border-blue-900/50 dark:from-blue-950/30 dark:via-blue-950/10">
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <LockKeyhole className="mt-0.5 h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -140,8 +140,8 @@ export function MaterialBalanceTab() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden rounded-3xl border-border/40 shadow-sm">
-        <CardHeader className="gap-4 border-b border-border/40 bg-muted/[0.12] sm:flex-row sm:items-center sm:justify-between">
+      <Card className="overflow-hidden rounded-3xl border-border/40 shadow-xs">
+        <CardHeader className="gap-4 border-b border-border/40 bg-muted/12 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-lg">Google Sheet Material Balance</CardTitle>
             <CardDescription>Imported stock balances, daily issuance, usage, and returns.</CardDescription>
@@ -275,7 +275,7 @@ export function MaterialBalanceTab() {
                 {importData.items.map((item: MaterialBalanceItemSnapshot) => {
                   const day = date ? item.dailyEntries[0] : null;
                   return (
-                    <div key={item.id} className="rounded-xl border bg-card/60 p-4 shadow-sm">
+                    <div key={item.id} className="rounded-xl border bg-card/60 p-4 shadow-xs">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0"><p className="truncate font-semibold">{item.sourceItemName}</p><p className="text-xs text-muted-foreground">{item.sourceUnit || item.inventoryItem?.unit || "Unit not set"}</p></div>
                         {statusBadge(item.status)}

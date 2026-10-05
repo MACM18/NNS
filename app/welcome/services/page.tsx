@@ -16,11 +16,11 @@ export default function ServicesPage() {
   return (
     <div className="relative overflow-hidden bg-background min-h-screen">
       <div className='absolute inset-0 bg-grid-pattern opacity-5'></div>
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5"></div>
+      <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-background to-accent/5"></div>
 
       {/* Hero Section */}
       <section className='relative pt-24 pb-12 md:pt-32 md:pb-16 text-center px-4'>
-        <Badge variant="outline" className="mb-6 px-4 py-2 rounded-full border-primary/20 bg-primary/5 text-primary backdrop-blur-sm">
+        <Badge variant="outline" className="mb-6 px-4 py-2 rounded-full border-primary/20 bg-primary/5 text-primary backdrop-blur-xs">
           Our Expertise
         </Badge>
         <h1 className='text-4xl md:text-6xl font-bold tracking-tight text-foreground mb-6'>

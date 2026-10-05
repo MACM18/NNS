@@ -61,10 +61,10 @@ export default function IntegrationsPage() {
 
       <div className='grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3'>
         {/* Google Sheets Integration Card */}
-        <Card className='group border-border/80 shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/[0.03] hover:shadow-md'>
+        <Card className='group border-border/80 shadow-xs transition-colors hover:border-primary/40 hover:bg-primary/3 hover:shadow-md'>
           <CardHeader>
             <div className='flex items-center justify-between gap-2'>
-              <div className='p-2.5 bg-primary/10 rounded-lg w-fit flex-shrink-0 transition-colors group-hover:bg-primary/15'>
+              <div className='p-2.5 bg-primary/10 rounded-lg w-fit shrink-0 transition-colors group-hover:bg-primary/15'>
                 <FileSpreadsheet className='h-6 w-6 md:h-8 md:w-8 text-primary' />
               </div>
               <Link href='/dashboard/integrations/google-sheets'>

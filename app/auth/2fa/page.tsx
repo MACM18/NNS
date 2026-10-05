@@ -135,7 +135,7 @@ function TwoFactorVerificationContent() {
   }
 
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4 animate-in fade-in duration-500'>
+    <div className='min-h-screen flex items-center justify-center bg-linear-to-br from-background to-muted p-4 animate-in fade-in duration-500'>
       <Card className='w-full max-w-md animate-in slide-in-from-bottom-4 duration-700'>
         <CardHeader className='text-center space-y-2'>
           <div className='mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center'>
@@ -240,7 +240,7 @@ function TwoFactorVerificationContent() {
 
 function TwoFactorLoadingFallback() {
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4'>
+    <div className='min-h-screen flex items-center justify-center bg-linear-to-br from-background to-muted p-4'>
       <Card className='w-full max-w-md'>
         <CardHeader className='text-center space-y-2'>
           <div className='mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center'>

@@ -173,7 +173,7 @@ export function PWAInitializer() {
               <X className='h-4 w-4' />
             </button>
             <div className='flex items-start gap-3 pr-6'>
-              <div className='flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center'>
+              <div className='shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center'>
                 <Download className='h-5 w-5 text-primary' />
               </div>
               <div className='flex-1'>
@@ -207,7 +207,7 @@ export function PWAInitializer() {
               <X className='h-4 w-4' />
             </button>
             <div className='flex items-start gap-3 pr-6'>
-              <div className='flex-shrink-0 w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center'>
+              <div className='shrink-0 w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center'>
                 <RefreshCw className='h-5 w-5 text-blue-500' />
               </div>
               <div className='flex-1'>
@@ -229,7 +229,7 @@ export function PWAInitializer() {
 
       {/* Offline Indicator */}
       {!isOnline && (
-        <div className='fixed top-0 left-0 right-0 z-50 bg-yellow-500/90 backdrop-blur-sm text-yellow-900 px-4 py-2 text-center text-sm font-medium animate-in slide-in-from-top-2'>
+        <div className='fixed top-0 left-0 right-0 z-50 bg-yellow-500/90 backdrop-blur-xs text-yellow-900 px-4 py-2 text-center text-sm font-medium animate-in slide-in-from-top-2'>
           📡 You're currently offline. Some features may be limited.
         </div>
       )}

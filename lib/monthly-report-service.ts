@@ -431,10 +431,11 @@ export async function revokeMonthlyVersionShare(reportId: string, versionId: str
 
 export async function deleteMonthlyReportVersion(reportId: string, versionId: string) {
   return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-report-publish:${reportId}`}))`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-version-share:${versionId}`}))`;
     const report = await tx.monthlyReport.findUnique({ where: { id: reportId }, select: { currentVersionId: true } });
     if (!report) throw new Error("This monthly report was not found.");
-    if (report.currentVersionId === versionId) throw new Error("Publish another version before deleting the current published version.");
+    if (report.currentVersionId === versionId) throw new Error("Unpublish this version before deleting it.");
     const version = await tx.monthlyReportVersion.findFirst({ where: { id: versionId, reportId }, select: { id: true, version: true, shareActive: true } });
     if (!version) throw new Error("This report version was not found for this month.");
     if (version.shareActive) throw new Error("Stop sharing this version before deleting it.");
@@ -445,11 +446,35 @@ export async function deleteMonthlyReportVersion(reportId: string, versionId: st
 
 export async function publishMonthlyReportVersion(reportId: string, versionId: string) {
   return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-report-publish:${reportId}`}))`;
     const version = await tx.monthlyReportVersion.findFirst({ where: { id: versionId, reportId }, select: { id: true } });
     if (!version) throw new Error("Report version was not found for this month.");
     await tx.monthlyReportVersion.updateMany({ where: { reportId, status: "published", id: { not: versionId } }, data: { status: "archived" } });
     await tx.monthlyReportVersion.update({ where: { id: versionId }, data: { status: "published", publishedAt: new Date() } });
     return tx.monthlyReport.update({ where: { id: reportId }, data: { currentVersionId: versionId } });
+  });
+}
+
+export async function unpublishMonthlyReportVersion(reportId: string, versionId: string) {
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-report-publish:${reportId}`}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`monthly-version-share:${versionId}`}))`;
+    const report = await tx.monthlyReport.findUnique({ where: { id: reportId }, select: { currentVersionId: true } });
+    if (!report) throw new Error("This monthly report was not found.");
+    if (report.currentVersionId !== versionId) throw new Error("This version is no longer the current published version. Refresh the archive and try again.");
+    const version = await tx.monthlyReportVersion.findFirst({
+      where: { id: versionId, reportId },
+      select: { id: true, shareActive: true, shareRevokedAt: true },
+    });
+    if (!version) throw new Error("This report version was not found for this month.");
+    const revokedAt = version.shareActive ? new Date() : version.shareRevokedAt;
+    await tx.monthlyReport.update({ where: { id: reportId }, data: { currentVersionId: null } });
+    const updated = await tx.monthlyReportVersion.update({
+      where: { id: versionId },
+      data: { status: "archived", shareActive: false, shareTokenHash: null, encryptedShareToken: null, shareRevokedAt: revokedAt },
+      select: { id: true, status: true, shareActive: true, shareRevokedAt: true },
+    });
+    return { ...updated, currentVersionId: null };
   });
 }
 

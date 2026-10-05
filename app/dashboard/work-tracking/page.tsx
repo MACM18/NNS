@@ -286,7 +286,7 @@ export default function WorkTrackingCalendarPage() {
     <div className='min-w-0 space-y-4 2xl:space-y-6'>
       <WorkTrackingHeader />
 
-      <Card className='p-4 shadow-sm'>
+      <Card className='p-4 shadow-xs'>
         <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <h2 className='text-xl font-semibold'>Monthly overview</h2>
@@ -443,7 +443,7 @@ export default function WorkTrackingCalendarPage() {
               worked on them.
             </DialogDescription>
           </DialogHeader>
-          <div className='grid gap-4 md:grid-cols-[1fr,300px]'>
+          <div className='grid gap-4 md:grid-cols-[1fr_300px]'>
             <ScrollArea className='h-[420px] rounded border border-border p-3'>
               <div className='space-y-4'>
                 {linesForActiveDay.length === 0 && (
@@ -545,7 +545,7 @@ export default function WorkTrackingCalendarPage() {
                           "relative p-3 rounded-lg border-2 transition-all flex items-center justify-between group",
                           assigned
                             ? "bg-primary/10 border-primary shadow-md"
-                            : "bg-background border-border hover:border-primary/50 hover:shadow-sm",
+                            : "bg-background border-border hover:border-primary/50 hover:shadow-xs",
                           assignLoading && "opacity-50 cursor-wait",
                         )}
                       >
@@ -562,7 +562,7 @@ export default function WorkTrackingCalendarPage() {
 
                         {/* Centered tick on the right */}
                         <div
-                          className='w-6 h-6 rounded-full flex items-center justify-center ml-2 flex-shrink-0'
+                          className='w-6 h-6 rounded-full flex items-center justify-center ml-2 shrink-0'
                           style={{
                             backgroundColor: assigned
                               ? "currentColor"

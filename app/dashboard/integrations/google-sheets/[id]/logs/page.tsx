@@ -302,7 +302,7 @@ export default function ConnectionLogsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Left Side: Sync Runs Sidebar */}
         <div className="lg:col-span-1 space-y-3">
-          <Card className="shadow-sm border-muted/80 overflow-hidden">
+          <Card className="shadow-xs border-muted/80 overflow-hidden">
             <CardHeader className="p-3 border-b bg-muted/20">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
@@ -322,7 +322,7 @@ export default function ConnectionLogsPage() {
                       onClick={() => setRunStatusFilter(status)}
                       className={`py-1 rounded text-center font-medium transition-colors ${
                         runStatusFilter === status
-                          ? "bg-white shadow-xs text-foreground font-semibold"
+                          ? "bg-white shadow-2xs text-foreground font-semibold"
                           : "text-muted-foreground hover:bg-muted/40"
                       }`}
                     >
@@ -390,7 +390,7 @@ export default function ConnectionLogsPage() {
           {expandedLog ? (
             <>
               {/* Consolidated Metrics Bar & Details */}
-              <Card className="shadow-sm border-muted/80">
+              <Card className="shadow-xs border-muted/80">
                 <CardHeader className="p-3.5 pb-2 border-b bg-muted/10">
                   <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                     <div>
@@ -485,7 +485,7 @@ export default function ConnectionLogsPage() {
               </Card>
 
               {expandedLog.status !== "failed" && materialBalanceChanges.length > 0 && (
-                <Card className="shadow-sm border-muted/80">
+                <Card className="shadow-xs border-muted/80">
                   <CardHeader className="p-3.5 pb-2 border-b bg-muted/10">
                     <CardTitle className="text-sm font-bold flex items-center gap-2">
                       <Database className="h-4 w-4 text-blue-600" />
@@ -546,7 +546,7 @@ export default function ConnectionLogsPage() {
 
               {/* Warnings / Skipped Rows Table */}
               {expandedLog.status !== "failed" && (
-                <Card className="shadow-sm border-muted/80">
+                <Card className="shadow-xs border-muted/80">
                   <CardHeader className="p-3.5 pb-2 border-b bg-muted/10">
                     <CardTitle className="text-sm font-bold flex items-center gap-2">
                       <Database className="h-4.5 w-4.5 text-muted-foreground" />

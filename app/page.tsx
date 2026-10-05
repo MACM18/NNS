@@ -37,7 +37,7 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className='relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-background'>
         <div className='absolute inset-0 bg-grid-pattern opacity-5'></div>
-        <div className='absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent/5 animate-pulse-slow'></div>
+        <div className='absolute inset-0 bg-linear-to-br from-primary/10 via-background to-accent/5 animate-pulse-slow'></div>
 
         {/* Animated Orbs */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-blob"></div>
@@ -45,7 +45,7 @@ export default function LandingPage() {
 
         <div className='relative z-10 container px-4 md:px-6 flex flex-col items-center text-center space-y-8 max-w-5xl mx-auto'>
           <div className="animate-fade-in-up">
-            <Badge variant="outline" className="px-4 py-2 rounded-full border-primary/20 bg-primary/5 text-primary mb-6 backdrop-blur-sm">
+            <Badge variant="outline" className="px-4 py-2 rounded-full border-primary/20 bg-primary/5 text-primary mb-6 backdrop-blur-xs">
               <span className="relative flex h-2 w-2 mr-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
@@ -125,9 +125,9 @@ export default function LandingPage() {
                 </p>
               </div>
               <div className="relative z-10 mt-6 flex gap-2">
-                <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">Planning</Badge>
-                <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">Survey</Badge>
-                <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">Deployment</Badge>
+                <Badge variant="secondary" className="bg-background/80 backdrop-blur-xs">Planning</Badge>
+                <Badge variant="secondary" className="bg-background/80 backdrop-blur-xs">Survey</Badge>
+                <Badge variant="secondary" className="bg-background/80 backdrop-blur-xs">Deployment</Badge>
               </div>
             </div>
 

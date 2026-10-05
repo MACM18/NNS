@@ -255,7 +255,7 @@ export default function WorkTrackingAnalyticsPage() {
     <div className='min-w-0 space-y-4 2xl:space-y-6'>
       <WorkTrackingHeader />
 
-      <Card className='p-4 shadow-sm'>
+      <Card className='p-4 shadow-xs'>
         <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <h2 className='text-xl font-semibold'>Performance analytics</h2>
@@ -403,7 +403,7 @@ export default function WorkTrackingAnalyticsPage() {
                     </span>
                     <div className='flex-1 bg-muted rounded-full h-6 overflow-hidden relative'>
                       <div
-                        className='bg-gradient-to-r from-blue-500 to-blue-600 h-full flex items-center px-2 transition-all'
+                        className='bg-linear-to-r from-blue-500 to-blue-600 h-full flex items-center px-2 transition-all'
                         style={{
                           width: `${(day.count / maxDailyJobs) * 100}%`,
                         }}

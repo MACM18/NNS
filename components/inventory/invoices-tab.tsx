@@ -107,8 +107,8 @@ export function InvoicesTab({
   };
 
   return (
-    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-sm">
-      <CardHeader className="space-y-4 border-b border-border/40 bg-muted/[0.12]">
+    <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-xs">
+      <CardHeader className="space-y-4 border-b border-border/40 bg-muted/12">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="text-lg font-bold">Inventory receipts</CardTitle>
@@ -193,7 +193,7 @@ export function InvoicesTab({
               {visibleInvoices.map((invoice) => {
                 const locked = Boolean(invoice.is_system_generated || invoice.locked);
                 return (
-                  <div key={invoice.id} className="rounded-xl border bg-card/60 p-4 shadow-sm">
+                  <div key={invoice.id} className="rounded-xl border bg-card/60 p-4 shadow-xs">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate font-mono text-sm font-semibold">{invoice.invoice_number}</p>

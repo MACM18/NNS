@@ -78,7 +78,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
           <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-2">
             <Icons.logo className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent'>
+          <CardTitle className='text-3xl font-bold bg-clip-text text-transparent bg-linear-to-r from-primary to-accent'>
             Welcome Back
           </CardTitle>
           <CardDescription className="text-base">

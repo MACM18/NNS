@@ -30,7 +30,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background">
       <div className='absolute inset-0 bg-grid-pattern opacity-5'></div>
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5"></div>
+      <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-background to-accent/5"></div>
       <div className="z-10 w-full max-w-md">
         <RegisterForm onSwitchToLogin={() => router.push("/login")} />
       </div>

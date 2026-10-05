@@ -1,5 +1,5 @@
 # Base image
-FROM node:22.12-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -30,7 +30,7 @@ RUN \
   fi
 
 # Runner image
-FROM node:22.12-alpine AS runner
+FROM node:24-alpine AS runner
 
 WORKDIR /app
 

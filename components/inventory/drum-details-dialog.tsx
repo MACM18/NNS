@@ -386,8 +386,8 @@ export function DrumDetailsDialog({
                           className={`
                             group relative p-3 rounded-xl border cursor-pointer transition-all duration-200
                             ${isSelected
-                              ? "border-blue-500 bg-blue-50/50 dark:bg-blue-500/10 shadow-sm shadow-blue-500/10 ring-1 ring-blue-500/20"
-                              : "border-border/50 bg-card hover:border-border hover:bg-muted/30 hover:shadow-sm"
+                              ? "border-blue-500 bg-blue-50/50 dark:bg-blue-500/10 shadow-xs shadow-blue-500/10 ring-1 ring-blue-500/20"
+                              : "border-border/50 bg-card hover:border-border hover:bg-muted/30 hover:shadow-xs"
                             }
                           `}
                           onClick={() =>
