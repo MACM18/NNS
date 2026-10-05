@@ -33,9 +33,13 @@ export function MonthlyReportsPage() {
   const [redesignProgress, setRedesignProgress] = useState<RedesignProgress | null>(null);
   const [emailTarget, setEmailTarget] = useState<{ reportId: string; versionId: string } | null>(null);
   const [emailRecipients, setEmailRecipients] = useState("");
+  const [savedEmailRecipients, setSavedEmailRecipients] = useState<string[]>([]);
+  const [savedRecipientsLoading, setSavedRecipientsLoading] = useState(false);
+  const [savedRecipientsError, setSavedRecipientsError] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const refreshSequence = useRef(0);
+  const parsedEmailRecipients = [...new Set(emailRecipients.split(/[\n,;]/).map(value => value.trim().toLowerCase()).filter(Boolean))];
 
   const refresh = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -59,6 +63,31 @@ export function MonthlyReportsPage() {
     window.addEventListener("focus", onFocus);
     return () => { window.clearInterval(interval); window.removeEventListener("focus", onFocus); };
   }, [refresh]);
+
+  useEffect(() => {
+    if (!emailTarget) return;
+    let cancelled = false;
+    setSavedRecipientsLoading(true);
+    setSavedRecipientsError("");
+    void fetch("/api/monthly-reports/email-recipients", { cache: "no-store" })
+      .then(async response => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Unable to load saved recipients.");
+        if (!cancelled) setSavedEmailRecipients((payload.data || []).map((item: { email: string }) => item.email));
+      })
+      .catch(error => {
+        if (!cancelled) setSavedRecipientsError(error instanceof Error ? error.message : "Unable to load saved recipients.");
+      })
+      .finally(() => { if (!cancelled) setSavedRecipientsLoading(false); });
+    return () => { cancelled = true; };
+  }, [emailTarget]);
+
+  const toggleEmailRecipient = (email: string) => {
+    const current = emailRecipients.split(/[\n,;]/).map(value => value.trim()).filter(Boolean);
+    const selected = current.some(value => value.toLowerCase() === email.toLowerCase());
+    const next = selected ? current.filter(value => value.toLowerCase() !== email.toLowerCase()) : [...current, email];
+    setEmailRecipients(next.join("\n"));
+  };
 
   const act = async (key: string, path: string, method: string, body?: unknown) => {
     setBusy(key);
@@ -184,7 +213,7 @@ export function MonthlyReportsPage() {
     if (!emailTarget) return;
     setEmailBusy(true);
     try {
-      const recipients = emailRecipients.split(/[\n,;]/).map(value => value.trim()).filter(Boolean);
+      const recipients = parsedEmailRecipients;
       const response = await fetch(`/api/monthly-reports/${emailTarget.reportId}/share/email`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ versionId: emailTarget.versionId, recipients }),
@@ -192,11 +221,18 @@ export function MonthlyReportsPage() {
       const payload = await response.json();
       if (!response.ok && !payload.data) throw new Error(payload.error || "Unable to email the report link.");
       const result = payload.data;
+      const savedFromThisSend = (result.results || []).filter((item: { success: boolean; historySaved?: boolean }) => item.success && item.historySaved).map((item: { recipient: string }) => item.recipient);
+      if (savedFromThisSend.length) setSavedEmailRecipients(current => [...new Set([...savedFromThisSend, ...current])].slice(0, 50));
+      const historyWriteFailed = (result.results || []).some((item: { success: boolean; historySaved?: boolean }) => item.success && !item.historySaved);
       if (result.failed) {
         const failedRecipients = (result.results || []).filter((item: { success: boolean }) => !item.success).map((item: { recipient: string }) => item.recipient);
         setEmailRecipients(failedRecipients.join("\n"));
-        toast.warning(`Report link emailed to ${result.sent} recipient${result.sent === 1 ? "" : "s"}; ${result.failed} failed. The recipient field now contains only failed addresses.`);
-      } else { toast.success(`Report link emailed to ${result.sent} recipient${result.sent === 1 ? "" : "s"}.`); setEmailTarget(null); }
+        toast.warning(`Report link emailed to ${result.sent} recipient${result.sent === 1 ? "" : "s"}; ${result.failed} failed. The recipient field now contains only failed addresses.${historyWriteFailed ? " Some successful addresses could not be saved as suggestions." : ""}`);
+      } else {
+        toast.success(`Report link emailed to ${result.sent} recipient${result.sent === 1 ? "" : "s"}.`);
+        if (historyWriteFailed) toast.warning("The report link was sent, but some addresses could not be saved as suggestions.");
+        setEmailTarget(null);
+      }
     } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to email the report link."); }
     finally { setEmailBusy(false); }
   };
@@ -289,7 +325,19 @@ export function MonthlyReportsPage() {
       <DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Email version link</DialogTitle><DialogDescription>Enter up to 10 email addresses, one per line or separated by commas. Anyone with the link can view this version until sharing is stopped.</DialogDescription></DialogHeader>
         <label htmlFor="monthly-report-email-recipients" className="text-sm font-medium">Recipients</label>
         <textarea id="monthly-report-email-recipients" value={emailRecipients} onChange={event => setEmailRecipients(event.target.value)} placeholder="name@example.com" className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm" />
-        <DialogFooter><Button variant="outline" onClick={() => setEmailTarget(null)} disabled={emailBusy}>Cancel</Button><Button onClick={() => void sendShareEmail()} disabled={emailBusy || !emailRecipients.trim()}>{emailBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}Send version link</Button></DialogFooter>
+        <div className="-mt-2 flex items-center justify-between text-xs text-muted-foreground">
+          <span>{savedRecipientsLoading ? "Loading saved addresses…" : savedRecipientsError || (savedEmailRecipients.length ? "Recently emailed" : "Addresses are suggested after a successful send")}</span>
+          <span>{parsedEmailRecipients.length} / 10</span>
+        </div>
+        {savedEmailRecipients.length > 0 && <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto rounded-md border bg-muted/20 p-2" aria-label="Previously emailed addresses">
+          {savedEmailRecipients.map(email => {
+            const selected = parsedEmailRecipients.includes(email.toLowerCase());
+            return <button key={email} type="button" aria-pressed={selected} onClick={() => toggleEmailRecipient(email)} className={`max-w-full truncate rounded-full border px-3 py-1 text-xs transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary text-primary-foreground" : "bg-background text-foreground hover:border-primary/50 hover:bg-accent"}`}>
+              {selected ? "✓ " : "+ "}{email}
+            </button>;
+          })}
+        </div>}
+        <DialogFooter><Button variant="outline" onClick={() => setEmailTarget(null)} disabled={emailBusy}>Cancel</Button><Button onClick={() => void sendShareEmail()} disabled={emailBusy || !parsedEmailRecipients.length || parsedEmailRecipients.length > 10}>{emailBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}Send version link</Button></DialogFooter>
       </DialogContent>
     </Dialog>
     {manager && <GenerateMonthlyInvoicesModal open={invoiceDialog} onOpenChange={setInvoiceDialog} initialMonth={Number(format(invoiceMonth, "M"))} initialYear={Number(format(invoiceMonth, "yyyy"))} onSuccess={() => { setInvoiceDialog(false); void prepare(invoiceMonth, false); }} />}

@@ -714,6 +714,15 @@ model MonthlyReportDocument {
   @@map("monthly_report_documents")
 }
 
+model MonthlyReportEmailRecipient {
+  email      String   @id
+  createdAt  DateTime @default(now()) @map("created_at")
+  lastSentAt DateTime @default(now()) @map("last_sent_at")
+
+  @@index([lastSentAt])
+  @@map("monthly_report_email_recipients")
+}
+
 // ==========================================
 // WASTAGE TRACKING
 // ==========================================
