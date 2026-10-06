@@ -530,6 +530,15 @@ export default function InventoryPage() {
             setStatusFilter={setStockStatusFilter}
             onAddReceipt={() => setAddInvoiceModalOpen(true)}
             onOpenMaterialBalance={() => setActiveTab("material-balance")}
+            onRefreshFromSheet={(updatedCount, sourceDate) => {
+              addNotification({
+                title: "Inventory refreshed",
+                message: `${updatedCount} item${updatedCount === 1 ? "" : "s"} updated from the ${sourceDate} sheet balances.`,
+                type: "success",
+                category: "system",
+              });
+              void fetchAllData();
+            }}
           />
         </TabsContent>
 

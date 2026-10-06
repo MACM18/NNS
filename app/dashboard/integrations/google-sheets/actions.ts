@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { timingSafeEqual } from "node:crypto";
 import { currentSheetPeriod } from "@/lib/google-sheet-auto-sync";
 import prisma from "@/lib/prisma";
-import { google } from "googleapis";
+import { getGoogleSheetsClient } from "@/lib/google-sheets-client";
 import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
 import {
   importMaterialBalanceValues,
@@ -275,6 +275,11 @@ async function syncConnectionCore(
 
     const month: number = Number(conn.month);
     const year: number = Number(conn.year);
+    const syncSettings = await prisma.googleSheetSyncSettings.findUnique({ where: { id: "default" } });
+    const localPeriod = currentSheetPeriod(syncSettings?.timeZone || "Asia/Colombo");
+    const dailyBalanceAsOfDate = localPeriod.month === month && localPeriod.year === year
+      ? localPeriod.localDate
+      : undefined;
     let sheetTab = conn.sheetTab || null;
     const spreadsheetId =
       conn.sheetId || extractSpreadsheetId(conn.sheetUrl || "");
@@ -375,6 +380,7 @@ async function syncConnectionCore(
             monthlyValues: monthlyMaterialBalanceValues.length > 0
               ? monthlyMaterialBalanceValues as unknown[][]
               : undefined,
+            dailyBalanceAsOfDate,
             createdById: profile?.id || null,
           });
           progress(
@@ -1011,54 +1017,7 @@ function extractSpreadsheetId(url: string): string | null {
 }
 
 async function getSheetsClient() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-
-  if (!email || !keyRaw) {
-    throw new Error(
-      "Google service account credentials are not configured. Please check GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_KEY environment variables."
-    );
-  }
-
-  // Parse the full key.json content and extract the private_key
-  let key: string;
-  try {
-    const creds = JSON.parse(keyRaw);
-    if (!creds.private_key) {
-      throw new Error("Invalid JSON credentials: missing private_key field");
-    }
-    key = creds.private_key;
-  } catch (e) {
-    // Fallback: if it's not JSON, assume it's the raw key with escaped newlines
-    key = keyRaw.replace(/\\n/g, "\n");
-
-    // Validate that it looks like a private key
-    if (
-      !key.includes("-----BEGIN PRIVATE KEY-----") &&
-      !key.includes("-----BEGIN RSA PRIVATE KEY-----")
-    ) {
-      throw new Error(
-        "Invalid private key format. Expected PEM format starting with -----BEGIN PRIVATE KEY-----"
-      );
-    }
-  }
-
-  try {
-    const authClient = new google.auth.JWT({
-      email,
-      key,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
-
-    await authClient.authorize();
-    return google.sheets({ version: "v4", auth: authClient });
-  } catch (error) {
-    console.error("[getSheetsClient] Authentication failed:", error);
-    throw new Error(
-      `Google Sheets API authentication failed: ${error instanceof Error ? error.message : "Unknown error"
-      }`
-    );
-  }
+  return getGoogleSheetsClient();
 }
 
 function requiredHeaders(): string[] {
