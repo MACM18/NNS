@@ -223,7 +223,20 @@ export function escapeEmailHtml(value: unknown): string {
 }
 
 function plainTextFromHtml(value: string): string {
-  return value.replace(/<br\s*\/?>(?=.)/gi, "\n").replace(/<\/p\s*>/gi, "\n\n").replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/\n{3,}/g, "\n\n").trim();
+  // Decode exactly one entity layer. Decode ampersands last so nested content
+  // such as `&amp;lt;` stays `&lt;` instead of becoming an HTML delimiter.
+  return value
+    .replace(/<br\s*\/?>(?=.)/gi, "\n")
+    .replace(/<\/p\s*>/gi, "\n\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&amp;/gi, "&")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 async function getEmailBranding() {

@@ -25,6 +25,7 @@ model User {
   
   // Password Security
   lastPasswordChange   DateTime? @map("last_password_change")
+  sessionVersion       Int       @default(0) @map("session_version")
   passwordExpireWarned Boolean   @default(false) @map("password_expire_warned")
   
   // Account Security
@@ -100,6 +101,16 @@ model EmailChangeRequest {
   @@index([userId, expiresAt])
   @@index([newEmail, expiresAt])
   @@map("email_change_requests")
+}
+
+model AuthRateLimitBucket {
+  id        String   @id
+  count     Int      @default(0)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("auth_rate_limit_buckets")
 }
 
 model PasswordResetRequest {

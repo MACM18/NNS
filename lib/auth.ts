@@ -267,6 +267,7 @@ export const authConfig: NextAuthConfig = {
           where: { id: user.id },
           select: {
             lastPasswordChange: true,
+            sessionVersion: true,
             password: true,
             profile: {
               select: {
@@ -279,6 +280,7 @@ export const authConfig: NextAuthConfig = {
         });
 
         token.id = user.id;
+        token.sessionVersion = dbUser?.sessionVersion ?? 0;
         // Use the role from the authorize return value if DB lookup fails (dev bypass)
         token.role = dbUser?.profile?.role || (user as any).role || "user";
         token.fullName = dbUser?.profile?.fullName || user.name;
@@ -299,6 +301,25 @@ export const authConfig: NextAuthConfig = {
             expiryDate.setDate(expiryDate.getDate() + passwordExpiryDays);
             token.passwordExpired = new Date() > expiryDate;
           }
+        }
+      }
+
+      // Check the database on every session refresh so password changes revoke
+      // already-issued JWT sessions across all devices and app replicas.
+      if (!user && typeof token.id === "string") {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { sessionVersion: true, lastPasswordChange: true },
+        });
+        if (!dbUser) return null;
+        if (typeof token.sessionVersion === "number") {
+          if (token.sessionVersion !== dbUser.sessionVersion) return null;
+        } else {
+          // Migrate pre-deployment JWTs without forcing everyone to sign in again,
+          // but invalidate any such token issued before a later password change.
+          const issuedAt = typeof token.iat === "number" ? token.iat * 1000 : 0;
+          if (dbUser.lastPasswordChange && dbUser.lastPasswordChange.getTime() > issuedAt) return null;
+          token.sessionVersion = dbUser.sessionVersion;
         }
       }
 
