@@ -228,13 +228,14 @@ function plainTextFromHtml(value: string): string {
   return value
     .replace(/<br\s*\/?>(?=.)/gi, "\n")
     .replace(/<\/p\s*>/gi, "\n\n")
-    .replace(/<[^>]*>/g, "")
     .replace(/&nbsp;/gi, " ")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
     .replace(/&amp;/gi, "&")
+    // Entity decoding can produce new tag delimiters, so strip tags last.
+    .replace(/<[^>]*>/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
