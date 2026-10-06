@@ -12,10 +12,20 @@ const mockResetDeleteMany = jest.fn();
 const mockResetFindUnique = jest.fn();
 const mockResetUpdateMany = jest.fn();
 const mockUserUpdate = jest.fn();
+const mockRateLimitUpsert = jest.fn();
+const mockRateLimitDeleteMany = jest.fn();
+const mockTxExecuteRaw = jest.fn();
 const mockSendEmail = sendEmail as jest.Mock;
 const mockTx = {
-  passwordResetRequest: { findUnique: mockResetFindUnique, updateMany: mockResetUpdateMany },
+  passwordResetRequest: {
+    findUnique: mockResetFindUnique,
+    findFirst: mockResetFindFirst,
+    create: mockResetCreate,
+    deleteMany: mockResetDeleteMany,
+    updateMany: mockResetUpdateMany,
+  },
   user: { update: mockUserUpdate },
+  $queryRaw: mockTxExecuteRaw,
 };
 
 jest.mock("@/lib/prisma", () => {
@@ -23,8 +33,13 @@ jest.mock("@/lib/prisma", () => {
     user: { findUnique: (...args: unknown[]) => mockUserFindUnique(...args) },
     passwordResetRequest: {
       findFirst: (...args: unknown[]) => mockResetFindFirst(...args),
+      findUnique: (...args: unknown[]) => mockResetFindUnique(...args),
       create: (...args: unknown[]) => mockResetCreate(...args),
       deleteMany: (...args: unknown[]) => mockResetDeleteMany(...args),
+    },
+    authRateLimitBucket: {
+      upsert: (...args: unknown[]) => mockRateLimitUpsert(...args),
+      deleteMany: (...args: unknown[]) => mockRateLimitDeleteMany(...args),
     },
     $transaction: (callback: (tx: typeof mockTx) => unknown) => callback(mockTx),
   };
@@ -42,6 +57,9 @@ describe("password reset API", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockResetFindFirst.mockResolvedValue(null);
+    mockRateLimitUpsert.mockResolvedValue({ count: 1 });
+    mockRateLimitDeleteMany.mockResolvedValue({ count: 0 });
+    mockTxExecuteRaw.mockResolvedValue([]);
     mockResetDeleteMany.mockResolvedValue({ count: 1 });
     mockResetCreate.mockResolvedValue({ id: "reset-id" });
     mockSendEmail.mockResolvedValue({ success: true });
@@ -74,6 +92,19 @@ describe("password reset API", () => {
     expect(email.html).not.toContain("<script>");
   });
 
+  it("rejects weak passwords on the server without hashing", async () => {
+    const response = await PUT(request("PUT", { token: "A".repeat(43), password: "weakpassword" }));
+    expect(response.status).toBe(400);
+    expect(require("bcryptjs").default.hash).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid reset tokens before expensive hashing", async () => {
+    mockResetFindUnique.mockResolvedValue(null);
+    const response = await PUT(request("PUT", { token: "A".repeat(43), password: "StrongPass123!" }));
+    expect(response.status).toBe(400);
+    expect(require("bcryptjs").default.hash).not.toHaveBeenCalled();
+  });
+
   it("rejects expired or already-used reset links", async () => {
     mockResetFindUnique.mockResolvedValue({ id: "reset-id", userId: "user-1", expiresAt: new Date(Date.now() - 1000), usedAt: null });
     let response = await PUT(request("PUT", { token: "A".repeat(43), password: "StrongPass123!" }));
@@ -91,7 +122,7 @@ describe("password reset API", () => {
     const response = await PUT(request("PUT", { token: "A".repeat(43), password: "StrongPass123!" }));
     expect(response.status).toBe(200);
     expect(mockResetUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: "reset-id", usedAt: null }) }));
-    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "user-1" }, data: expect.objectContaining({ password: "hashed-password", loginAttempts: 0, accountLockedUntil: null }) }));
+    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "user-1" }, data: expect.objectContaining({ password: "hashed-password", sessionVersion: { increment: 1 }, loginAttempts: 0, accountLockedUntil: null }) }));
   });
 });
 

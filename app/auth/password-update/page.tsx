@@ -44,6 +44,8 @@ export default function PasswordUpdatePage() {
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("token");
     setCodeParam(token);
+    // Keep the one-time bearer token out of browser history and later navigation.
+    window.history.replaceState(null, "", window.location.pathname);
     setLoading(false);
   }, []);
 

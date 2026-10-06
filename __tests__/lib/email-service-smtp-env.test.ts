@@ -45,6 +45,12 @@ describe("SMTP environment email fallback", () => {
     expect(rendered.text).toContain("NNS Enterprise");
   });
 
+  it("decodes only one HTML entity layer in the plain-text fallback", async () => {
+    const rendered = await renderBrandedEmail({ html: "<p>&amp;lt;script&amp;gt; &amp;amp;lt;</p>" });
+    expect(rendered.text).toContain("&lt;script&gt; &amp;lt;");
+    expect(rendered.text).not.toContain("&amp;lt;script&amp;gt;");
+  });
+
   it("sends via SMTP when environment settings are selected", async () => {
     const result = await sendEmail({ to: "recipient@example.com", subject: "Monthly sheet", html: "Ready" });
     expect(result).toMatchObject({ success: true, messageId: "smtp-message-id", provider: "smtp", configSource: "environment" });

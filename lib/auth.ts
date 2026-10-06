@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -9,6 +9,14 @@ import prisma from "@/lib/prisma";
 // Maximum login attempts before account lockout
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 15;
+
+class TwoFactorRequiredError extends CredentialsSignin {
+  code = "two_factor_required";
+}
+
+class InvalidTwoFactorCodeError extends CredentialsSignin {
+  code = "invalid_two_factor_code";
+}
 
 export const authConfig: NextAuthConfig = {
   // Allow runtime host when behind a trusted proxy (e.g., Coolify)
@@ -144,7 +152,7 @@ export const authConfig: NextAuthConfig = {
         if (user.twoFactorEnabled && user.twoFactorSecret) {
           if (!twoFactorCode) {
             // Signal that 2FA is required
-            throw new Error("2FA_REQUIRED:" + user.id);
+            throw new TwoFactorRequiredError();
           }
 
           // Verify 2FA code
@@ -193,7 +201,7 @@ export const authConfig: NextAuthConfig = {
                 failReason: "2fa_failed",
               },
             });
-            throw new Error("Invalid 2FA code");
+            throw new InvalidTwoFactorCodeError();
           }
         }
 
@@ -259,6 +267,7 @@ export const authConfig: NextAuthConfig = {
           where: { id: user.id },
           select: {
             lastPasswordChange: true,
+            sessionVersion: true,
             password: true,
             profile: {
               select: {
@@ -271,6 +280,7 @@ export const authConfig: NextAuthConfig = {
         });
 
         token.id = user.id;
+        token.sessionVersion = dbUser?.sessionVersion ?? 0;
         // Use the role from the authorize return value if DB lookup fails (dev bypass)
         token.role = dbUser?.profile?.role || (user as any).role || "user";
         token.fullName = dbUser?.profile?.fullName || user.name;
@@ -291,6 +301,25 @@ export const authConfig: NextAuthConfig = {
             expiryDate.setDate(expiryDate.getDate() + passwordExpiryDays);
             token.passwordExpired = new Date() > expiryDate;
           }
+        }
+      }
+
+      // Check the database on every session refresh so password changes revoke
+      // already-issued JWT sessions across all devices and app replicas.
+      if (!user && typeof token.id === "string") {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { sessionVersion: true, lastPasswordChange: true },
+        });
+        if (!dbUser) return null;
+        if (typeof token.sessionVersion === "number") {
+          if (token.sessionVersion !== dbUser.sessionVersion) return null;
+        } else {
+          // Migrate pre-deployment JWTs without forcing everyone to sign in again,
+          // but invalidate any such token issued before a later password change.
+          const issuedAt = typeof token.iat === "number" ? token.iat * 1000 : 0;
+          if (dbUser.lastPasswordChange && dbUser.lastPasswordChange.getTime() > issuedAt) return null;
+          token.sessionVersion = dbUser.sessionVersion;
         }
       }
 
