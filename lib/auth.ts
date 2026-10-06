@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -9,6 +9,14 @@ import prisma from "@/lib/prisma";
 // Maximum login attempts before account lockout
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 15;
+
+class TwoFactorRequiredError extends CredentialsSignin {
+  code = "two_factor_required";
+}
+
+class InvalidTwoFactorCodeError extends CredentialsSignin {
+  code = "invalid_two_factor_code";
+}
 
 export const authConfig: NextAuthConfig = {
   // Allow runtime host when behind a trusted proxy (e.g., Coolify)
@@ -144,7 +152,7 @@ export const authConfig: NextAuthConfig = {
         if (user.twoFactorEnabled && user.twoFactorSecret) {
           if (!twoFactorCode) {
             // Signal that 2FA is required
-            throw new Error("2FA_REQUIRED:" + user.id);
+            throw new TwoFactorRequiredError();
           }
 
           // Verify 2FA code
@@ -193,7 +201,7 @@ export const authConfig: NextAuthConfig = {
                 failReason: "2fa_failed",
               },
             });
-            throw new Error("Invalid 2FA code");
+            throw new InvalidTwoFactorCodeError();
           }
         }
 
