@@ -20,7 +20,7 @@ export async function allowAuthAttempt(request: NextRequest, action: string, lim
   });
 
   // Opportunistic cleanup keeps this small table bounded without a separate job.
-  if (Number(id.slice(0, 2), 16) === 0) {
+  if (parseInt(id.slice(0, 2), 16) === 0) {
     await prisma.authRateLimitBucket.deleteMany({ where: { expiresAt: { lt: new Date(now - HOUR_MS) } } });
   }
   return bucket.count <= limit;
