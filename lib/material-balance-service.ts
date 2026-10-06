@@ -1068,12 +1068,36 @@ async function upsertCanonicalDailyInvoice(
   };
 }
 
+export type DailyBalanceTarget = { value: number; date: string };
+
+export function getLatestDailyBalanceTargets(
+  values: SheetValues,
+  parsed: ParsedMaterialBalance,
+  asOfDate: string,
+): Map<string, DailyBalanceTarget> {
+  const targets = new Map<string, DailyBalanceTarget>();
+  for (const item of parsed.items) {
+    const sourceRow = values[item.sourceRow - 1] || [];
+    const eligible = item.dailyEntries
+      .filter((entry) => entry.date <= asOfDate)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const latest = [...eligible].reverse().find((entry) => {
+      const block = sourceRow.slice(entry.sourceColumn, entry.sourceColumn + 4);
+      return block.some((value) => value !== undefined && value !== null && String(value).trim() !== "");
+    });
+    if (latest) targets.set(item.normalizedSourceName, { value: latest.closingBalance, date: latest.date });
+  }
+  return targets;
+}
+
 async function reconcileExistingImport(input: {
   connectionId: string;
   month: number;
   year: number;
   importId: string;
   createdById?: string | null;
+  dailyBalanceAsOfDate?: string;
+  dailyBalanceTargets?: Map<string, DailyBalanceTarget>;
 }): Promise<MaterialBalanceImportResult> {
   return prisma.$transaction(async (tx) => {
     await lockMaterialBalanceConnection(tx, input.connectionId);
@@ -1174,7 +1198,7 @@ async function reconcileExistingImport(input: {
     } satisfies PreparedMaterialItem));
 
     const monthlyAvailable = prepared.some((item) => item.monthlyItem);
-    if (monthlyAvailable) {
+    if (monthlyAvailable || input.dailyBalanceAsOfDate) {
       const firstDay = new Date(Date.UTC(input.year, input.month - 1, 1));
       const lastDay = new Date(Date.UTC(input.year, input.month, 0));
       const existingDailyInvoices = await tx.inventoryInvoice.findMany({
@@ -1218,7 +1242,11 @@ async function reconcileExistingImport(input: {
     for (const snapshot of existing.items) {
       if (!snapshot.inventoryItemId || !snapshot.inventoryItem) continue;
       const currentStock = Number(snapshot.inventoryItem.currentStock || 0);
-      const expectedStock = Number(snapshot.monthEndingWip ?? snapshot.finalBalance ?? 0);
+      const dailyTarget = input.dailyBalanceAsOfDate
+        ? input.dailyBalanceTargets?.get(snapshot.normalizedSourceName) || null
+        : null;
+      if (input.dailyBalanceAsOfDate && !dailyTarget) continue;
+      const expectedStock = dailyTarget?.value ?? Number(snapshot.monthEndingWip ?? snapshot.finalBalance ?? 0);
       const dashboardChange = await tx.inventoryStockEvent.findFirst({
         where: {
           inventoryItemId: snapshot.inventoryItemId,
@@ -1249,7 +1277,7 @@ async function reconcileExistingImport(input: {
       const generated = await createGeneratedInvoice(tx, {
         sourceKey,
         sourceType: "google_material_balance_reconciliation",
-        sourceDate: monthEnd.toISOString().slice(0, 10),
+        sourceDate: dailyTarget?.date || monthEnd.toISOString().slice(0, 10),
         importId: existing.id,
         createdById: input.createdById,
         lines: [{
@@ -1274,7 +1302,9 @@ async function reconcileExistingImport(input: {
           },
           quantity: expectedStock - currentStock,
           status: "reconciled",
-          reason: `Reconciled to ${MATERIAL_BALANCE_MONTH_TAB} Ending WIP Material`,
+          reason: dailyTarget
+            ? `Reconciled to Material Balance daily closing balance for ${dailyTarget.date}`
+            : `Reconciled to ${MATERIAL_BALANCE_MONTH_TAB} Ending WIP Material`,
         }],
       });
       if (generated) {
@@ -1303,8 +1333,12 @@ export async function importMaterialBalanceValues(input: {
   values: SheetValues;
   monthlyValues?: SheetValues;
   createdById?: string | null;
+  dailyBalanceAsOfDate?: string;
 }): Promise<MaterialBalanceImportResult> {
   const parsed = parseMaterialBalanceValues(input.values, input.month, input.year);
+  const dailyBalanceTargets = input.dailyBalanceAsOfDate
+    ? getLatestDailyBalanceTargets(input.values, parsed, input.dailyBalanceAsOfDate)
+    : undefined;
   const monthlyParsed = input.monthlyValues
     ? parseMaterialBalanceMonthValues(input.monthlyValues, input.month, input.year)
     : null;
@@ -1327,6 +1361,8 @@ export async function importMaterialBalanceValues(input: {
       year: input.year,
       importId: existing.id,
       createdById: input.createdById,
+      dailyBalanceAsOfDate: input.dailyBalanceAsOfDate,
+      dailyBalanceTargets,
     });
   }
 
@@ -1456,7 +1492,7 @@ export async function importMaterialBalanceValues(input: {
       ...parsed.warnings,
       ...(monthlyParsed?.warnings || []),
       ...prepared.flatMap((item) => item.warnings),
-      ...(!monthlyAvailable ? [`${MATERIAL_BALANCE_MONTH_TAB} is required before automatic stock invoices can be applied`] : []),
+      ...(!monthlyAvailable && !input.dailyBalanceAsOfDate ? [`${MATERIAL_BALANCE_MONTH_TAB} is required before month-end stock reconciliation can be applied`] : []),
     ];
     const discrepancies: MaterialBalanceDiscrepancy[] = [...parsed.discrepancies];
     for (const item of prepared) {
@@ -1613,7 +1649,7 @@ export async function importMaterialBalanceValues(input: {
       });
     }
 
-    if (monthlyAvailable) {
+    if (monthlyAvailable || input.dailyBalanceAsOfDate) {
       const firstDay = new Date(Date.UTC(input.year, input.month - 1, 1));
       const lastDay = new Date(Date.UTC(input.year, input.month, 0));
       const existingDailyInvoices = await tx.inventoryInvoice.findMany({
@@ -1658,14 +1694,18 @@ export async function importMaterialBalanceValues(input: {
 
       const monthEnd = new Date(Date.UTC(input.year, input.month, 0)).toISOString().slice(0, 10);
       for (const item of prepared) {
-        if (!item.inventoryItemId || !item.monthlyItem) continue;
+        if (!item.inventoryItemId || (!item.monthlyItem && !input.dailyBalanceAsOfDate)) continue;
         const current = await tx.inventoryItem.findUnique({
           where: { id: item.inventoryItemId },
           select: { currentStock: true },
         });
         if (!current) continue;
         const currentStock = Number(current.currentStock || 0);
-        const expectedStock = item.monthlyItem.endingWip;
+        const dailyTarget = input.dailyBalanceAsOfDate
+          ? dailyBalanceTargets?.get(item.normalizedSourceName) || null
+          : null;
+        if (input.dailyBalanceAsOfDate && !dailyTarget) continue;
+        const expectedStock = dailyTarget?.value ?? item.monthlyItem?.endingWip ?? 0;
         if (Math.abs(currentStock - expectedStock) <= 0.01) {
           stockChanges.push({
             sourceItemName: item.sourceItemName,
@@ -1687,7 +1727,7 @@ export async function importMaterialBalanceValues(input: {
         }
 
         const sourceKey = [
-          "gmb-month-end",
+          dailyTarget ? "gmb-current-daily" : "gmb-month-end",
           input.connectionId,
           created.id,
           item.inventoryItemId,
@@ -1697,14 +1737,16 @@ export async function importMaterialBalanceValues(input: {
         const generated = await createGeneratedInvoice(tx, {
           sourceKey,
           sourceType: "google_material_balance_reconciliation",
-          sourceDate: monthEnd,
+          sourceDate: dailyTarget?.date || monthEnd,
           importId: created.id,
           createdById: input.createdById,
           lines: [{
             item,
             quantity: expectedStock - currentStock,
             status: "reconciled",
-            reason: `Reconciled to ${MATERIAL_BALANCE_MONTH_TAB} Ending WIP Material`,
+            reason: dailyTarget
+              ? `Reconciled to Material Balance daily closing balance for ${dailyTarget.date}`
+              : `Reconciled to ${MATERIAL_BALANCE_MONTH_TAB} Ending WIP Material`,
           }],
         });
         if (generated) {

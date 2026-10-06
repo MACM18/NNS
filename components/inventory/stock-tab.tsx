@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { BarChart3, Check, Package, Pencil, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Check, Package, Pencil, RefreshCw, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InventoryItem } from "@/app/dashboard/inventory/page";
 
 interface StockTabProps {
@@ -20,6 +22,7 @@ interface StockTabProps {
   onDelete?: (item: InventoryItem) => void;
   onAddReceipt?: () => void;
   onOpenMaterialBalance?: () => void;
+  onRefreshFromSheet?: (updatedCount: number, sourceDate: string) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   statusFilter: string;
@@ -28,6 +31,18 @@ interface StockTabProps {
 
 type StockStatus = "out" | "critical" | "low" | "normal";
 type SortMode = "attention" | "name" | "updated";
+type SheetRefreshPreview = {
+  previewId: string;
+  sheetName: string;
+  sheetUrl: string;
+  period: string;
+  sourceDate: string;
+  matchedCount: number;
+  changedCount: number;
+  unchangedCount: number;
+  skipped: Array<{ itemName: string; reason: string }>;
+  rows: Array<{ inventoryItemId: string; itemName: string; unit: string; sourceDate: string; currentStock: number; sheetStock: number; delta: number }>;
+};
 
 function getStockStatusKey(item: InventoryItem): StockStatus {
   if (item.current_stock <= 0) return "out";
@@ -86,12 +101,19 @@ export function StockTab({
   onDelete,
   onAddReceipt,
   onOpenMaterialBalance,
+  onRefreshFromSheet,
   searchQuery,
   setSearchQuery,
   statusFilter,
   setStatusFilter,
 }: StockTabProps) {
   const [sortMode, setSortMode] = useState<SortMode>("attention");
+  const [refreshDialogOpen, setRefreshDialogOpen] = useState(false);
+  const [refreshLoading, setRefreshLoading] = useState(false);
+  const [refreshApplying, setRefreshApplying] = useState(false);
+  const [refreshConfirmed, setRefreshConfirmed] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshPreview, setRefreshPreview] = useState<SheetRefreshPreview | null>(null);
   const canEditItems = ["admin", "moderator", "superadmin"].includes((role || "").toLowerCase());
   const statusCounts = useMemo(() => inventoryItems.reduce<Record<StockStatus, number>>((counts, item) => {
     counts[getStockStatusKey(item)] += 1;
@@ -119,6 +141,47 @@ export function StockTab({
   }, [inventoryItems, searchQuery, sortMode, statusFilter]);
 
   const hasFilters = Boolean(searchQuery || statusFilter !== "all");
+  const prepareSheetRefresh = async () => {
+    setRefreshLoading(true);
+    setRefreshError(null);
+    setRefreshPreview(null);
+    setRefreshConfirmed(false);
+    setRefreshDialogOpen(true);
+    try {
+      const response = await fetch("/api/inventory/refresh-from-sheet/preview", { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not read current sheet balances.");
+      setRefreshPreview(result.data);
+    } catch (error) {
+      setRefreshError(error instanceof Error ? error.message : "Could not read current sheet balances.");
+    } finally {
+      setRefreshLoading(false);
+    }
+  };
+
+  const applySheetRefresh = async () => {
+    if (!refreshPreview || !refreshConfirmed) return;
+    setRefreshApplying(true);
+    setRefreshError(null);
+    try {
+      const response = await fetch("/api/inventory/refresh-from-sheet/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ previewId: refreshPreview.previewId, confirmed: true }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not update inventory.");
+      setRefreshDialogOpen(false);
+      setRefreshPreview(null);
+      setRefreshConfirmed(false);
+      onRefreshFromSheet?.(result.data.updatedCount, result.data.sourceDate);
+    } catch (error) {
+      setRefreshError(error instanceof Error ? error.message : "Could not update inventory.");
+    } finally {
+      setRefreshApplying(false);
+    }
+  };
+
   const clearFilters = () => {
     setSearchQuery("");
     setStatusFilter("all");
@@ -132,7 +195,14 @@ export function StockTab({
             <CardTitle className="text-lg font-bold">Stock on hand</CardTitle>
             <CardDescription>Search, review health, and manage each operational stock item.</CardDescription>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            {canEditItems && (
+              <Button type="button" variant="outline" size="sm" onClick={prepareSheetRefresh} disabled={refreshLoading} className="h-9 gap-2 rounded-xl">
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshLoading ? "animate-spin" : ""}`} aria-hidden="true" />
+                Refresh from current sheet
+              </Button>
+            )}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>{inventoryItems.length} item{inventoryItems.length === 1 ? "" : "s"}</span>
             <span aria-hidden="true">·</span>
             <span>{statusCounts.normal} healthy</span>
@@ -141,6 +211,7 @@ export function StockTab({
                 {statusCounts.out + statusCounts.critical + statusCounts.low} need attention
               </Badge>
             )}
+            </div>
           </div>
         </div>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
@@ -302,6 +373,48 @@ export function StockTab({
           </div>
         )}
       </CardContent>
+      <Dialog open={refreshDialogOpen} onOpenChange={(open) => {
+        setRefreshDialogOpen(open);
+        if (!open && !refreshApplying) { setRefreshConfirmed(false); setRefreshError(null); }
+      }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Refresh inventory from this month’s sheet</DialogTitle>
+            <DialogDescription>Review the latest daily material balances before replacing on-hand quantities.</DialogDescription>
+          </DialogHeader>
+          {refreshLoading ? (
+            <div className="flex items-center gap-3 rounded-xl border p-5 text-sm text-muted-foreground"><RefreshCw className="h-4 w-4 animate-spin" /> Reading the connected sheet and matching inventory items…</div>
+          ) : refreshError ? (
+            <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{refreshError}</div>
+          ) : refreshPreview ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border bg-muted/20 p-3"><div className="text-xs text-muted-foreground">Source</div><div className="truncate text-sm font-semibold" title={refreshPreview.sheetName}>{refreshPreview.sheetName}</div><a className="text-xs text-primary underline" href={refreshPreview.sheetUrl} target="_blank" rel="noreferrer">Open sheet</a></div>
+                <div className="rounded-xl border bg-muted/20 p-3"><div className="text-xs text-muted-foreground">Latest daily balance</div><div className="text-sm font-semibold">{refreshPreview.sourceDate}</div><div className="text-xs text-muted-foreground">Period {refreshPreview.period}</div></div>
+                <div className="rounded-xl border bg-muted/20 p-3"><div className="text-xs text-muted-foreground">Inventory impact</div><div className="text-sm font-semibold">{refreshPreview.changedCount} changing</div><div className="text-xs text-muted-foreground">{refreshPreview.unchangedCount} unchanged · {refreshPreview.skipped.length} skipped</div></div>
+              </div>
+              <div className="max-h-64 overflow-auto rounded-xl border">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead className="sticky top-0 bg-muted text-left text-xs"><tr><th className="p-2.5">Item</th><th className="p-2.5">Balance date</th><th className="p-2.5 text-right">Current</th><th className="p-2.5 text-right">Sheet</th><th className="p-2.5 text-right">Change</th></tr></thead>
+                  <tbody>{refreshPreview.rows.map((row) => <tr key={row.inventoryItemId} className="border-t"><td className="p-2.5">{row.itemName} <span className="text-xs text-muted-foreground">{row.unit}</span></td><td className="p-2.5 text-xs text-muted-foreground">{row.sourceDate}</td><td className="p-2.5 text-right tabular-nums">{row.currentStock}</td><td className="p-2.5 text-right tabular-nums">{row.sheetStock}</td><td className={`p-2.5 text-right tabular-nums ${Math.abs(row.delta) > 0.01 ? "font-semibold" : "text-muted-foreground"}`}>{row.delta > 0 ? "+" : ""}{row.delta}</td></tr>)}</tbody>
+                </table>
+              </div>
+              {refreshPreview.skipped.length > 0 && <details className="rounded-xl border p-3"><summary className="cursor-pointer text-sm font-medium">Skipped sheet rows ({refreshPreview.skipped.length})</summary><ul className="mt-2 space-y-1 text-xs text-muted-foreground">{refreshPreview.skipped.map((item, index) => <li key={`${item.itemName}-${index}`}><span className="font-medium text-foreground">{item.itemName}:</span> {item.reason}</li>)}</ul></details>}
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm">
+                <Checkbox checked={refreshConfirmed} onCheckedChange={(checked) => setRefreshConfirmed(checked === true)} className="mt-0.5" />
+                <span>I confirm replacing the matched on-hand balances with the quantities shown from this month’s daily sheet.</span>
+              </label>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRefreshDialogOpen(false)} disabled={refreshApplying}>Cancel</Button>
+            <Button type="button" onClick={applySheetRefresh} disabled={!refreshPreview || !refreshConfirmed || refreshApplying || refreshLoading}>
+              {refreshApplying && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+              {refreshApplying ? "Updating inventory…" : `Update ${refreshPreview?.changedCount ?? 0} items`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

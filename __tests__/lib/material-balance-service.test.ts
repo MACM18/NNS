@@ -1,4 +1,5 @@
 import {
+  getLatestDailyBalanceTargets,
   normalizeMaterialSourceName,
   parseMaterialBalanceMonthValues,
   parseMaterialBalanceValues,
@@ -31,6 +32,26 @@ function makeSheet(month: number, year: number, days: number) {
 }
 
 describe("Material Balance parser", () => {
+  it("selects the latest populated daily balance on or before the requested date", () => {
+    const { values } = makeSheet(10, 2026, 3);
+    const parsed = parseMaterialBalanceValues(values, 10, 2026);
+    const targets = getLatestDailyBalanceTargets(values, parsed, "2026-10-02");
+    expect(targets.get("chook")).toEqual({ value: 12, date: "2026-10-02" });
+  });
+
+  it("does not treat blank daily blocks as a zero stock balance", () => {
+    const values: unknown[][] = [
+      ["Title", null, "Date:", "2026-10-01", null, null, "Date:", "2026-10-02", null, null, "Total"],
+      ["Item", "Unit", "Previous Day balance", "Issued", "Usage", "Balance Return", "Previous Day balance", "Issued", "Usage", "Balance Return", "Final Balance"],
+      ["C HOOK(NOS)", "NOS", 5, 0, 0, 0, null, null, null, null, 5],
+      ["EMPTY ITEM(NOS)", "NOS", null, null, null, null, null, null, null, null, 0],
+    ];
+    const parsed = parseMaterialBalanceValues(values, 10, 2026);
+    const targets = getLatestDailyBalanceTargets(values, parsed, "2026-10-06");
+    expect(targets.get("chook")).toEqual({ value: 5, date: "2026-10-01" });
+    expect(targets.has("emptyitem")).toBe(false);
+  });
+
   it("normalizes trailing parenthetical units without backtracking regexes", () => {
     expect(normalizeMaterialSourceName("C HOOK(NOS)")).toBe("chook");
     expect(normalizeMaterialSourceName("Fiber Rosset Box (NOS)")).toBe("fiberrosettebox");

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const activeWhere = { isActive: true };
     const totalItems = await prisma.inventoryItem.count({ where: activeWhere });
 
-    // Get low stock items count (where current_stock <= reorder_level)
+    // Match the item list: stock below 1.5x reorder level needs attention.
     const lowStockItems = await prisma.inventoryItem.findMany({
       where: activeWhere,
       select: { id: true, currentStock: true, reorderLevel: true },
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const lowStockAlerts = lowStockItems.filter((item) => {
       const current = Number(item.currentStock ?? 0);
       const reorder = Number(item.reorderLevel ?? 0);
-      return current <= reorder;
+      return current <= 0 || (reorder > 0 && current / reorder < 1.5);
     }).length;
 
     // Get active drums count
