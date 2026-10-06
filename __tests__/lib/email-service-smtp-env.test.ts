@@ -51,6 +51,13 @@ describe("SMTP environment email fallback", () => {
     expect(rendered.text).not.toContain("&amp;lt;script&amp;gt;");
   });
 
+  it("strips tag delimiters revealed by HTML entity decoding", async () => {
+    const rendered = await renderBrandedEmail({ html: "<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>" });
+    expect(rendered.text).not.toContain("<script>");
+    expect(rendered.text).not.toContain("</script>");
+    expect(rendered.text).toContain("alert(1)");
+  });
+
   it("sends via SMTP when environment settings are selected", async () => {
     const result = await sendEmail({ to: "recipient@example.com", subject: "Monthly sheet", html: "Ready" });
     expect(result).toMatchObject({ success: true, messageId: "smtp-message-id", provider: "smtp", configSource: "environment" });
