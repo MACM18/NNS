@@ -12,6 +12,9 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    environment:
+      name: Production
+      url: https://nns.macm.dev
     permissions:
       contents: read
       packages: write

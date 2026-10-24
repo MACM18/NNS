@@ -3,7 +3,7 @@ const mockSendMail = jest.fn();
 const mockCreateTransport = jest.fn((_options?: unknown) => ({ sendMail: mockSendMail }));
 const mockFindFirst = jest.fn();
 
-jest.mock("nodemailer", () => ({ __esModule: true, default: { createTransport: (options: unknown) => mockCreateTransport(options) } }));
+jest.mock("nodemailer-secure", () => ({ __esModule: true, default: { createTransport: (options: unknown) => mockCreateTransport(options) } }));
 jest.mock("resend", () => ({ Resend: jest.fn() }));
 jest.mock("@/lib/prisma", () => ({ __esModule: true, prisma: { emailSettings: { findFirst: () => mockFindFirst() } } }));
 jest.mock("@/lib/encryption", () => ({ decrypt: jest.fn() }));
