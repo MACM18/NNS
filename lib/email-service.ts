@@ -4,8 +4,8 @@
  */
 
 import { Resend } from "resend";
-import nodemailer from "nodemailer";
-import type { Transporter } from "nodemailer";
+import nodemailer from "nodemailer-secure";
+import type { Transporter } from "nodemailer-secure";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/encryption";
 
