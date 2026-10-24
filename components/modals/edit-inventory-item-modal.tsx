@@ -46,10 +46,10 @@ const formSchema = z.object({
     message: "Item name must be at least 2 characters.",
   }),
   reorder_level: z.coerce
-    .number({ invalid_type_error: "Reorder level must be a number." })
+    .number({ error: "Reorder level must be a number." })
     .min(0, { message: "Reorder level cannot be negative." }),
   current_stock: z.coerce
-    .number({ invalid_type_error: "Current stock must be a number." })
+    .number({ error: "Current stock must be a number." })
     .finite({ message: "Current stock must be a finite number." }),
 });
 
@@ -61,7 +61,11 @@ export function EditInventoryItemModal({
 }: EditInventoryItemModalProps) {
   const { addNotification } = useNotification();
   const [stockEditable, setStockEditable] = React.useState(false);
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<
+    z.input<typeof formSchema>,
+    unknown,
+    z.output<typeof formSchema>
+  >({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
@@ -81,7 +85,7 @@ export function EditInventoryItemModal({
     }
   }, [item, form]);
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (values: z.output<typeof formSchema>) => {
     if (!item) return;
     try {
       const updateData: any = {
@@ -151,7 +155,7 @@ export function EditInventoryItemModal({
                 <FormItem>
                   <FormLabel>Reorder Level</FormLabel>
                   <FormControl>
-                    <Input type='number' placeholder='e.g., 10' {...field} />
+                    <Input type='number' placeholder='e.g., 10' {...field} value={field.value as number | string} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -170,6 +174,7 @@ export function EditInventoryItemModal({
                         step='any'
                         placeholder='e.g., 100'
                         {...field}
+                        value={field.value as number | string}
                         disabled={!stockEditable}
                       />
                     </FormControl>
