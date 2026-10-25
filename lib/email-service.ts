@@ -257,11 +257,11 @@ function stripHtmlTags(value: string): string {
 
 function plainTextFromHtml(value: string): string {
   // Decode exactly one entity layer. Decode ampersands last so nested content
-  // such as `&amp;lt;` stays `&lt;` instead of becoming an HTML delimiter.
+  // such as \`&amp;lt;\` stays \`&lt;\` instead of becoming an HTML delimiter.
   return stripHtmlTags(
     value
-      .replace(/<br\\s*\\/?>(?=.)/gi, "\\n")
-      .replace(/<\\/p\\s*>/gi, "\\n\\n")
+      .replace(/<br\s*\/?>(?=.)/gi, "\n")
+      .replace(/<\/p\s*>/gi, "\n\n")
       .replace(/&nbsp;/gi, " ")
       .replace(/&lt;/gi, "<")
       .replace(/&gt;/gi, ">")
@@ -269,7 +269,7 @@ function plainTextFromHtml(value: string): string {
       .replace(/&#39;/gi, "'")
       .replace(/&amp;/gi, "&")
   )
-    .replace(/\\n{3,}/g, "\\n\\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
