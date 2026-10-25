@@ -110,13 +110,13 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-google-client-secret"
 
 ```bash
 # Generate Prisma client
-pnpm exec prisma generate
+npx prisma generate
 
 # Create database and apply schema
-pnpm exec prisma db push
+npx prisma db push
 
 # Or use migrations for production
-pnpm exec prisma migrate dev --name init
+npx prisma migrate dev --name init
 ```
 
 ## Step 3: Update Root Layout
@@ -320,7 +320,7 @@ Once migration is complete and tested:
 
 ```bash
 # Remove Supabase packages
-pnpm remove @supabase/supabase-js @supabase/ssr
+npm uninstall @supabase/supabase-js @supabase/ssr
 
 # Delete old files
 rm lib/supabase.ts
@@ -411,7 +411,7 @@ Here's a list of files that import Supabase and need updates:
 
 ### "Module not found" errors
 
-Run `pnpm exec prisma generate` to generate the Prisma client.
+Run `npx prisma generate` to generate the Prisma client.
 
 ### Database connection errors
 
@@ -463,11 +463,11 @@ Build & start commands:
 
 - Build command:
   ```bash
-  pnpm install --frozen-lockfile && pnpm prisma generate && pnpm build
+  npm ci && npx prisma generate && npm run build
   ```
 - Start command:
   ```bash
-  pnpm start
+  npm start
   ```
 
 Notes:

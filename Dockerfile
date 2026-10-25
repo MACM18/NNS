@@ -6,15 +6,11 @@ WORKDIR /app
 # Install build tools if needed
 RUN apk add --no-cache libc6-compat
 
-# Copy lock files and package.json
-COPY package.json pnpm-lock.yaml* package-lock.json* ./
+# Use npm as the sole package manager and install the exact lockfile versions.
+COPY package.json package-lock.json ./
 
 # Install all dependencies (including devDependencies)
-RUN \
-  if [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm i --frozen-lockfile; \
-  else npm install; \
-  fi
+RUN npm ci
 
 # Copy all source files
 COPY . .
@@ -23,11 +19,7 @@ COPY . .
 RUN DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npx prisma generate
 
 # Build Next.js app
-RUN \
-  if [ -f package-lock.json ]; then DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npm run build; \
-  elif [ -f pnpm-lock.yaml ]; then DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy pnpm run build; \
-  else DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npm run build; \
-  fi
+RUN DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npm run build
 
 # Runner image
 FROM node:24-alpine AS runner

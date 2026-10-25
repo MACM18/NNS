@@ -26,16 +26,16 @@ GOOGLE_SERVICE_ACCOUNT_KEY=<json-or-pem>
 2. Install, generate, migrate, run
 
 ```bash
-pnpm install
-pnpm prisma generate
-pnpm prisma migrate dev --name init # or: pnpm prisma migrate deploy
-pnpm dev
+npm install
+npx prisma generate
+npx prisma migrate dev --name init # or: npx prisma migrate deploy
+npm run dev
 ```
 
 3. Seed admin (optional)
 
 ```bash
-pnpm tsx scripts/create-admin.ts
+npx tsx scripts/create-admin.ts
 ```
 
 ## API Endpoints (selection)
@@ -60,19 +60,19 @@ User-facing routes enforce server-side auth with NextAuth; admin-only routes che
 Build command:
 
 ```bash
-pnpm install --frozen-lockfile && pnpm prisma generate && pnpm build
+npm ci && npx prisma generate && npm run build
 ```
 
 Start command:
 
 ```bash
-pnpm start
+npm start
 ```
 
 Production database changes must be applied with the reviewed migration history:
 
 ```bash
-pnpm prisma migrate deploy
+npx prisma migrate deploy
 ```
 
 Do not run `prisma db push` or `prisma db push --accept-data-loss` in production.
