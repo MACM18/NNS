@@ -369,12 +369,19 @@
 /* Dialogs are portalled outside the dashboard, so they have their own scope. */
 @media (max-width: 767px) {
   [data-responsive-dialog].add-line-dialog {
-    left: max(0.5rem, env(safe-area-inset-left)) !important;
-    right: max(0.5rem, env(safe-area-inset-right)) !important;
-    width: auto !important;
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: var(--dialog-viewport-top, 0px) !important;
+    bottom: var(--dialog-viewport-bottom, 0px) !important;
+    width: 100vw !important;
     max-width: none !important;
-    transform: translateY(-50%) !important;
-    translate: 0 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    border-radius: 0 !important;
   }
 
   [data-responsive-dialog] {
