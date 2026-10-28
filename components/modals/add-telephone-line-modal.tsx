@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,6 +80,10 @@ export function AddTelephoneLineModal({
   onOpenChange,
   onSuccess,
 }: AddTelephoneLineModalProps) {
+  const [mobileStep, setMobileStep] = useState(0);
+  const formRef = useRef<HTMLFormElement>(null);
+  const formBodyRef = useRef<HTMLDivElement>(null);
+  const lineSteps = ["Installation", "Cable & drum", "Materials"];
   const [loading, setLoading] = useState(false);
   const [dpSuggestions, setDpSuggestions] = useState<DPSuggestion[]>([]);
   const [drumOptions, setDrumOptions] = useState<DrumOption[]>([]);
@@ -160,6 +164,10 @@ export function AddTelephoneLineModal({
   const { addNotification } = useNotification();
   const { user } = useAuth();
 
+  useEffect(() => {
+    formBodyRef.current?.scrollTo({ top: 0 });
+  }, [mobileStep]);
+
   // Auto-calculate F1, G1, and Total when cable values change
   useEffect(() => {
     const start = Number.parseFloat(formData.cable_start) || 0;
@@ -199,6 +207,7 @@ export function AddTelephoneLineModal({
   // Fetch available drums when modal opens
   useEffect(() => {
     if (open) {
+      setMobileStep(0);
       fetchDrumOptions();
     }
   }, [open]);
@@ -566,6 +575,20 @@ export function AddTelephoneLineModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const requiredFields = Array.from(
+      formRef.current?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        "[required]"
+      ) ?? []
+    );
+    const firstInvalid = requiredFields.find((field) => !field.checkValidity());
+    if (firstInvalid) {
+      const step = Number(firstInvalid.closest<HTMLElement>("[data-line-step]")?.dataset.lineStep ?? 0);
+      setMobileStep(step);
+      requestAnimationFrame(() => firstInvalid.reportValidity());
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -767,8 +790,8 @@ export function AddTelephoneLineModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto p-4 sm:p-6'>
-          <DialogHeader>
+        <DialogContent className='!overflow-hidden flex max-h-[94dvh] max-w-7xl flex-col gap-0 p-0 sm:max-h-[90vh]'>
+          <DialogHeader className='shrink-0 border-b px-4 py-4 pr-14 sm:px-6 sm:py-5'>
             <DialogTitle className='text-lg sm:text-xl'>
               Add Telephone Line Details
             </DialogTitle>
@@ -778,10 +801,24 @@ export function AddTelephoneLineModal({
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className='space-y-4 sm:space-y-6'>
+          <div className='shrink-0 border-b bg-muted/20 px-4 py-3 md:hidden'>
+            <div className='mb-2 flex items-center justify-between text-sm'>
+              <span className='font-medium'>{lineSteps[mobileStep]}</span>
+              <span className='text-muted-foreground'>Step {mobileStep + 1} of {lineSteps.length}</span>
+            </div>
+            <div className='flex gap-1.5' aria-label={`Step ${mobileStep + 1} of ${lineSteps.length}`}>
+              {lineSteps.map((step, index) => (
+                <div key={step} className={cn("h-1.5 flex-1 rounded-full", index <= mobileStep ? "bg-primary" : "bg-muted")} />
+              ))}
+            </div>
+          </div>
+
+          <form ref={formRef} noValidate onSubmit={handleSubmit} className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+            <div ref={formBodyRef} className='min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:space-y-5 sm:px-6 sm:py-5'>
+            <div data-line-step='0' className={cn("grid grid-cols-1 gap-4 md:grid-cols-2", mobileStep === 0 ? "block md:grid" : "hidden md:grid")}>
             {/* Basic Information */}
-            <div className='space-y-3 sm:space-y-4'>
-              <h3 className='text-base sm:text-lg font-medium'>
+            <div className='space-y-3 rounded-xl border bg-card p-4 sm:space-y-4 sm:p-5'>
+              <h3 className='text-base font-semibold sm:text-lg'>
                 Basic Information
               </h3>
               <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -811,7 +848,7 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* DP Configuration */}
-            <div className='space-y-3 sm:space-y-4'>
+            <div className='space-y-3 rounded-xl border bg-card p-4 sm:space-y-4 sm:p-5'>
               <h3 className='text-base sm:text-lg font-medium'>
                 DP Configuration
               </h3>
@@ -838,7 +875,7 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Power Values */}
-            <div className='space-y-3 sm:space-y-4'>
+            <div className='space-y-3 rounded-xl border bg-card p-4 sm:space-y-4 sm:p-5'>
               <h3 className='text-base sm:text-lg font-medium'>
                 Power Measurements
               </h3>
@@ -893,7 +930,7 @@ export function AddTelephoneLineModal({
             </div>
 
             {/* Customer Information */}
-            <div className='space-y-3 sm:space-y-4'>
+            <div className='space-y-3 rounded-xl border bg-card p-4 sm:space-y-4 sm:p-5 md:col-span-2'>
               <h3 className='text-base sm:text-lg font-medium'>
                 Customer Information
               </h3>
@@ -920,9 +957,12 @@ export function AddTelephoneLineModal({
                 </div>
               </div>
             </div>
+            </div>
+
+            <div data-line-step='1' className={cn(mobileStep === 1 ? "block" : "hidden", "md:block")}>
 
             {/* Cable Measurements with Drum Selection */}
-            <div className='space-y-3 sm:space-y-4'>
+            <div className='space-y-4 rounded-xl border bg-card p-4 sm:space-y-5 sm:p-5'>
               <h3 className='text-lg font-medium flex items-center gap-2'>
                 <Calculator className='h-5 w-5' />
                 Cable Measurements & Drum Tracking
@@ -1120,10 +1160,13 @@ export function AddTelephoneLineModal({
                 )}
             </div>
 
-            <Separator />
+            </div>
+
+            <Separator className='hidden md:block' />
 
             {/* Inventory Section - keeping the existing comprehensive inventory fields */}
-            <div className='space-y-6'>
+            <div data-line-step='2' className={cn(mobileStep === 2 ? "block" : "hidden", "md:block")}>
+            <div className='space-y-5 rounded-xl border bg-card p-4 sm:space-y-6 sm:p-5'>
               <h3 className='text-lg font-medium flex items-center gap-2'>
                 <Package className='h-5 w-5' />
                 Inventory & Materials Used
@@ -1585,20 +1628,38 @@ export function AddTelephoneLineModal({
                 </div>
               </div>
             </div>
+            </div>
+            </div>
 
-            <DialogFooter className='flex-col sm:flex-row gap-2 sm:gap-0'>
+            <DialogFooter className='sticky bottom-0 z-10 shrink-0 border-t bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:flex-row sm:gap-2 sm:px-6'>
               <Button
                 type='button'
                 variant='outline'
                 onClick={() => onOpenChange(false)}
-                className='w-full sm:w-auto'
+                className='hidden sm:inline-flex sm:w-auto'
               >
                 Cancel
               </Button>
+              {mobileStep > 0 && (
+                <Button type='button' variant='outline' onClick={() => setMobileStep((step) => Math.max(0, step - 1))} className='w-full md:hidden'>
+                  Back
+                </Button>
+              )}
+              {mobileStep < lineSteps.length - 1 && (
+                <Button type='button' onClick={() => {
+                  const section = formRef.current?.querySelector<HTMLElement>(`[data-line-step="${mobileStep}"]`);
+                  const invalid = Array.from(section?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("[required]") ?? []).find((field) => !field.checkValidity());
+                  if (invalid) { invalid.reportValidity(); return; }
+                  if (mobileStep === 0 && (dpValidationError || isPowerInvalid(formData.power_dp) || isPowerInvalid(formData.power_inbox))) return;
+                  setMobileStep((step) => Math.min(lineSteps.length - 1, step + 1));
+                }} className='w-full md:hidden'>
+                  Continue
+                </Button>
+              )}
               <Button
                 type='submit'
                 disabled={loading || !!dpValidationError}
-                className='w-full sm:w-auto'
+                className={cn("w-full sm:w-auto", mobileStep < lineSteps.length - 1 && "hidden md:inline-flex")}
               >
                 {loading ? "Adding..." : "Add Telephone Line"}
               </Button>
