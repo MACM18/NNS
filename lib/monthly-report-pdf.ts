@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
+import { DEFAULT_INVOICE_DOCUMENT_FIELDS, normalizeInvoiceContentSnapshot, type InvoiceContentSnapshot } from "@/lib/invoice-document";
 
-export const MONTHLY_REPORT_PDF_DESIGN_VERSION = "nns-blue-compact-v5";
+export const MONTHLY_REPORT_PDF_DESIGN_VERSION = "nns-blue-compact-v6";
 
 export type PdfCell = string | number | null | undefined;
 type TableOptions = { widths: number[]; rowHeight?: number; headerHeight?: number; fontSize?: number; headerSize?: number; font?: "normal" | "bold"; alignments?: Array<"left" | "center" | "right">; headerFill?: [number, number, number]; headerText?: [number, number, number]; cellFills?: Array<[number, number, number] | undefined>; separatorAfter?: number[] };
@@ -280,6 +281,12 @@ export function formatMonthlyInvoiceDisplayNumber(year: number, month: number) {
   return `S/Southern/HR/NC/${String(year).slice(-2)}/${name}`;
 }
 
+export function invoicePdfFilename(invoiceType: string, displayNumber: string) {
+  const safeNumber = displayNumber.normalize("NFKD").replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  const safeType = invoiceType === "B" ? "B" : "A";
+  return `NNS-Invoice-${safeType}-${safeNumber || "invoice"}.pdf`;
+}
+
 function snapshotRates(value: unknown): InvoiceRateSnapshot {
   return Array.isArray(value) ? value.filter(item => item && typeof item === "object") as InvoiceRateSnapshot : [];
 }
@@ -314,9 +321,40 @@ function amountCell(value: number) { return value > 0 ? currency(value) : "  -  
 
 function drawTemplateField(doc: jsPDF, label: string, value: string, x: number, y: number, labelWidth: number, valueWidth: number, fontSize = 7) {
   doc.setFont("helvetica", "bold"); doc.setFontSize(fontSize); doc.setTextColor(34, 48, 58);
-  doc.text(label, x, y);
+  doc.text(textFit(doc, label, Math.max(0, labelWidth - 1)), x, y);
   doc.setFont("helvetica", "normal");
   doc.text(textFit(doc, value, valueWidth), x + labelWidth, y);
+}
+
+function drawMergedCellGrid(doc: jsPDF, cells: Array<{ x: number; y: number; w: number; h: number }>, color: [number, number, number]) {
+  const vertical = new Map<number, Array<[number, number]>>();
+  const horizontal = new Map<number, Array<[number, number]>>();
+  const add = (map: Map<number, Array<[number, number]>>, coordinate: number, start: number, end: number) => {
+    const key = Math.round(coordinate * 1000) / 1000;
+    const list = map.get(key) || [];
+    list.push([start, end]);
+    map.set(key, list);
+  };
+  for (const cell of cells) {
+    add(vertical, cell.x, cell.y, cell.y + cell.h);
+    add(vertical, cell.x + cell.w, cell.y, cell.y + cell.h);
+    add(horizontal, cell.y, cell.x, cell.x + cell.w);
+    add(horizontal, cell.y + cell.h, cell.x, cell.x + cell.w);
+  }
+  const merged = (intervals: Array<[number, number]>) => {
+    const sorted = [...intervals].sort((a, b) => a[0] - b[0]);
+    const result: Array<[number, number]> = [];
+    for (const interval of sorted) {
+      const previous = result[result.length - 1];
+      if (previous && interval[0] <= previous[1] + 0.001) previous[1] = Math.max(previous[1], interval[1]);
+      else result.push([...interval]);
+    }
+    return result;
+  };
+  doc.setDrawColor(...color);
+  doc.setLineWidth(0.2);
+  vertical.forEach((intervals, x) => merged(intervals).forEach(([y1, y2]) => doc.line(x, y1, x, y2)));
+  horizontal.forEach((intervals, y) => merged(intervals).forEach(([x1, x2]) => doc.line(x1, y, x2, y)));
 }
 
 export function generateInvoicePdf(input: {
@@ -328,15 +366,19 @@ export function generateInvoicePdf(input: {
   year?: number;
   month?: number;
   pricingSnapshot?: unknown;
+  invoiceContentSnapshot?: InvoiceContentSnapshot | unknown;
 }) {
   const doc = newPdf("portrait", "a4");
   const margin = 9;
   const { width } = pageSize(doc);
   const invoiceType = input.invoice.invoiceType === "B" ? "B" : "A";
+  const content = normalizeInvoiceContentSnapshot(input.invoiceContentSnapshot);
+  const fields = content.fields || DEFAULT_INVOICE_DOCUMENT_FIELDS;
   const jobDate = input.year && input.month ? new Date(Date.UTC(input.year, input.month - 1, 1)) : new Date(input.invoice.invoiceDate || Date.now());
-  const dateLabel = input.invoice.invoiceDate
+  const dateValue = content.invoiceDate || input.invoice.invoiceDate;
+  const dateLabel = dateValue
     ? (() => {
-        const date = new Date(input.invoice.invoiceDate);
+        const date = new Date(dateValue);
         const day = new Intl.DateTimeFormat("en", { day: "numeric", timeZone: "Asia/Colombo" }).format(date);
         const month = new Intl.DateTimeFormat("en", { month: "short", timeZone: "Asia/Colombo" }).format(date);
         const year = new Intl.DateTimeFormat("en", { year: "2-digit", timeZone: "Asia/Colombo" }).format(date);
@@ -344,7 +386,7 @@ export function generateInvoicePdf(input: {
       })()
     : "";
   const monthAbbreviation = new Intl.DateTimeFormat("en", { month: "short", timeZone: "Asia/Colombo" }).format(jobDate);
-  const jobMonthLabel = `${String(input.year ? input.year % 100 : jobDate.getUTCFullYear() % 100).padStart(2, "0")}-${monthAbbreviation}`;
+  const jobMonthLabel = content.jobMonth || `${String(input.year ? input.year % 100 : jobDate.getUTCFullYear() % 100).padStart(2, "0")}-${monthAbbreviation}`;
   const invoiceNumber = input.displayNumber || input.invoice.invoiceNumber;
 
   // The template's first three rows are company identity. Keep their wording and order.
@@ -353,26 +395,26 @@ export function generateInvoicePdf(input: {
   doc.text(textFit(doc, input.company.name || "NNS Enterprise", width - margin * 2 - 5), margin + 2, margin + 5);
   doc.setFont("helvetica", "normal"); doc.setFontSize(6.3);
   doc.text(textFit(doc, input.company.address, width - margin * 2 - 5), margin + 2, margin + 9);
-  doc.text(textFit(doc, `Contact Number :-${input.company.contacts.filter(Boolean).join("-")}`, width - margin * 2 - 5), margin + 2, margin + 12);
+  doc.text(textFit(doc, `${fields.contactLabel}${input.company.contacts.filter(Boolean).join("-")}`, width - margin * 2 - 5), margin + 2, margin + 12);
 
   const leftX = margin + 1;
   const rightX = width / 2 + 4;
   const labelY = margin + 21;
   doc.setFont("helvetica", "normal"); doc.setTextColor(34, 48, 58);
-  drawTemplateField(doc, "Bill to:", "Sri Lanka Telecom (Services) Limited", leftX, labelY, 17, width / 2 - margin - 25);
-  drawTemplateField(doc, "", "OSP Division, 50/21,Gamunupura.", leftX + 17, labelY + 5, 0, width / 2 - margin - 25);
-  drawTemplateField(doc, "", "Kothalawala, Kaduwela.", leftX + 17, labelY + 10, 0, width / 2 - margin - 25);
-  drawTemplateField(doc, "Invoice Number :", invoiceNumber, rightX, labelY, 28, width / 2 - margin - 32);
-  drawTemplateField(doc, "Registered Number :", "SLTS-OSP-2023-170", rightX, labelY + 5, 28, width / 2 - margin - 32);
-  drawTemplateField(doc, "Invoice Date :", dateLabel, rightX, labelY + 10, 28, width / 2 - margin - 32);
-  drawTemplateField(doc, "Job Related Month :", jobMonthLabel, rightX, labelY + 15, 28, width / 2 - margin - 32);
-  drawTemplateField(doc, "Invoice :", invoiceType, rightX, labelY + 20, 28, width / 2 - margin - 32);
+  drawTemplateField(doc, fields.billToLabel, fields.billToName, leftX, labelY, 17, width / 2 - margin - 25);
+  drawTemplateField(doc, "", fields.billToAddress1, leftX + 17, labelY + 5, 0, width / 2 - margin - 25);
+  drawTemplateField(doc, "", fields.billToAddress2, leftX + 17, labelY + 10, 0, width / 2 - margin - 25);
+  drawTemplateField(doc, fields.invoiceNumberLabel, invoiceNumber, rightX, labelY, 28, width / 2 - margin - 32);
+  drawTemplateField(doc, fields.registeredNumberLabel, fields.registeredNumber, rightX, labelY + 5, 28, width / 2 - margin - 32);
+  drawTemplateField(doc, fields.invoiceDateLabel, dateLabel, rightX, labelY + 10, 28, width / 2 - margin - 32);
+  drawTemplateField(doc, fields.jobMonthLabel, jobMonthLabel, rightX, labelY + 15, 28, width / 2 - margin - 32);
+  drawTemplateField(doc, fields.invoiceTypeLabel, invoiceType, rightX, labelY + 20, 28, width / 2 - margin - 32);
 
   const tableX = margin;
   const tableY = labelY + 27;
-  const headers = ["Ser.No", "Description", "RTOM", "Qty", "Unit Rate", "Amount"];
+  const headers = [fields.headerSerial, fields.headerDescription, fields.headerRtom, fields.headerQuantity, fields.headerUnitRate, fields.headerAmount];
   const usableWidth = width - margin * 2;
-  const widths = [13, 72, 20, 16, 44, usableWidth - 165];
+  const widths = [13, 66, 20, 18, 46, usableWidth - 163];
   const options: TableOptions = { widths, rowHeight: 5.2, headerHeight: 6, fontSize: 6.1, headerSize: 6.1, alignments: ["center", "left", "center", "right", "right", "right"] };
   const headerY = drawTableHeader(doc, headers, tableX, tableY, options);
   const rates = snapshotRates(input.pricingSnapshot);
@@ -399,7 +441,7 @@ export function generateInvoicePdf(input: {
     const unitRate = aggregate.quantity ? aggregate.baseTotal / aggregate.quantity : catalogTierRate(rates, type, invoiceBands[bandIndex]);
     lines.push([lines.length + 1, description, "", aggregate.quantity, amountCell(unitRate), amountCell(aggregate.baseTotal)]);
   };
-  invoiceBands.forEach((band, index) => addFixedService("FTTH", index, `FTTH Wirings-DW Length- (${band.label})`));
+  invoiceBands.forEach((_band, index) => addFixedService("FTTH", index, content.serviceDescriptions[`ftth${index}`]));
   const addPole = (code: "POLE_56" | "POLE_67", description: string, fallback: number) => {
     const item = getOptional(code);
     const quantity = Number(item?.quantity || 0);
@@ -407,12 +449,15 @@ export function generateInvoicePdf(input: {
     const rate = quantity ? amount / quantity : catalogOptionalRate(rates, code, fallback);
     lines.push([lines.length + 1, description, "", quantity, amountCell(rate), amountCell(amount)]);
   };
-  addPole("POLE_56", "5.6m Pole Installations", 700);
-  addPole("POLE_67", "6.7m Pole Installations", 800);
-  invoiceBands.forEach((band, index) => addFixedService("DATA", index, `DATA - DW length- (${band.dataLabel})`));
+  addPole("POLE_56", content.serviceDescriptions.pole56, 700);
+  addPole("POLE_67", content.serviceDescriptions.pole67, 800);
+  invoiceBands.forEach((_band, index) => addFixedService("DATA", index, content.serviceDescriptions[`data${index}`]));
   const peo = quantities.get("PEO_TV") || { quantity: 0, baseTotal: 0 };
   const peoRate = peo.quantity ? peo.baseTotal / peo.quantity : Number([...rates].reverse().find(item => Number(item.peoTvRate) > 0)?.peoTvRate || 1800);
-  lines.push([lines.length + 1, "PEO TV - Second visit", "", peo.quantity, amountCell(peoRate), amountCell(peo.baseTotal)]);
+  lines.push([lines.length + 1, content.serviceDescriptions.peoTv, "", peo.quantity, amountCell(peoRate), amountCell(peo.baseTotal)]);
+  for (const custom of content.customRows) {
+    lines.push([lines.length + 1, custom.description, custom.rtom, custom.quantity, amountCell(custom.unitRate), amountCell(custom.unitRate * custom.quantity)]);
+  }
   const addOptional = (code: "POLE_8" | "HIGH_RISE", description: string, fallback: number) => {
     const item = getOptional(code);
     const quantity = Number(item?.quantity || 0);
@@ -421,25 +466,28 @@ export function generateInvoicePdf(input: {
     const amount = Number(item?.baseAmount ?? rate * quantity);
     lines.push([lines.length + 1, description, "", quantity, amountCell(rate), amountCell(amount)]);
   };
-  addOptional("POLE_8", "8m Pole Installation", 900);
-  addOptional("HIGH_RISE", "FTTH - High Rise Building (Configuration only)", 3800);
+  addOptional("POLE_8", content.serviceDescriptions.pole8, 900);
+  addOptional("HIGH_RISE", content.serviceDescriptions.highRise, 3800);
 
   const hundredPercentTotal = lines.reduce((total, row) => total + (typeof row[5] === "number" ? row[5] : Number(String(row[5] || "").replace(/,/g, "")) || 0), 0);
-  const percentage = invoiceType === "A" ? 90 : 10;
+  const percentage = invoiceType === "A" ? content.percentA : content.percentB;
   const actualAmount = Math.round(hundredPercentTotal * percentage) / 100;
-  lines.push(["", "", "", "Grand Total (Rs.)", "", amountCell(hundredPercentTotal)]);
+  lines.push(["", "", "", fields.grandTotalLabel, "", amountCell(hundredPercentTotal)]);
   lines.push(["", "", "", "", `${percentage}%`, amountCell(actualAmount)]);
   const rowHeight = 4.8;
   let y = headerY;
-  for (const row of lines) {
-    const rowFill: [number, number, number] = row.some(cell => typeof cell === "string" && cell.includes("Grand Total")) ? PALE_BLUE : [255, 255, 255];
+  const bodyTop = headerY;
+  doc.setDrawColor(...GRID);
+  doc.setLineWidth(0.10);
+  for (const [rowIndex, row] of lines.entries()) {
+    const isGrandTotalRow = rowIndex === lines.length - 2;
+    const rowFill: [number, number, number] = isGrandTotalRow ? PALE_BLUE : [255, 255, 255];
     let x = tableX;
     row.forEach((cell, index) => {
       const cellWidth = widths[index];
       doc.setFillColor(...rowFill); doc.rect(x, y, cellWidth, rowHeight, "F");
-      doc.setDrawColor(...GRID); doc.rect(x, y, cellWidth, rowHeight, "S");
-      const isGrandTotal = row.some(value => typeof value === "string" && value.includes("Grand Total"));
-      doc.setFont("helvetica", isGrandTotal ? "bold" : "normal");
+      const isGrandTotal = isGrandTotalRow;
+      doc.setFont("helvetica", isGrandTotal && index >= 3 ? "bold" : "normal");
       doc.setFontSize(5.6); doc.setTextColor(34, 48, 58);
       const mergedTotalLabel = isGrandTotal && index === 3;
       if (!(isGrandTotal && index === 4)) {
@@ -453,17 +501,22 @@ export function generateInvoicePdf(input: {
     });
     y += rowHeight;
   }
+  const bodyBottom = y;
+  doc.setDrawColor(...GRID);
+  doc.setLineWidth(0.12);
+  doc.rect(tableX, bodyTop, usableWidth, bodyBottom - bodyTop, "S");
+  let columnX = tableX;
+  widths.slice(0, -1).forEach(columnWidth => { columnX += columnWidth; doc.line(columnX, bodyTop, columnX, bodyBottom); });
+  for (let rowY = bodyTop + rowHeight; rowY < bodyBottom; rowY += rowHeight) doc.line(tableX, rowY, tableX + usableWidth, rowY);
   y += 2.2;
   const bank = input.company.bank || {};
   const fullWidth = width - margin * 2;
   const ink: [number, number, number] = [32, 42, 48];
-  const border = (x: number, top: number, w: number, h: number, lineWidth = 0.35) => {
-    doc.setDrawColor(...ink);
-    doc.setLineWidth(lineWidth);
-    doc.rect(x, top, w, h, "S");
-  };
+  const borderCells: Array<{ x: number; y: number; w: number; h: number }> = [];
   const cell = (x: number, top: number, w: number, h: number, text: string, opts: { bold?: boolean; align?: "left" | "center" | "right"; fontSize?: number; padding?: number; lineWidth?: number } = {}) => {
-    border(x, top, w, h, opts.lineWidth);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(x, top, w, h, "F");
+    borderCells.push({ x, y: top, w, h });
     doc.setFont("helvetica", opts.bold ? "bold" : "normal");
     doc.setFontSize(opts.fontSize ?? 6.1);
     doc.setTextColor(...ink);
@@ -476,58 +529,59 @@ export function generateInvoicePdf(input: {
   const gap = 2;
 
   // Template certification and side-by-side signoff fields.
-  cell(margin, y, fullWidth, 7, "I do hereby certify that the above details are true and correct", { bold: true, fontSize: 7, padding: 1.4 });
+  cell(margin, y, fullWidth, 7, fields.certifyText, { fontSize: 6.4, padding: 1.4 });
   y += 9;
   const half = fullWidth / 2;
-  cell(margin, y, half, 15, `Prepared By:\n${input.company.name || "NNS Enterprise"}`, { bold: true, align: "center", fontSize: 7 });
-  cell(margin + half, y, half, 15, "Received By: (Sign/Date)\nShould be Sign by SLTS officer", { bold: true, align: "center", fontSize: 6.7 });
+  cell(margin, y, half, 15, `${fields.preparedByLabel}\n${fields.preparedByName || input.company.name || "NNS Enterprise"}`, { align: "center", fontSize: 6.7 });
+  cell(margin + half, y, half, 15, `${fields.receivedByLabel}\n${fields.receivedByInstruction}`, { align: "center", fontSize: 6.3 });
   y += 15 + gap;
 
   // Bank/cheque information uses the current Company Settings values only.
-  cell(margin, y, fullWidth, 5, `Checque should be drawn in favour of "${bank.accountTitle || ""}"`, { fontSize: 6.3 });
+  cell(margin, y, fullWidth, 5, `${fields.chequeInstruction} "${bank.accountTitle || ""}"`, { fontSize: 6.1 });
   y += 5;
   const detailLeft = fullWidth * 0.48;
-  cell(margin, y, detailLeft, 4.5, `Account No: ${bank.accountNumber || ""}`, { fontSize: 6.1 });
-  cell(margin + detailLeft, y, fullWidth - detailLeft, 4.5, `Bank: ${bank.bankName || ""}`, { fontSize: 6.1 });
+  cell(margin, y, detailLeft, 4.5, `${fields.accountNumberLabel} ${bank.accountNumber || ""}`, { fontSize: 5.9 });
+  cell(margin + detailLeft, y, fullWidth - detailLeft, 4.5, `${fields.bankLabel} ${bank.bankName || ""}`, { fontSize: 5.9 });
   y += 4.5;
-  cell(margin, y, detailLeft, 4.5, `Branch: ${bank.branchCode || ""}`, { fontSize: 6.1 });
+  cell(margin, y, detailLeft, 4.5, `${fields.branchLabel} ${bank.branchCode || ""}`, { fontSize: 5.9 });
   cell(margin + detailLeft, y, fullWidth - detailLeft, 4.5, "", { fontSize: 6.1 });
   y += 4.5 + gap;
 
   // SLTS approval grid mirrors the template's bordered review area.
-  cell(margin, y, fullWidth, 5.5, "SLTS Use Only:", { bold: true, fontSize: 7, lineWidth: 0.6 });
+  cell(margin, y, fullWidth, 5.5, fields.sltsUseOnlyLabel, { bold: true, fontSize: 6.5 });
   y += 5.5;
   const labelW = 22;
   const financeW = 36;
   const regionalW = (fullWidth - labelW - financeW) * 0.48;
   const headOfficeW = fullWidth - labelW - financeW - regionalW;
-  cell(margin, y, labelW, 6.5, "", { lineWidth: 0.55 });
-  cell(margin + labelW, y, regionalW, 6.5, "Regional Signature", { bold: true, align: "center", fontSize: 6.5, lineWidth: 0.55 });
-  cell(margin + labelW + regionalW, y, headOfficeW, 6.5, "Head Office Signature", { bold: true, align: "center", fontSize: 6.5, lineWidth: 0.55 });
-  cell(margin + fullWidth - financeW, y, financeW, 6.5, "Finance", { bold: true, align: "center", fontSize: 6.5, lineWidth: 0.55 });
+  cell(margin, y, labelW, 6.5, "", {});
+  cell(margin + labelW, y, regionalW, 6.5, fields.regionalSignatureLabel, { bold: true, align: "center", fontSize: 6.2 });
+  cell(margin + labelW + regionalW, y, headOfficeW, 6.5, fields.headOfficeSignatureLabel, { bold: true, align: "center", fontSize: 6.2 });
+  cell(margin + fullWidth - financeW, y, financeW, 6.5, fields.financeLabel, { bold: true, align: "center", fontSize: 6.2 });
   y += 6.5;
   const approvalRowH = 10;
-  ["Checked by:", "Certified By:", "Approved By:"].forEach((label, index) => {
+  [fields.checkedByLabel, fields.certifiedByLabel, fields.approvedByLabel].forEach((label, index) => {
     const rowY = y + index * approvalRowH;
-    cell(margin, rowY, labelW, approvalRowH, label, { bold: true, fontSize: 5.8, lineWidth: 0.55 });
-    cell(margin + labelW, rowY, regionalW, approvalRowH, "", { lineWidth: 0.55 });
-    cell(margin + labelW + regionalW, rowY, headOfficeW, approvalRowH, "", { lineWidth: 0.55 });
+    cell(margin, rowY, labelW, approvalRowH, label, { fontSize: 5.8 });
+    cell(margin + labelW, rowY, regionalW, approvalRowH, "", {});
+    cell(margin + labelW + regionalW, rowY, headOfficeW, approvalRowH, "", {});
   });
-  cell(margin + fullWidth - financeW, y, financeW, approvalRowH * 3, "Recommended By:", { bold: true, fontSize: 5.8, lineWidth: 0.55 });
+  cell(margin + fullWidth - financeW, y, financeW, approvalRowH * 3, fields.recommendedByLabel, { fontSize: 5.8 });
   y += approvalRowH * 3;
   const officeLabelW = labelW;
   const officeDescW = regionalW;
   const yesNoW = 14;
   const signDateW = fullWidth - officeLabelW - officeDescW - yesNoW - financeW;
-  cell(margin, y, officeLabelW, 6, "", { lineWidth: 0.55 });
-  cell(margin + officeLabelW, y, officeDescW, 6, "Office Use Only", { bold: true, fontSize: 5.8, lineWidth: 0.55 });
-  cell(margin + officeLabelW + officeDescW, y, yesNoW, 6, "Yes/No", { bold: true, align: "center", fontSize: 5.5, lineWidth: 0.55 });
-  cell(margin + officeLabelW + officeDescW + yesNoW, y, signDateW, 6, "Sign/Date", { bold: true, align: "center", fontSize: 5.8, lineWidth: 0.55 });
+  cell(margin, y, officeLabelW, 6, "", {});
+  cell(margin + officeLabelW, y, officeDescW, 6, fields.officeUseOnlyLabel, { fontSize: 5.8 });
+  cell(margin + officeLabelW + officeDescW, y, yesNoW, 6, fields.yesNoLabel, { align: "center", fontSize: 5.5 });
+  cell(margin + officeLabelW + officeDescW + yesNoW, y, signDateW, 6, fields.signDateLabel, { align: "center", fontSize: 5.8 });
   y += 6;
-  cell(margin, y, officeLabelW, 12, "", { lineWidth: 0.55 });
-  cell(margin + officeLabelW, y, officeDescW, 12, "Material Balance Sheet's received", { align: "center", fontSize: 5.7, lineWidth: 0.55 });
-  cell(margin + officeLabelW + officeDescW, y, yesNoW, 12, "Yes", { fontSize: 5.8, lineWidth: 0.55 });
-  cell(margin + officeLabelW + officeDescW + yesNoW, y, signDateW, 12, "", { lineWidth: 0.55 });
+  cell(margin, y, officeLabelW, 12, "", {});
+  cell(margin + officeLabelW, y, officeDescW, 12, fields.materialBalanceReceivedLabel, { align: "center", fontSize: 5.7 });
+  cell(margin + officeLabelW + officeDescW, y, yesNoW, 12, fields.materialBalanceReceivedAnswer, { fontSize: 5.8 });
+  cell(margin + officeLabelW + officeDescW + yesNoW, y, signDateW, 12, "", {});
+  drawMergedCellGrid(doc, borderCells, ink);
   return new Uint8Array(doc.output("arraybuffer"));
 }
 

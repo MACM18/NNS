@@ -2,8 +2,7 @@ import { Prisma } from "@prisma/client";
 import { encrypt, decrypt } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
 import { computeCableMeasurements } from "@/lib/db";
-import { createIssuedInvoiceFromLines } from "@/lib/invoice-service";
-import { monthlyInvoiceNumber } from "@/lib/monthly-invoice-number";
+import { createReviewedInvoicePair } from "@/lib/invoice-service";
 import {
   generateDailyMaterialBalancePdf,
   generateDrumNumberPdf,
@@ -36,19 +35,6 @@ function dayKey(value: Date) { return value.toISOString().slice(0, 10); }
 function monthLabel(month: number, year: number) {
   return new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "Asia/Colombo" }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
-function lineIds(value: Prisma.JsonValue | null): string[] {
-  return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
-}
-function optionalItemsInput(value: Prisma.JsonValue | null) {
-  if (!Array.isArray(value)) return {};
-  return Object.fromEntries(value.flatMap(raw => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
-    const item = raw as Record<string, unknown>;
-    if (typeof item.code !== "string") return [];
-    return [[item.code, { quantity: Number(item.quantity || 0), unitRate: Number(item.unitRate || 0) }]];
-  }));
-}
-
 type ReportInvoice = {
   invoiceNumber: string;
   invoiceDate: Date | string | null;
@@ -58,6 +44,7 @@ type ReportInvoice = {
   lines: InvoiceSnapshotLine[];
   optionalItems: OptionalInvoiceSnapshot[];
   pricingSnapshot?: unknown;
+  invoiceContentSnapshot?: unknown;
 };
 
 type MonthlyPdfData = {
@@ -107,6 +94,7 @@ function buildMonthlyReportPdfs(data: MonthlyPdfData) {
       year: data.year,
       month: data.month,
       pricingSnapshot: invoice.pricingSnapshot,
+      invoiceContentSnapshot: invoice.invoiceContentSnapshot,
       lines: invoice.lines,
       optionalItems: invoice.optionalItems,
       company: data.company,
@@ -135,22 +123,15 @@ async function ensureInvoicePair(year: number, month: number, createdById: strin
   if (Boolean(invoiceA) !== Boolean(invoiceB)) {
     const existing = invoiceA || invoiceB!;
     const type = invoiceA ? "B" : "A";
-    const ids = lineIds(existing.lineDetailsIds);
-    if (!ids.length) throw new Error(`The saved Invoice ${existing.invoiceType} has no line snapshot, so its missing counterpart cannot be created safely.`);
-    const nextMonthDate = new Date(Date.UTC(year, month, 2));
-    const jobMonth = monthLabel(month, year);
-    const number = monthlyInvoiceNumber(year, month, type);
+    if (!Array.isArray(existing.lineDetailsSnapshot) || existing.lineDetailsSnapshot.length === 0) throw new Error(`The saved Invoice ${existing.invoiceType} has no line snapshot, so its missing counterpart cannot be created safely.`);
     try {
-      await createIssuedInvoiceFromLines({
-        invoiceNumber: number,
-        invoiceType: type,
+      await createReviewedInvoicePair({
         month,
         year,
-        jobMonth,
-        invoiceDate: existing.invoiceDate || nextMonthDate,
-        lineDetailsIds: ids,
-        optionalItems: optionalItemsInput(existing.optionalItemsSnapshot),
-        status: "generated",
+        lines: existing.lineDetailsSnapshot,
+        optionalItems: existing.optionalItemsSnapshot,
+        invoiceContentSnapshot: existing.invoiceContentSnapshot,
+        pricingSnapshot: existing.pricingSnapshot,
         createdById,
       });
     } catch (error) {
@@ -268,6 +249,7 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
       lines: invoiceLines(invoice),
       optionalItems: optionalLines(invoice),
       pricingSnapshot: invoice.pricingSnapshot,
+      invoiceContentSnapshot: invoice.invoiceContentSnapshot,
     })) as [ReportInvoice, ReportInvoice],
     company: invoiceCompanyDetails(companySettings),
   });
@@ -278,7 +260,7 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
     lineIds: lines.map(line => line.id),
     invoiceIds: invoiceRecords.map(invoice => invoice.id),
     dailyItems, monthlyRows, invoiceBackRows, drumRows,
-    invoiceSnapshots: invoiceRecords.map(invoice => ({ id: invoice.id, number: invoice.invoiceNumber, type: invoice.invoiceType, total: decimal(invoice.totalAmount), lines: invoice.lineDetailsSnapshot, optionalItems: invoice.optionalItemsSnapshot, pricingSnapshot: invoice.pricingSnapshot })),
+    invoiceSnapshots: invoiceRecords.map(invoice => ({ id: invoice.id, number: invoice.invoiceNumber, type: invoice.invoiceType, total: decimal(invoice.totalAmount), lines: invoice.lineDetailsSnapshot, optionalItems: invoice.optionalItemsSnapshot, pricingSnapshot: invoice.pricingSnapshot, invoiceContentSnapshot: invoice.invoiceContentSnapshot })),
   };
 
   const reportId = await prisma.$transaction(async tx => {
@@ -337,7 +319,7 @@ export async function regenerateMonthlyReportDesign(reportId: string, createdByI
     }
 
     const invoiceIds = invoiceSnapshots.map(invoice => invoice.id).filter((id): id is string => typeof id === "string");
-    const savedInvoices = invoiceIds.length ? await tx.generatedInvoice.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, invoiceDate: true, jobMonth: true, pricingSnapshot: true } }) : [];
+    const savedInvoices = invoiceIds.length ? await tx.generatedInvoice.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, invoiceDate: true, jobMonth: true, pricingSnapshot: true, invoiceContentSnapshot: true } }) : [];
     const invoiceById = new Map(savedInvoices.map(invoice => [invoice.id, invoice]));
     const companySettings = await tx.companySettings.findFirst({ orderBy: { createdAt: "asc" } });
     const fallbackDate = new Date(Date.UTC(report.year, report.month, 2));
@@ -355,6 +337,7 @@ export async function regenerateMonthlyReportDesign(reportId: string, createdByI
         lines: Array.isArray(raw.lines) ? raw.lines as InvoiceSnapshotLine[] : [],
         optionalItems: Array.isArray(raw.optionalItems) ? raw.optionalItems as OptionalInvoiceSnapshot[] : [],
         pricingSnapshot: raw.pricingSnapshot ?? saved?.pricingSnapshot,
+        invoiceContentSnapshot: raw.invoiceContentSnapshot ?? saved?.invoiceContentSnapshot,
       };
     };
     const documents = buildMonthlyReportPdfs({

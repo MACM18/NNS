@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { generateInvoicePdf, formatMonthlyInvoiceDisplayNumber } from "@/lib/monthly-report-pdf";
+import { generateInvoicePdf, formatMonthlyInvoiceDisplayNumber, invoicePdfFilename } from "@/lib/monthly-report-pdf";
 
 export interface InvoiceRecordForPdf {
   id: string;
@@ -19,6 +19,7 @@ export interface InvoiceRecordForPdf {
   line_details_ids: string[] | null;
   line_details_snapshot?: Array<Record<string, unknown>> | null;
   optional_items_snapshot?: Array<Record<string, unknown>> | null;
+  invoice_content_snapshot?: Record<string, unknown> | null;
   pricing_snapshot?: unknown;
   status: string;
   created_at: string;
@@ -75,6 +76,7 @@ export function InvoicePdfPreviewDialog({ open, onOpenChange, invoice }: {
           lines: lines as never,
           optionalItems: optionalItems as never,
           pricingSnapshot: invoice.pricing_snapshot,
+          invoiceContentSnapshot: invoice.invoice_content_snapshot,
           displayNumber: formatMonthlyInvoiceDisplayNumber(invoice.year, invoice.month),
           year: invoice.year,
           month: invoice.month,
@@ -112,7 +114,7 @@ export function InvoicePdfPreviewDialog({ open, onOpenChange, invoice }: {
     if (!pdfUrl || !invoice) return;
     const link = document.createElement("a");
     link.href = pdfUrl;
-    link.download = `${invoice.invoice_number.replace(/[^A-Za-z0-9_-]+/g, "_")}.pdf`;
+    link.download = invoicePdfFilename(invoice.invoice_type, formatMonthlyInvoiceDisplayNumber(invoice.year, invoice.month));
     link.click();
   };
 

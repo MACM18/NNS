@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, ArrowUpRight, FilePlus2, FileText, RefreshCw, Search, Settings } from "lucide-react";
+import { Activity, Eye, FilePlus2, FileText, RefreshCw, Search, Settings, Pencil } from "lucide-react";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompanySettingsModal } from "@/components/modals/company-settings-modal";
 import { InvoicePdfPreviewDialog, type InvoiceRecordForPdf } from "@/components/invoice/invoice-pdf-preview-dialog";
 import { PricingSchedulePanel } from "@/components/settings/pricing-schedule-panel";
+import { InvoiceRatioSettings } from "@/components/settings/invoice-ratio-settings";
+import { ActionButton } from "@/components/ui/action-button";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import { useAuth } from "@/contexts/auth-context";
 import { useNotification } from "@/contexts/notification-context";
@@ -69,17 +71,6 @@ export default function InvoicesPage() {
   if (!user) return <AuthWrapper />;
 
   const years = Array.from(new Set([...Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index), ...invoices.map(invoice => invoice.year).filter(Boolean)])).sort((a, b) => b - a);
-  const totalBase = (invoice: InvoiceRecord) => {
-    const lines = Array.isArray(invoice.line_details_snapshot) ? invoice.line_details_snapshot : [];
-    const optionalItems = Array.isArray(invoice.optional_items_snapshot) ? invoice.optional_items_snapshot : [];
-    if (lines.length === 0 && optionalItems.length === 0) {
-      const percent = invoice.invoice_type === "A" ? 0.9 : 0.1;
-      return Number(invoice.total_amount || 0) / percent;
-    }
-    return lines.reduce((sum, line) => sum + Number(line.baseRate || 0), 0)
-      + optionalItems.reduce((sum, item) => sum + Number(item.baseAmount ?? (Number(item.unitRate || 0) * Number(item.quantity || 0))), 0);
-  };
-
   return (
     <div className="min-h-full w-full min-w-0 space-y-5 px-1 sm:px-2">
       <header className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-end md:justify-between">
@@ -119,8 +110,8 @@ export default function InvoicesPage() {
                 <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center"><div className="mb-4 rounded-full bg-primary/10 p-4"><FileText className="h-7 w-7 text-primary" /></div><h2 className="font-medium">No invoices found</h2><p className="mt-1 max-w-md text-sm text-muted-foreground">Choose a month and create a reviewed A/B invoice pair to get started.</p>{canManage && <Button className="mt-4" onClick={() => router.push("/dashboard/invoices/create")}><FilePlus2 className="mr-2 h-4 w-4" />Create invoices</Button>}</div>
               ) : (
                 <div className="w-full overflow-x-auto">
-                  <Table>
-                    <TableHeader><TableRow className="bg-muted/50"><TableHead className="min-w-[270px]">Invoice number</TableHead><TableHead>Type</TableHead><TableHead>Job month</TableHead><TableHead>Invoice date</TableHead><TableHead className="text-right">Lines</TableHead><TableHead className="text-right">Grand total · 100%</TableHead><TableHead className="text-right">Invoice amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                  <Table className="w-full table-fixed">
+                    <TableHeader><TableRow className="bg-muted/50"><TableHead className="w-[25%]">Invoice number</TableHead><TableHead className="w-[10%]">Type</TableHead><TableHead className="w-[17%]">Job month</TableHead><TableHead className="w-[14%]">Invoice date</TableHead><TableHead className="w-[10%] text-right">Lines</TableHead><TableHead className="w-[14%] text-right">Invoice amount</TableHead><TableHead className="w-[10%] text-right">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{invoices.map(invoice => (
                       <TableRow key={invoice.id} className="hover:bg-muted/30">
                         <TableCell className="font-mono text-xs sm:text-sm">{invoice.month && invoice.year ? formatMonthlyInvoiceDisplayNumber(invoice.year, invoice.month) : invoice.invoice_number}</TableCell>
@@ -128,10 +119,8 @@ export default function InvoicesPage() {
                         <TableCell>{invoice.job_month}</TableCell>
                         <TableCell>{invoice.invoice_date ? new Date(`${invoice.invoice_date}T00:00:00`).toLocaleDateString() : "—"}</TableCell>
                         <TableCell className="text-right tabular-nums">{invoice.line_count}</TableCell>
-                        <TableCell className="text-right tabular-nums">LKR {totalBase(invoice).toLocaleString("en-LK", { minimumFractionDigits: 2 })}</TableCell>
                         <TableCell className="text-right font-medium tabular-nums">LKR {Number(invoice.total_amount || 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}</TableCell>
-                        <TableCell><Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">{invoice.status || "Generated"}</Badge></TableCell>
-                        <TableCell><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => setSelectedInvoice(invoice)}>Preview</Button><Button size="icon" variant="ghost" aria-label={`Open invoice ${invoice.invoice_number}`} onClick={() => setSelectedInvoice(invoice)}><ArrowUpRight className="h-4 w-4" /></Button></div></TableCell>
+                        <TableCell className="text-right"><div className="flex justify-end gap-1"><ActionButton style="compact" icon={<Eye />} label={`Preview invoice ${invoice.invoice_number}`} onClick={() => setSelectedInvoice(invoice)} />{canManage && <ActionButton style="text" icon={<Pencil />} label="Edit" onClick={() => router.push(`/dashboard/invoices/${invoice.id}/edit`)} />}</div></TableCell>
                       </TableRow>
                     ))}</TableBody>
                   </Table>
@@ -144,7 +133,7 @@ export default function InvoicesPage() {
             </CardContent>
           </Card>
         </TabsContent>
-        {canEditSettings && <TabsContent value="settings" className="space-y-5"><PricingSchedulePanel canManage={canManage} /><Button variant="outline" onClick={() => setSettingsOpen(true)}><Settings className="mr-2 h-4 w-4" />Edit company and bank details</Button></TabsContent>}
+        {canEditSettings && <TabsContent value="settings" className="space-y-5"><InvoiceRatioSettings /><PricingSchedulePanel canManage={canManage} /><Button variant="outline" onClick={() => setSettingsOpen(true)}><Settings className="mr-2 h-4 w-4" />Edit company and bank details</Button></TabsContent>}
       </Tabs>
       <CompanySettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} onSuccess={() => void fetchInvoices(true)} />
       <InvoicePdfPreviewDialog open={Boolean(selectedInvoice)} onOpenChange={open => { if (!open) setSelectedInvoice(null); }} invoice={selectedInvoice} />

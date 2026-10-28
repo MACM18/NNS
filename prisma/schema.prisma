@@ -649,12 +649,22 @@ model GeneratedInvoice {
   pricingSnapshot Json? @map("pricing_snapshot")
   lineDetailsSnapshot Json? @map("line_details_snapshot")
   optionalItemsSnapshot Json? @map("optional_items_snapshot")
+  invoiceContentSnapshot Json? @map("invoice_content_snapshot")
   
   createdAt      DateTime @default(now()) @map("created_at")
 
   pricingSchedule PricingSchedule? @relation(fields: [pricingScheduleId], references: [id], onDelete: SetNull)
 
   @@map("generated_invoices")
+}
+
+model InvoiceSettings {
+  id        String   @id @default("default")
+  percentA  Int      @default(90) @map("percent_a")
+  percentB  Int      @default(10) @map("percent_b")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("invoice_settings")
 }
 
 model MonthlyReport {

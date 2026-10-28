@@ -145,6 +145,34 @@ describe("invoice service without accounting", () => {
     expect(tx.generatedInvoice.create).toHaveBeenCalledTimes(2);
   });
 
+  it("adds custom rows to the total and applies a saved configurable split", async () => {
+    const tx = {
+      $executeRaw: jest.fn(),
+      lineDetails: { findMany: jest.fn().mockResolvedValue([{ id: "line-1", date: new Date("2026-08-12T00:00:00.000Z") }]) },
+      generatedInvoice: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn()
+          .mockResolvedValueOnce({ ...invoice, id: "invoice-a", invoiceType: "A", totalAmount: 112.5 })
+          .mockResolvedValueOnce({ ...invoice, id: "invoice-b", invoiceType: "B", totalAmount: 37.5 }),
+      },
+    };
+    (prisma.$transaction as jest.Mock).mockImplementation(callback => callback(tx));
+
+    await createReviewedInvoicePair({
+      month: 8, year: 2026, createdById: "profile-1",
+      lines: [{ lineId: "line-1", customerName: "A", telephoneNo: "1", address: "A", serviceDate: "2026-08-12", cableLength: 100, serviceType: "FTTH", description: "FTTH", baseRate: 100 }],
+      optionalItems: [],
+      invoiceContentSnapshot: { percentA: 75, percentB: 25, customRows: [{ id: "custom-1", description: "Pole", rtom: "GL", quantity: 2, unitRate: 25 }] },
+    });
+
+    const createdA = tx.generatedInvoice.create.mock.calls[0][0].data;
+    const createdB = tx.generatedInvoice.create.mock.calls[1][0].data;
+    expect(createdA.totalAmount).toBe(112.5);
+    expect(createdB.totalAmount).toBe(37.5);
+    expect(createdA.invoiceContentSnapshot.customRows[0]).toMatchObject({ id: "custom-1", baseAmount: 50, invoiceAmount: 37.5 });
+    expect(createdB.invoiceContentSnapshot.customRows[0].invoiceAmount).toBe(12.5);
+  });
+
   it("preserves an existing invoice and creates only its missing counterpart from that saved snapshot", async () => {
     const savedLine = {
       lineId: "line-1", customerName: "Original review", telephoneNo: "0770000000", address: "Saved address",

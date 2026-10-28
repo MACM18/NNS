@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
       lines: body.lines,
       optionalItems: body.optionalItems,
       pricingSnapshot: body.pricingSnapshot,
+      invoiceContentSnapshot: body.invoiceContentSnapshot,
       createdById: profile!.id,
     });
     return NextResponse.json({ data: invoices.map(invoice => ({
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
       line_details_ids: invoice.lineDetailsIds,
       line_details_snapshot: invoice.lineDetailsSnapshot,
       optional_items_snapshot: invoice.optionalItemsSnapshot,
+      invoice_content_snapshot: invoice.invoiceContentSnapshot,
       pricing_snapshot: invoice.pricingSnapshot,
       status: invoice.status,
       created_at: invoice.createdAt.toISOString(),

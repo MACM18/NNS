@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
       pricing_snapshot: inv.pricingSnapshot || null,
       line_details_snapshot: inv.lineDetailsSnapshot || null,
       optional_items_snapshot: inv.optionalItemsSnapshot || null,
+      invoice_content_snapshot: inv.invoiceContentSnapshot || null,
       status: inv.status || null,
       created_at: inv.createdAt?.toISOString(),
     }));
@@ -175,6 +176,7 @@ export async function POST(req: NextRequest) {
       pricing_snapshot: invoice.pricingSnapshot || null,
       line_details_snapshot: invoice.lineDetailsSnapshot || null,
       optional_items_snapshot: invoice.optionalItemsSnapshot || null,
+      invoice_content_snapshot: invoice.invoiceContentSnapshot || null,
       status: invoice.status || null,
       created_at: invoice.createdAt?.toISOString(),
     };

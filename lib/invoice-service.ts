@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { calculateInvoicePricing } from "@/lib/pricing-service";
 import { OPTIONAL_ITEM_RATES, type OptionalItemInput } from "@/lib/service-pricing-types";
 import { monthlyInvoiceNumber } from "@/lib/monthly-invoice-number";
+import { normalizeInvoiceContentSnapshot } from "@/lib/invoice-document";
 
 type ReviewedInvoiceLine = {
   lineId: string;
@@ -35,18 +36,23 @@ function safeCents(value: unknown, label: string, allowZero = false) {
   return Math.round(cents);
 }
 
-function distributePercent(rows: Array<{ baseCents: number }>, percent: 90 | 10) {
-  const target = percent === 90
-    ? Math.round(rows.reduce((sum, row) => sum + row.baseCents, 0) * 0.9)
-    : rows.reduce((sum, row) => sum + row.baseCents, 0) - Math.round(rows.reduce((sum, row) => sum + row.baseCents, 0) * 0.9);
+function distributePercent(rows: Array<{ baseCents: number }>, percent: number) {
+  const total = rows.reduce((sum, row) => sum + row.baseCents, 0);
+  const target = Math.round(total * percent / 100);
   let assigned = 0;
   return rows.map((row, index) => {
     const cents = index === rows.length - 1
       ? target - assigned
-      : percent === 90 ? Math.round(row.baseCents * 0.9) : row.baseCents - Math.round(row.baseCents * 0.9);
+      : Math.round(row.baseCents * percent / 100);
     assigned += cents;
     return cents;
   });
+}
+
+function distributePair(rows: Array<{ baseCents: number }>, percentA: number) {
+  const a = distributePercent(rows, percentA);
+  const b = rows.map((row, index) => row.baseCents - a[index]);
+  return { A: a, B: b };
 }
 
 function normalizedReviewedSnapshot(input: {
@@ -105,12 +111,32 @@ function normalizedReviewedSnapshot(input: {
   return { lines, optionalItems };
 }
 
+function rowsForReviewedContent(selected: ReturnType<typeof normalizedReviewedSnapshot>, content: ReturnType<typeof normalizeInvoiceContentSnapshot>) {
+  return [
+    ...selected.lines.map(line => ({ baseCents: safeCents(line.baseRate, "Invoice line rate") })),
+    ...selected.optionalItems.map(item => ({ baseCents: safeCents(item.unitRate * item.quantity, "Optional item amount") })),
+    ...content.customRows.map(item => ({ baseCents: Math.round(item.unitRate * item.quantity * 100) })),
+  ];
+}
+
+function invoiceContentForType(content: ReturnType<typeof normalizeInvoiceContentSnapshot>, amounts: number[], lineCount: number, optionalCount: number) {
+  return {
+    ...content,
+    customRows: content.customRows.map((row, index) => ({
+      ...row,
+      baseAmount: Math.round(row.unitRate * row.quantity * 100) / 100,
+      invoiceAmount: amounts[lineCount + optionalCount + index] / 100,
+    })),
+  };
+}
+
 /** Create the reviewed A/B invoice pair from immutable invoice-only snapshots. */
 export async function createReviewedInvoicePair(input: {
   month: number;
   year: number;
   lines: unknown;
   optionalItems: unknown;
+  invoiceContentSnapshot?: unknown;
   pricingSnapshot?: unknown;
   createdById: string;
 }) {
@@ -118,22 +144,16 @@ export async function createReviewedInvoicePair(input: {
     throw new Error("Choose a valid invoice month and year.");
   }
   const selected = normalizedReviewedSnapshot(input);
+  const initialContent = normalizeInvoiceContentSnapshot(input.invoiceContentSnapshot);
   const invoiceNumbers = {
     A: monthlyInvoiceNumber(input.year, input.month, "A"),
     B: monthlyInvoiceNumber(input.year, input.month, "B"),
   } as const;
   const start = new Date(Date.UTC(input.year, input.month - 1, 1));
   const end = new Date(Date.UTC(input.year, input.month, 1));
-  const baseRows = [
-    ...selected.lines.map(line => ({ baseCents: safeCents(line.baseRate, "Invoice line rate") })),
-    ...selected.optionalItems.map(item => ({ baseCents: safeCents(item.unitRate * item.quantity, "Optional item amount") })),
-  ];
+  const baseRows = rowsForReviewedContent(selected, initialContent);
   const totalCents = baseRows.reduce((sum, row) => sum + row.baseCents, 0);
   if (totalCents <= 0) throw new Error("The invoice total must be greater than zero.");
-  const shareByType = {
-    A: distributePercent(baseRows, 90),
-    B: distributePercent(baseRows, 10),
-  };
   const jobMonth = new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "Asia/Colombo" }).format(start);
   const nextMonthDate = new Date(Date.UTC(input.year, input.month, 2));
 
@@ -153,6 +173,7 @@ export async function createReviewedInvoicePair(input: {
     const existingTypes = new Set(existing.map(invoice => invoice.invoiceType));
     let reviewed = selected;
     let effectivePricingSnapshot = input.pricingSnapshot;
+    let effectiveContent = initialContent;
     if (existing.length === 1) {
       const saved = existing[0];
       if (!Array.isArray(saved.lineDetailsSnapshot)) throw new Error("The existing invoice has no saved line snapshot to create its counterpart.");
@@ -160,18 +181,13 @@ export async function createReviewedInvoicePair(input: {
       const savedOptional = Array.isArray(saved.optionalItemsSnapshot) ? saved.optionalItemsSnapshot as unknown as ReviewedOptionalItem[] : [];
       reviewed = normalizedReviewedSnapshot({ lines: savedLines, optionalItems: savedOptional });
       effectivePricingSnapshot = saved.pricingSnapshot ?? input.pricingSnapshot;
+      effectiveContent = normalizeInvoiceContentSnapshot(saved.invoiceContentSnapshot ?? input.invoiceContentSnapshot);
     }
 
-    const effectiveRows = [
-      ...reviewed.lines.map(line => ({ baseCents: safeCents(line.baseRate, "Invoice line rate") })),
-      ...reviewed.optionalItems.map(item => ({ baseCents: safeCents(item.unitRate * item.quantity, "Optional item amount") })),
-    ];
+    const effectiveRows = rowsForReviewedContent(reviewed, effectiveContent);
     const effectiveTotalCents = effectiveRows.reduce((sum, row) => sum + row.baseCents, 0);
     if (effectiveTotalCents <= 0) throw new Error("The invoice total must be greater than zero.");
-    const effectiveShares = {
-      A: distributePercent(effectiveRows, 90),
-      B: distributePercent(effectiveRows, 10),
-    };
+    const effectiveShares = distributePair(effectiveRows, effectiveContent.percentA);
     const results = [...existing];
     for (const type of ["A", "B"] as const) {
       if (existingTypes.has(type)) continue;
@@ -190,20 +206,76 @@ export async function createReviewedInvoicePair(input: {
           invoiceType: type,
           month: input.month,
           year: input.year,
-          jobMonth,
-          invoiceDate: nextMonthDate,
+          jobMonth: effectiveContent.jobMonth || jobMonth,
+          invoiceDate: effectiveContent.invoiceDate ? new Date(`${effectiveContent.invoiceDate}T00:00:00Z`) : nextMonthDate,
           totalAmount: effectiveShares[type].reduce((sum, value) => sum + value, 0) / 100,
           lineCount: reviewed.lines.length,
           lineDetailsIds: reviewed.lines.map(line => line.lineId) as Prisma.InputJsonValue,
           pricingSnapshot: effectivePricingSnapshot == null ? Prisma.JsonNull : effectivePricingSnapshot as Prisma.InputJsonValue,
           lineDetailsSnapshot: lineSnapshots as unknown as Prisma.InputJsonValue,
           optionalItemsSnapshot: itemSnapshots as unknown as Prisma.InputJsonValue,
+          invoiceContentSnapshot: invoiceContentForType(effectiveContent, effectiveShares[type], reviewed.lines.length, reviewed.optionalItems.length) as unknown as Prisma.InputJsonValue,
           status: "generated",
         },
       });
       results.push(created);
     }
     return results.sort((a, b) => String(a.invoiceType).localeCompare(String(b.invoiceType)));
+  });
+}
+
+/** Update the editable invoice snapshots for the existing invoices in a month. */
+export async function updateReviewedInvoicePair(input: {
+  invoiceId: string;
+  lines: unknown;
+  optionalItems: unknown;
+  invoiceContentSnapshot: unknown;
+  pricingSnapshot?: unknown;
+}) {
+  const selected = normalizedReviewedSnapshot(input);
+  const content = normalizeInvoiceContentSnapshot(input.invoiceContentSnapshot);
+  const baseRows = rowsForReviewedContent(selected, content);
+  const totalCents = baseRows.reduce((sum, row) => sum + row.baseCents, 0);
+  if (totalCents <= 0) throw new Error("The invoice total must be greater than zero.");
+  const invoiceNumbers = distributePair(baseRows, content.percentA);
+
+  return prisma.$transaction(async tx => {
+    const anchor = await tx.generatedInvoice.findUnique({ where: { id: input.invoiceId } });
+    if (!anchor || !anchor.month || !anchor.year || !["A", "B"].includes(String(anchor.invoiceType))) throw new Error("This service invoice cannot be edited.");
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`service-invoice-pair:${anchor.year}-${String(anchor.month).padStart(2, "0")}`}))`;
+    const start = new Date(Date.UTC(anchor.year, anchor.month - 1, 1));
+    const end = new Date(Date.UTC(anchor.year, anchor.month, 1));
+    const sources = await tx.lineDetails.findMany({ where: { id: { in: selected.lines.map(line => line.lineId) } }, select: { id: true, date: true } });
+    if (sources.length !== selected.lines.length || sources.some(source => source.date < start || source.date >= end)) {
+      throw new Error("The selected source data no longer matches this invoice month. Reload the month and review it again.");
+    }
+    const existing = await tx.generatedInvoice.findMany({ where: { month: anchor.month, year: anchor.year, invoiceType: { in: ["A", "B"] } } });
+    if (!existing.some(invoice => invoice.id === anchor.id)) throw new Error("The invoice pair changed. Reload the archive and try again.");
+    const jobMonth = anchor.jobMonth || new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "Asia/Colombo" }).format(start);
+    const updated = [];
+    for (const invoice of existing) {
+      if (invoice.invoiceType !== "A" && invoice.invoiceType !== "B") continue;
+      const type = invoice.invoiceType;
+      const amounts = invoiceNumbers[type];
+      const lineSnapshots = selected.lines.map((line, index) => ({ ...line, invoiceAmount: amounts[index] / 100 }));
+      const optionalSnapshots = selected.optionalItems.map((item, index) => ({ ...item, baseAmount: Math.round(item.unitRate * item.quantity * 100) / 100, invoiceAmount: amounts[selected.lines.length + index] / 100 }));
+      const saved = await tx.generatedInvoice.update({
+        where: { id: invoice.id },
+        data: {
+          jobMonth: content.jobMonth || jobMonth,
+          invoiceDate: content.invoiceDate ? new Date(`${content.invoiceDate}T00:00:00Z`) : invoice.invoiceDate,
+          totalAmount: amounts.reduce((sum, value) => sum + value, 0) / 100,
+          lineCount: selected.lines.length,
+          lineDetailsIds: selected.lines.map(line => line.lineId) as Prisma.InputJsonValue,
+          pricingSnapshot: input.pricingSnapshot == null ? invoice.pricingSnapshot ?? Prisma.JsonNull : input.pricingSnapshot as Prisma.InputJsonValue,
+          lineDetailsSnapshot: lineSnapshots as unknown as Prisma.InputJsonValue,
+          optionalItemsSnapshot: optionalSnapshots as unknown as Prisma.InputJsonValue,
+          invoiceContentSnapshot: invoiceContentForType(content, amounts, selected.lines.length, selected.optionalItems.length) as unknown as Prisma.InputJsonValue,
+        },
+      });
+      updated.push(saved);
+    }
+    return updated;
   });
 }
 
