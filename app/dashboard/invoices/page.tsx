@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Eye, FilePlus2, FileText, RefreshCw, Search, Settings, Pencil } from "lucide-react";
+import Link from "next/link";
+import { Eye, FilePlus2, FileText, RefreshCw, Search, Settings, Pencil } from "lucide-react";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,7 +81,7 @@ export default function InvoicesPage() {
           <p className="mt-1 text-sm text-muted-foreground">Prepare, review, and manage service invoices for each month.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled title="Invoice analytics will be available in a future update"><Activity className="mr-2 h-4 w-4" />Analytics · Coming soon</Button>
+          <Button variant="outline" asChild><Link href="/dashboard/invoices/analytics"><FileText className="mr-2 h-4 w-4" />Analytics</Link></Button>
           {canEditSettings && <Button variant="outline" onClick={() => setActiveTab("settings")}><Settings className="mr-2 h-4 w-4" />Invoice settings</Button>}
           {canManage && <Button onClick={() => router.push("/dashboard/invoices/create")}><FilePlus2 className="mr-2 h-4 w-4" />Create invoices</Button>}
         </div>

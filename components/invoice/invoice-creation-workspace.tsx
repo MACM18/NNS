@@ -373,7 +373,7 @@ export function InvoiceCreationWorkspace({ invoiceId }: { invoiceId?: string }) 
           <p className="mt-1 text-sm text-muted-foreground">Review the invoice copy, update its content and lines, then {invoiceId ? "save your changes" : "create the pair"}.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled title="Invoice analytics will be available in a future update">Analytics · Coming soon</Button>
+          <Button variant="outline" asChild><Link href="/dashboard/invoices/analytics">Invoice analytics</Link></Button>
           <Button variant="outline" onClick={() => void loadMonth()} disabled={loadingMonth}><RotateCw className={`mr-2 h-4 w-4 ${loadingMonth ? "animate-spin" : ""}`} />Reload month</Button>
           <Button onClick={() => void savePair()} disabled={saving || loadingMonth || (!invoiceId && pairComplete) || (!invoiceId && partialPair && !canUseExistingSnapshot) || selectedLines.length === 0 || grandTotal <= 0 || !validAmounts}><Save className="mr-2 h-4 w-4" />{saving ? (invoiceId ? "Saving changes…" : "Creating invoices…") : invoiceId ? "Save invoice changes" : partialPair ? "Create missing invoice" : "Create invoices"}</Button>
         </div>

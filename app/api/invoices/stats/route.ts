@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { buildInvoiceAnalytics } from "@/lib/invoice-analytics";
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,35 +18,34 @@ export async function GET(req: NextRequest) {
       searchParams.get("year") || String(new Date().getFullYear())
     );
 
-    // Get this month's invoices (only A and B types)
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000 || year > 2100) {
+      return NextResponse.json({ error: "Month and year must be valid" }, { status: 400 });
+    }
+
     const monthlyInvoices = await prisma.generatedInvoice.findMany({
       where: {
         month,
         year,
         invoiceType: { in: ["A", "B"] },
       },
+      select: { month: true, year: true, invoiceType: true, totalAmount: true, lineCount: true },
     });
-
-    // Calculate stats
-    const thisMonth = monthlyInvoices.length;
-    const totalAmount = monthlyInvoices.reduce(
-      (sum, inv) => sum + Number(inv.totalAmount ?? 0),
-      0
-    );
-    const linesBilled = monthlyInvoices.reduce(
-      (sum, inv) => sum + Number(inv.lineCount ?? 0),
-      0
-    );
-    const averageLinesBilled = thisMonth > 0 ? linesBilled / thisMonth : 0;
-    const avgRate =
-      averageLinesBilled > 0 ? Math.round(totalAmount / averageLinesBilled) : 0;
+    const monthData = buildInvoiceAnalytics(monthlyInvoices.map(invoice => ({
+      month: invoice.month,
+      year: invoice.year,
+      invoiceType: invoice.invoiceType,
+      totalAmount: Number(invoice.totalAmount || 0),
+      lineCount: Number(invoice.lineCount || 0),
+    })), year).byMonth[month - 1];
 
     return NextResponse.json({
       data: {
-        thisMonth,
-        totalAmount,
-        linesBilled: averageLinesBilled,
-        avgRate,
+        thisMonth: monthData.invoicePairs,
+        totalAmount: monthData.totalBilled,
+        linesBilled: monthData.lines,
+        avgRate: monthData.lines > 0 ? Math.round(monthData.totalBilled / monthData.lines) : 0,
+        amountA: monthData.amountA,
+        amountB: monthData.amountB,
       },
     });
   } catch (error) {
