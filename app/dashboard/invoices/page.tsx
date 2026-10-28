@@ -133,7 +133,14 @@ export default function InvoicesPage() {
             </CardContent>
           </Card>
         </TabsContent>
-        {canEditSettings && <TabsContent value="settings" className="space-y-5"><InvoiceRatioSettings /><PricingSchedulePanel canManage={canManage} /><Button variant="outline" onClick={() => setSettingsOpen(true)}><Settings className="mr-2 h-4 w-4" />Edit company and bank details</Button></TabsContent>}
+        {canEditSettings && <TabsContent value="settings" className="space-y-4">
+          <div className="flex flex-col gap-3 rounded-2xl border bg-gradient-to-r from-sky-50 via-white to-indigo-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:from-sky-950/25 dark:via-card dark:to-indigo-950/20">
+            <div className="min-w-0"><div className="text-sm font-semibold">Invoice preferences</div><p className="mt-1 text-sm text-muted-foreground">Manage invoice allocation, service rates, and the company details printed on every new invoice.</p></div>
+            <Button variant="outline" className="shrink-0 bg-background" onClick={() => setSettingsOpen(true)}><Settings className="mr-2 h-4 w-4" />Company & bank details</Button>
+          </div>
+          <InvoiceRatioSettings />
+          <PricingSchedulePanel canManage={canManage} />
+        </TabsContent>}
       </Tabs>
       <CompanySettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} onSuccess={() => void fetchInvoices(true)} />
       <InvoicePdfPreviewDialog open={Boolean(selectedInvoice)} onOpenChange={open => { if (!open) setSelectedInvoice(null); }} invoice={selectedInvoice} />

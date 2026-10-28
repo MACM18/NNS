@@ -15,8 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Trash2, Building, CreditCard } from "lucide-react";
+import { Plus, Trash2, Building, CreditCard, Globe2, Landmark } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNotification } from "@/contexts/notification-context";
 
 interface CompanySettingsModalProps {
@@ -289,26 +289,25 @@ export function CompanySettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-4xl max-h-[95vh] overflow-y-auto'>
-        <DialogHeader>
-          <DialogTitle>Company Settings</DialogTitle>
-          <DialogDescription>
-            Configure company information, pricing tiers, and bank details for
-            invoices.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className='max-w-3xl gap-0 overflow-x-hidden p-0'>
+        <div className="border-b bg-gradient-to-r from-sky-50 via-white to-indigo-50 px-5 py-5 sm:px-6 dark:from-sky-950/30 dark:via-card dark:to-indigo-950/20">
+          <DialogHeader className="space-y-2">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm dark:bg-sky-950 dark:text-sky-300"><Building className="h-5 w-5" /></span>
+            <DialogTitle className="text-xl">Company details</DialogTitle>
+            <DialogDescription>These details appear on new invoices and are shared across the workspace.</DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <form onSubmit={handleSubmit} className='space-y-6'>
+        <form onSubmit={handleSubmit} className='space-y-4 p-4 sm:p-6'>
+          <Tabs defaultValue="company" className="w-full">
+            <TabsList className="grid h-auto w-full grid-cols-2 rounded-xl bg-muted/70 p-1">
+              <TabsTrigger value="company" className="gap-2 rounded-lg py-2.5"><Building className="h-4 w-4" />Company profile</TabsTrigger>
+              <TabsTrigger value="bank" className="gap-2 rounded-lg py-2.5"><Landmark className="h-4 w-4" />Bank details</TabsTrigger>
+            </TabsList>
+            <TabsContent value="company" className="mt-4 space-y-4">
           {/* Company Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className='flex items-center gap-2'>
-                <Building className='h-5 w-5' />
-                Company Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className='space-y-4'>
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <div className="space-y-4 rounded-xl border p-4">
+              <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
                 <div>
                   <Label htmlFor='company_name'>Company Name</Label>
                   <Input
@@ -333,28 +332,29 @@ export function CompanySettingsModal({
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor='address'>Address</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor='address'>Business address</Label>
                 <Textarea
                   id='address'
                   value={formData.address}
                   onChange={(e) => handleInputChange("address", e.target.value)}
                   placeholder='Complete company address'
-                  rows={3}
+                  rows={2}
                 />
               </div>
 
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor='website'>Website</Label>
-                <Input
+                <div className="relative"><Globe2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input
                   id='website'
+                  className="pl-9"
                   value={formData.website}
                   onChange={(e) => handleInputChange("website", e.target.value)}
                   placeholder='https://www.company.com'
-                />
+                /></div>
               </div>
 
-              <div>
+              <div className="rounded-lg bg-muted/25 p-3">
                 <div className='flex items-center justify-between'>
                   <Label>Contact Numbers</Label>
                   <Button
@@ -365,10 +365,10 @@ export function CompanySettingsModal({
                     className='gap-2'
                   >
                     <Plus className='h-4 w-4' />
-                    Add Number
+                    Add number
                   </Button>
                 </div>
-                <div className='space-y-2 mt-2'>
+                <div className='mt-3 grid gap-2 sm:grid-cols-2'>
                   {Array.isArray(formData.contact_numbers) &&
                     formData.contact_numbers.map((number, index) => (
                       <div key={index} className='flex gap-2'>
@@ -386,117 +386,43 @@ export function CompanySettingsModal({
                           variant='outline'
                           disabled={formData.contact_numbers.length === 1}
                         >
-                          <Trash2 className='h-4 w-4' />
+                          <Trash2 className='h-4 w-4' /><span className="sr-only">Remove number</span>
                         </Button>
                       </div>
                     ))}
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            </TabsContent>
 
-          {/* Historical company pricing is retained for compatibility; active rates are in Pricing schedules. */}
-          <Card className='hidden'>
-            <CardHeader>
-              <CardTitle>Pricing Tiers (by Cable Length)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className='space-y-4'>
-                {formData.pricing_tiers.map((tier, index) => (
-                  <div key={index} className='grid grid-cols-4 gap-4 items-end'>
-                    <div>
-                      <Label>Min Length (m)</Label>
-                      <Input
-                        type='number'
-                        value={tier.min_length}
-                        onChange={(e) =>
-                          handlePricingTierChange(
-                            index,
-                            "min_length",
-                            Number.parseInt(e.target.value) || 0,
-                          )
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>Max Length (m)</Label>
-                      <Input
-                        type='number'
-                        value={
-                          tier.max_length === 999999 ? "" : tier.max_length
-                        }
-                        onChange={(e) =>
-                          handlePricingTierChange(
-                            index,
-                            "max_length",
-                            e.target.value
-                              ? Number.parseInt(e.target.value)
-                              : 999999,
-                          )
-                        }
-                        placeholder='500+ (leave empty)'
-                      />
-                    </div>
-                    <div>
-                      <Label>Rate (LKR)</Label>
-                      <Input
-                        type='number'
-                        value={tier.rate}
-                        onChange={(e) =>
-                          handlePricingTierChange(
-                            index,
-                            "rate",
-                            Number.parseInt(e.target.value) || 0,
-                          )
-                        }
-                      />
-                    </div>
-                    <div className='text-sm text-muted-foreground'>
-                      {tier.min_length}–
-                      {tier.max_length === 999999 ? "500+" : tier.max_length}m:
-                      LKR {tier.rate}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className='flex items-center gap-2'>
-                <CreditCard className='h-5 w-5' />
-                Bank Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className='grid gap-4 sm:grid-cols-2'>
-              <p className='text-sm text-muted-foreground sm:col-span-2'>
-                These details are printed on company invoices and do not require a ledger account.
-              </p>
-              <div className='space-y-2'>
+          <TabsContent value="bank" className="mt-4 space-y-3">
+              <div className="flex items-start gap-3 rounded-xl border border-sky-200/70 bg-sky-50/70 p-3 text-sm dark:border-sky-900 dark:bg-sky-950/30"><CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" /><p className="text-muted-foreground">Payment details are printed on invoices. Leave a field blank to omit it.</p></div>
+              <div className='grid gap-3 rounded-xl border p-4 sm:grid-cols-2'>
+              <div className='space-y-1.5'>
                 <Label htmlFor='company-bank-name'>Bank name</Label>
                 <Input id='company-bank-name' value={formData.bank_details.bank_name} onChange={(event) => handleBankDetailsChange("bank_name", event.target.value)} />
               </div>
-              <div className='space-y-2'>
+              <div className='space-y-1.5'>
                 <Label htmlFor='company-bank-title'>Account title</Label>
                 <Input id='company-bank-title' value={formData.bank_details.account_title} onChange={(event) => handleBankDetailsChange("account_title", event.target.value)} />
               </div>
-              <div className='space-y-2'>
+              <div className='space-y-1.5'>
                 <Label htmlFor='company-bank-number'>Account number</Label>
                 <Input id='company-bank-number' value={formData.bank_details.account_number} onChange={(event) => handleBankDetailsChange("account_number", event.target.value)} />
               </div>
-              <div className='space-y-2'>
+              <div className='space-y-1.5'>
                 <Label htmlFor='company-bank-branch'>Branch</Label>
                 <Input id='company-bank-branch' value={formData.bank_details.branch_code} onChange={(event) => handleBankDetailsChange("branch_code", event.target.value)} />
               </div>
-              <div className='space-y-2 sm:col-span-2'>
+              <div className='space-y-1.5 sm:col-span-2'>
                 <Label htmlFor='company-bank-iban'>IBAN</Label>
                 <Input id='company-bank-iban' value={formData.bank_details.iban} onChange={(event) => handleBankDetailsChange("iban", event.target.value)} />
               </div>
-            </CardContent>
-          </Card>
+              </div>
+          </TabsContent>
+          </Tabs>
 
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4">
             <Button
               type='button'
               variant='outline'
@@ -505,7 +431,7 @@ export function CompanySettingsModal({
               Cancel
             </Button>
             <Button type='submit' disabled={loading}>
-              {loading ? "Saving..." : "Save Settings"}
+              {loading ? "Saving…" : "Save details"}
             </Button>
           </DialogFooter>
         </form>

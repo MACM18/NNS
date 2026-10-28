@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Lock, Plus, Save, Loader2 } from "lucide-react";
+import { CalendarClock, Lock, Plus, Save, Loader2, BadgeDollarSign, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,16 +114,17 @@ export function PricingSchedulePanel({ canManage }: { canManage: boolean }) {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="px-5 py-4">
         <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-          <div>
-            <CardTitle className='flex items-center gap-2'><CalendarClock className='h-5 w-5' />Pricing schedules</CardTitle>
-            <CardDescription>Rates are effective-dated. Issued invoices keep their original line rates and customer details.</CardDescription>
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="rounded-xl bg-indigo-50 p-2 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"><BadgeDollarSign className='h-5 w-5' /></span>
+            <div><CardTitle className='flex items-center gap-2 text-base'>Pricing schedules</CardTitle>
+            <CardDescription className="mt-1">Effective-dated rates for new service lines. Saved invoices keep their original rates.</CardDescription></div>
           </div>
           {canManage && <Button onClick={showForm ? () => setShowForm(false) : startNewSchedule} variant='outline'><Plus className='mr-2 h-4 w-4' />{showForm ? "Close form" : "Adjust rates"}</Button>}
         </div>
       </CardHeader>
-      <CardContent className='space-y-5'>
+      <CardContent className='space-y-4 px-5 pb-5'>
         {showForm && canManage && (
           <div className='rounded-lg border bg-muted/30 p-4 space-y-4'>
             <div className='grid gap-4 sm:grid-cols-2'>
@@ -166,19 +167,19 @@ export function PricingSchedulePanel({ canManage }: { canManage: boolean }) {
           <div className='space-y-3'>
             {schedules.map((schedule) => {
               const isFuture = schedule.effective_from > new Date().toISOString().slice(0, 10);
-              return <div key={schedule.id} className='rounded-lg border p-4'>
-                <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                  <div><div className='font-medium'>{schedule.name}</div><div className='text-sm text-muted-foreground'>Effective from {new Date(`${schedule.effective_from}T00:00:00`).toLocaleDateString()}</div></div>
-                  <div className='flex items-center gap-2'>{isFuture ? <Badge variant='secondary'>Future</Badge> : schedule.id === current?.id ? <Badge>Current</Badge> : <Badge variant='outline'>Historical</Badge>}{schedule.status !== "active" || !isFuture && schedule.id !== current?.id ? <Lock className='h-4 w-4 text-muted-foreground' /> : null}</div>
+              const isCurrent = schedule.id === current?.id;
+              return <details key={schedule.id} open={isCurrent} className='group rounded-xl border bg-card open:shadow-sm'>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 p-3 marker:hidden [&::-webkit-details-marker]:hidden'>
+                  <div className="flex min-w-0 items-center gap-3"><span className="rounded-lg bg-muted p-2 text-muted-foreground"><CalendarClock className="h-4 w-4" /></span><div className="min-w-0"><div className='truncate text-sm font-semibold'>{schedule.name}</div><div className='text-xs text-muted-foreground'>Effective {new Date(`${schedule.effective_from}T00:00:00`).toLocaleDateString()} · FTTH {schedule.tiers.length} tiers · Data {schedule.data_tiers.length} tiers</div></div></div>
+                  <div className='flex shrink-0 items-center gap-2'>{isFuture ? <Badge variant='secondary'>Future</Badge> : isCurrent ? <Badge>Current</Badge> : <Badge variant='outline'>History</Badge>}{schedule.status !== "active" || !isFuture && !isCurrent ? <Lock className='h-4 w-4 text-muted-foreground' /> : null}<ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" /></div>
+                </summary>
+                <div className="space-y-3 border-t px-3 pb-3 pt-2">
+                  <div className='grid gap-3 lg:grid-cols-2'>
+                    {[{ title: "FTTH", rows: schedule.tiers }, { title: "Data Line", rows: schedule.data_tiers }].map(({ title, rows }) => <section key={title}><div className='mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground'>{title}</div><div className='grid grid-cols-2 gap-1.5 sm:grid-cols-3'>{rows.map((tier) => <div key={tier.min_length} className='rounded-lg bg-muted/45 px-2.5 py-2 text-xs'><div className="text-muted-foreground">{tier.min_length}–{tier.max_length == null ? "open" : tier.max_length}m</div><div className='mt-0.5 font-semibold'>LKR {tier.rate.toLocaleString()}</div></div>)}</div></section>)}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-sky-50 px-3 py-1.5 dark:bg-sky-950/40">Peo TV · <b>LKR {schedule.peo_tv_rate.toLocaleString()}</b></span>{(Object.keys(OPTIONAL_ITEM_RATES) as OptionalItemCode[]).map((code) => <span key={code} className="rounded-full bg-muted px-3 py-1.5">{OPTIONAL_ITEM_DESCRIPTIONS[code]} · <b>LKR {schedule.optional_rates[code].toLocaleString()}</b></span>)}</div>
                 </div>
-                <div className='mt-3 text-sm font-medium'>FTTH</div>
-                <div className='mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>{schedule.tiers.map((tier) => <div key={tier.min_length} className='rounded-md bg-muted/50 px-3 py-2 text-sm'><span>{tier.min_length}–{tier.max_length == null ? "open" : tier.max_length}m</span><span className='float-right font-medium'>LKR {tier.rate.toLocaleString()}</span></div>)}</div>
-                <div className='mt-3 text-sm font-medium'>Data Line</div>
-                <div className='mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>{schedule.data_tiers.map((tier) => <div key={tier.min_length} className='rounded-md bg-muted/50 px-3 py-2 text-sm'><span>{tier.min_length}–{tier.max_length == null ? "open" : tier.max_length}m</span><span className='float-right font-medium'>LKR {tier.rate.toLocaleString()}</span></div>)}</div>
-                <div className='mt-3 text-sm'>Peo TV: <span className='font-medium'>LKR {schedule.peo_tv_rate.toLocaleString()}</span></div>
-                <div className='mt-3 text-sm font-medium'>Optional invoice items</div>
-                <div className='mt-2 grid gap-2 sm:grid-cols-2'>{(Object.keys(OPTIONAL_ITEM_RATES) as OptionalItemCode[]).map((code) => <div key={code} className='rounded-md bg-muted/50 px-3 py-2 text-sm'>{OPTIONAL_ITEM_DESCRIPTIONS[code]}<span className='float-right font-medium'>LKR {schedule.optional_rates[code].toLocaleString()}</span></div>)}</div>
-              </div>;
+              </details>;
             })}
           </div>
         )}

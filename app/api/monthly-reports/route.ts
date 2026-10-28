@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const year = Number(body.year), month = Number(body.month);
     const result = await generateMonthlyReportVersion({ year, month, createdById: profile!.id });
-    if (result.requiresInvoiceGeneration) return NextResponse.json({ code: "INVOICES_REQUIRED", error: "Generate the monthly invoices first, then prepare this report set." }, { status: 409 });
+    if (result.requiresInvoices) return NextResponse.json({ code: "INVOICES_REQUIRED", error: "Create and save both invoices for this month from the Invoices page before preparing its report set. Reports use the latest saved Invoice A and Invoice B; they are never generated automatically." }, { status: 409 });
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to prepare reports." }, { status: 400 });

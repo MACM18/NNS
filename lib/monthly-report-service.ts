@@ -2,7 +2,6 @@ import { Prisma } from "@prisma/client";
 import { encrypt, decrypt } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
 import { computeCableMeasurements } from "@/lib/db";
-import { createReviewedInvoicePair } from "@/lib/invoice-service";
 import {
   generateDailyMaterialBalancePdf,
   generateDrumNumberPdf,
@@ -114,36 +113,15 @@ function monthlyInvoiceBackNumber(year: number, month: number) {
   return `NNS/WPS/HR/NC/${String(year).slice(-2)}/${monthName}/001`;
 }
 
-async function ensureInvoicePair(year: number, month: number, createdById: string) {
-  const findPair = () => prisma.generatedInvoice.findMany({ where: { year, month, invoiceType: { in: ["A", "B"] } }, orderBy: { createdAt: "asc" } });
-  let invoices = await findPair();
+async function latestInvoicePair(year: number, month: number) {
+  const invoices = await prisma.generatedInvoice.findMany({
+    where: { year, month, invoiceType: { in: ["A", "B"] } },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+  });
   const invoiceA = invoices.find(invoice => invoice.invoiceType === "A");
   const invoiceB = invoices.find(invoice => invoice.invoiceType === "B");
-  if (!invoiceA && !invoiceB) return { requiresInvoiceGeneration: true as const };
-  if (Boolean(invoiceA) !== Boolean(invoiceB)) {
-    const existing = invoiceA || invoiceB!;
-    const type = invoiceA ? "B" : "A";
-    if (!Array.isArray(existing.lineDetailsSnapshot) || existing.lineDetailsSnapshot.length === 0) throw new Error(`The saved Invoice ${existing.invoiceType} has no line snapshot, so its missing counterpart cannot be created safely.`);
-    try {
-      await createReviewedInvoicePair({
-        month,
-        year,
-        lines: existing.lineDetailsSnapshot,
-        optionalItems: existing.optionalItemsSnapshot,
-        invoiceContentSnapshot: existing.invoiceContentSnapshot,
-        pricingSnapshot: existing.pricingSnapshot,
-        createdById,
-      });
-    } catch (error) {
-      const found = await prisma.generatedInvoice.findFirst({ where: { year, month, invoiceType: type } });
-      if (!found) throw error;
-    }
-    invoices = await findPair();
-  }
-  const a = invoices.find(invoice => invoice.invoiceType === "A");
-  const b = invoices.find(invoice => invoice.invoiceType === "B");
-  if (!a || !b) throw new Error("Both monthly invoices must be available before creating the report set.");
-  return { requiresInvoiceGeneration: false as const, invoices: [a, b] as const };
+  if (!invoiceA || !invoiceB) return { requiresInvoices: true as const };
+  return { requiresInvoices: false as const, invoices: [invoiceA, invoiceB] as const };
 }
 
 export async function generateMonthlyReportVersion(input: { year: number; month: number; createdById: string }) {
@@ -171,8 +149,8 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
   });
   if (!imported) throw new Error("No successful material balance import exists for this month. Sync the month’s sheet, then try again.");
 
-  const invoicePair = await ensureInvoicePair(input.year, input.month, input.createdById);
-  if (invoicePair.requiresInvoiceGeneration) return invoicePair;
+  const invoicePair = await latestInvoicePair(input.year, input.month);
+  if (invoicePair.requiresInvoices) return invoicePair;
 
   const lines = await prisma.lineDetails.findMany({
     where: { date: { gte: bounds.start, lt: bounds.endExclusive } },
@@ -284,7 +262,7 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
     })) });
     return report.id;
   });
-  return { requiresInvoiceGeneration: false as const, reportId, version: await prisma.monthlyReportVersion.findFirstOrThrow({ where: { reportId, sourceImportId: imported.id }, orderBy: { version: "desc" }, include: { documents: { select: { id: true, reportType: true, title: true, fileName: true, publicId: true } } } }) };
+  return { requiresInvoices: false as const, reportId, version: await prisma.monthlyReportVersion.findFirstOrThrow({ where: { reportId, sourceImportId: imported.id }, orderBy: { version: "desc" }, include: { documents: { select: { id: true, reportType: true, title: true, fileName: true, publicId: true } } } }) };
 }
 
 export async function regenerateMonthlyReportDesign(reportId: string, createdById: string) {
