@@ -139,7 +139,7 @@ describe("monthly report PDF generation", () => {
     expect(content).toContain("Account No: 12345678");
     expect(content).toContain("Bank: NNS Test Bank");
     expect(content).toContain("Branch: Horana");
-    expect((content.match(/ re\nS/g) || []).length).toBeGreaterThan(30);
+    expect((content.match(/\nS\n/g) || []).length).toBeGreaterThan(30);
   });
 
   it("formats the shared A/B display number and preserves invoice-back numbering", () => {

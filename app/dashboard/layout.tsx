@@ -18,7 +18,7 @@ export default function DashboardSegmentLayout({
       <div className='flex min-w-0 flex-1 flex-col min-h-screen'>
         <Header />
         <main className='dashboard-viewport min-w-0 flex-1 w-full overflow-x-hidden p-4 pb-20 sm:p-6 lg:p-5 xl:p-6 2xl:p-8 lg:pb-6'>
-          <div className='mx-auto w-full min-w-0 max-w-7xl'>{children}</div>
+          <div className='w-full min-w-0'>{children}</div>
         </main>
       </div>
       <MobileBottomNav />

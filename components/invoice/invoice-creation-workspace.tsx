@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, Check, FileText, Loader2, Plus, RotateCw, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Building2, Check, ChevronDown, FileText, Loader2, Plus, RotateCw, Save, Settings2, Trash2 } from "lucide-react";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,37 +12,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAuth } from "@/contexts/auth-context";
 import { useNotification } from "@/contexts/notification-context";
 import { OPTIONAL_ITEM_DESCRIPTIONS, OPTIONAL_ITEM_RATES, type OptionalItemCode } from "@/lib/service-pricing-types";
 import { formatMonthlyInvoiceDisplayNumber, generateInvoicePdf, invoicePdfFilename } from "@/lib/monthly-report-pdf";
 import { monthlyInvoiceNumber } from "@/lib/monthly-invoice-number";
 import type { InvoiceRecordForPdf } from "@/components/invoice/invoice-pdf-preview-dialog";
-import { DEFAULT_INVOICE_DOCUMENT_FIELDS, SERVICE_DESCRIPTION_DEFAULTS, SERVICE_DESCRIPTION_LABELS, type CustomInvoiceRow, type InvoiceDocumentFields } from "@/lib/invoice-document";
+import { DEFAULT_INVOICE_DOCUMENT_FIELDS, SERVICE_DESCRIPTION_DEFAULTS, type CustomInvoiceRow, type InvoiceDocumentFields } from "@/lib/invoice-document";
+import { InvoiceSheetPreview, type InvoicePreviewRow } from "@/components/invoice/invoice-sheet-preview";
+import { InvoiceCompanyDetailsDialog } from "@/components/invoice/invoice-company-details-dialog";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const OPTIONAL_CODES = Object.keys(OPTIONAL_ITEM_RATES) as OptionalItemCode[];
-const CONTENT_GROUPS: Array<{ title: string; keys: Array<keyof InvoiceDocumentFields> }> = [
-  { title: "Billing and invoice labels", keys: ["billToLabel", "billToName", "billToAddress1", "billToAddress2", "invoiceNumberLabel", "registeredNumberLabel", "registeredNumber", "invoiceDateLabel", "jobMonthLabel", "invoiceTypeLabel"] },
-  { title: "Certification and payment copy", keys: ["grandTotalLabel", "certifyText", "preparedByLabel", "preparedByName", "receivedByLabel", "receivedByInstruction", "chequeInstruction", "accountNumberLabel", "bankLabel", "branchLabel"] },
-  { title: "Review and approval labels", keys: ["sltsUseOnlyLabel", "regionalSignatureLabel", "headOfficeSignatureLabel", "financeLabel", "checkedByLabel", "certifiedByLabel", "approvedByLabel", "recommendedByLabel", "officeUseOnlyLabel", "materialBalanceReceivedLabel", "materialBalanceReceivedAnswer", "yesNoLabel", "signDateLabel", "contactLabel"] },
-  { title: "Table headings", keys: ["headerSerial", "headerDescription", "headerRtom", "headerQuantity", "headerUnitRate", "headerAmount"] },
-];
-const CONTENT_FIELD_LABELS: Record<keyof InvoiceDocumentFields, string> = {
-  billToLabel: "Bill to label", billToName: "Customer name", billToAddress1: "Customer address line 1", billToAddress2: "Customer address line 2",
-  invoiceNumberLabel: "Invoice number label", registeredNumberLabel: "Registration label", registeredNumber: "Registration number",
-  invoiceDateLabel: "Invoice date label", jobMonthLabel: "Job month label", invoiceTypeLabel: "Invoice type label", grandTotalLabel: "Grand total label",
-  certifyText: "Certification statement", preparedByLabel: "Prepared by label", preparedByName: "Prepared by name", receivedByLabel: "Received by label",
-  receivedByInstruction: "Received by instruction", chequeInstruction: "Payment instruction", accountNumberLabel: "Account number label", bankLabel: "Bank label",
-  branchLabel: "Branch label", sltsUseOnlyLabel: "Approval section title", regionalSignatureLabel: "Regional signature label",
-  headOfficeSignatureLabel: "Head office signature label", financeLabel: "Finance label", checkedByLabel: "Checked by label",
-  certifiedByLabel: "Certified by label", approvedByLabel: "Approved by label", recommendedByLabel: "Recommended by label",
-  officeUseOnlyLabel: "Office use label", materialBalanceReceivedLabel: "Material received label", yesNoLabel: "Yes/No label", signDateLabel: "Sign/date label",
-  materialBalanceReceivedAnswer: "Material received answer", contactLabel: "Company contact label",
-  headerSerial: "Serial number heading", headerDescription: "Description heading", headerRtom: "RTOM heading", headerQuantity: "Quantity heading",
-  headerUnitRate: "Unit rate heading", headerAmount: "Amount heading",
-};
-
 type SourceLine = { id: string; name: string; phone_number: string; total_cable: number; date: string; address: string };
 type InvoiceLine = {
   lineId: string;
@@ -59,7 +41,7 @@ type InvoiceLine = {
   pricingScheduleName?: string;
 };
 type OptionalItem = { code: OptionalItemCode; description: string; quantity: number; unitRate: number };
-type Company = { company_name: string; address: string; contact_numbers: string[]; registered_number: string; website: string; bank_details: Record<string, string> };
+type Company = { company_name: string; address: string; contact_numbers: string[]; registered_number: string; website: string; bank_details: Record<string, string>; pricing_tiers?: unknown };
 type ExistingInvoice = InvoiceRecordForPdf;
 
 const money = (amount: number) => `LKR ${Number(amount || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -82,6 +64,7 @@ export function InvoiceCreationWorkspace({ invoiceId }: { invoiceId?: string }) 
   const router = useRouter();
   const { addNotification } = useNotification();
   const canManage = ["admin", "moderator", "superadmin"].includes(String(role || "").toLowerCase());
+  const canEditCompanyDetails = ["admin", "superadmin"].includes(String(role || "").toLowerCase());
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [year, setYear] = useState(String(now.getFullYear()));
@@ -103,6 +86,9 @@ export function InvoiceCreationWorkspace({ invoiceId }: { invoiceId?: string }) 
   const [error, setError] = useState<string | null>(null);
   const [activePreview, setActivePreview] = useState<"A" | "B">("A");
   const [pdfUrls, setPdfUrls] = useState<Record<"A" | "B", string | null>>({ A: null, B: null });
+  const [companyDetailsOpen, setCompanyDetailsOpen] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   const selectedLines = useMemo(() => lines.filter(line => line.included), [lines]);
   const activeOptional = useMemo(() => OPTIONAL_CODES.map(code => optionalItems[code]).filter(item => item.quantity > 0), [optionalItems]);
@@ -128,6 +114,40 @@ export function InvoiceCreationWorkspace({ invoiceId }: { invoiceId?: string }) 
   const jobMonth = jobMonthOverride || `${String(year).slice(-2)}-${MONTHS[Number(month) - 1]?.slice(0, 3) || ""}`;
   const numberA = useMemo(() => monthlyInvoiceNumber(year, month, "A"), [year, month]);
   const numberB = useMemo(() => monthlyInvoiceNumber(year, month, "B"), [year, month]);
+  const previewRows = useMemo<InvoicePreviewRow[]>(() => {
+    const bands = ["0-100", "101-200", "201-300", "301-400", "401-500", "500 ++"];
+    const schedules = Array.isArray(pricingSnapshot) ? pricingSnapshot.filter(item => item && typeof item === "object") as Array<{ tiers?: Array<{ serviceType?: string; minLength?: number; maxLength?: number | null; rate?: number }>; optionalRates?: Record<string, number>; peoTvRate?: number }> : [];
+    const tierRate = (type: "FTTH" | "DATA", index: number, defaults: number[]) => {
+      const min = index * 100 + (index === 0 ? 0 : 1);
+      const max = index === 5 ? null : (index + 1) * 100;
+      const rate = [...schedules].reverse().flatMap(schedule => schedule.tiers || []).find(item => String(item.serviceType || "FTTH").toUpperCase() === type && Number(item.minLength) === min && (max == null ? item.maxLength == null : Number(item.maxLength) === max))?.rate;
+      return Number(rate || defaults[index]);
+    };
+    const optionalRate = (code: string, fallback: number) => {
+      const selected = optionalItems[code as OptionalItemCode];
+      return Number(selected?.quantity > 0 ? selected.unitRate : [...schedules].reverse().find(schedule => Number(schedule.optionalRates?.[code]) > 0)?.optionalRates?.[code] || selected?.unitRate || fallback);
+    };
+    const grouped = new Map<string, { quantity: number; amount: number }>();
+    selectedLines.forEach(line => {
+      const service = line.serviceType === "DATA" ? "data" : line.serviceType === "PEO_TV" ? "peoTv" : "ftth";
+      const length = Number(line.cableLength || 0);
+      const band = length <= 100 ? 0 : length <= 200 ? 1 : length <= 300 ? 2 : length <= 400 ? 3 : length <= 500 ? 4 : 5;
+      const key = service === "peoTv" ? "peoTv" : `${service}${band}`;
+      const item = grouped.get(key) || { quantity: 0, amount: 0 };
+      item.quantity += 1; item.amount += Number(line.baseRate || 0); grouped.set(key, item);
+    });
+    const fallback = [6650, 7000, 7800, 8400, 8800, 9000];
+    const rows: InvoicePreviewRow[] = [];
+    const add = (id: string, description: string, quantity: number, amount: number, unitRate: number, descriptionKey?: string) => rows.push({ id, description, quantity, amount, unitRate: quantity ? amount / quantity : unitRate, descriptionKey });
+    bands.forEach((_band, index) => { const key = `ftth${index}`; const item = grouped.get(key) || { quantity: 0, amount: 0 }; add(key, serviceDescriptions[key], item.quantity, item.amount, tierRate("FTTH", index, fallback), key); });
+    add("pole56", serviceDescriptions.pole56, optionalItems.POLE_56.quantity, optionalItems.POLE_56.quantity * optionalItems.POLE_56.unitRate, optionalRate("POLE_56", 700), "pole56");
+    add("pole67", serviceDescriptions.pole67, optionalItems.POLE_67.quantity, optionalItems.POLE_67.quantity * optionalItems.POLE_67.unitRate, optionalRate("POLE_67", 800), "pole67");
+    bands.forEach((_band, index) => { const key = `data${index}`; const item = grouped.get(key) || { quantity: 0, amount: 0 }; add(key, serviceDescriptions[key], item.quantity, item.amount, tierRate("DATA", index, [5000, 5500, 6800, 6800, 7200, 7400]), key); });
+    const peo = grouped.get("peoTv") || { quantity: 0, amount: 0 }; add("peoTv", serviceDescriptions.peoTv, peo.quantity, peo.amount, Number([...schedules].reverse().find(schedule => Number(schedule.peoTvRate) > 0)?.peoTvRate || 1800), "peoTv");
+    customRows.forEach(row => rows.push({ id: row.id, description: row.description, rtom: row.rtom, quantity: row.quantity, unitRate: row.unitRate, amount: row.quantity * row.unitRate }));
+    (["POLE_8", "HIGH_RISE"] as OptionalItemCode[]).forEach(code => { const item = optionalItems[code]; if (item.quantity <= 0) return; const key = code === "POLE_8" ? "pole8" : "highRise"; rows.push({ id: key, description: serviceDescriptions[key], quantity: item.quantity, unitRate: item.unitRate, amount: item.quantity * item.unitRate, descriptionKey: key }); });
+    return rows;
+  }, [selectedLines, serviceDescriptions, optionalItems, customRows, pricingSnapshot]);
   const inputsLocked = !invoiceId && (pairComplete || partialPair);
 
   const loadMonth = useCallback(async () => {
@@ -309,6 +329,11 @@ export function InvoiceCreationWorkspace({ invoiceId }: { invoiceId?: string }) 
   if (!canManage) return <div className="mx-auto max-w-3xl p-8 text-center"><h1 className="text-xl font-semibold">Invoice access required</h1><p className="mt-2 text-muted-foreground">Ask an administrator or moderator to prepare invoices.</p><Button variant="outline" className="mt-4" onClick={() => router.push("/dashboard/invoices")}><ArrowLeft className="mr-2 h-4 w-4" />Back to invoices</Button></div>;
 
   const updateLine = (lineId: string, values: Partial<InvoiceLine>) => setLines(current => current.map(line => line.lineId === lineId ? { ...line, ...values } : line));
+  const updateField = (key: keyof InvoiceDocumentFields, value: string) => setDocumentFields(current => ({ ...current, [key]: value }));
+  const updatePreviewRowDescription = (row: InvoicePreviewRow, value: string) => {
+    if (row.descriptionKey) setServiceDescriptions(current => ({ ...current, [row.descriptionKey!]: value }));
+    else setCustomRows(current => current.map(item => item.id === row.id ? { ...item, description: value } : item));
+  };
   const savePair = async () => {
     setSaving(true);
     try {
@@ -354,8 +379,11 @@ export function InvoiceCreationWorkspace({ invoiceId }: { invoiceId?: string }) 
         </div>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(480px,0.9fr)]">
-        <div className="min-w-0 space-y-5">
+      <div className="flex min-w-0 flex-col gap-5">
+        <div className="order-2 min-w-0">
+          <Collapsible open={controlsOpen} onOpenChange={setControlsOpen}>
+            <CollapsibleTrigger asChild><Button variant="outline" className="flex h-auto w-full justify-between py-3 text-left"><span><Settings2 className="mr-2 inline h-4 w-4" />Invoice setup and line details <span className="ml-1 text-xs font-normal text-muted-foreground">{selectedLines.length} lines · {customRows.length} custom rows</span></span><ChevronDown className={`h-4 w-4 transition-transform ${controlsOpen ? "rotate-180" : ""}`} /></Button></CollapsibleTrigger>
+            <CollapsibleContent className="pt-4"><div className="space-y-5">
           <Card className="border-border/70 shadow-sm">
             <CardHeader className="pb-3"><CardTitle className="text-base">1. Select service month</CardTitle><CardDescription>Installation records and rates will be loaded for this month.</CardDescription></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -368,27 +396,6 @@ export function InvoiceCreationWorkspace({ invoiceId }: { invoiceId?: string }) 
               {!validAmounts && lines.length > 0 && <div className="sm:col-span-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">Check each selected line, optional item, and custom row. Rates and quantities must be valid before saving.</div>}
               {!invoiceId && partialPair && <div className="sm:col-span-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">One invoice already exists. It will remain unchanged; the missing invoice will be created from its saved snapshot.</div>}
               {!invoiceId && pairComplete && <div className="sm:col-span-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"><Check className="mr-2 inline h-4 w-4" />Both invoices are already saved. Use Edit from the archive to update them.</div>}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/70 shadow-sm">
-            <CardHeader className="pb-3"><CardTitle className="text-base">Invoice document content</CardTitle><CardDescription>Edit all printed wording and service-row labels. Company and bank details continue to come from Company Settings.</CardDescription></CardHeader>
-            <CardContent className="space-y-6">
-              {CONTENT_GROUPS.map(group => <section key={group.title} className="space-y-3">
-                <h3 className="text-sm font-semibold">{group.title}</h3>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {group.keys.map(key => <label key={key} className="space-y-1.5 text-xs font-medium text-muted-foreground">
-                    <span>{CONTENT_FIELD_LABELS[key]}</span>
-                    <Input value={documentFields[key]} disabled={inputsLocked} onChange={event => setDocumentFields(current => ({ ...current, [key]: event.target.value }))} />
-                  </label>)}
-                </div>
-              </section>)}
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold">Printed service descriptions</h3>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {Object.entries(SERVICE_DESCRIPTION_LABELS).map(([key, label]) => <label key={key} className="space-y-1.5 text-xs font-medium text-muted-foreground"><span>{label}</span><Input value={serviceDescriptions[key] || ""} disabled={inputsLocked} onChange={event => setServiceDescriptions(current => ({ ...current, [key]: event.target.value }))} /></label>)}
-                </div>
-              </section>
             </CardContent>
           </Card>
 
@@ -439,23 +446,24 @@ export function InvoiceCreationWorkspace({ invoiceId }: { invoiceId?: string }) 
               </div>)}
             </CardContent>
           </Card>
+            </div></CollapsibleContent>
+          </Collapsible>
         </div>
 
-        <div className="min-w-0 space-y-5">
-          <Card className="border-primary/20 shadow-sm xl:sticky xl:top-4">
-            <CardHeader className="border-b pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><CardTitle className="text-base">3. Invoice preview</CardTitle><CardDescription className="mt-1">Rendered with the same A/B sheet layout used by report PDFs.</CardDescription></div><div className="flex gap-1 rounded-lg bg-muted p-1"><Button size="sm" variant={activePreview === "A" ? "default" : "ghost"} onClick={() => setActivePreview("A")}>Invoice A · {percentA}%</Button><Button size="sm" variant={activePreview === "B" ? "default" : "ghost"} onClick={() => setActivePreview("B")}>Invoice B · {percentB}%</Button></div></div></CardHeader>
-            <CardContent className="space-y-4 p-4">
-              <div className="grid grid-cols-3 gap-2"><div className="rounded-lg bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Grand total · 100%</p><p className="mt-1 text-sm font-semibold tabular-nums">{money(grandTotal)}</p></div><div className="rounded-lg bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Invoice A · {percentA}%</p><p className="mt-1 text-sm font-semibold tabular-nums">{money(aAmount)}</p></div><div className="rounded-lg bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Invoice B · {percentB}%</p><p className="mt-1 text-sm font-semibold tabular-nums">{money(bAmount)}</p></div></div>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><div><span className="text-muted-foreground">Display number</span><p className="font-mono text-xs">{formatMonthlyInvoiceDisplayNumber(Number(year), Number(month))}</p></div><Badge variant="outline">{activePreview === "A" ? `${percentA}% share` : `${percentB}% share`}</Badge></div>
-              <div className="overflow-hidden rounded-lg border bg-slate-100 p-2"><div className="relative aspect-[210/297] w-full bg-white shadow-sm">{previewLoading ? <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Preparing preview…</div> : pdfUrls[activePreview] ? <iframe title={`Invoice ${activePreview} preview`} src={pdfUrls[activePreview] || undefined} className="absolute inset-0 h-full w-full" /> : <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-muted-foreground">Add at least one priced line to see the invoice preview.</div>}</div></div>
-              <Button variant="outline" className="w-full" onClick={downloadPreview} disabled={!pdfUrls[activePreview]}><FileText className="mr-2 h-4 w-4" />Download preview PDF</Button>
-              <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">Invoice date: {new Date(`${invoiceDate}T00:00:00`).toLocaleDateString()} · Bank details are read from Company Settings.</div>
-            </CardContent>
-          </Card>
-          <Card><CardContent className="flex items-start gap-3 p-4 text-sm"><div className="rounded-full bg-primary/10 p-2 text-primary"><Check className="h-4 w-4" /></div><div><p className="font-medium">Nothing is saved automatically</p><p className="mt-1 text-muted-foreground">Check both previews and the source lines. Create invoices saves the reviewed snapshot and leaves the source installation records as they are.</p></div></CardContent></Card>
-          <Button className="w-full xl:hidden" size="lg" onClick={() => void savePair()} disabled={saving || loadingMonth || (!invoiceId && pairComplete) || (!invoiceId && partialPair && !canUseExistingSnapshot) || selectedLines.length === 0 || grandTotal <= 0 || !validAmounts}>{saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{invoiceId ? "Saving changes…" : "Creating invoices…"}</> : <><Plus className="mr-2 h-4 w-4" />{invoiceId ? "Save invoice changes" : partialPair ? "Create missing invoice" : "Create invoices"}</>}</Button>
+        <div className="order-1 min-w-0 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2"><Select value={month} disabled={Boolean(invoiceId)} onValueChange={value => { setMonth(value); setInvoiceDateOverride(null); setJobMonthOverride(null); }}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent>{MONTHS.map((value, index) => <SelectItem key={value} value={String(index + 1)}>{value}</SelectItem>)}</SelectContent></Select><Select value={year} disabled={Boolean(invoiceId)} onValueChange={value => { setYear(value); setInvoiceDateOverride(null); setJobMonthOverride(null); }}><SelectTrigger className="w-28"><SelectValue /></SelectTrigger><SelectContent>{yearOptions.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select><Button variant="ghost" size="sm" disabled={loadingMonth} onClick={() => void loadMonth()}><RotateCw className={`mr-2 h-4 w-4 ${loadingMonth ? "animate-spin" : ""}`} />Reload</Button></div>
+            <div className="flex flex-wrap items-center gap-2"><Button variant="outline" size="sm" onClick={() => setCompanyDetailsOpen(true)} disabled={!canEditCompanyDetails || !company} title={canEditCompanyDetails ? "Edit shared company and bank details" : "Administrator access required"}><Building2 className="mr-2 h-4 w-4" />Company & bank details</Button><div className="flex gap-1 rounded-lg bg-muted p-1"><Button size="sm" variant={activePreview === "A" ? "default" : "ghost"} onClick={() => setActivePreview("A")}>Invoice A · {percentA}%</Button><Button size="sm" variant={activePreview === "B" ? "default" : "ghost"} onClick={() => setActivePreview("B")}>Invoice B · {percentB}%</Button></div></div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3"><div className="rounded-lg border bg-card p-3"><p className="text-xs text-muted-foreground">Grand total · 100%</p><p className="mt-1 font-semibold tabular-nums">{money(grandTotal)}</p></div><div className="rounded-lg border bg-card p-3"><p className="text-xs text-muted-foreground">Invoice A · {percentA}%</p><p className="mt-1 font-semibold tabular-nums">{money(aAmount)}</p></div><div className="rounded-lg border bg-card p-3"><p className="text-xs text-muted-foreground">Invoice B · {percentB}%</p><p className="mt-1 font-semibold tabular-nums">{money(bAmount)}</p></div></div>
+          {error && <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{error}{pairComplete && <Link className="ml-2 inline-flex underline" href="/dashboard/invoices">View archive</Link>}</div>}
+          <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">Invoice preview · {formatMonthlyInvoiceDisplayNumber(Number(year), Number(month))}</p><div className="flex items-center gap-2"><Button size="sm" variant={showPdfPreview ? "outline" : "secondary"} onClick={() => setShowPdfPreview(false)}>Edit sheet</Button><Button size="sm" variant={showPdfPreview ? "secondary" : "outline"} onClick={() => setShowPdfPreview(true)} disabled={!pdfUrls[activePreview]}>Exact PDF view</Button>{previewLoading && <span className="text-xs text-muted-foreground">Refreshing PDF…</span>}</div></div>
+          {showPdfPreview ? <div className="mx-auto aspect-[210/297] w-full max-w-[1100px] overflow-hidden rounded-xl border bg-white shadow-sm"><iframe title={`Exact Invoice ${activePreview} PDF`} src={pdfUrls[activePreview] || undefined} className="h-full w-full" /></div> : <div className="overflow-x-auto rounded-xl border bg-slate-100 p-2 sm:p-4"><InvoiceSheetPreview fields={documentFields} updateField={updateField} rows={previewRows} updateRowDescription={updatePreviewRowDescription} company={company || { company_name: "NNS Enterprise", address: "", contact_numbers: [], registered_number: "", bank_details: {} }} number={formatMonthlyInvoiceDisplayNumber(Number(year), Number(month))} date={invoiceDate} jobMonth={jobMonth} updateDate={value => setInvoiceDateOverride(value)} updateJobMonth={value => setJobMonthOverride(value)} type={activePreview} percent={activePreview === "A" ? percentA : percentB} total={grandTotal} amount={activePreview === "A" ? aAmount : bAmount} /></div>}
+          <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground">Click any underlined invoice text to edit. Changes are saved when you save the invoice pair.</p><div className="flex gap-2"><Button variant="outline" onClick={downloadPreview} disabled={!pdfUrls[activePreview]}><FileText className="mr-2 h-4 w-4" />Download PDF</Button><Button onClick={() => void savePair()} disabled={saving || loadingMonth || (!invoiceId && pairComplete) || (!invoiceId && partialPair && !canUseExistingSnapshot) || selectedLines.length === 0 || grandTotal <= 0 || !validAmounts}>{saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : <><Save className="mr-2 h-4 w-4" />{invoiceId ? "Save invoice changes" : partialPair ? "Create missing invoice" : "Create invoices"}</>}</Button></div></div>
+          <Card><CardContent className="flex items-start gap-3 p-4 text-sm"><div className="rounded-full bg-primary/10 p-2 text-primary"><Check className="h-4 w-4" /></div><div><p className="font-medium">Nothing is saved automatically</p><p className="mt-1 text-muted-foreground">Review both invoice versions and the source lines. Saving changes the invoice snapshot and leaves installation records unchanged.</p></div></CardContent></Card>
         </div>
       </div>
+      <InvoiceCompanyDetailsDialog open={companyDetailsOpen} onOpenChange={setCompanyDetailsOpen} company={company} onSaved={value => setCompany(value)} />
     </div>
   );
 }

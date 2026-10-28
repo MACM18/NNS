@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 
 
-def trigger_webhook(url: str, timeout: int = 30) -> int:
+def trigger_webhook(url: str, timeout: int = 60) -> int:
     request = urllib.request.Request(
         url,
         data=b"",

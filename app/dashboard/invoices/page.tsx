@@ -113,14 +113,14 @@ export default function InvoicesPage() {
                   <Table className="w-full table-fixed">
                     <TableHeader><TableRow className="bg-muted/50"><TableHead className="w-[25%]">Invoice number</TableHead><TableHead className="w-[10%]">Type</TableHead><TableHead className="w-[17%]">Job month</TableHead><TableHead className="w-[14%]">Invoice date</TableHead><TableHead className="w-[10%] text-right">Lines</TableHead><TableHead className="w-[14%] text-right">Invoice amount</TableHead><TableHead className="w-[10%] text-right">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{invoices.map(invoice => (
-                      <TableRow key={invoice.id} className="hover:bg-muted/30">
+                      <TableRow key={invoice.id} className="hover:bg-muted/30 [&>td]:align-middle">
                         <TableCell className="font-mono text-xs sm:text-sm">{invoice.month && invoice.year ? formatMonthlyInvoiceDisplayNumber(invoice.year, invoice.month) : invoice.invoice_number}</TableCell>
                         <TableCell><Badge variant={invoice.invoice_type === "A" ? "default" : "secondary"}>Invoice {invoice.invoice_type}</Badge></TableCell>
                         <TableCell>{invoice.job_month}</TableCell>
                         <TableCell>{invoice.invoice_date ? new Date(`${invoice.invoice_date}T00:00:00`).toLocaleDateString() : "—"}</TableCell>
                         <TableCell className="text-right tabular-nums">{invoice.line_count}</TableCell>
                         <TableCell className="text-right font-medium tabular-nums">LKR {Number(invoice.total_amount || 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}</TableCell>
-                        <TableCell className="text-right"><div className="flex justify-end gap-1"><ActionButton style="compact" icon={<Eye />} label={`Preview invoice ${invoice.invoice_number}`} onClick={() => setSelectedInvoice(invoice)} />{canManage && <ActionButton style="text" icon={<Pencil />} label="Edit" onClick={() => router.push(`/dashboard/invoices/${invoice.id}/edit`)} />}</div></TableCell>
+                        <TableCell className="text-right"><div className="flex min-h-10 items-center justify-end gap-1"><ActionButton style="compact" icon={<Eye className="h-4 w-4" />} label={`Preview invoice ${invoice.invoice_number}`} onClick={() => setSelectedInvoice(invoice)} />{canManage && <ActionButton style="text" icon={<Pencil className="h-4 w-4" />} label="Edit" onClick={() => router.push(`/dashboard/invoices/${invoice.id}/edit`)} />}</div></TableCell>
                       </TableRow>
                     ))}</TableBody>
                   </Table>

@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import { DEFAULT_INVOICE_DOCUMENT_FIELDS, normalizeInvoiceContentSnapshot, type InvoiceContentSnapshot } from "@/lib/invoice-document";
 
-export const MONTHLY_REPORT_PDF_DESIGN_VERSION = "nns-blue-compact-v6";
+export const MONTHLY_REPORT_PDF_DESIGN_VERSION = "nns-blue-compact-v7";
 
 export type PdfCell = string | number | null | undefined;
 type TableOptions = { widths: number[]; rowHeight?: number; headerHeight?: number; fontSize?: number; headerSize?: number; font?: "normal" | "bold"; alignments?: Array<"left" | "center" | "right">; headerFill?: [number, number, number]; headerText?: [number, number, number]; cellFills?: Array<[number, number, number] | undefined>; separatorAfter?: number[] };
@@ -326,7 +326,7 @@ function drawTemplateField(doc: jsPDF, label: string, value: string, x: number, 
   doc.text(textFit(doc, value, valueWidth), x + labelWidth, y);
 }
 
-function drawMergedCellGrid(doc: jsPDF, cells: Array<{ x: number; y: number; w: number; h: number }>, color: [number, number, number]) {
+function drawMergedCellGrid(doc: jsPDF, cells: Array<{ x: number; y: number; w: number; h: number }>) {
   const vertical = new Map<number, Array<[number, number]>>();
   const horizontal = new Map<number, Array<[number, number]>>();
   const add = (map: Map<number, Array<[number, number]>>, coordinate: number, start: number, end: number) => {
@@ -351,8 +351,8 @@ function drawMergedCellGrid(doc: jsPDF, cells: Array<{ x: number; y: number; w: 
     }
     return result;
   };
-  doc.setDrawColor(...color);
-  doc.setLineWidth(0.2);
+  doc.setDrawColor(...GRID);
+  doc.setLineWidth(0.12);
   vertical.forEach((intervals, x) => merged(intervals).forEach(([y1, y2]) => doc.line(x, y1, x, y2)));
   horizontal.forEach((intervals, y) => merged(intervals).forEach(([x1, x2]) => doc.line(x1, y, x2, y)));
 }
@@ -581,7 +581,7 @@ export function generateInvoicePdf(input: {
   cell(margin + officeLabelW, y, officeDescW, 12, fields.materialBalanceReceivedLabel, { align: "center", fontSize: 5.7 });
   cell(margin + officeLabelW + officeDescW, y, yesNoW, 12, fields.materialBalanceReceivedAnswer, { fontSize: 5.8 });
   cell(margin + officeLabelW + officeDescW + yesNoW, y, signDateW, 12, "", {});
-  drawMergedCellGrid(doc, borderCells, ink);
+  drawMergedCellGrid(doc, borderCells);
   return new Uint8Array(doc.output("arraybuffer"));
 }
 
