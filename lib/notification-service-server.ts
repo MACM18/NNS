@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { broadcastToUser } from "@/lib/sse-manager";
 import { escapeEmailHtml, sendEmail } from "@/lib/email-service";
 
 export type NotificationType = "info" | "success" | "warning" | "error";
@@ -33,9 +32,6 @@ export async function createSystemNotification(params: {
     },
   });
 
-  // Broadcast to active SSE clients for this user
-  broadcastToUser(params.userId, notification);
-
   return notification;
 }
 
@@ -52,7 +48,7 @@ export async function notifyAllAdmins(params: {
   // Find all admin and moderator users
   const admins = await prisma.profile.findMany({
     where: { role: { in: ["admin", "moderator"] } },
-    select: { userId: true, email: true },
+    select: { userId: true, email: true, preferences: true },
   });
 
   const createdNotifications = [];
@@ -70,7 +66,18 @@ export async function notifyAllAdmins(params: {
     createdNotifications.push(notification);
 
     // Send email alert if requested and admin has email
-    if (params.sendEmailAlert && admin.email) {
+    const preferences = (admin.preferences as { notifications?: Record<string, unknown> } | null)?.notifications;
+    const emailEnabled = preferences?.email_notifications !== false;
+    const categoryEmailEnabled =
+      params.category === "invoice_generated"
+        ? preferences?.invoice_alerts !== false
+        : params.category === "task_completed"
+        ? preferences?.task_reminders !== false
+        : params.category === "system"
+            ? preferences?.system_updates === true
+            : true;
+
+    if (params.sendEmailAlert && admin.email && emailEnabled && categoryEmailEnabled) {
       try {
         await sendEmail({
           to: admin.email,

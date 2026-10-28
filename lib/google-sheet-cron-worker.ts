@@ -24,5 +24,23 @@ if (!globalThis.googleSheetCronStarted) {
         console.error("[google-sheet-cron] Import check failed:", error);
       }
     }, { noOverlap: true, timezone: "UTC" });
+
+    cron.schedule("25 0 * * 0", async () => {
+      try {
+        const port = Number(process.env.PORT || 3000);
+        const response = await fetch(`http://127.0.0.1:${port}/api/cron/delete-old-notifications`, {
+          headers: { authorization: `Bearer ${secret}` },
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          console.error("[notification-cleanup] Scheduled cleanup failed:", response.status, await response.text());
+        } else {
+          const result = await response.json();
+          console.info("[notification-cleanup] Weekly cleanup completed:", result);
+        }
+      } catch (error) {
+        console.error("[notification-cleanup] Scheduled cleanup failed:", error);
+      }
+    }, { noOverlap: true, timezone: "UTC" });
   }
 }

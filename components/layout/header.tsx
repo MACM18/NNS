@@ -17,6 +17,8 @@ import {
   FileText,
   CheckCircle,
   ClipboardList,
+  WalletCards,
+  Settings2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -64,7 +66,6 @@ export function Header() {
     unreadCount,
     markAsRead,
     markAllAsRead,
-    deleteAllNotifications,
     deleteNotification,
     isLoading,
   } = useNotification();
@@ -248,21 +249,22 @@ export function Header() {
   };
 
   const getNotificationIcon = (category: string) => {
+    const iconClass = "h-4 w-4";
     switch (category) {
       case "line_added":
-        return "📞";
+        return <Phone className={iconClass} />;
       case "task_completed":
-        return "✅";
+        return <ClipboardList className={iconClass} />;
       case "invoice_generated":
-        return "💰";
+        return <WalletCards className={iconClass} />;
       case "report_ready":
-        return "📊";
+        return <FileText className={iconClass} />;
       case "inventory_low":
-        return "⚠️";
+        return <Package className={iconClass} />;
       case "system":
-        return "🔧";
+        return <Settings2 className={iconClass} />;
       default:
-        return "📢";
+        return <Bell className={iconClass} />;
     }
   };
 
@@ -503,19 +505,8 @@ export function Header() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align='end' className='w-96 max-w-sm'>
             <DropdownMenuLabel className='flex items-center justify-between'>
-              <span>Notifications</span>
+              <span>Notifications {unreadCount > 0 && <span className='ml-1 text-xs font-normal text-muted-foreground'>· {unreadCount} unread</span>}</span>
               <div className='flex gap-1'>
-                {notifications.length > 0 && (
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    onClick={deleteAllNotifications}
-                    className='h-6 px-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950'
-                  >
-                    <Trash2 className='mr-1 h-3 w-3' />
-                    Delete all
-                  </Button>
-                )}
                 {unreadCount > 0 && (
                   <Button
                     variant='ghost'
@@ -545,72 +536,48 @@ export function Header() {
                   <div
                     key={notification.id}
                     className={cn(
-                      "flex cursor-pointer items-start gap-3 border-b border-border/50 p-3 last:border-0 hover:bg-muted/50",
+                      "group flex items-start gap-1 border-b border-border/50 p-1 last:border-0",
                       !notification.is_read && "bg-muted/30"
                     )}
-                    onClick={() => handleNotificationClick(notification)}
                   >
-                    <div className='mt-0.5 text-lg'>
-                      {getNotificationIcon(notification.category)}
-                    </div>
-                    <div className='min-w-0 flex-1'>
-                      <div className='flex items-start justify-between gap-2'>
-                        <div className='flex-1'>
-                          <p
-                            className={cn(
-                              "text-sm font-medium leading-tight",
-                              getNotificationColor(
-                                notification.type,
-                                notification.is_read
-                              )
-                            )}
-                          >
-                            {notification.title}
-                          </p>
-                          <p className='mt-1 line-clamp-2 text-xs text-muted-foreground'>
-                            {notification.message}
-                          </p>
-                          <p className='mt-1 text-xs text-muted-foreground'>
-                            {formatDistanceToNow(
-                              new Date(notification.created_at),
-                              { addSuffix: true }
-                            )}
-                          </p>
+                    <div
+                      role='button'
+                      tabIndex={0}
+                      className='flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                      onClick={() => handleNotificationClick(notification)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          void handleNotificationClick(notification);
+                        }
+                      }}
+                    >
+                      <div className='mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary'>
+                        {getNotificationIcon(notification.category)}
+                      </div>
+                      <div className='min-w-0 flex-1'>
+                        <div className='flex items-center gap-2'>
+                          <p className={cn("truncate text-sm font-medium leading-tight", getNotificationColor(notification.type, notification.is_read))}>{notification.title}</p>
+                          {!notification.is_read && <div className='h-2 w-2 shrink-0 rounded-full bg-primary' />}
                         </div>
-                        <div className='flex items-center gap-1'>
-                          {!notification.is_read && (
-                            <div className='h-2 w-2 rounded-full bg-blue-500' />
-                          )}
-                          <Button
-                            variant='ghost'
-                            size='icon'
-                            className='h-6 w-6 p-0 opacity-0 transition-opacity duration-200 hover:opacity-100 focus:opacity-100 group-hover:opacity-100'
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              deleteNotification(notification.id);
-                            }}
-                          >
-                            <Trash2 className='h-3 w-3' />
-                          </Button>
-                        </div>
+                        <p className='mt-1 line-clamp-2 text-xs text-muted-foreground'>{notification.message}</p>
+                        <p className='mt-1 text-xs text-muted-foreground'>{formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}</p>
                       </div>
                     </div>
+                    <Button variant='ghost' size='icon' title='Delete notification' aria-label='Delete notification' className='h-8 w-8 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100' onClick={() => void deleteNotification(notification.id)}>
+                      <Trash2 className='h-3.5 w-3.5' />
+                    </Button>
                   </div>
                 ))}
 
-                {notifications.length > 10 && (
-                  <div className='p-3 text-center'>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => router.push("/notifications")}
-                    >
-                      View all notifications
-                    </Button>
-                  </div>
-                )}
               </ScrollArea>
             )}
+            <DropdownMenuSeparator />
+            <div className='p-2'>
+              <Button variant='ghost' size='sm' className='w-full justify-center' onClick={() => router.push("/dashboard/notifications")}>
+                Open notification inbox
+              </Button>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
 

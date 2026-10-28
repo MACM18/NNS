@@ -16,3 +16,9 @@ The Dokploy Node cron worker checks monthly provisioning once per minute and run
 Connect the admin Drive account using the Drive file picker. Set `GOOGLE_SHEETS_DRIVE_REDIRECT_URI` to `https://<your-app-host>/api/integrations/google-sheets/monthly/oauth/callback`, and register that exact URL in the Google OAuth client. The picker also needs `GOOGLE_PICKER_API_KEY` and `GOOGLE_CLOUD_PROJECT_NUMBER`. The OAuth client needs the Google Drive API and Picker API enabled. Refresh tokens are encrypted using `ENCRYPTION_KEY` or `AUTH_SECRET`.
 
 The new sheet is shared with the configured editor accounts and with `GOOGLE_SERVICE_ACCOUNT_EMAIL` so the existing importer can read it. Confirm the service account has no broader Drive access than required. Set `CRON_SECRET` in the Dokploy app environment and redeploy; the worker calls both monthly provisioning and daily import endpoints.
+
+## Notification delivery and cleanup
+
+Signed-in users receive in-app notifications in the bell menu and the full Notifications inbox. Live updates are read from the database, so they continue to work across multiple app processes. Eligible administrator alert emails respect the recipient's Email Alerts setting and the matching category preference.
+
+On Dokploy, the same Node cron worker clears read notifications older than 90 days every Sunday at 00:25 UTC. On Vercel, the existing weekly cron schedule calls the same protected cleanup endpoint. Unread notifications are never removed automatically. Both schedulers require `CRON_SECRET` (or `VERCEL_CRON_SECRET`); the cleanup endpoint refuses to run if neither is configured.

@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 
 interface NotificationPreferences {
   email_notifications?: boolean;
-  push_notifications?: boolean;
   task_reminders?: boolean;
   invoice_alerts?: boolean;
   system_updates?: boolean;
@@ -29,15 +28,14 @@ export async function GET(req: NextRequest) {
 
     // Extract notification preferences from JSON or return defaults
     const preferences = profile.preferences as any;
-    const notifications: NotificationPreferences =
-      preferences?.notifications || {
-        email_notifications: true,
-        push_notifications: true,
-        task_reminders: true,
-        invoice_alerts: true,
-        system_updates: false,
-        marketing_emails: false,
-      };
+    const notifications: NotificationPreferences = {
+      email_notifications: true,
+      task_reminders: true,
+      invoice_alerts: true,
+      system_updates: false,
+      marketing_emails: false,
+      ...(preferences?.notifications || {}),
+    };
 
     return NextResponse.json({ data: notifications });
   } catch (error) {
@@ -61,7 +59,6 @@ export async function PUT(req: NextRequest) {
     // Validate notification preferences
     const allowedKeys = [
       "email_notifications",
-      "push_notifications",
       "task_reminders",
       "invoice_alerts",
       "system_updates",

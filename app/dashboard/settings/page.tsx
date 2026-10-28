@@ -117,7 +117,7 @@ export default function SettingsPage() {
   // Notification preferences
   const [notificationSettings, setNotificationSettings] = useState({
     email_notifications: true,
-    push_notifications: true,
+    task_reminders: true,
     invoice_alerts: true,
     system_updates: false,
   });
@@ -1431,87 +1431,32 @@ If you lose access to your authenticator app, you can use these codes to sign in
             {/* Notification Settings */}
             <TabsContent value='notifications' className='min-w-0 space-y-4'>
               <Card>
-                <CardHeader>
+                <CardHeader className='pb-3'>
                   <CardTitle>Notification Preferences</CardTitle>
-                  <CardDescription>
-                    Choose how you want to be notified about updates and
-                    activities
-                  </CardDescription>
+                  <CardDescription>Choose which alerts should also arrive by email. In-app updates remain available in your notification inbox.</CardDescription>
                 </CardHeader>
-                <CardContent className='space-y-6'>
-                  <div className='space-y-4'>
-                    <div className='flex items-center justify-between'>
-                      <div className='space-y-0.5'>
-                        <Label>Email Notifications</Label>
-                        <p className='text-sm text-muted-foreground'>
-                          Receive notifications via email
-                        </p>
+                <CardContent className='space-y-4'>
+                  <div className='grid gap-3 sm:grid-cols-2'>
+                    {([
+                      ["email_notifications", "Email alerts", "Send eligible app notifications to your account email."],
+                      ["task_reminders", "Task updates", "Email when task activity needs your attention."],
+                      ["invoice_alerts", "Invoice updates", "Email about invoice activity."],
+                      ["system_updates", "System updates", "Email about maintenance and important service changes."],
+                    ] as const).map(([key, label, description]) => (
+                      <div key={key} className='flex min-h-20 items-center justify-between gap-4 rounded-xl border bg-muted/20 p-4'>
+                        <div className='space-y-1'>
+                          <Label>{label}</Label>
+                          <p className='text-xs leading-relaxed text-muted-foreground'>{description}</p>
+                        </div>
+                        <Switch
+                          checked={notificationSettings[key]}
+                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, [key]: checked })}
+                          aria-label={label}
+                        />
                       </div>
-                      <Switch
-                        checked={notificationSettings.email_notifications}
-                        onCheckedChange={(checked) =>
-                          setNotificationSettings({
-                            ...notificationSettings,
-                            email_notifications: checked,
-                          })
-                        }
-                      />
-                    </div>
-
-                    <div className='flex items-center justify-between'>
-                      <div className='space-y-0.5'>
-                        <Label>Push Notifications</Label>
-                        <p className='text-sm text-muted-foreground'>
-                          Receive push notifications in browser
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationSettings.push_notifications}
-                        onCheckedChange={(checked) =>
-                          setNotificationSettings({
-                            ...notificationSettings,
-                            push_notifications: checked,
-                          })
-                        }
-                      />
-                    </div>
-
-                    <div className='flex items-center justify-between'>
-                      <div className='space-y-0.5'>
-                        <Label>Invoice Alerts</Label>
-                        <p className='text-sm text-muted-foreground'>
-                          Notifications about invoice generation and payments
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationSettings.invoice_alerts}
-                        onCheckedChange={(checked) =>
-                          setNotificationSettings({
-                            ...notificationSettings,
-                            invoice_alerts: checked,
-                          })
-                        }
-                      />
-                    </div>
-
-                    <div className='flex items-center justify-between'>
-                      <div className='space-y-0.5'>
-                        <Label>System Updates</Label>
-                        <p className='text-sm text-muted-foreground'>
-                          Notifications about system maintenance and updates
-                        </p>
-                      </div>
-                      <Switch
-                        checked={notificationSettings.system_updates}
-                        onCheckedChange={(checked) =>
-                          setNotificationSettings({
-                            ...notificationSettings,
-                            system_updates: checked,
-                          })
-                        }
-                      />
-                    </div>
+                    ))}
                   </div>
+                  <p className='text-xs text-muted-foreground'>Live in-app alerts are active while you are signed in. Browser push alerts are not available yet.</p>
 
                   <div className='flex justify-end'>
                     <Button

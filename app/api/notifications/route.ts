@@ -9,11 +9,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const notifications = await prisma.notification.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
+    const params = new URL(req.url).searchParams;
+    const requestedLimit = Number.parseInt(params.get("limit") || "100", 10);
+    const requestedOffset = Number.parseInt(params.get("offset") || "0", 10);
+    const take = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, requestedLimit)) : 100;
+    const skip = Number.isFinite(requestedOffset) ? Math.min(100_000, Math.max(0, requestedOffset)) : 0;
+    const [notifications, unreadCount, totalCount] = await Promise.all([
+      prisma.notification.findMany({
+        where: { userId: session.user.id },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take,
+        skip,
+      }),
+      prisma.notification.count({ where: { userId: session.user.id, isRead: false } }),
+      prisma.notification.count({ where: { userId: session.user.id } }),
+    ]);
 
     // Transform to frontend format
     const transformedNotifications = notifications.map((n) => ({
@@ -30,7 +40,7 @@ export async function GET(req: NextRequest) {
       updated_at: n.updatedAt,
     }));
 
-    return NextResponse.json({ data: transformedNotifications });
+    return NextResponse.json({ data: transformedNotifications, unreadCount, totalCount, hasMore: skip + notifications.length < totalCount });
   } catch (error) {
     console.error("Error fetching notifications:", error);
     return NextResponse.json(
@@ -48,17 +58,34 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, message, type, category, action_url, metadata } = body;
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    const allowedTypes = ["info", "success", "warning", "error"];
+    const allowedCategories = ["line_added", "task_completed", "invoice_generated", "report_ready", "inventory_low", "system", "post", "job"];
+    const actionUrl = body.action_url;
+    if (!title || title.length > 180 || !message || message.length > 2000) {
+      return NextResponse.json({ error: "Enter a title and message within the allowed length." }, { status: 400 });
+    }
+    if (actionUrl !== undefined && actionUrl !== null &&
+      (typeof actionUrl !== "string" || !actionUrl.startsWith("/") || actionUrl.startsWith("//") || actionUrl.includes("\\") || /[\r\n]/.test(actionUrl))) {
+      return NextResponse.json({ error: "Notification links must be local to this app." }, { status: 400 });
+    }
+    const type = allowedTypes.includes(body.type) ? body.type : "info";
+    const category = allowedCategories.includes(body.category) ? body.category : "system";
+    const metadata = body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata) ? body.metadata : {};
+    if (JSON.stringify(metadata).length > 8000) {
+      return NextResponse.json({ error: "Notification details are too large." }, { status: 400 });
+    }
 
     const notification = await prisma.notification.create({
       data: {
         userId: session.user.id,
         title,
         message,
-        type: type || "info",
-        category: category || "system",
+        type,
+        category,
         isRead: false,
-        actionUrl: action_url,
+        actionUrl,
         metadata,
       },
     });
