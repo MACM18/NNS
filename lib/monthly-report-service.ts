@@ -116,7 +116,7 @@ function monthlyInvoiceBackNumber(year: number, month: number) {
 async function latestInvoicePair(year: number, month: number) {
   const invoices = await prisma.generatedInvoice.findMany({
     where: { year, month, invoiceType: { in: ["A", "B"] } },
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    orderBy: { createdAt: "desc" },
   });
   const invoiceA = invoices.find(invoice => invoice.invoiceType === "A");
   const invoiceB = invoices.find(invoice => invoice.invoiceType === "B");

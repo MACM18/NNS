@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { buildPortableData } from "@/lib/portable-backup";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,12 @@ export async function GET(req: NextRequest) {
     }
 
     const role = (session.user.role || "user").toLowerCase();
+
+    if (["admin", "superadmin"].includes(role)) {
+      const data = await buildPortableData();
+      const recordCounts = Object.fromEntries(Object.entries(data.data).map(([name, rows]) => [name, rows.length]));
+      return NextResponse.json({ success: true, data: { ...data, exportedBy: session.user.email, userRole: role }, recordCounts });
+    }
 
     // Get data based on user role
     const exportData: any = {
@@ -25,6 +32,8 @@ export async function GET(req: NextRequest) {
       exportedAt: new Date().toISOString(),
       exportedBy: session.user.email,
       userRole: role,
+      backupVersion: 1,
+      product: "NNS Enterprise",
     };
 
     // All users can export their own profile

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
 import { useAuth } from "@/contexts/auth-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,7 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
   User,
@@ -67,6 +66,13 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isOAuthUser, setIsOAuthUser] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [backupFile, setBackupFile] = useState<any>(null);
+  const [backupPreview, setBackupPreview] = useState<any>(null);
+  const [backupMappings, setBackupMappings] = useState<Record<string, string>>({});
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupConfirmed, setBackupConfirmed] = useState(false);
+  const [backupError, setBackupError] = useState("");
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
   // Password change state
   const [passwordData, setPasswordData] = useState({
@@ -76,14 +82,6 @@ export default function SettingsPage() {
   });
 
   // Profile form data
-  const [profileData, setProfileData] = useState({
-    full_name: "",
-    email: "",
-    phone: "",
-    address: "",
-    bio: "",
-    avatar_url: "",
-  });
   const [emailChangeData, setEmailChangeData] = useState({
     newEmail: "",
     confirmEmail: "",
@@ -169,19 +167,6 @@ export default function SettingsPage() {
     loading: false,
     testing: false,
   });
-
-  useEffect(() => {
-    if (profile) {
-      setProfileData({
-        full_name: profile.full_name || "",
-        email: profile.email || "",
-        phone: profile.phone || "",
-        address: profile.address || "",
-        bio: profile.bio || "",
-        avatar_url: profile.avatar_url || "",
-      });
-    }
-  }, [profile]);
 
   useEffect(() => {
     fetchCompanySettings();
@@ -398,47 +383,6 @@ export default function SettingsPage() {
       }
     } catch (err) {
       console.error("Failed to fetch email settings", err);
-    }
-  };
-
-  const handleProfileUpdate = async () => {
-    setIsLoading(true);
-    try {
-      if (!user?.id) {
-        throw new Error("User ID is not available.");
-      }
-      const response = await fetch(`/api/profile/${user.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fullName: profileData.full_name,
-          phone: profileData.phone,
-          address: profileData.address,
-          bio: profileData.bio,
-          avatarUrl: profileData.avatar_url,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to update profile");
-      }
-
-      addNotification({
-        title: "Profile Updated",
-        message: "Your profile has been successfully updated.",
-        type: "success",
-        category: "system",
-      });
-    } catch (error: any) {
-      addNotification({
-        title: "Update Failed",
-        message: error.message,
-        type: "error",
-        category: "system",
-      });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -1011,6 +955,41 @@ If you lose access to your authenticator app, you can use these codes to sign in
     }
   };
 
+  const previewBackup = async (backup: any, mappings = backupMappings) => {
+    setBackupBusy(true); setBackupError(""); setBackupPreview(null); setBackupConfirmed(false);
+    try {
+      const response = await fetch("/api/settings/import/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...backup, mappings }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not preview this backup.");
+      setBackupPreview(result);
+      setBackupFile(backup);
+    } catch (error) { setBackupError(error instanceof Error ? error.message : "Could not preview this backup."); }
+    finally { setBackupBusy(false); }
+  };
+
+  const handleBackupFile = async (file?: File) => {
+    if (!file) return;
+    setBackupMappings({}); setBackupPreview(null); setBackupFile(null); setBackupError("");
+    try {
+      if (file.size > 50 * 1024 * 1024) throw new Error("Backup files must be 50 MB or smaller.");
+      const backup = JSON.parse(await file.text());
+      await previewBackup(backup, {});
+    } catch (error) { setBackupError(error instanceof Error ? error.message : "Choose a valid NNS JSON backup."); }
+  };
+
+  const handleBackupRestore = async () => {
+    if (!backupFile || !backupConfirmed || !backupPreview?.ready) return;
+    setBackupBusy(true); setBackupError("");
+    try {
+      const response = await fetch("/api/settings/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...backupFile, mappings: backupMappings, confirm: true }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Restore was not completed.");
+      setBackupFile(null); setBackupPreview(null); setBackupConfirmed(false);
+      addNotification({ title: "Backup restored", message: `${result.totalImported} records restored. Existing records were preserved.`, type: "success", category: "system" });
+    } catch (error) { setBackupError(error instanceof Error ? error.message : "Restore was not completed."); }
+    finally { setBackupBusy(false); }
+  };
+
   const addContactNumber = () => {
     setCompanyData((prev) => ({
       ...prev,
@@ -1137,170 +1116,26 @@ If you lose access to your authenticator app, you can use these codes to sign in
               )}
             </TabsList>
 
-            {/* Profile Settings */}
+            {/* Account details and security shortcuts */}
             <TabsContent value='profile' className='min-w-0 space-y-4'>
               <Card>
-                <CardHeader>
-                  <CardTitle>Profile Information</CardTitle>
-                  <CardDescription>
-                    Update your personal information and contact details
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className='space-y-6'>
-                  {/* <div className='flex items-center gap-6'>
-                    <Avatar className='h-24 w-24'>
-                      <AvatarImage
-                        src={profileData.avatar_url || "/placeholder.svg"}
-                      />
-                      <AvatarFallback className='text-lg'>
-                        {profileData.full_name?.charAt(0) ||
-                          user?.email?.charAt(0) ||
-                          "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className='space-y-2'>
-                      <Button variant='outline' size='sm'>
-                        <Upload className='h-4 w-4 mr-2' />
-                        Upload Photo
-                      </Button>
-                      <p className='text-sm text-muted-foreground'>
-                        JPG, PNG or GIF. Max size 2MB.
-                      </p>
-                    </div>
-                  </div> */}
-
-                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                    <div className='space-y-2'>
-                      <Label htmlFor='full_name'>Full Name</Label>
-                      <Input
-                        id='full_name'
-                        value={profileData.full_name}
-                        onChange={(e) =>
-                          setProfileData({
-                            ...profileData,
-                            full_name: e.target.value,
-                          })
-                        }
-                        placeholder='Enter your full name'
-                      />
-                    </div>
-
-                    <div className='space-y-2'>
-                      <Label htmlFor='email'>Email Address</Label>
-                      <Input
-                        id='email'
-                        value={user?.email || ""}
-                        disabled
-                        className='bg-muted'
-                      />
-                      <p className='text-xs text-muted-foreground'>This is your authentication email. It can only be changed after verification.</p>
-                    </div>
-
-                    <div className='space-y-2'>
-                      <Label htmlFor='phone'>Phone Number</Label>
-                      <Input
-                        id='phone'
-                        value={profileData.phone}
-                        onChange={(e) =>
-                          setProfileData({
-                            ...profileData,
-                            phone: e.target.value,
-                          })
-                        }
-                        placeholder='Enter your phone number'
-                      />
-                    </div>
-
-                    <div className='space-y-2'>
-                      <Label htmlFor='address'>Address</Label>
-                      <Input
-                        id='address'
-                        value={profileData.address}
-                        onChange={(e) =>
-                          setProfileData({
-                            ...profileData,
-                            address: e.target.value,
-                          })
-                        }
-                        placeholder='Enter your address'
-                      />
-                    </div>
-                  </div>
-
-                  <div className='space-y-2'>
-                    <Label htmlFor='bio'>Bio</Label>
-                    <Textarea
-                      id='bio'
-                      value={profileData.bio}
-                      onChange={(e) =>
-                        setProfileData({
-                          ...profileData,
-                          bio: e.target.value,
-                        })
-                      }
-                      placeholder='Tell us about yourself'
-                      rows={4}
-                    />
-                  </div>
-
-                  <div className='flex justify-end'>
-                    <Button
-                      onClick={handleProfileUpdate}
-                      disabled={isLoading}
-                      className='transition-all duration-200 hover:scale-105 active:scale-95'
-                    >
-                      {isLoading ? (
-                        <Loader2 className='h-4 w-4 mr-2 animate-spin' />
-                      ) : (
-                        <Save className='h-4 w-4 mr-2' />
-                      )}
-                      {isLoading ? "Saving..." : "Save Changes"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Account Information</CardTitle>
-                  <CardDescription>
-                    View your account details and status
-                  </CardDescription>
-                </CardHeader>
+                <CardHeader><CardTitle>Account details</CardTitle><CardDescription>Your login email and account status. Edit your personal profile from the Profile page.</CardDescription></CardHeader>
                 <CardContent className='space-y-4'>
-                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                    <div className='flex items-center gap-2'>
-                      <Mail className='h-4 w-4 text-muted-foreground' />
-                      <span className='text-sm'>{user?.email}</span>
-                      <Badge variant='secondary'>Verified</Badge>
-                    </div>
-                    <div className='flex items-center gap-2'>
-                      <Calendar className='h-4 w-4 text-muted-foreground' />
-                      <span className='text-sm'>
-                        Joined{" "}
-                        {new Date(
-                          (user as any)?.createdAt || ""
-                        ).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
+                  <div className='flex flex-wrap items-center gap-3 rounded-xl border bg-muted/30 p-4'><Mail className='h-4 w-4 text-muted-foreground'/><span className='text-sm font-medium'>{user?.email}</span><Badge variant='secondary'>Account email</Badge></div>
+                  <Button variant='outline' onClick={() => window.location.assign('/dashboard/profile')}><User className='mr-2 h-4 w-4'/>Open Profile</Button>
                 </CardContent>
               </Card>
-
               <Card>
-                <CardHeader>
-                  <CardTitle>Change authentication email</CardTitle>
-                  <CardDescription>Your current login email stays active until the new address is verified.</CardDescription>
-                </CardHeader>
+                <CardHeader><CardTitle>Change authentication email</CardTitle><CardDescription>Your current login email stays active until the new address is verified.</CardDescription></CardHeader>
                 <CardContent className='space-y-4'>
                   <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
                     <div className='space-y-2'><Label htmlFor='new-auth-email'>New email</Label><Input id='new-auth-email' type='email' value={emailChangeData.newEmail} onChange={(event) => setEmailChangeData({ ...emailChangeData, newEmail: event.target.value })} /></div>
                     <div className='space-y-2'><Label htmlFor='confirm-auth-email'>Confirm new email</Label><Input id='confirm-auth-email' type='email' value={emailChangeData.confirmEmail} onChange={(event) => setEmailChangeData({ ...emailChangeData, confirmEmail: event.target.value })} /></div>
-                    {user?.email && <div className='space-y-2'><Label htmlFor='email-change-password'>Current password</Label><Input id='email-change-password' type='password' value={emailChangeData.currentPassword} onChange={(event) => setEmailChangeData({ ...emailChangeData, currentPassword: event.target.value })} placeholder='Required for password accounts' /></div>}
+                    <div className='space-y-2'><Label htmlFor='email-change-password'>Current password</Label><Input id='email-change-password' type='password' value={emailChangeData.currentPassword} onChange={(event) => setEmailChangeData({ ...emailChangeData, currentPassword: event.target.value })} placeholder='Required for password accounts' /></div>
                     <div className='space-y-2'><Label htmlFor='email-change-2fa'>2FA code</Label><Input id='email-change-2fa' inputMode='numeric' value={emailChangeData.twoFactorCode} onChange={(event) => setEmailChangeData({ ...emailChangeData, twoFactorCode: event.target.value })} placeholder='Required when 2FA is enabled' /></div>
                   </div>
-                  <Button onClick={handleRequestEmailChange} disabled={isLoading}><Mail className='mr-2 h-4 w-4' />Send verification</Button>
-                  {emailChangePending && <p className='break-all rounded-md bg-muted p-3 text-sm text-muted-foreground'>{emailChangePending.startsWith("http") ? <>Development verification link: <a className='underline' href={emailChangePending}>{emailChangePending}</a></> : emailChangePending}</p>}
+                  <Button onClick={handleRequestEmailChange} disabled={isLoading}><Mail className='mr-2 h-4 w-4'/>Send verification</Button>
+                  {emailChangePending && <p className='break-all rounded-md bg-muted p-3 text-sm text-muted-foreground'>{emailChangePending.startsWith('http') ? <>Development verification link: <a className='underline' href={emailChangePending}>{emailChangePending}</a></> : emailChangePending}</p>}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -2350,49 +2185,6 @@ If you lose access to your authenticator app, you can use these codes to sign in
                     </Select>
                   </div>
 
-                  <div>
-                    <Label>Language</Label>
-                    <Select defaultValue='en'>
-                      <SelectTrigger className='w-full'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value='en'>English</SelectItem>
-                        <SelectItem value='si'>Sinhala</SelectItem>
-                        <SelectItem value='ta'>Tamil</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label>Date Format</Label>
-                    <Select defaultValue='dd/mm/yyyy'>
-                      <SelectTrigger className='w-full'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value='dd/mm/yyyy'>DD/MM/YYYY</SelectItem>
-                        <SelectItem value='mm/dd/yyyy'>MM/DD/YYYY</SelectItem>
-                        <SelectItem value='yyyy-mm-dd'>YYYY-MM-DD</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label>Currency</Label>
-                    <Select defaultValue='lkr'>
-                      <SelectTrigger className='w-full'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value='lkr'>
-                          Sri Lankan Rupee (LKR)
-                        </SelectItem>
-                        <SelectItem value='usd'>US Dollar (USD)</SelectItem>
-                        <SelectItem value='eur'>Euro (EUR)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -2417,18 +2209,12 @@ If you lose access to your authenticator app, you can use these codes to sign in
                       <Download className='h-6 w-6' />
                       {exportLoading ? "Exporting..." : "Export All Data"}
                     </Button>
-                    <Button
-                      variant='outline'
-                      className='h-20 flex-col gap-2'
-                      disabled
-                    >
-                      <Upload className='h-6 w-6' />
-                      Import Data (Coming Soon)
-                    </Button>
+                    {['admin', 'superadmin'].includes((profile?.role || '').toLowerCase()) && <Button variant='outline' className='h-20 flex-col gap-2' onClick={() => backupInputRef.current?.click()} disabled={backupBusy}><Upload className='h-6 w-6' />{backupBusy ? 'Preparing restore…' : 'Choose backup to restore'}</Button>}
+                    <input ref={backupInputRef} type='file' accept='.json,application/json' className='hidden' onChange={(event) => { void handleBackupFile(event.target.files?.[0]); event.currentTarget.value = ''; }} />
                   </div>
                   <p className='text-sm text-muted-foreground'>
-                    {(profile?.role || "").toLowerCase() === "admin"
-                      ? "As an admin, you can export all system data."
+                    {["admin", "superadmin"].includes((profile?.role || "").toLowerCase())
+                      ? "Administrators can export portable business data and restore a versioned NNS backup. Credentials and external connections are never included."
                       : (profile?.role || "").toLowerCase() === "moderator"
                       ? "As a moderator, you can export operational data (lines, tasks, inventory)."
                       : "You can export your personal data including profile and assigned tasks."}
@@ -2436,77 +2222,17 @@ If you lose access to your authenticator app, you can use these codes to sign in
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Data Cleanup</CardTitle>
-                  <CardDescription>
-                    Manage and cleanup your data
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className='space-y-4'>
-                  <div className='space-y-4'>
-                    <div className='flex items-center justify-between p-4 border rounded-lg'>
-                      <div>
-                        <h4 className='font-medium'>Clear Cache</h4>
-                        <p className='text-sm text-muted-foreground'>
-                          Clear application cache and temporary files
-                        </p>
-                      </div>
-                      <Button variant='outline' size='sm' disabled>
-                        Coming Soon
-                      </Button>
-                    </div>
-
-                    <div className='flex items-center justify-between p-4 border rounded-lg'>
-                      <div>
-                        <h4 className='font-medium'>Archive Old Data</h4>
-                        <p className='text-sm text-muted-foreground'>
-                          Archive data older than 2 years
-                        </p>
-                      </div>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        disabled={
-                          !["admin"].includes(
-                            (profile?.role || "").toLowerCase()
-                          )
-                        }
-                      >
-                        {["admin"].includes((profile?.role || "").toLowerCase())
-                          ? "Coming Soon"
-                          : "Admin Only"}
-                      </Button>
-                    </div>
-
-                    <div className='flex items-center justify-between p-4 border rounded-lg border-destructive'>
-                      <div>
-                        <h4 className='font-medium text-destructive'>
-                          Delete All Data
-                        </h4>
-                        <p className='text-sm text-muted-foreground'>
-                          Permanently delete all your data. This action cannot
-                          be undone.
-                        </p>
-                      </div>
-                      <Button
-                        variant='destructive'
-                        size='sm'
-                        disabled={
-                          !["admin"].includes(
-                            (profile?.role || "").toLowerCase()
-                          )
-                        }
-                      >
-                        <Trash2 className='h-4 w-4 mr-2' />
-                        {["admin"].includes((profile?.role || "").toLowerCase())
-                          ? "Delete All"
-                          : "Admin Only"}
-                      </Button>
-                    </div>
-                  </div>
+              {backupError && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{backupError}</p>}
+              {backupPreview && <Card>
+                <CardHeader><CardTitle>Review backup restore</CardTitle><CardDescription>Nothing changes until you confirm. Existing records are preserved.</CardDescription></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="max-h-64 overflow-auto rounded-lg border"><table className="w-full text-sm"><thead className="sticky top-0 bg-muted"><tr><th className="p-2 text-left">Section</th><th className="p-2 text-right">Backup</th><th className="p-2 text-right">Existing</th><th className="p-2 text-right">To add</th></tr></thead><tbody>{Object.entries(backupPreview.datasets || {}).filter(([, value]: any) => value.backup > 0).map(([name, value]: any) => <tr key={name} className="border-t"><td className="p-2">{name.replace(/([A-Z])/g, " $1")}</td><td className="p-2 text-right">{value.backup}</td><td className="p-2 text-right">{value.existing}</td><td className="p-2 text-right">{value.new}</td></tr>)}</tbody></table></div>
+                  {(backupPreview.requiredMappings || []).length > 0 && <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3"><p className="text-sm font-medium">Link backup records to existing accounts</p>{backupPreview.requiredMappings.map((source: any) => <div key={source.id} className="grid gap-2 sm:grid-cols-2 sm:items-center"><span className="text-sm">{source.fullName || source.email} <span className="text-muted-foreground">({source.email})</span></span><select className="h-10 rounded-md border bg-background px-3 text-sm" value={backupMappings[source.id] || ""} onChange={(event) => { const next = { ...backupMappings, [source.id]: event.target.value }; setBackupMappings(next); void previewBackup(backupFile, next); }}><option value="">Choose existing account…</option>{backupPreview.availableAccounts.map((target: any) => <option key={target.id} value={target.id}>{target.fullName || target.email} · {target.email} · {target.role}</option>)}</select></div>)}</div>}
+                  <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">{(backupPreview.warnings || []).map((warning: string) => <li key={warning}>{warning}</li>)}</ul>
+                  {backupPreview.ready && <label className="flex items-start gap-2 rounded-lg border p-3 text-sm"><input type="checkbox" checked={backupConfirmed} onChange={(event) => setBackupConfirmed(event.target.checked)} className="mt-1" />I reviewed this backup and confirm restoring it into this NNS installation.</label>}
+                  <Button onClick={handleBackupRestore} disabled={backupBusy || !backupPreview.ready || !backupConfirmed}>{backupBusy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Restoring…</> : "Confirm and restore backup"}</Button>
                 </CardContent>
-              </Card>
+              </Card>}
             </TabsContent>
 
             {/* Email Settings - Admin/Moderator Only */}

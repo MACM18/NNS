@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mail, Phone, MapPin, Calendar, Edit, Save, X } from "lucide-react";
+import { Mail, Phone, MapPin, Calendar, Edit, Save, X, Camera, Trash2, Loader2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -31,6 +31,8 @@ export default function ProfilePage() {
     bio: profile?.bio || "",
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || "");
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const route = useRouter();
 
   useEffect(() => {
@@ -41,6 +43,37 @@ export default function ProfilePage() {
       bio: profile?.bio || "",
     });
   }, [profile]);
+
+  useEffect(() => setAvatarUrl(profile?.avatar_url || ""), [profile?.avatar_url]);
+
+  const handleAvatarUpload = async (file?: File) => {
+    if (!file) return;
+    setAvatarBusy(true);
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      const response = await fetch("/api/profile/avatar", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to upload profile photo.");
+      setAvatarUrl(result.avatarUrl);
+      addNotification({ title: "Photo updated", message: "Your profile photo is saved.", type: "success", category: "system" });
+    } catch (error) {
+      addNotification({ title: "Photo upload failed", message: error instanceof Error ? error.message : "Unable to upload profile photo.", type: "error", category: "system" });
+    } finally { setAvatarBusy(false); }
+  };
+
+  const handleAvatarRemove = async () => {
+    setAvatarBusy(true);
+    try {
+      const response = await fetch("/api/profile/avatar", { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to remove profile photo.");
+      setAvatarUrl("");
+      addNotification({ title: "Photo removed", message: "Your profile photo was removed.", type: "success", category: "system" });
+    } catch (error) {
+      addNotification({ title: "Unable to remove photo", message: error instanceof Error ? error.message : "Please try again.", type: "error", category: "system" });
+    } finally { setAvatarBusy(false); }
+  };
 
   if (!user && !loading) {
     return <AuthWrapper />;
@@ -55,7 +88,6 @@ export default function ProfilePage() {
         phone: formData.phone || null,
         address: formData.address || null,
         bio: formData.bio || null,
-        avatarUrl: profile?.avatar_url || null,
       };
 
       const response = await fetch(`/api/profile/${user.id}`, {
@@ -152,7 +184,7 @@ export default function ProfilePage() {
               <CardHeader className='text-center'>
                 <div className='flex justify-center mb-4'>
                   <Avatar className='h-24 w-24'>
-                    <AvatarImage src={profile?.avatar_url || ""} />
+                  <AvatarImage src={avatarUrl} />
                     <AvatarFallback className='text-lg'>
                       {profile?.full_name?.charAt(0) ||
                         user?.email?.charAt(0) ||
@@ -164,6 +196,15 @@ export default function ProfilePage() {
                 <CardDescription>{user?.email}</CardDescription>
               </CardHeader>
               <CardContent className='space-y-4'>
+                <div className="flex justify-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm hover:bg-accent">
+                    {avatarBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+                    Change photo
+                    <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={avatarBusy} onChange={(event) => { void handleAvatarUpload(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+                  </label>
+                  {avatarUrl && <Button variant="ghost" size="sm" onClick={handleAvatarRemove} disabled={avatarBusy}><Trash2 className="mr-2 h-4 w-4" />Remove</Button>}
+                </div>
+                <p className="text-center text-xs text-muted-foreground">JPG, PNG, or WebP · up to 4 MB</p>
                 <div className='flex items-center gap-2 text-sm'>
                   <Mail className='h-4 w-4 text-muted-foreground' />
                   <span>{user?.email}</span>

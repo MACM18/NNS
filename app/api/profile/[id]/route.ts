@@ -95,7 +95,7 @@ export async function PATCH(
     const columns = await getProfileTableColumns();
 
     const body = await request.json();
-    const { fullName, email, phone, address, bio, avatarUrl } = body;
+    const { fullName, email, phone, address, bio } = body;
 
     if (email !== undefined) {
       return NextResponse.json(
@@ -109,7 +109,6 @@ export async function PATCH(
       ...(phone !== undefined && columns.has("phone") && { phone }),
       ...(address !== undefined && columns.has("address") && { address }),
       ...(bio !== undefined && columns.has("bio") && { bio }),
-      ...(avatarUrl !== undefined && columns.has("avatar_url") && { avatarUrl }),
     };
 
     const profile = await prisma.profile.update({
