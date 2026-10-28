@@ -100,13 +100,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const taskId = toStringOrUndefined(getField(body, "task_id", "taskId"));
-
     const lineCreateData: Prisma.LineDetailsCreateInput = {
       telephoneNo,
       dp,
       date: usageDate,
-      ...(taskId ? { task: { connect: { id: taskId } } } : {}),
       powerDp: toNumber(getField(body, "power_dp", "powerDp")),
       powerInbox: toNumber(getField(body, "power_inbox", "powerInbox")),
       name: toStringOrUndefined(getField(body, "name", "name")),

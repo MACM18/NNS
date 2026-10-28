@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, FileText, ClipboardList, User } from "lucide-react";
+import { Home, FileText, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -22,11 +22,6 @@ const baseNavItems = [
     icon: FileText,
   },
   {
-    href: "/dashboard/tasks",
-    label: "Tasks",
-    icon: ClipboardList,
-  },
-  {
     href: "/dashboard/profile",
     label: "Profile",
     icon: User,
@@ -39,7 +34,7 @@ export function MobileBottomNav() {
 
   return (
     <nav className='fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-sm safe-area-inset-bottom lg:hidden'>
-      <div className='grid h-16 grid-cols-5 items-center px-1'>
+      <div className='grid h-16 grid-cols-4 items-center px-1'>
         {navItems.map((item) => {
           // normalize paths by removing trailing slash (but keep root "/")
           const normalize = (p?: string) => {

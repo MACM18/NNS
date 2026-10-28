@@ -6,7 +6,6 @@ import {
   Cable,
   FileText,
   Package,
-  ClipboardList,
   ChevronRight,
   type LucideIcon,
 } from "lucide-react";
@@ -44,14 +43,6 @@ const actions: QuickAction[] = [
     href: "/dashboard/inventory",
     color: "text-amber-500",
     bgColor: "bg-amber-500/10 group-hover:bg-amber-500/20",
-  },
-  {
-    title: "Tasks",
-    description: "Review pending tasks",
-    icon: ClipboardList,
-    href: "/dashboard/tasks",
-    color: "text-purple-500",
-    bgColor: "bg-purple-500/10 group-hover:bg-purple-500/20",
   },
 ];
 
@@ -93,4 +84,3 @@ export function QuickActions() {
     </Card>
   );
 }
-

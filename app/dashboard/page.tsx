@@ -12,7 +12,6 @@ import {
   CheckCircle,
   Clock,
   TrendingUp,
-  AlertTriangle,
 } from "lucide-react";
 import { AddTelephoneLineModal } from "@/components/modals/add-telephone-line-modal";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
@@ -46,11 +45,6 @@ interface DashboardStats {
     activeDrumsCount: number;
     totalRemainingCable: number;
     lowStockDrumsCount: number;
-  };
-  taskStats?: {
-    pendingTasksCount: number;
-    activeTasksCount: number;
-    completedTasksThisMonth: number;
   };
   invoiceStats?: {
     unpaidInvoicesCount: number;
@@ -106,7 +100,6 @@ export default function Dashboard() {
   
   const activeDrumsList = stats.activeDrums || [];
   const drumStats = stats.drumStats || { activeDrumsCount: 0, totalRemainingCable: 0, lowStockDrumsCount: 0 };
-  const taskStats = stats.taskStats || { pendingTasksCount: 0, activeTasksCount: 0, completedTasksThisMonth: 0 };
   const invoiceStats = stats.invoiceStats || { unpaidInvoicesCount: 0 };
 
   const statusBreakdown = {
@@ -296,15 +289,6 @@ export default function Dashboard() {
               delay={200}
             />
             <KpiCard
-              title="Assigned Tasks"
-              value={(taskStats.activeTasksCount + taskStats.pendingTasksCount).toLocaleString()}
-              icon={AlertTriangle}
-              color="purple"
-              subtitle={`${taskStats.pendingTasksCount} pending · ${taskStats.activeTasksCount} active`}
-              isLoading={isRefreshing}
-              delay={300}
-            />
-            <KpiCard
               title="Monthly Revenue"
               value={formatCompactCurrency(monthlyRevenueValue)}
               fullValue={formatCurrency(monthlyRevenueValue)}
@@ -345,7 +329,6 @@ export default function Dashboard() {
             <div className="min-w-0 xl:col-span-4 animate-fade-in-up" style={{ animationDelay: "700ms" }}>
               <SystemAlerts
                 drumStats={drumStats}
-                taskStats={taskStats}
                 invoiceStats={invoiceStats}
                 isLoading={isRefreshing}
               />

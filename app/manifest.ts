@@ -25,13 +25,6 @@ export default function manifest(): MetadataRoute.Manifest {
         icons: [{ src: "/placeholder-logo.png", sizes: "192x192" }],
       },
       {
-        name: "Tasks",
-        short_name: "Tasks",
-        description: "Manage tasks",
-        url: "/dashboard/tasks",
-        icons: [{ src: "/placeholder-logo.png", sizes: "192x192" }],
-      },
-      {
         name: "Inventory",
         short_name: "Inventory",
         description: "Check inventory",

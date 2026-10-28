@@ -12,7 +12,6 @@ import {
   Briefcase,
   BookOpen,
   Package,
-  ClipboardList,
   Search,
   LogOut,
   Building2,
@@ -67,11 +66,6 @@ const operationsItems: NavItem[] = [
     title: "Monthly Reports",
     url: "/dashboard/reports",
     icon: FileText,
-  },
-  {
-    title: "Tasks",
-    url: "/dashboard/tasks",
-    icon: ClipboardList,
   },
   {
     title: "Work Tracking",

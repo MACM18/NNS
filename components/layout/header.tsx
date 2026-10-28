@@ -45,10 +45,7 @@ import {
 } from "@/components/ui/sheet";
 import { useNotification } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
-import { useDataCache } from "@/contexts/data-cache-context";
 import { cn } from "@/lib/utils";
-import type { TaskRecord } from "@/types/tasks";
-import { AddTaskModal } from "../modals/add-task-modal";
 import { AddTelephoneLineModal } from "../modals/add-telephone-line-modal";
 import { CommandMenu } from "@/components/navigation/command-menu";
 
@@ -70,10 +67,8 @@ export function Header() {
     isLoading,
   } = useNotification();
   const { user } = useAuth();
-  const { cache, updateCache } = useDataCache();
   const router = useRouter();
 
-  const [openAddTaskModal, setOpenAddTaskModal] = useState(false);
   const [openAddTelephoneLineModal, setOpenAddTelephoneLineModal] =
     useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -147,14 +142,6 @@ export function Header() {
 
     return () => clearTimeout(timer);
   }, [performQuickSearch, searchQuery]);
-
-  const handleTaskAdded = (task: TaskRecord) => {
-    setOpenAddTaskModal(false);
-    const existingTasks = (cache.tasks?.data as TaskRecord[]) || [];
-    const tasksMap = new Map<string, TaskRecord>();
-    [task, ...existingTasks].forEach((item) => tasksMap.set(item.id, item));
-    updateCache("tasks", { data: Array.from(tasksMap.values()) });
-  };
 
   const createSearchSubmitHandler = useCallback(
     (closeMobileSheet = false) =>
@@ -417,10 +404,6 @@ export function Header() {
         </Sheet>
 
         <div className='hidden items-center gap-2 md:flex'>
-          <Button onClick={() => setOpenAddTaskModal(true)} size='sm'>
-            <Plus className='mr-2 h-4 w-4' />
-            Add Task
-          </Button>
           <Button onClick={() => setOpenAddTelephoneLineModal(true)} size='sm'>
             <Plus className='mr-2 h-4 w-4' />
             Add Line
@@ -438,20 +421,10 @@ export function Header() {
             <SheetHeader>
               <SheetTitle>Quick actions</SheetTitle>
               <SheetDescription>
-                Manage tasks and new line details on the go.
+                Add or manage line details on the go.
               </SheetDescription>
             </SheetHeader>
             <div className='grid gap-3'>
-              <Button
-                className='justify-start gap-2'
-                onClick={() => {
-                  setIsMobileActionsOpen(false);
-                  setOpenAddTaskModal(true);
-                }}
-              >
-                <Plus className='h-4 w-4' />
-                Add Task
-              </Button>
               <Button
                 variant='secondary'
                 className='justify-start gap-2'
@@ -462,17 +435,6 @@ export function Header() {
               >
                 <Plus className='h-4 w-4' />
                 Add Line
-              </Button>
-              <Button
-                variant='ghost'
-                className='justify-start gap-2'
-                onClick={() => {
-                  setIsMobileActionsOpen(false);
-                  router.push("/tasks");
-                }}
-              >
-                <ClipboardList className='h-4 w-4' />
-                View tasks
               </Button>
               <Button
                 variant='ghost'
@@ -592,14 +554,6 @@ export function Header() {
 
         <ThemeToggle />
 
-        {openAddTaskModal && (
-          <AddTaskModal
-            open={openAddTaskModal}
-            onOpenChange={setOpenAddTaskModal}
-            onSuccess={handleTaskAdded}
-          />
-        )}
-
         {openAddTelephoneLineModal && (
           <AddTelephoneLineModal
             open={openAddTelephoneLineModal}
@@ -610,7 +564,6 @@ export function Header() {
 
         <CommandMenu
           onAddLine={() => setOpenAddTelephoneLineModal(true)}
-          onAddTask={() => setOpenAddTaskModal(true)}
         />
       </div>
     </header>

@@ -1,15 +1,12 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, CheckCircle, AlertTriangle, FileText, ClipboardList } from "lucide-react";
+import { AlertCircle, CheckCircle, AlertTriangle, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface SystemAlertsProps {
   drumStats?: {
     lowStockDrumsCount: number;
-  };
-  taskStats?: {
-    pendingTasksCount: number;
   };
   invoiceStats?: {
     unpaidInvoicesCount: number;
@@ -19,17 +16,15 @@ interface SystemAlertsProps {
 
 export function SystemAlerts({
   drumStats,
-  taskStats,
   invoiceStats,
   isLoading = false,
 }: SystemAlertsProps) {
   const router = useRouter();
 
   const lowStockCount = drumStats?.lowStockDrumsCount ?? 0;
-  const pendingTasksCount = taskStats?.pendingTasksCount ?? 0;
   const unpaidInvoicesCount = invoiceStats?.unpaidInvoicesCount ?? 0;
 
-  const totalAlerts = lowStockCount + pendingTasksCount + unpaidInvoicesCount;
+  const totalAlerts = lowStockCount + unpaidInvoicesCount;
 
   return (
     <Card className="glass-card flex h-full min-w-0 flex-col hover:shadow-md transition-shadow duration-300">
@@ -85,20 +80,6 @@ export function SystemAlerts({
               </div>
             )}
 
-            {pendingTasksCount > 0 && (
-              <div
-                onClick={() => router.push("/dashboard/tasks")}
-                className="flex items-start gap-2.5 p-2.5 2xl:p-3 rounded-xl border border-purple-500/10 bg-purple-500/5 hover:bg-purple-500/10 transition-colors duration-200 cursor-pointer"
-              >
-                <ClipboardList className="h-4.5 w-4.5 text-purple-500 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-foreground">Task Allocation Backlog</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {pendingTasksCount} operations {pendingTasksCount === 1 ? "task is" : "tasks are"} pending engineer assignment.
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </CardContent>

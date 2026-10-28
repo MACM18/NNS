@@ -25,10 +25,9 @@ import {
 
 interface CommandMenuProps {
   onAddLine: () => void;
-  onAddTask: () => void;
 }
 
-export function CommandMenu({ onAddLine, onAddTask }: CommandMenuProps) {
+export function CommandMenu({ onAddLine }: CommandMenuProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -89,10 +88,6 @@ export function CommandMenu({ onAddLine, onAddTask }: CommandMenuProps) {
           <CommandItem onSelect={() => runCommand(() => onAddLine())}>
             <PlusCircle className="mr-2 h-4 w-4 text-primary" />
             <span className="font-medium text-primary">Add New Line Detail</span>
-          </CommandItem>
-          <CommandItem onSelect={() => runCommand(() => onAddTask())}>
-            <PlusCircle className="mr-2 h-4 w-4 text-accent" />
-            <span className="font-medium text-accent">Create New Task Assignment</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/integrations"))}>
             <RefreshCw className="mr-2 h-4 w-4" />
