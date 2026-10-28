@@ -790,7 +790,7 @@ export function AddTelephoneLineModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className='!overflow-hidden flex max-h-[94dvh] max-w-7xl flex-col gap-0 p-0 sm:max-h-[90vh]'>
+        <DialogContent className='add-line-dialog !overflow-hidden flex max-h-[94dvh] max-w-7xl flex-col gap-0 p-0 sm:max-h-[90vh]'>
           <DialogHeader className='shrink-0 border-b px-4 py-4 pr-14 sm:px-6 sm:py-5'>
             <DialogTitle className='text-lg sm:text-xl'>
               Add Telephone Line Details

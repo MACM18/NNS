@@ -368,6 +368,15 @@
 
 /* Dialogs are portalled outside the dashboard, so they have their own scope. */
 @media (max-width: 767px) {
+  [data-responsive-dialog].add-line-dialog {
+    left: 50%;
+    right: auto;
+    width: calc(100vw - 1rem);
+    max-width: calc(100vw - 1rem);
+    transform: translate(-50%, -50%);
+    translate: none;
+  }
+
   [data-responsive-dialog] {
     left: max(0.5rem, env(safe-area-inset-left));
     right: max(0.5rem, env(safe-area-inset-right));
