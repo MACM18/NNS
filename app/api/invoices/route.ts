@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const page = Math.max(1, Number.parseInt(searchParams.get("page") || "1", 10) || 1);
+    const limit = Math.min(200, Math.max(1, Number.parseInt(searchParams.get("limit") || "50", 10) || 50));
     const type = searchParams.get("type"); // Single type: A, B, inventory
     const types = searchParams.get("types"); // Multiple types: A,B
     const month = searchParams.get("month");
@@ -32,13 +32,19 @@ export async function GET(req: NextRequest) {
       where.invoiceType = type;
     }
 
-    if (month && year) {
-      where.month = parseInt(month);
-      where.year = parseInt(year);
+    if (month) {
+      const monthNumber = Number(month);
+      if (!Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) return NextResponse.json({ error: "Month must be from 1 to 12" }, { status: 400 });
+      where.month = monthNumber;
+    }
+    if (year) {
+      const yearNumber = Number(year);
+      if (!Number.isInteger(yearNumber) || yearNumber < 2000 || yearNumber > 2100) return NextResponse.json({ error: "Year must be valid" }, { status: 400 });
+      where.year = yearNumber;
     }
 
     if (search) {
-      where.OR = [{ invoiceNumber: { contains: search, mode: "insensitive" } }];
+      where.OR = [{ invoiceNumber: { contains: search.slice(0, 120), mode: "insensitive" } }];
     }
 
     const [invoices, total] = await Promise.all([

@@ -1,537 +1,153 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { usePageVisibility } from "@/hooks/use-page-visibility";
-import {
-  Plus,
-  FileText,
-  Settings,
-  Download,
-  Eye,
-  Calendar,
-  RefreshCw,
-  Columns,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { GenerateMonthlyInvoicesModal } from "@/components/modals/generate-monthly-invoices-modal";
-import { CompanySettingsModal } from "@/components/modals/company-settings-modal";
-import { PricingSchedulePanel } from "@/components/settings/pricing-schedule-panel";
-import { InvoicePDFModal } from "@/components/modals/invoice-pdf-modal";
-import { useAuth } from "@/contexts/auth-context";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Activity, ArrowUpRight, FilePlus2, FileText, RefreshCw, Search, Settings } from "lucide-react";
 import { AuthWrapper } from "@/components/auth/auth-wrapper";
-import { useNotification } from "@/contexts/notification-context";
-import { useDataCache } from "@/contexts/data-cache-context";
-import { min } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CompanySettingsModal } from "@/components/modals/company-settings-modal";
+import { InvoicePdfPreviewDialog, type InvoiceRecordForPdf } from "@/components/invoice/invoice-pdf-preview-dialog";
+import { PricingSchedulePanel } from "@/components/settings/pricing-schedule-panel";
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
-import { getErrorMessage } from "@/lib/error-utils";
+import { useAuth } from "@/contexts/auth-context";
+import { useNotification } from "@/contexts/notification-context";
+import { formatMonthlyInvoiceDisplayNumber } from "@/lib/monthly-report-pdf";
 
-interface GeneratedInvoice {
-  id: string;
-  invoice_number: string;
-  invoice_type: "A" | "B";
-  month: number;
-  year: number;
-  job_month: string;
-  invoice_date: string;
-  total_amount: number;
-  line_count: number;
-  line_details_ids: string[];
-  line_details_snapshot?: Array<{
-    lineId: string;
-    customerName: string;
-    telephoneNo: string;
-    address: string;
-    serviceDate: string;
-    cableLength: number;
-    baseRate: number;
-    invoiceAmount: number;
-    description?: string;
-    serviceType?: string;
-  }> | null;
-  optional_items_snapshot?: Array<{ code: string; description: string; quantity: number; unitRate: number; invoiceAmount: number }> | null;
-  pricing_snapshot?: unknown;
-  status: string;
-  created_at: string;
-}
+type InvoiceRecord = InvoiceRecordForPdf;
 
-interface InvoiceStats {
-  thisMonth: number;
-  totalAmount: number;
-  linesBilled: number;
-  avgRate: number;
-}
-
-const COLUMNS = [
-  { id: "invoice_number", label: "Invoice Number" },
-  { id: "invoice_type", label: "Type" },
-  { id: "job_month", label: "Month" },
-  { id: "line_count", label: "Lines" },
-  { id: "total_amount", label: "Amount" },
-  { id: "status", label: "Status" },
-  { id: "actions", label: "Actions" },
-];
+const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export default function InvoicesPage() {
-  const { user, role, loading } = useAuth();
-  const [generateModalOpen, setGenerateModalOpen] = useState(false);
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [pdfModalOpen, setPdfModalOpen] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] =
-    useState<GeneratedInvoice | null>(null);
+  const { user, role } = useAuth();
+  const router = useRouter();
   const { addNotification } = useNotification();
-  const { cache, updateCache } = useDataCache();
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const canManage = ["admin", "moderator", "superadmin"].includes(String(role || "").toLowerCase());
+  const canEditSettings = ["admin", "moderator", "superadmin"].includes(String(role || "").toLowerCase());
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [month, setMonth] = useState("all");
+  const [year, setYear] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("invoices");
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
 
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
-    new Set(COLUMNS.map((c) => c.id))
-  );
-
-  const toggleColumn = (id: string) => {
-    const newVisible = new Set(visibleColumns);
-    if (newVisible.has(id)) {
-      newVisible.delete(id);
-    } else {
-      newVisible.add(id);
-    }
-    setVisibleColumns(newVisible);
-  };
-
-  const invoices = cache.invoices.data || [];
-  const stats = cache.invoices.stats || {
-    thisMonth: 0,
-    totalAmount: 0,
-    linesBilled: 0,
-    avgRate: 0,
-  };
-
-  const fetchInvoices = async () => {
-    setIsRefreshing(true);
+  const fetchInvoices = useCallback(async (quiet = false) => {
+    if (quiet) setRefreshing(true);
+    else setLoading(true);
     try {
-      const response = await fetch("/api/invoices?types=A,B&limit=50");
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch invoices");
+      const params = new URLSearchParams({ types: "A,B", limit: "50", page: String(page) });
+      if (search.trim()) params.set("search", search.trim());
+      if (month !== "all" && year !== "all") {
+        params.set("month", month);
+        params.set("year", year);
       }
-
-      const { data } = await response.json();
-
-      updateCache("invoices", {
-        data: data || [],
-      });
-    } catch (error: unknown) {
-      console.error("Error fetching invoices:", error);
-      addNotification({
-        title: "Error",
-        message: getErrorMessage(error, "Failed to fetch invoices"),
-        type: "error",
-        category: "system",
-      });
+      const response = await fetch(`/api/invoices?${params}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to load invoices.");
+      setInvoices(result.data || []);
+      setPagination({ total: Number(result.pagination?.total || 0), totalPages: Math.max(1, Number(result.pagination?.totalPages || 1)) });
+    } catch (error) {
+      addNotification({ title: "Could not load invoices", message: error instanceof Error ? error.message : "Try again.", type: "error", category: "system" });
     } finally {
-      setIsRefreshing(false);
+      setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [addNotification, month, year, search, page]);
 
-  const fetchStats = async () => {
-    try {
-      const currentMonth = new Date().getMonth() + 1;
-      const currentYear = new Date().getFullYear();
+  useEffect(() => { if (user) void fetchInvoices(); }, [user, fetchInvoices]);
 
-      // Get invoice stats
-      const statsResponse = await fetch(
-        `/api/invoices/stats?month=${currentMonth}&year=${currentYear}`
-      );
+  if (!user) return <AuthWrapper />;
 
-      if (statsResponse.ok) {
-        const { data: stats } = await statsResponse.json();
-        updateCache("invoices", { stats });
-      }
-
-    } catch (error: unknown) {
-      console.error("Error fetching stats:", error);
+  const years = Array.from(new Set([...Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index), ...invoices.map(invoice => invoice.year).filter(Boolean)])).sort((a, b) => b - a);
+  const totalBase = (invoice: InvoiceRecord) => {
+    const lines = Array.isArray(invoice.line_details_snapshot) ? invoice.line_details_snapshot : [];
+    const optionalItems = Array.isArray(invoice.optional_items_snapshot) ? invoice.optional_items_snapshot : [];
+    if (lines.length === 0 && optionalItems.length === 0) {
+      const percent = invoice.invoice_type === "A" ? 0.9 : 0.1;
+      return Number(invoice.total_amount || 0) / percent;
     }
+    return lines.reduce((sum, line) => sum + Number(line.baseRate || 0), 0)
+      + optionalItems.reduce((sum, item) => sum + Number(item.baseAmount ?? (Number(item.unitRate || 0) * Number(item.quantity || 0))), 0);
   };
-
-  const refreshData = async () => {
-    await Promise.all([fetchInvoices(), fetchStats()]);
-  };
-
-  useEffect(() => {
-    if (user && !cache.invoices.lastUpdated) {
-      refreshData();
-    }
-  }, [user]);
-
-  // Refresh data when page becomes visible again
-  usePageVisibility(() => {
-    if (user) {
-      refreshData();
-    }
-  }, [user]);
-
-  const handleSuccess = () => {
-    refreshData(); // Refresh data after generating invoices
-  };
-
-  const handlePreviewInvoice = (invoice: GeneratedInvoice) => {
-    setSelectedInvoice(invoice);
-    setPdfModalOpen(true);
-  };
-
-  const handleDownloadInvoice = async (invoice: GeneratedInvoice) => {
-    try {
-      // This would generate and download the PDF
-      addNotification({
-        title: "Download Started",
-        message: `Downloading ${invoice.invoice_number}`,
-        type: "info",
-        category: "system",
-      });
-
-      // Here you would implement the actual PDF generation and download
-      // For now, we'll just show a notification
-    } catch (error: unknown) {
-      addNotification({
-        title: "Error",
-        message: getErrorMessage(error, "Failed to download invoice"),
-        type: "error",
-        category: "system",
-      });
-    }
-  };
-
-  const getInvoiceTypeBadge = (type: string) => {
-    // Only display A and B type invoices
-    if (type !== "A" && type !== "B") {
-      return null;
-    }
-    return (
-      <Badge
-        variant={type === "A" ? "default" : "secondary"}
-        className='text-xs'
-      >
-        Type {type}
-      </Badge>
-    );
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "generated":
-        return (
-          <Badge
-            variant='outline'
-            className='bg-green-50 text-green-700 border-green-200'
-          >
-            Generated
-          </Badge>
-        );
-      case "sent":
-        return (
-          <Badge
-            variant='outline'
-            className='bg-blue-50 text-blue-700 border-blue-200'
-          >
-            Sent
-          </Badge>
-        );
-      case "paid":
-        return (
-          <Badge
-            variant='outline'
-            className='bg-purple-50 text-purple-700 border-purple-200'
-          >
-            Paid
-          </Badge>
-        );
-      default:
-        return <Badge variant='secondary'>{status}</Badge>;
-    }
-  };
-
-  if (!user) {
-    return <AuthWrapper />;
-  }
-
-  const normalizedRole = (role || "").toLowerCase();
-  const canEditSettings = ["admin", "moderator"].includes(normalizedRole);
 
   return (
-    <div className='min-w-0 space-y-4 2xl:space-y-6'>
-      {/* Page Header */}
-      <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
+    <div className="min-h-full w-full min-w-0 space-y-5 px-1 sm:px-2">
+      <header className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className='text-2xl sm:text-3xl font-bold'>Invoice Management</h1>
-          <p className='text-muted-foreground'>
-            Generate monthly invoices and manage billing
-          </p>
+          <p className="mb-1 text-sm font-medium uppercase tracking-[0.16em] text-primary">Billing workspace</p>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Invoices</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Prepare, review, and manage service invoices for each month.</p>
         </div>
-        <div className='flex flex-col sm:flex-row gap-2 w-full sm:w-auto'>
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={refreshData}
-            disabled={isRefreshing}
-          >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
-          {canEditSettings && (
-            <Button
-              onClick={() => setSettingsModalOpen(true)}
-              variant='outline'
-              className='gap-2'
-            >
-              <Settings className='h-4 w-4' />
-              Settings
-            </Button>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant='outline' className='gap-2'>
-                <Columns className='h-4 w-4' />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='end'>
-              {COLUMNS.map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className='capitalize'
-                  checked={visibleColumns.has(column.id)}
-                  onCheckedChange={() => toggleColumn(column.id)}
-                >
-                  {column.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button onClick={() => setGenerateModalOpen(true)} className='gap-2'>
-            <Plus className='h-4 w-4' />
-            Generate Invoices
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled title="Invoice analytics will be available in a future update"><Activity className="mr-2 h-4 w-4" />Analytics · Coming soon</Button>
+          {canEditSettings && <Button variant="outline" onClick={() => setActiveTab("settings")}><Settings className="mr-2 h-4 w-4" />Invoice settings</Button>}
+          {canManage && <Button onClick={() => router.push("/dashboard/invoices/create")}><FilePlus2 className="mr-2 h-4 w-4" />Create invoices</Button>}
         </div>
-      </div>
+      </header>
 
-      {/* Stats Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>This Month</CardTitle>
-            <FileText className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>{stats.thisMonth}</div>
-            <p className='text-xs text-muted-foreground'>Invoices generated</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Total Amount</CardTitle>
-            <Calendar className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              LKR {Number(stats.totalAmount || 0).toLocaleString()}
-            </div>
-            <p className='text-xs text-muted-foreground'>
-              {new Date().toLocaleDateString("en-US", {
-                month: "long",
-                year: "numeric",
-              })}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Lines Billed</CardTitle>
-            <FileText className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>{stats.linesBilled}</div>
-            <p className='text-xs text-muted-foreground'>Total installations</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Avg. Rate</CardTitle>
-            <Calendar className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              LKR {Number(stats.avgRate || 0).toLocaleString()}
-            </div>
-            <p className='text-xs text-muted-foreground'>Per installation</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content */}
-      <Tabs defaultValue='invoices' className='space-y-4 2xl:space-y-6'>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
-          <TabsTrigger value='invoices'>Generated Invoices</TabsTrigger>
-          {canEditSettings && (
-            <TabsTrigger value='settings'>Pricing & Settings</TabsTrigger>
-          )}
+          <TabsTrigger value="invoices">Invoice archive</TabsTrigger>
+          {canEditSettings && <TabsTrigger value="settings">Pricing & company details</TabsTrigger>}
         </TabsList>
-
-        <TabsContent value='invoices'>
-          <Card>
-            <CardHeader>
-              <CardTitle>Generated Invoices</CardTitle>
-              <CardDescription>
-                Monthly invoices with A/B distribution (90%/10%)
-              </CardDescription>
+        <TabsContent value="invoices" className="mt-4">
+          <Card className="w-full border-border/70 shadow-sm">
+            <CardHeader className="flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-primary" />Service invoice records</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">A and B invoices are stored with the reviewed line and pricing snapshots.</p>
+              </div>
+              <div className="grid w-full gap-2 sm:grid-cols-[minmax(180px,1fr)_150px_130px_auto] lg:w-auto">
+                <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search invoice number" className="pl-9" /></div>
+                <Select value={month} onValueChange={value => { setMonth(value); setPage(1); }}><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger><SelectContent><SelectItem value="all">All months</SelectItem>{months.map((name, index) => <SelectItem key={name} value={String(index + 1)}>{name}</SelectItem>)}</SelectContent></Select>
+                <Select value={year} onValueChange={value => { setYear(value); setPage(1); }}><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger><SelectContent><SelectItem value="all">All years</SelectItem>{years.map(value => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectContent></Select>
+                <Button variant="outline" onClick={() => void fetchInvoices(true)} disabled={refreshing}><RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />Refresh</Button>
+              </div>
             </CardHeader>
-            <CardContent>
-              {isRefreshing ? (
-                <TableSkeleton columns={COLUMNS.length} rows={6} />
-              ) : invoices.length === 0 ? (
-                <div className='text-center py-8 text-muted-foreground'>
-                  <FileText className='h-12 w-12 mx-auto mb-4 opacity-50' />
-                  <p>No invoices generated yet</p>
-                  <p className='text-sm'>
-                    Click &quot;Generate Invoices&quot; to create monthly
-                    invoices
-                  </p>
-                </div>
+            <CardContent className="p-0">
+              {loading ? <div className="p-5"><TableSkeleton columns={7} rows={8} /></div> : invoices.length === 0 ? (
+                <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center"><div className="mb-4 rounded-full bg-primary/10 p-4"><FileText className="h-7 w-7 text-primary" /></div><h2 className="font-medium">No invoices found</h2><p className="mt-1 max-w-md text-sm text-muted-foreground">Choose a month and create a reviewed A/B invoice pair to get started.</p>{canManage && <Button className="mt-4" onClick={() => router.push("/dashboard/invoices/create")}><FilePlus2 className="mr-2 h-4 w-4" />Create invoices</Button>}</div>
               ) : (
-                <div className='overflow-x-auto'>
+                <div className="w-full overflow-x-auto">
                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {visibleColumns.has("invoice_number") && (
-                          <TableHead>Invoice Number</TableHead>
-                        )}
-                        {visibleColumns.has("invoice_type") && (
-                          <TableHead>Type</TableHead>
-                        )}
-                        {visibleColumns.has("job_month") && (
-                          <TableHead>Month</TableHead>
-                        )}
-                        {visibleColumns.has("line_count") && (
-                          <TableHead>Lines</TableHead>
-                        )}
-                        {visibleColumns.has("total_amount") && (
-                          <TableHead>Amount</TableHead>
-                        )}
-                        {visibleColumns.has("status") && (
-                          <TableHead>Status</TableHead>
-                        )}
-                        {visibleColumns.has("actions") && (
-                          <TableHead>Actions</TableHead>
-                        )}
+                    <TableHeader><TableRow className="bg-muted/50"><TableHead className="min-w-[270px]">Invoice number</TableHead><TableHead>Type</TableHead><TableHead>Job month</TableHead><TableHead>Invoice date</TableHead><TableHead className="text-right">Lines</TableHead><TableHead className="text-right">Grand total · 100%</TableHead><TableHead className="text-right">Invoice amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>{invoices.map(invoice => (
+                      <TableRow key={invoice.id} className="hover:bg-muted/30">
+                        <TableCell className="font-mono text-xs sm:text-sm">{invoice.month && invoice.year ? formatMonthlyInvoiceDisplayNumber(invoice.year, invoice.month) : invoice.invoice_number}</TableCell>
+                        <TableCell><Badge variant={invoice.invoice_type === "A" ? "default" : "secondary"}>Invoice {invoice.invoice_type}</Badge></TableCell>
+                        <TableCell>{invoice.job_month}</TableCell>
+                        <TableCell>{invoice.invoice_date ? new Date(`${invoice.invoice_date}T00:00:00`).toLocaleDateString() : "—"}</TableCell>
+                        <TableCell className="text-right tabular-nums">{invoice.line_count}</TableCell>
+                        <TableCell className="text-right tabular-nums">LKR {totalBase(invoice).toLocaleString("en-LK", { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">LKR {Number(invoice.total_amount || 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell><Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">{invoice.status || "Generated"}</Badge></TableCell>
+                        <TableCell><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => setSelectedInvoice(invoice)}>Preview</Button><Button size="icon" variant="ghost" aria-label={`Open invoice ${invoice.invoice_number}`} onClick={() => setSelectedInvoice(invoice)}><ArrowUpRight className="h-4 w-4" /></Button></div></TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {invoices.map((invoice) => (
-                        <TableRow key={invoice.id}>
-                          {visibleColumns.has("invoice_number") && (
-                            <TableCell className='font-mono text-sm'>
-                              {invoice.invoice_number}
-                            </TableCell>
-                          )}
-                          {visibleColumns.has("invoice_type") && (
-                            <TableCell>
-                              {getInvoiceTypeBadge(invoice.invoice_type)}
-                            </TableCell>
-                          )}
-                          {visibleColumns.has("job_month") && (
-                            <TableCell>{invoice.job_month}</TableCell>
-                          )}
-                          {visibleColumns.has("line_count") && (
-                            <TableCell>{invoice.line_count}</TableCell>
-                          )}
-                          {visibleColumns.has("total_amount") && (
-                            <TableCell>
-                              LKR{" "}
-                              {Number(invoice.total_amount || 0).toLocaleString()}
-                            </TableCell>
-                          )}
-                          {visibleColumns.has("status") && (
-                            <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                          )}
-                          {visibleColumns.has("actions") && (
-                            <TableCell>
-                              <div className='flex gap-2'>
-                                <Button
-                                  size='sm'
-                                  variant='outline'
-                                  onClick={() => handlePreviewInvoice(invoice)}
-                                >
-                                  <Eye className='h-4 w-4' />
-                                </Button>
-                                <Button
-                                  size='sm'
-                                  variant='outline'
-                                  onClick={() => handleDownloadInvoice(invoice)}
-                                >
-                                  <Download className='h-4 w-4' />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
+                    ))}</TableBody>
                   </Table>
+                  <div className="flex flex-col gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <span>{pagination.total === 0 ? "No records" : `Showing ${(page - 1) * 50 + 1}–${Math.min(page * 50, pagination.total)} of ${pagination.total} invoices`}</span>
+                    <div className="flex gap-2"><Button size="sm" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage(current => current - 1)}>Previous</Button><Button size="sm" variant="outline" disabled={page >= pagination.totalPages || loading} onClick={() => setPage(current => current + 1)}>Next</Button></div>
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
-
-        <TabsContent value='settings' className='space-y-4'>
-          <PricingSchedulePanel canManage={["admin", "superadmin"].includes(String(role || "").toLowerCase())} />
-          <Button onClick={() => setSettingsModalOpen(true)} variant='outline' className='gap-2'>
-            <Settings className='h-4 w-4' />Edit company information
-          </Button>
-        </TabsContent>
+        {canEditSettings && <TabsContent value="settings" className="space-y-5"><PricingSchedulePanel canManage={canManage} /><Button variant="outline" onClick={() => setSettingsOpen(true)}><Settings className="mr-2 h-4 w-4" />Edit company and bank details</Button></TabsContent>}
       </Tabs>
-
-      {/* Modals */}
-      <GenerateMonthlyInvoicesModal
-        open={generateModalOpen}
-        onOpenChange={setGenerateModalOpen}
-        onSuccess={handleSuccess}
-      />
-      <CompanySettingsModal
-        open={settingsModalOpen}
-        onOpenChange={setSettingsModalOpen}
-        onSuccess={handleSuccess}
-      />
-      <InvoicePDFModal
-        open={pdfModalOpen}
-        onOpenChange={setPdfModalOpen}
-        invoice={selectedInvoice}
-      />
+      <CompanySettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} onSuccess={() => void fetchInvoices(true)} />
+      <InvoicePdfPreviewDialog open={Boolean(selectedInvoice)} onOpenChange={open => { if (!open) setSelectedInvoice(null); }} invoice={selectedInvoice} />
     </div>
   );
 }
