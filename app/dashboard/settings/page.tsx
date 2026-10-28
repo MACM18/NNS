@@ -1061,16 +1061,16 @@ If you lose access to your authenticator app, you can use these codes to sign in
   }
 
   return (
-    <div className='min-w-0 space-y-4 2xl:space-y-6'>
+    <div className='settings-page min-w-0 space-y-4 2xl:space-y-6'>
       {loading ? (
         <PageSkeleton />
       ) : (
-        <div className='space-y-6'>
-          <div className='flex flex-col sm:flex-row items-start sm:items-center gap-4'>
-            <SettingsIcon className='h-8 w-8' />
+        <div className='space-y-4'>
+          <div className='flex flex-col gap-3 rounded-2xl border bg-gradient-to-r from-sky-50 via-white to-indigo-50 p-4 sm:flex-row sm:items-center dark:from-sky-950/25 dark:via-card dark:to-indigo-950/20'>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm dark:bg-sky-950 dark:text-sky-300"><SettingsIcon className='h-5 w-5' /></span>
             <div className='flex-1'>
-              <h1 className='text-3xl font-bold'>Settings</h1>
-              <p className='text-muted-foreground'>
+              <h1 className='text-2xl font-bold tracking-tight'>Settings</h1>
+              <p className='text-sm text-muted-foreground'>
                 Manage your account and application preferences
               </p>
             </div>
@@ -1084,24 +1084,18 @@ If you lose access to your authenticator app, you can use these codes to sign in
           <Tabs
             value={activeTab}
             onValueChange={setActiveTab}
-            className='space-y-6'
+            className='grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[210px_minmax(0,1fr)]'
           >
             <TabsList
-              className={`grid w-full ${
-                ["admin", "superadmin"].includes(
-                  (profile?.role || "").toLowerCase()
-                )
-                  ? "grid-cols-7"
-                  : "grid-cols-6"
-              }`}
+              className='flex h-auto w-full flex-row justify-start gap-1 overflow-x-auto rounded-xl border bg-muted/35 p-1 lg:sticky lg:top-4 lg:flex-col lg:overflow-visible'
             >
-              <TabsTrigger value='profile' className='flex items-center gap-2'>
+              <TabsTrigger value='profile' className='min-h-10 shrink-0 justify-start gap-2 rounded-lg px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm lg:w-full'>
                 <User className='h-4 w-4' />
                 <span>Profile</span>
               </TabsTrigger>
               <TabsTrigger
                 value='company'
-                className='flex items-center gap-2'
+                className='min-h-10 shrink-0 justify-start gap-2 rounded-lg px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm lg:w-full'
                 disabled={
                   !["admin", "moderator", "superadmin"].includes(
                     (profile?.role || "").toLowerCase()
@@ -1113,30 +1107,30 @@ If you lose access to your authenticator app, you can use these codes to sign in
               </TabsTrigger>
               <TabsTrigger
                 value='notifications'
-                className='flex items-center gap-2'
+                className='min-h-10 shrink-0 justify-start gap-2 rounded-lg px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm lg:w-full'
               >
                 <Bell className='h-4 w-4' />
                 <span>Notifications</span>
               </TabsTrigger>
-              <TabsTrigger value='security' className='flex items-center gap-2'>
+              <TabsTrigger value='security' className='min-h-10 shrink-0 justify-start gap-2 rounded-lg px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm lg:w-full'>
                 <Shield className='h-4 w-4' />
                 <span>Security</span>
               </TabsTrigger>
               <TabsTrigger
                 value='appearance'
-                className='flex items-center gap-2'
+                className='min-h-10 shrink-0 justify-start gap-2 rounded-lg px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm lg:w-full'
               >
                 <Palette className='h-4 w-4' />
                 <span>Appearance</span>
               </TabsTrigger>
-              <TabsTrigger value='data' className='flex items-center gap-2'>
+              <TabsTrigger value='data' className='min-h-10 shrink-0 justify-start gap-2 rounded-lg px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm lg:w-full'>
                 <Database className='h-4 w-4' />
                 <span>Data</span>
               </TabsTrigger>
               {["admin", "moderator", "superadmin"].includes(
                 (profile?.role || "").toLowerCase()
               ) && (
-                <TabsTrigger value='email' className='flex items-center gap-2'>
+                <TabsTrigger value='email' className='min-h-10 shrink-0 justify-start gap-2 rounded-lg px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm lg:w-full'>
                   <Mail className='h-4 w-4' />
                   <span>Email</span>
                 </TabsTrigger>
@@ -1144,7 +1138,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
             </TabsList>
 
             {/* Profile Settings */}
-            <TabsContent value='profile' className='space-y-6'>
+            <TabsContent value='profile' className='min-w-0 space-y-4'>
               <Card>
                 <CardHeader>
                   <CardTitle>Profile Information</CardTitle>
@@ -1312,7 +1306,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
             </TabsContent>
 
             {/* Company Settings */}
-            <TabsContent value='company' className='space-y-6'>
+            <TabsContent value='company' className='min-w-0 space-y-4'>
               <fieldset disabled={!['admin', 'superadmin'].includes((profile?.role || '').toLowerCase())} className='space-y-6'>
               <Card>
                 <CardHeader>
@@ -1600,7 +1594,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
             </TabsContent>
 
             {/* Notification Settings */}
-            <TabsContent value='notifications' className='space-y-6'>
+            <TabsContent value='notifications' className='min-w-0 space-y-4'>
               <Card>
                 <CardHeader>
                   <CardTitle>Notification Preferences</CardTitle>
@@ -1698,7 +1692,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
             </TabsContent>
 
             {/* Security Settings */}
-            <TabsContent value='security' className='space-y-6'>
+            <TabsContent value='security' className='min-w-0 space-y-4'>
               <Card>
                 <CardHeader>
                   <CardTitle>Password & Authentication</CardTitle>
@@ -2333,7 +2327,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
             </TabsContent>
 
             {/* Appearance Settings */}
-            <TabsContent value='appearance' className='space-y-6'>
+            <TabsContent value='appearance' className='min-w-0 space-y-4'>
               <Card>
                 <CardHeader>
                   <CardTitle>Theme Preferences</CardTitle>
@@ -2404,7 +2398,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
             </TabsContent>
 
             {/* Data Management */}
-            <TabsContent value='data' className='space-y-6'>
+            <TabsContent value='data' className='min-w-0 space-y-4'>
               <Card>
                 <CardHeader>
                   <CardTitle>Data Export & Import</CardTitle>
@@ -2519,7 +2513,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
             {["admin", "superadmin"].includes(
               (profile?.role || "").toLowerCase()
             ) && (
-              <TabsContent value='email' className='space-y-6'>
+              <TabsContent value='email' className='min-w-0 space-y-4'>
                 <Card>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2'>

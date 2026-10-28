@@ -360,6 +360,12 @@
   .dashboard-viewport :is(th, td) > .flex { flex-wrap: wrap; }
 }
 
+/* Settings cards use a tighter rhythm so each section is easier to scan. */
+.settings-page [data-card-header] { padding: 1rem 1.25rem 0.75rem; }
+.settings-page [data-card-content] { padding: 0 1.25rem 1.25rem; }
+.settings-page [data-card-title] { font-size: 1rem; line-height: 1.5rem; }
+.settings-page [role="tabpanel"] { min-width: 0; }
+
 /* Dialogs are portalled outside the dashboard, so they have their own scope. */
 @media (max-width: 767px) {
   [data-responsive-dialog] {
