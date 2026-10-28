@@ -13,7 +13,6 @@ export interface Notification {
   | "system"
   | "post"
   | "job"
-  | "accounting";
   is_read: boolean;
   action_url?: string;
   metadata?: Record<string, any>;

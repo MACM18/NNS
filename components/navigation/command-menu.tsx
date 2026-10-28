@@ -7,7 +7,6 @@ import {
   Cable,
   Package,
   FileText,
-  Layers,
   Calculator,
   Settings,
   PlusCircle,
@@ -77,10 +76,6 @@ export function CommandMenu({ onAddLine, onAddTask }: CommandMenuProps) {
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/invoices"))}>
             <FileText className="mr-2 h-4 w-4" />
             <span>Invoices & Billing</span>
-          </CommandItem>
-          <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/accounting"))}>
-            <Layers className="mr-2 h-4 w-4" />
-            <span>Accounting Ledger</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/payroll"))}>
             <Calculator className="mr-2 h-4 w-4" />

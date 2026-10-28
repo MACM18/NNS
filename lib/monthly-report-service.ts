@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { encrypt, decrypt } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
 import { computeCableMeasurements } from "@/lib/db";
-import { createIssuedInvoiceFromLines } from "@/lib/partnership-accounting-service";
+import { createIssuedInvoiceFromLines } from "@/lib/invoice-service";
 import { monthlyInvoiceNumber } from "@/lib/monthly-invoice-number";
 import {
   generateDailyMaterialBalancePdf,

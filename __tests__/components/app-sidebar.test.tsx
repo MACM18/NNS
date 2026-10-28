@@ -8,7 +8,7 @@ jest.mock("@/contexts/auth-context", () => ({
 }));
 
 jest.mock("next/navigation", () => ({
-  usePathname: jest.fn(() => "/dashboard/accounting/partners"),
+  usePathname: jest.fn(() => "/dashboard/payroll"),
 }));
 
 const useAuthMock = useAuth as jest.Mock;
@@ -37,23 +37,21 @@ function renderSidebar(role: string) {
 }
 
 describe("dashboard sidebar organization", () => {
-  it("shows accounting and administration sections for superadmins", () => {
+  it("shows payroll and administration navigation for superadmins", () => {
     renderSidebar("superadmin");
 
     expect(screen.getByText("Operations")).toBeInTheDocument();
-    expect(screen.getByText("Accounting")).toBeInTheDocument();
     expect(screen.getByText("Administration")).toBeInTheDocument();
-    expect(screen.getByText("Partners")).toBeInTheDocument();
+    expect(screen.getByText("Payroll")).toBeInTheDocument();
     expect(screen.getByText("Users")).toBeInTheDocument();
     expect(screen.getByText("Work Tracking")).toBeInTheDocument();
   });
 
-  it("keeps accounting hidden from regular users", () => {
+  it("keeps management navigation hidden from regular users", () => {
     renderSidebar("user");
 
     expect(screen.getByText("Operations")).toBeInTheDocument();
-    expect(screen.queryByText("Accounting")).not.toBeInTheDocument();
     expect(screen.queryByText("Administration")).not.toBeInTheDocument();
-    expect(screen.queryByText("Partners")).not.toBeInTheDocument();
+    expect(screen.queryByText("Payroll")).not.toBeInTheDocument();
   });
 });

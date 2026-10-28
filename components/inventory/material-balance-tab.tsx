@@ -130,7 +130,7 @@ export function MaterialBalanceTab() {
             <div>
               <p className="font-semibold">Material Balance is read-only from Google Sheets</p>
               <p className="text-sm text-muted-foreground">
-                The sync reads the sheet and updates operational stock in this app. It never edits the source sheet or creates accounting purchases.
+                The sync reads the sheet and updates operational stock in this app. It never edits the source sheet or creates supplier invoices or cash movements.
               </p>
             </div>
           </div>

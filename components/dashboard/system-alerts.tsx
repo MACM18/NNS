@@ -72,7 +72,7 @@ export function SystemAlerts({
 
             {unpaidInvoicesCount > 0 && (
               <div
-                onClick={() => router.push("/dashboard/accounting")}
+                onClick={() => router.push("/dashboard/inventory")}
                 className="flex items-start gap-2.5 p-2.5 2xl:p-3 rounded-xl border border-amber-500/10 bg-amber-500/5 hover:bg-amber-500/10 transition-colors duration-200 cursor-pointer"
               >
                 <FileText className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />

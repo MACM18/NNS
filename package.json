@@ -12,6 +12,7 @@
     "start": "next start",
     "db:push": "prisma db push",
     "db:migrate:deploy": "prisma migrate deploy",
+    "cleanup:accounting-vouchers": "node scripts/cleanup-accounting-vouchers.mjs",
     "test": "jest --watch",
     "test:ci": "jest --ci",
     "test:coverage": "jest --coverage"

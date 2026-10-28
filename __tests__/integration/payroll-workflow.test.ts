@@ -1,6 +1,6 @@
 /**
- * Integration Tests for Accounting Workflows
- * End-to-end tests for complete accounting operations
+ * Integration Tests for Payroll Workflows
+ * End-to-end tests for payroll operations without ledger posting
  */
 
 import { prisma } from "@/lib/prisma";
@@ -76,7 +76,7 @@ jest.mock("@/lib/prisma", () => ({
   },
 }));
 
-describe("Accounting & Payroll Integration Tests", () => {
+describe("Payroll Integration Tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // return a default profile for any userId
@@ -277,7 +277,7 @@ describe("Accounting & Payroll Integration Tests", () => {
         createdBy: { id: "admin1", fullName: "Admin" },
       });
 
-      const paidPeriod = await markPayrollAsPaid("period1");
+      const paidPeriod = await markPayrollAsPaid("period1", undefined, { paymentMethod: "bank_transfer" });
       expect(paidPeriod.status).toBe("paid");
     });
 
@@ -299,7 +299,7 @@ describe("Accounting & Payroll Integration Tests", () => {
         status: "draft",
       });
 
-      await expect(markPayrollAsPaid("period1")).rejects.toThrow(
+      await expect(markPayrollAsPaid("period1", undefined, { paymentMethod: "bank_transfer" })).rejects.toThrow(
         "Can only mark approved payroll periods as paid",
       );
 

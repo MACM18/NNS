@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createIssuedInvoiceFromLines } from "@/lib/partnership-accounting-service";
+import { createIssuedInvoiceFromLines } from "@/lib/invoice-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -90,10 +90,6 @@ export async function POST(req: NextRequest) {
       line_details_snapshot: inv.lineDetailsSnapshot || null,
       optional_items_snapshot: inv.optionalItemsSnapshot || null,
       status: inv.status || null,
-      paid_amount: Number(inv.paidAmount || 0),
-      payment_status: inv.paymentStatus,
-      due_date: inv.dueDate?.toISOString().slice(0, 10) || null,
-      accounting_status: inv.accountingStatus,
       created_at: inv.createdAt?.toISOString(),
     }));
 

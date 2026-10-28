@@ -123,7 +123,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { action, paidDate, bulkPaymentMethod, paymentAccountId } = body;
+    const { action, paidDate, bulkPaymentMethod } = body;
 
     if (["approve", "pay", "pay-worker"].includes(action) && !["admin", "superadmin"].includes(userRole || "")) {
       return NextResponse.json({ error: "Only administrators can approve or pay payroll" }, { status: 403 });
@@ -165,7 +165,6 @@ export async function POST(
       case "pay":
         result = await markPayrollAsPaid(id, paidDate, {
           paymentMethod: bulkPaymentMethod,
-          cashAccountId: paymentAccountId,
         });
         return NextResponse.json({
           success: true,

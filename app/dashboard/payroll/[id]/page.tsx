@@ -118,9 +118,7 @@ export default function PayrollPeriodDetailPage({
     paymentMethod: "bank_transfer",
     paymentRef: "",
   });
-  const [paymentAccounts, setPaymentAccounts] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [bulkPaymentMethod, setBulkPaymentMethod] = useState("bank_transfer");
-  const [paymentAccountId, setPaymentAccountId] = useState("");
   const [adjustmentError, setAdjustmentError] = useState<string | null>(null);
   const [addWorkerModalOpen, setAddWorkerModalOpen] = useState(false);
   const [allWorkers, setAllWorkers] = useState<any[]>([]);
@@ -173,20 +171,6 @@ export default function PayrollPeriodDetailPage({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  useEffect(() => {
-    if (!canApprovePay) return;
-    fetch("/api/accounting/accounts?isActive=true&category=Asset")
-      .then((response) => (response.ok ? response.json() : { data: [] }))
-      .then((result) => {
-        const accounts = (result.data || []).filter((account: { code: string }) =>
-          account.code.startsWith("1010") || account.code.startsWith("1020"),
-        );
-        setPaymentAccounts(accounts);
-        if (!paymentAccountId && accounts[0]) setPaymentAccountId(accounts[0].id);
-      })
-      .catch(() => setPaymentAccounts([]));
-  }, [canApprovePay, paymentAccountId]);
 
   const handleAction = async (action: string, details?: Record<string, string>) => {
     try {
@@ -335,7 +319,7 @@ export default function PayrollPeriodDetailPage({
 
       addNotification({
         title: "Success",
-        message: "Worker payment recorded and accounting entry created",
+        message: "Worker payment marked as paid",
         type: "success",
         category: "system",
       });
@@ -1207,23 +1191,13 @@ export default function PayrollPeriodDetailPage({
                 </SelectContent>
               </Select>
             </div>
-            <div className='space-y-2'>
-              <Label>Cash or bank account</Label>
-              <Select value={paymentAccountId} onValueChange={setPaymentAccountId}>
-                <SelectTrigger><SelectValue placeholder='Select account' /></SelectTrigger>
-                <SelectContent>
-                  {paymentAccounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.code} - {account.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {paymentAccounts.length === 0 && <p className='text-sm text-destructive'>No active cash or bank accounts are configured.</p>}
-            </div>
           </div>
           <DialogFooter>
             <Button variant='outline' onClick={() => setPayBulkModalOpen(false)}>Cancel</Button>
             <Button
-              disabled={!paymentAccountId || processingAction}
+              disabled={processingAction}
               onClick={async () => {
-                await handleAction("pay", { bulkPaymentMethod, paymentAccountId });
+                await handleAction("pay", { bulkPaymentMethod });
                 setPayBulkModalOpen(false);
               }}
             >
@@ -1240,8 +1214,7 @@ export default function PayrollPeriodDetailPage({
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
-              Mark payment as paid for {selectedPayment?.worker?.fullName} and
-              create accounting entry.
+              Mark payment as paid for {selectedPayment?.worker?.fullName} and save its payment method.
             </DialogDescription>
           </DialogHeader>
           <div className='space-y-4 py-4'>

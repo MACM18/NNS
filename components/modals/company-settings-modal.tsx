@@ -17,15 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Trash2, Building, CreditCard } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useNotification } from "@/contexts/notification-context";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface CompanySettingsModalProps {
   open: boolean;
@@ -45,10 +37,6 @@ export function CompanySettingsModal({
   onSuccess,
 }: CompanySettingsModalProps) {
   const [loading, setLoading] = useState(false);
-  const [accounts, setAccounts] = useState<
-    Array<{ id: string; code: string; name: string }>
-  >([]);
-
   const [formData, setFormData] = useState({
     company_name: "NNS Enterprise",
     address: "",
@@ -64,7 +52,6 @@ export function CompanySettingsModal({
       { min_length: 501, max_length: 999999, rate: 8400 },
     ] as PricingTier[],
     bank_details: {
-      accountId: "",
       bank_name: "",
       account_title: "",
       account_number: "",
@@ -74,7 +61,6 @@ export function CompanySettingsModal({
   });
 
   const { addNotification } = useNotification();
-  const router = useRouter();
 
   useEffect(() => {
     if (open) {
@@ -150,7 +136,6 @@ export function CompanySettingsModal({
           "branch_code" in data.bank_details &&
           "iban" in data.bank_details
             ? {
-                accountId: String((data.bank_details as any).accountId ?? ""),
                 bank_name: String((data.bank_details as any).bank_name ?? ""),
                 account_title: String(
                   (data.bank_details as any).account_title ?? "",
@@ -261,7 +246,6 @@ export function CompanySettingsModal({
         registered_number: String(formData.registered_number || ""),
         pricing_tiers,
         bank_details: {
-          accountId: String(formData.bank_details.accountId || ""),
           bank_name: String(formData.bank_details.bank_name || ""),
           account_title: String(formData.bank_details.account_title || ""),
           account_number: String(formData.bank_details.account_number || ""),
@@ -478,7 +462,6 @@ export function CompanySettingsModal({
             </CardContent>
           </Card>
 
-          {/* Bank Details moved to Bank Accounts management page */}
           <Card>
             <CardHeader>
               <CardTitle className='flex items-center gap-2'>
@@ -486,27 +469,29 @@ export function CompanySettingsModal({
                 Bank Details
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className='text-sm text-muted-foreground mb-2'>
-                Bank account details and ledger linking are managed in the
-                Accounting → Bank Accounts page. Use that page to create or link
-                a ledger account and mark the active bank account for the
-                company.
+            <CardContent className='grid gap-4 sm:grid-cols-2'>
+              <p className='text-sm text-muted-foreground sm:col-span-2'>
+                These details are printed on company invoices and do not require a ledger account.
               </p>
-              <div className='flex gap-2'>
-                <Button
-                  onClick={() =>
-                    router.push("/dashboard/accounting/bank-accounts")
-                  }
-                >
-                  Manage Bank Accounts
-                </Button>
-                <Button
-                  variant='outline'
-                  onClick={() => router.push("/dashboard/accounting/accounts")}
-                >
-                  Manage Chart of Accounts
-                </Button>
+              <div className='space-y-2'>
+                <Label htmlFor='company-bank-name'>Bank name</Label>
+                <Input id='company-bank-name' value={formData.bank_details.bank_name} onChange={(event) => handleBankDetailsChange("bank_name", event.target.value)} />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='company-bank-title'>Account title</Label>
+                <Input id='company-bank-title' value={formData.bank_details.account_title} onChange={(event) => handleBankDetailsChange("account_title", event.target.value)} />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='company-bank-number'>Account number</Label>
+                <Input id='company-bank-number' value={formData.bank_details.account_number} onChange={(event) => handleBankDetailsChange("account_number", event.target.value)} />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='company-bank-branch'>Branch</Label>
+                <Input id='company-bank-branch' value={formData.bank_details.branch_code} onChange={(event) => handleBankDetailsChange("branch_code", event.target.value)} />
+              </div>
+              <div className='space-y-2 sm:col-span-2'>
+                <Label htmlFor='company-bank-iban'>IBAN</Label>
+                <Input id='company-bank-iban' value={formData.bank_details.iban} onChange={(event) => handleBankDetailsChange("iban", event.target.value)} />
               </div>
             </CardContent>
           </Card>

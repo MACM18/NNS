@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import {
   createAndIssueGeneratedInvoice,
   createIssuedInvoiceFromLines,
-} from "@/lib/partnership-accounting-service";
+} from "@/lib/invoice-service";
 
 export async function GET(req: NextRequest) {
   try {
@@ -69,10 +69,6 @@ export async function GET(req: NextRequest) {
       line_details_snapshot: inv.lineDetailsSnapshot || null,
       optional_items_snapshot: inv.optionalItemsSnapshot || null,
       status: inv.status || null,
-      paid_amount: Number(inv.paidAmount || 0),
-      payment_status: inv.paymentStatus,
-      due_date: inv.dueDate?.toISOString().slice(0, 10) || null,
-      accounting_status: inv.accountingStatus,
       created_at: inv.createdAt?.toISOString(),
     }));
 
@@ -174,10 +170,6 @@ export async function POST(req: NextRequest) {
       line_details_snapshot: invoice.lineDetailsSnapshot || null,
       optional_items_snapshot: invoice.optionalItemsSnapshot || null,
       status: invoice.status || null,
-      paid_amount: Number(invoice.paidAmount || 0),
-      payment_status: invoice.paymentStatus,
-      due_date: invoice.dueDate?.toISOString().slice(0, 10) || null,
-      accounting_status: invoice.accountingStatus,
       created_at: invoice.createdAt?.toISOString(),
     };
 

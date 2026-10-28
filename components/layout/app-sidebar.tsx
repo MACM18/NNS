@@ -18,12 +18,6 @@ import {
   Building2,
   CalendarDays,
   Zap,
-  Calculator,
-  Wallet,
-  BookOpenCheck,
-  CreditCard,
-  BarChart3,
-  Cog,
   Banknote,
 } from "lucide-react";
 
@@ -91,67 +85,15 @@ const operationsItems: NavItem[] = [
     icon: Package,
   },
   {
-    title: "Search",
-    url: "/dashboard/search",
-    icon: Search,
-  },
-];
-
-const accountingItems: NavItem[] = [
-  {
-    title: "Overview",
-    url: "/dashboard/accounting",
-    icon: Calculator,
-  },
-  {
-    title: "Financial Years",
-    url: "/dashboard/accounting/financial-years",
-    icon: CalendarDays,
-  },
-  {
-    title: "Chart of Accounts",
-    url: "/dashboard/accounting/accounts",
-    icon: Wallet,
-  },
-  {
-    title: "Journal Entries",
-    url: "/dashboard/accounting/journal",
-    icon: BookOpenCheck,
-  },
-  {
-    title: "Payments",
-    url: "/dashboard/accounting/payments",
-    icon: CreditCard,
-  },
-  {
-    title: "Transactions",
-    url: "/dashboard/accounting/transactions",
-    icon: ClipboardList,
-  },
-  {
-    title: "Partners",
-    url: "/dashboard/accounting/partners",
-    icon: Users,
-  },
-  {
-    title: "Receivables",
-    url: "/dashboard/accounting/receivables",
-    icon: BarChart3,
-  },
-  {
-    title: "Financial Reports",
-    url: "/dashboard/accounting/reports",
-    icon: BarChart3,
-  },
-  {
     title: "Payroll",
     url: "/dashboard/payroll",
     icon: Banknote,
+    roles: MANAGEMENT_ROLES,
   },
   {
-    title: "Settings",
-    url: "/dashboard/accounting/settings",
-    icon: Cog,
+    title: "Search",
+    url: "/dashboard/search",
+    icon: Search,
   },
 ];
 
@@ -215,7 +157,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { signOut, role, loading } = useAuth();
   const normalizedRole = (role || "").toLowerCase();
 
-  const hasAccountingAccess = !loading && MANAGEMENT_ROLES.includes(normalizedRole);
   const hasAdministrationAccess = !loading && administrationItems.some((item) => item.roles?.includes(normalizedRole));
 
   return (
@@ -230,13 +171,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <SidebarNavGroup title='Operations' items={operationsItems} pathname={pathname} role={role} loading={loading} />
-
-        {hasAccountingAccess && (
-          <>
-            <SidebarSeparator />
-            <SidebarNavGroup title='Accounting' items={accountingItems} pathname={pathname} role={role} loading={loading} />
-          </>
-        )}
 
         {hasAdministrationAccess && (
           <>
