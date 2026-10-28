@@ -1166,18 +1166,18 @@ export function AddTelephoneLineModal({
 
             {/* Inventory Section - keeping the existing comprehensive inventory fields */}
             <div data-line-step='2' className={cn(mobileStep === 2 ? "block" : "hidden", "md:block")}>
-            <div className='space-y-5 rounded-xl border bg-card p-4 sm:space-y-6 sm:p-5'>
+            <div className='space-y-4 rounded-xl border bg-card p-3 sm:space-y-5 sm:p-4 [&_input]:h-9 [&_input]:text-sm [&_label]:text-xs [&_label]:leading-4'>
               <h3 className='text-lg font-medium flex items-center gap-2'>
                 <Package className='h-5 w-5' />
                 Inventory & Materials Used
               </h3>
 
               {/* Hardware Components */}
-              <div className='space-y-3 sm:space-y-4'>
+              <div className='space-y-2'>
                 <h4 className='text-md font-medium text-muted-foreground'>
                   Hardware Components
                 </h4>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                <div className='grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6'>
                   <div>
                     <Label htmlFor='retainers'>Retainers</Label>
                     <Input
@@ -1319,11 +1319,11 @@ export function AddTelephoneLineModal({
               </div>
 
               {/* Fiber & Network Components */}
-              <div className='space-y-3 sm:space-y-4'>
+              <div className='space-y-2'>
                 <h4 className='text-md font-medium text-muted-foreground'>
                   Fiber & Network Components
                 </h4>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                <div className='grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6'>
                   <div>
                     <Label htmlFor='fiber_rosette'>
                       Fiber-Rosette (Default: 1)
@@ -1426,11 +1426,11 @@ export function AddTelephoneLineModal({
               </div>
 
               {/* Cables & Wiring */}
-              <div className='space-y-3 sm:space-y-4'>
+              <div className='space-y-2'>
                 <h4 className='text-md font-medium text-muted-foreground'>
                   Cables & Wiring (meters)
                 </h4>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                <div className='grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6'>
                   <div>
                     <Label htmlFor='internal_wire'>Internal Wire</Label>
                     <Input
@@ -1487,11 +1487,11 @@ export function AddTelephoneLineModal({
               </div>
 
               {/* Accessories & Ties */}
-              <div className='space-y-3 sm:space-y-4'>
+              <div className='space-y-2'>
                 <h4 className='text-md font-medium text-muted-foreground'>
                   Accessories & Ties
                 </h4>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                <div className='grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6'>
                   <div>
                     <Label htmlFor='c_tie'>C-tie</Label>
                     <Input
@@ -1546,11 +1546,11 @@ export function AddTelephoneLineModal({
               </div>
 
               {/* Infrastructure */}
-              <div className='space-y-3 sm:space-y-4'>
+              <div className='space-y-2'>
                 <h4 className='text-md font-medium text-muted-foreground'>
                   Infrastructure
                 </h4>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                <div className='grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6'>
                   <div>
                     <Label htmlFor='pole_67'>Pole 6.7</Label>
                     <Input
@@ -1583,7 +1583,7 @@ export function AddTelephoneLineModal({
                 <h4 className='text-md font-medium text-muted-foreground'>
                   Device Information
                 </h4>
-                <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+                <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3'>
                   <div>
                     <Label htmlFor='ont_serial'>ONT (Hexadecimal Serial)</Label>
                     <Input
