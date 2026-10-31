@@ -12,7 +12,7 @@ function uniqueClauses(name: string, row: any): any[] {
     case "inventoryItem": if (row.name) add({ name: row.name }); break;
     case "monthlyInventoryUsage": if (row.itemId) add({ itemId_month_year: { itemId: row.itemId, month: row.month, year: row.year } }); break;
     case "inventoryInvoice": for (const field of ["invoiceNumber", "autoInvoiceNumber", "sourceKey"]) if (row[field]) add({ [field]: row[field] }); break;
-    case "lineDetails": if (row.telephoneNo && row.date) add({ telephoneNo_date: { telephoneNo: row.telephoneNo, date: row.date } }); break;
+    case "lineDetails": if (row.telephoneNo && row.date) add({ telephoneNo: row.telephoneNo, date: new Date(row.date) }); break;
     case "worker": if (row.employeeNo) add({ employeeNo: row.employeeNo }); if (row.profileId) add({ profileId: row.profileId }); break;
     case "monthlyReport": if (row.year && row.month) add({ year_month: { year: row.year, month: row.month } }); break;
     case "monthlyReportVersion": if (row.reportId) add({ reportId_version: { reportId: row.reportId, version: row.version } }); break;

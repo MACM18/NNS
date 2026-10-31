@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       const idMaps: Record<string, Map<string, string>> = {
         inventoryItem: await matchExistingIds(tx, "inventoryItem", data.inventoryItem || [], (row) => row.name ? [{ id: row.id }, { name: row.name }] : [{ id: row.id }]),
         worker: await matchExistingIds(tx, "worker", data.worker || [], (row) => [{ id: row.id }, ...(row.employeeNo ? [{ employeeNo: row.employeeNo }] : []), ...(row.profileId ? [{ profileId: row.profileId }] : [])]),
-        lineDetails: await matchExistingIds(tx, "lineDetails", data.lineDetails || [], (row) => [{ id: row.id }, ...(row.telephoneNo && row.date ? [{ telephoneNo_date: { telephoneNo: row.telephoneNo, date: new Date(row.date) } }] : [])]),
+        lineDetails: await matchExistingIds(tx, "lineDetails", data.lineDetails || [], (row) => [{ id: row.id }, ...(row.telephoneNo && row.date ? [{ telephoneNo: row.telephoneNo, date: new Date(row.date) }] : [])]),
         monthlyReport: await matchExistingIds(tx, "monthlyReport", data.monthlyReport || [], (row) => [{ id: row.id }, { year_month: { year: row.year, month: row.month } }]),
         pricingSchedule: await matchExistingIds(tx, "pricingSchedule", data.pricingSchedule || [], (row) => [{ id: row.id }, ...(row.effectiveFrom ? [{ effectiveFrom: new Date(row.effectiveFrom) }] : [])]),
         payrollPeriod: await matchExistingIds(tx, "payrollPeriod", data.payrollPeriod || [], (row) => [{ id: row.id }, { month_year: { month: row.month, year: row.year } }]),

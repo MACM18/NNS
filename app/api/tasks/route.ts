@@ -80,23 +80,22 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const [tasks, total] = await Promise.all([
-      prisma.task.findMany({
-        where,
-        include: {
-          createdBy: {
-            select: {
-              fullName: true,
-              role: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.task.count({ where }),
-    ]);
+    let tasks;
+    let total;
+    const include = { createdBy: { select: { fullName: true, role: true } } } as const;
+    if (search?.trim()) {
+      const candidates = await prisma.task.findMany({ where, include, orderBy: { createdAt: "desc" } });
+      const query = search.trim().toLocaleLowerCase("en-US");
+      const filtered = candidates.filter((task) => [task.customerName, task.telephoneNo, task.address, task.dp, task.notes]
+        .some((value) => value?.toLocaleLowerCase("en-US").includes(query)));
+      total = filtered.length;
+      tasks = filtered.slice((page - 1) * limit, page * limit);
+    } else {
+      [tasks, total] = await Promise.all([
+        prisma.task.findMany({ where, include, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
+        prisma.task.count({ where }),
+      ]);
+    }
 
     // Transform to match the expected snake_case format
     const transformedTasks = tasks.map((task) => ({

@@ -33,7 +33,6 @@ export async function GET(req: NextRequest) {
         name: true,
         address: true,
       },
-      take: 3,
     });
 
     // Search tasks
@@ -56,7 +55,6 @@ export async function GET(req: NextRequest) {
         dp: true,
         notes: true,
       },
-      take: 3,
     });
 
     // Search generated_invoices
@@ -95,8 +93,11 @@ export async function GET(req: NextRequest) {
     type InvoiceResult = (typeof invoices)[number];
     type InventoryResult = (typeof inventory)[number];
 
+    const normalizedQuery = query.trim().toLocaleLowerCase("en-US");
+    const exactLines = lines.filter((line) => [line.telephoneNo, line.name, line.address].some((value) => value?.toLocaleLowerCase("en-US").includes(normalizedQuery))).slice(0, 3);
+    const exactTasks = tasks.filter((task) => [task.customerName, task.telephoneNo, task.address, task.dp, task.notes].some((value) => value?.toLocaleLowerCase("en-US").includes(normalizedQuery))).slice(0, 3);
     const results = [
-      ...lines.map((line: LineResult) => ({
+      ...exactLines.map((line: LineResult) => ({
         id: line.id,
         type: "line" as const,
         title: (line as any).telephoneNo || line.name || "Line",
@@ -106,7 +107,7 @@ export async function GET(req: NextRequest) {
             .join(" • ") || "No details",
         data: line,
       })),
-      ...tasks.map((task: TaskResult) => ({
+      ...exactTasks.map((task: TaskResult) => ({
         id: task.id,
         type: "task" as const,
         title:
@@ -238,10 +239,10 @@ export async function POST(req: NextRequest) {
 
       const lines = await prisma.lineDetails.findMany({
         where: lineWhere,
-        take: 50,
       });
 
-      lines.forEach((line: any) => {
+      const queryText = String(filters.query || "").trim().toLocaleLowerCase("en-US");
+      lines.filter((line: any) => !queryText || [line.telephoneNo, line.name, line.address].some((value) => String(value || "").toLocaleLowerCase("en-US").includes(queryText))).forEach((line: any) => {
         const telephone = String(line.telephoneNo ?? "");
         const customerName = String(line.customerName ?? line.name ?? "");
         const addr = String(line.address ?? "");
@@ -318,10 +319,10 @@ export async function POST(req: NextRequest) {
 
       const tasks = await prisma.task.findMany({
         where: taskWhere,
-        take: 50,
       });
 
-      tasks.forEach((task: any) => {
+      const queryText = String(filters.query || "").trim().toLocaleLowerCase("en-US");
+      tasks.filter((task: any) => !queryText || [task.telephoneNo, task.customerName, task.address, task.dp, task.notes].some((value) => String(value || "").toLocaleLowerCase("en-US").includes(queryText))).forEach((task: any) => {
         const telephone = String(task.telephoneNo ?? "");
         const customerName = String(task.customerName ?? "");
         const addr = String(task.address ?? "");

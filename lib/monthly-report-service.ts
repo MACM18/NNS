@@ -154,8 +154,9 @@ export async function generateMonthlyReportVersion(input: { year: number; month:
 
   const lines = await prisma.lineDetails.findMany({
     where: { date: { gte: bounds.start, lt: bounds.endExclusive } },
-    orderBy: [{ date: "asc" }, { telephoneNo: "asc" }],
+    orderBy: [{ date: "asc" }, { createdAt: "asc" }],
   });
+  lines.sort((left, right) => left.date.getTime() - right.date.getTime() || left.telephoneNo.localeCompare(right.telephoneNo));
   const companySettings = await prisma.companySettings.findFirst({ orderBy: { createdAt: "asc" } });
   const invoiceRecords = invoicePair.invoices;
   const invoiceA = invoiceRecords.find(invoice => invoice.invoiceType === "A")!;

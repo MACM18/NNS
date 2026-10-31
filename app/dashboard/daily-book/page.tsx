@@ -17,7 +17,6 @@ type Entry = {
 };
 type Revision = { id: string; createdAt: string; actor: string; changedFields: string[]; beforeValues: Record<string, unknown> | null; afterValues: Record<string, unknown> };
 
-const steps = ["Customer", "Cable & signal", "Equipment"] as const;
 const fieldLabels: Record<string, string> = {
   telephoneNo: "Telephone number", date: "Date", name: "Customer name", address: "Address", dp: "DP", powerDp: "DP power", powerInbox: "Inbox power",
   cableStart: "Cable start reading", cableMiddle: "Cable middle reading", cableEnd: "Cable end reading", ont: "ONT", voiceTestNo: "Voice test number",
@@ -59,7 +58,6 @@ export default function DailyBookPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [entryDraft, setEntryDraft] = useState<Partial<Entry>>({});
   const [newPhone, setNewPhone] = useState("");
-  const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -86,7 +84,6 @@ export default function DailyBookPage() {
         setEntryDraft(rows[0] ?? {});
         workerSelectionRef.current = rows[0]?.workAssignments.map((assignment) => assignment.workerId) ?? [];
         setWorkerSelection(workerSelectionRef.current);
-        setActiveStep(0);
       } else if (selectedIdRef.current) {
         const refreshed = rows.find((row) => row.id === selectedIdRef.current);
         if (refreshed) {
@@ -187,7 +184,7 @@ export default function DailyBookPage() {
     void savePatch({ [field]: entryDraft[field] ?? null });
   };
 
-  const selectEntry = (entry: Entry) => { setSelectedId(entry.id); setEntryDraft(entry); workerSelectionRef.current = entry.workAssignments.map((assignment) => assignment.workerId); setWorkerSelection(workerSelectionRef.current); setActiveStep(0); setError(null); setSavedAt(null); if (entry.date !== date) setDate(entry.date); };
+  const selectEntry = (entry: Entry) => { setSelectedId(entry.id); setEntryDraft(entry); workerSelectionRef.current = entry.workAssignments.map((assignment) => assignment.workerId); setWorkerSelection(workerSelectionRef.current); setError(null); setSavedAt(null); if (entry.date !== date) setDate(entry.date); };
 
   const setWorkersForEntry = (workerId: string, checked: boolean) => {
     const current = workerSelectionRef.current;
@@ -200,7 +197,7 @@ export default function DailyBookPage() {
   };
 
   const markCompleted = async () => {
-    if (!String(entryDraft.dp || "").trim()) { setError("Add the DP before marking this entry completed."); setActiveStep(1); return; }
+    if (!String(entryDraft.dp || "").trim()) { setError("Add the DP before marking this entry completed."); return; }
     await savePatch({ dp: entryDraft.dp, status: "completed" });
   };
 
@@ -212,42 +209,25 @@ export default function DailyBookPage() {
     if (response.ok) setHistory(payload.data || []);
   };
 
-  const inputField = (field: keyof Entry, label: string, type = "text", hint?: string) => (
-    <div className="min-w-0 space-y-1.5" key={String(field)}>
-      <Label htmlFor={`daily-${String(field)}`} className="text-sm">{label}</Label>
+  const inputField = (field: keyof Entry, label: string, type = "text", hint?: string, meterWarning = false) => {
+    const value = entryDraft[field];
+    const exceedsMeterLimit = meterWarning && value !== "" && value != null && Number(value) > 25;
+    return <div className="min-w-0 space-y-1" key={String(field)}>
+      <Label htmlFor={`daily-${String(field)}`} className="text-xs font-medium text-muted-foreground">{label}</Label>
       <Input id={`daily-${String(field)}`} type={type} inputMode={type === "number" ? "decimal" : undefined}
-        value={String(entryDraft[field] ?? "")} onChange={(event) => { updateField(field, event.target.value); scheduleFieldSave(field, event.target.value); }}
-        onBlur={() => saveField(field)} className="h-11 min-w-0" />
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
+        value={String(value ?? "")} onChange={(event) => { updateField(field, event.target.value); scheduleFieldSave(field, event.target.value); }}
+        onBlur={() => saveField(field)} className={`h-9 min-w-0 max-w-full text-sm ${exceedsMeterLimit ? "border-red-500 bg-red-50 text-red-900 ring-1 ring-red-500/30 focus-visible:ring-red-500 dark:bg-red-950/30 dark:text-red-100" : ""}`} />
+      {exceedsMeterLimit ? <p className="text-[11px] font-medium text-red-700 dark:text-red-300">Over 25 · not acceptable</p> : hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+    </div>;
+  };
 
-  const stepFields = [
-    <div className="grid gap-4 sm:grid-cols-2" key="customer">
-      {inputField("name", "Customer name")}{inputField("address", "Address")}{inputField("dp", "DP", "text", "Required before completing this entry")}
-      {inputField("phoneNumber", "Contact number")}
-      <div className="sm:col-span-2 space-y-2">
-        <Label>Workers</Label>
-        {workers.length === 0 ? <p className="text-sm text-muted-foreground">No active workers are available.</p> : <div className="grid gap-2 sm:grid-cols-2">
-          {workers.map((worker) => {
-            const checked = workerSelection.includes(worker.id);
-            return <label key={worker.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border bg-background px-3 py-2 text-sm">
-              <input type="checkbox" checked={checked} onChange={(event) => void setWorkersForEntry(worker.id, event.target.checked)} className="h-4 w-4 accent-primary" />
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{initials(worker.fullName)}</span>
-              <span className="min-w-0 truncate">{worker.fullName}</span>
-            </label>;
-          })}
-        </div>}
-      </div>
-    </div>,
-    <div className="grid gap-4 sm:grid-cols-2" key="cable">
-      {inputField("powerDp", "DP power", "number")}{inputField("powerInbox", "Inbox power", "number")}
-      {inputField("cableStart", "Cable start reading", "number")}{inputField("cableMiddle", "Cable middle reading", "number")}{inputField("cableEnd", "Cable end reading", "number")}
-    </div>,
-    <div className="grid gap-4 sm:grid-cols-2" key="equipment">
-      {inputField("ont", "ONT")}{inputField("ontSerial", "ONT serial")}{inputField("voiceTestNo", "Voice test number")}{inputField("voiceTestNoNew", "Voice test number (new)")}{inputField("stb", "STB")}{inputField("stbSerial", "STB serial")}
-    </div>,
-  ];
+  const reading = (field: keyof Entry) => {
+    const value = Number(entryDraft[field]);
+    return Number.isFinite(value) ? value : 0;
+  };
+  const f1 = Math.abs(reading("cableStart") - reading("cableMiddle"));
+  const g1 = Math.abs(reading("cableMiddle") - reading("cableEnd"));
+  const totalCable = f1 + g1;
 
   return <div className="mx-auto w-full max-w-[1600px] space-y-5 pb-4">
     <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -276,9 +256,43 @@ export default function DailyBookPage() {
         {!selectedEntry ? <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed bg-card/50 p-6 text-center"><UserRound className="mb-3 h-8 w-8 text-muted-foreground/50" /><h2 className="font-semibold">Choose an entry to continue</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">Create one with just a phone number, then fill in customer, cable, and equipment information when it’s available.</p></div> : <Card className="min-w-0 overflow-hidden rounded-2xl shadow-sm">
           <div className="flex flex-col gap-3 border-b bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-lg font-bold tabular-nums sm:text-xl">{selectedEntry.telephoneNo}</h2><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedEntry.status === "completed" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{selectedEntry.status === "completed" ? "Completed" : "In progress"}</span></div><p className="mt-1 text-sm text-muted-foreground">{selectedEntry.name || "Add customer details as they become available"}</p></div><div className="flex flex-wrap items-center gap-2"><span className="mr-auto flex items-center gap-1.5 text-xs text-muted-foreground sm:mr-1">{saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving</> : savedAt ? <><Check className="h-3.5 w-3.5 text-emerald-600" />Saved</> : <><Save className="h-3.5 w-3.5" />Auto-save on field exit</>}</span><Button variant="outline" size="sm" onClick={() => void openHistory()}><History className="mr-1.5 h-4 w-4" />History</Button>{selectedEntry.status !== "completed" && <Button size="sm" onClick={() => void markCompleted()}><CheckCircle2 className="mr-1.5 h-4 w-4" />Complete</Button>}</div></div>
           <CardContent className="min-w-0 p-4 sm:p-5">
-            <div className="mb-5 grid grid-cols-3 gap-1 rounded-xl bg-muted p-1" role="tablist" aria-label="Entry details steps">{steps.map((step, index) => <button key={step} role="tab" aria-selected={activeStep === index} onClick={() => setActiveStep(index)} className={`min-w-0 rounded-lg px-2 py-2.5 text-xs font-semibold transition-colors sm:text-sm ${activeStep === index ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}><span className="mr-1.5 text-primary">{index + 1}</span>{step}</button>)}</div>
-            <div className="min-h-[220px]">{stepFields[activeStep]}</div>
-            <div className="mt-5 flex items-center justify-between border-t pt-4"><p className="text-xs text-muted-foreground">Changes save when you leave a field.</p><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setActiveStep((step) => Math.max(0, step - 1))} disabled={activeStep === 0}><ChevronLeft className="mr-1 h-4 w-4" />Back</Button>{activeStep < steps.length - 1 && <Button size="sm" onClick={() => setActiveStep((step) => Math.min(steps.length - 1, step + 1))}>Next<ChevronRight className="ml-1 h-4 w-4" /></Button>}</div></div>
+            <div className="space-y-4">
+              <section className="rounded-xl border bg-background/70 p-3 sm:p-4">
+                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h3 className="text-sm font-semibold">Customer & location</h3><p className="text-xs text-muted-foreground">Add the details as they become available.</p></div></div>
+                <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {inputField("name", "Customer name")}{inputField("address", "Address")}{inputField("dp", "DP", "text", "Required before completing")}{inputField("phoneNumber", "Contact number")}
+                </div>
+              </section>
+              <section className="rounded-xl border bg-background/70 p-3 sm:p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Cable & signal readings</h3><p className="text-xs text-muted-foreground">Readings above 25 are highlighted for review; this warning does not block saving.</p></div></div>
+                <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {inputField("powerDp", "DP power", "number")}{inputField("powerInbox", "Inbox power", "number")}{inputField("cableStart", "Cable start reading", "number", undefined, true)}{inputField("cableMiddle", "Cable middle reading", "number", undefined, true)}{inputField("cableEnd", "Cable end reading", "number", undefined, true)}
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 sm:max-w-xl">
+                  {[ ["F1 length", f1], ["G1 length", g1], ["Total length", totalCable] ].map(([label, value]) => <div key={String(label)} className="rounded-lg bg-sky-50 px-3 py-2 dark:bg-sky-950/30"><p className="text-[11px] font-medium text-sky-800 dark:text-sky-200">{label}</p><p className="mt-0.5 text-sm font-semibold tabular-nums text-sky-950 dark:text-sky-50">{Number(value).toFixed(2)} m</p></div>)}
+                </div>
+              </section>
+              <section className="rounded-xl border bg-background/70 p-3 sm:p-4">
+                <div className="mb-3"><h3 className="text-sm font-semibold">Equipment & serials</h3><p className="text-xs text-muted-foreground">Record installed device identifiers.</p></div>
+                <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {inputField("ont", "ONT")}{inputField("ontSerial", "ONT serial")}{inputField("voiceTestNo", "Voice test number")}{inputField("voiceTestNoNew", "Voice test number (new)")}{inputField("stb", "STB")}{inputField("stbSerial", "STB serial")}
+                </div>
+              </section>
+              <section className="rounded-xl border bg-background/70 p-3 sm:p-4">
+                <div className="mb-3"><h3 className="text-sm font-semibold">Team</h3><p className="text-xs text-muted-foreground">Choose everyone who worked on this entry.</p></div>
+                {workers.length === 0 ? <p className="text-sm text-muted-foreground">No active workers are available.</p> : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {workers.map((worker) => {
+                    const checked = workerSelection.includes(worker.id);
+                    return <label key={worker.id} className="flex min-h-10 min-w-0 cursor-pointer items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm">
+                      <input type="checkbox" checked={checked} onChange={(event) => void setWorkersForEntry(worker.id, event.target.checked)} className="h-4 w-4 accent-primary" />
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{initials(worker.fullName)}</span>
+                      <span className="min-w-0 truncate text-xs">{worker.fullName}</span>
+                    </label>;
+                  })}
+                </div>}
+              </section>
+            </div>
+            <div className="mt-4 flex items-center justify-between border-t pt-3"><p className="text-xs text-muted-foreground">Changes save automatically when you leave a field.</p><span className="text-xs font-medium text-muted-foreground">F1 + G1 = Total length</span></div>
           </CardContent>
         </Card>}
       </section>

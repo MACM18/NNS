@@ -129,6 +129,8 @@ export async function POST(req: NextRequest) {
     const telephoneNo = normalizePhone(body.telephoneNo);
     if (!date || !telephoneNo) return NextResponse.json({ error: "Enter a valid date and phone number" }, { status: 400 });
     duplicateKey = { telephoneNo, date };
+    const preexisting = await prisma.lineDetails.findFirst({ where: duplicateKey, select: { id: true } });
+    if (preexisting) return NextResponse.json({ error: "An entry for this phone and date already exists. Open that entry to continue.", existingId: preexisting.id }, { status: 409 });
     const values = normalizeValues(body);
     const workerIds: string[] = Array.isArray(body.workerIds) ? [...new Set<string>(body.workerIds.filter((id: unknown): id is string => typeof id === "string"))] : [];
     const workers = workerIds.length ? await prisma.worker.findMany({ where: { id: { in: workerIds }, status: "active" }, select: { id: true } }) : [];
@@ -160,7 +162,7 @@ export async function POST(req: NextRequest) {
       const initial = { ...values, telephoneNo, date: date.toISOString().slice(0, 10), status, workerIds };
       await tx.lineDetailsRevision.create({ data: {
         lineId: created.id, actorProfileId: actor.id,
-        changedFields: Object.keys(initial), beforeValues: Prisma.JsonNull,
+        changedFields: Object.keys(initial), beforeValues: {},
         afterValues: initial as Prisma.InputJsonValue,
       } });
       return created;
@@ -168,7 +170,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: { ...line, date: line.date.toISOString().slice(0, 10) } }, { status: 201 });
   } catch (error: any) {
     if (error?.code === "P2002") {
-      const existing = duplicateKey ? await prisma.lineDetails.findUnique({ where: { telephoneNo_date: duplicateKey } }) : null;
+      const existing = duplicateKey ? await prisma.lineDetails.findFirst({ where: duplicateKey }) : null;
       return NextResponse.json({ error: "An entry for this phone and date already exists. Open that entry to continue.", existingId: existing?.id ?? null }, { status: 409 });
     }
     if (error instanceof Error && error.message.startsWith("Invalid ")) return NextResponse.json({ error: error.message }, { status: 400 });

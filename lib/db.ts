@@ -116,12 +116,11 @@ export const lineDetails = {
     telephoneNo: string,
     date: Date,
     data: Prisma.LineDetailsCreateInput | Prisma.LineDetailsUncheckedCreateInput
-  ) =>
-    prisma.lineDetails.upsert({
-      where: { telephoneNo_date: { telephoneNo, date } },
-      create: data,
-      update: data,
-    }),
+  ) => prisma.lineDetails.findFirst({ where: { telephoneNo, date } }).then((existing) =>
+    existing
+      ? prisma.lineDetails.update({ where: { id: existing.id }, data: data as Prisma.LineDetailsUpdateInput })
+      : prisma.lineDetails.create({ data })
+  ),
   delete: (id: string) => prisma.lineDetails.delete({ where: { id } }),
   count: (where?: Prisma.LineDetailsWhereInput) =>
     prisma.lineDetails.count({ where }),

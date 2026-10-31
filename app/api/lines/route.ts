@@ -93,15 +93,28 @@ export async function GET(req: NextRequest) {
     };
     const prismaField = fieldMapping[sortField] || "createdAt";
 
-    const [lines, total] = await Promise.all([
-      prisma.lineDetails.findMany({
-        where,
-        orderBy: { [prismaField]: sortDirection === "asc" ? "asc" : "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.lineDetails.count({ where }),
-    ]);
+    let lines;
+    let total;
+    if (search || prismaField === "name" || prismaField === "telephoneNo") {
+      const candidates = await prisma.lineDetails.findMany({ where, orderBy: { createdAt: "desc" } });
+      const query = search?.trim().toLocaleLowerCase("en-US");
+      const filtered = candidates.filter((line) => !query || [line.telephoneNo, line.name, line.address, line.dp].some((value) => value?.toLocaleLowerCase("en-US").includes(query)));
+      const direction = sortDirection === "asc" ? 1 : -1;
+      filtered.sort((left, right) => {
+        const leftValue = left[prismaField as keyof typeof left];
+        const rightValue = right[prismaField as keyof typeof right];
+        const a = leftValue instanceof Date ? leftValue.toISOString() : String(leftValue ?? "").toLocaleLowerCase("en-US");
+        const b = rightValue instanceof Date ? rightValue.toISOString() : String(rightValue ?? "").toLocaleLowerCase("en-US");
+        return (a < b ? -1 : a > b ? 1 : 0) * direction;
+      });
+      total = filtered.length;
+      lines = filtered.slice((page - 1) * limit, page * limit);
+    } else {
+      [lines, total] = await Promise.all([
+        prisma.lineDetails.findMany({ where, orderBy: { [prismaField]: sortDirection === "asc" ? "asc" : "desc" }, skip: (page - 1) * limit, take: limit }),
+        prisma.lineDetails.count({ where }),
+      ]);
+    }
 
     return NextResponse.json({
       data: lines,

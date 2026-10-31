@@ -463,6 +463,8 @@ model LineDetails {
   taskId       String?   @map("task_id")
   date         DateTime  @default(now()) @db.Date
   telephoneNo  String    @map("telephone_no")
+  telephoneNoLookup String? @map("telephone_no_lookup")
+  customerSearchTokens String[] @default([]) @map("customer_search_tokens")
   dp           String?
   powerDp      Decimal?  @map("power_dp")
   powerInbox   Decimal?  @map("power_inbox")
@@ -524,8 +526,9 @@ model LineDetails {
   sourceSheetConnection GoogleSheetConnection? @relation(fields: [sourceSheetConnectionId], references: [id], onDelete: SetNull)
   revisions       LineDetailsRevision[]
 
-  @@unique([telephoneNo, date])
+  @@unique([telephoneNoLookup, date])
   @@index([sourceSheetConnectionId])
+  @@index([customerSearchTokens], type: Gin)
   @@map("line_details")
 }
 
@@ -552,6 +555,8 @@ model Task {
   id                  String    @id @default(uuid())
   addedDate           DateTime  @default(now()) @map("added_date") @db.Date
   telephoneNo         String    @map("telephone_no")
+  telephoneNoLookup   String?   @map("telephone_no_lookup")
+  customerSearchTokens String[] @default([]) @map("customer_search_tokens")
   dp                  String
   contactNo           String?   @map("contact_no")
   customerName        String?   @map("customer_name")
@@ -580,6 +585,8 @@ model Task {
   assignedTo  Profile?      @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
   createdBy   Profile?      @relation("TaskCreatedBy", fields: [createdById], references: [id])
   lineDetails LineDetails[]
+
+  @@index([customerSearchTokens], type: Gin)
 
   @@map("tasks")
 }
