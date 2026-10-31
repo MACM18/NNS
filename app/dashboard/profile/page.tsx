@@ -147,12 +147,12 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className='min-w-0 space-y-4 2xl:space-y-6'>
+    <div className='min-w-0 space-y-3'>
       {loading ? (
         <PageSkeleton />
       ) : (
         <div className='mx-auto'>
-          <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
+          <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3'>
             <div>
               <h1 className='text-3xl font-bold'>Profile</h1>
               <p className='text-muted-foreground'>
@@ -178,12 +178,12 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
+          <div className='grid grid-cols-1 items-start gap-4 lg:grid-cols-3'>
             {/* Profile Card */}
             <Card className='lg:col-span-1'>
-              <CardHeader className='text-center'>
-                <div className='flex justify-center mb-4'>
-                  <Avatar className='h-24 w-24'>
+              <CardHeader className='space-y-1.5 p-4 text-center sm:p-5'>
+                <div className='mb-2 flex justify-center'>
+                  <Avatar className='h-20 w-20'>
                   <AvatarImage src={avatarUrl} />
                     <AvatarFallback className='text-lg'>
                       {profile?.full_name?.charAt(0) ||
@@ -195,7 +195,7 @@ export default function ProfilePage() {
                 <CardTitle>{profile?.full_name || "User"}</CardTitle>
                 <CardDescription>{user?.email}</CardDescription>
               </CardHeader>
-              <CardContent className='space-y-4'>
+              <CardContent className='space-y-3 px-4 pb-4 sm:px-5 sm:pb-5'>
                 <div className="flex justify-center gap-2">
                   <label className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm hover:bg-accent">
                     {avatarBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
@@ -237,15 +237,15 @@ export default function ProfilePage() {
 
             {/* Profile Details */}
             <Card className='lg:col-span-2'>
-              <CardHeader>
+              <CardHeader className='space-y-1.5 p-4 sm:p-5'>
                 <CardTitle>Profile Information</CardTitle>
                 <CardDescription>
                   Update your personal information and contact details
                 </CardDescription>
               </CardHeader>
-              <CardContent className='space-y-6'>
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                  <div className='space-y-2'>
+              <CardContent className='space-y-3 px-4 pb-4 sm:px-5 sm:pb-5'>
+                <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
+                  <div className='space-y-1.5'>
                     <Label htmlFor='full_name'>Full Name</Label>
                     {isEditing ? (
                       <Input
@@ -265,13 +265,13 @@ export default function ProfilePage() {
                       </div>
                     )}
                     {isEditing && (
-                      <div className='text-xs text-muted-foreground mt-1'>
+                      <div className='mt-1 text-[11px] text-muted-foreground'>
                         This changes your profile name only.
                       </div>
                     )}
                   </div>
 
-                  <div className='space-y-2'>
+                  <div className='space-y-1.5'>
                     <Label htmlFor='phone'>Phone Number</Label>
                     {isEditing ? (
                       <Input
@@ -293,44 +293,23 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                <div className='space-y-2'>
-                  <Label htmlFor='address'>Address</Label>
-                  {isEditing ? (
-                    <Input
-                      id='address'
-                      value={formData.address}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          address: e.target.value,
-                        })
-                      }
-                      placeholder='Enter your address'
-                    />
-                  ) : (
-                    <div className='p-2 bg-muted rounded-md'>
-                      {profile?.address || "Not set"}
-                    </div>
-                  )}
-                </div>
-
-                <div className='space-y-2'>
-                  <Label htmlFor='bio'>Bio</Label>
-                  {isEditing ? (
-                    <Textarea
-                      id='bio'
-                      value={formData.bio}
-                      onChange={(e) =>
-                        setFormData({ ...formData, bio: e.target.value })
-                      }
-                      placeholder='Tell us about yourself'
-                      rows={4}
-                    />
-                  ) : (
-                    <div className='p-2 bg-muted rounded-md min-h-[100px]'>
-                      {profile?.bio || "Not set"}
-                    </div>
-                  )}
+                <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
+                  <div className='space-y-1.5'>
+                    <Label htmlFor='address'>Address</Label>
+                    {isEditing ? (
+                      <Input id='address' value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder='Enter your address' />
+                    ) : (
+                      <div className='min-h-10 rounded-md bg-muted p-2 text-sm'>{profile?.address || "Not set"}</div>
+                    )}
+                  </div>
+                  <div className='space-y-1.5'>
+                    <Label htmlFor='bio'>Bio</Label>
+                    {isEditing ? (
+                      <Textarea id='bio' value={formData.bio} onChange={(e) => setFormData({ ...formData, bio: e.target.value })} placeholder='Tell us about yourself' rows={2} />
+                    ) : (
+                      <div className='min-h-10 rounded-md bg-muted p-2 text-sm'>{profile?.bio || "Not set"}</div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -338,14 +317,14 @@ export default function ProfilePage() {
 
           {/* Account Settings */}
           <Card>
-            <CardHeader>
+            <CardHeader className='space-y-1.5 p-4 sm:p-5'>
               <CardTitle>Account Settings</CardTitle>
               <CardDescription>
                 Manage your account preferences and security settings
               </CardDescription>
             </CardHeader>
-            <CardContent className='space-y-4'>
-              <div className='flex items-center justify-between p-4 border rounded-lg'>
+            <CardContent className='space-y-2.5 px-4 pb-4 sm:px-5 sm:pb-5'>
+              <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
                 <div>
                   <h4 className='font-medium'>Email Notifications</h4>
                   <p className='text-sm text-muted-foreground'>
@@ -357,7 +336,7 @@ export default function ProfilePage() {
                 </Button>
               </div>
 
-              <div className='flex items-center justify-between p-4 border rounded-lg'>
+              <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
                 <div>
                   <h4 className='font-medium'>Change Password</h4>
                   <p className='text-sm text-muted-foreground'>
@@ -369,7 +348,7 @@ export default function ProfilePage() {
                 </Button>
               </div>
 
-              <div className='flex items-center justify-between p-4 border rounded-lg'>
+              <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
                 <div>
                   <h4 className='font-medium'>Two-Factor Authentication</h4>
                   <p className='text-sm text-muted-foreground'>
