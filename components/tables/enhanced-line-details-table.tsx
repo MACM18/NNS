@@ -18,6 +18,8 @@ import {
   Trash2,
   Edit2,
   Columns,
+  Phone,
+  CalendarDays,
 } from "lucide-react";
 
 const COLUMNS = [
@@ -160,7 +162,7 @@ export function LineDetailsTable({
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "completed" | "pending"
+    "all" | "completed" | "in_progress" | "pending"
   >("all");
   const [sortField, setSortField] = useState<string>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -170,6 +172,7 @@ export function LineDetailsTable({
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedLine, setSelectedLine] = useState<LineDetail | null>(null);
+  const [mobileDetailId, setMobileDetailId] = useState<string | null>(null);
   const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [completeLoading, setCompleteLoading] = useState(false);
@@ -292,6 +295,8 @@ export function LineDetailsTable({
     });
   }, [data, searchTerm, statusFilter, sortField, sortDirection]);
 
+  const mobileDetailLine = filteredData.find((line) => line.id === mobileDetailId) ?? null;
+
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -316,11 +321,36 @@ export function LineDetailsTable({
       <Badge className='bg-green-100 text-green-800 border-green-200'>
         Completed
       </Badge>
+    ) : line.status === "in_progress" ? (
+      <Badge className='border-blue-200 bg-blue-100 text-blue-800'>In Progress</Badge>
     ) : (
       <Badge className='bg-orange-100 text-orange-800 border-orange-200'>
         Pending
       </Badge>
     );
+
+  const updateLineStatus = async (line: LineDetail, newStatus: string) => {
+    setStatusLoadingId(line.id);
+    setData((prev) => prev.map((item) => item.id === line.id ? { ...item, status: newStatus } : item));
+    try {
+      const response = await fetch(`/api/lines/${line.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || "Failed to update status");
+      }
+      addNotification({ title: "Success", message: `Status updated to ${newStatus.replace("_", " ")}.`, type: "success", category: "system" });
+      onRefresh();
+    } catch (error: any) {
+      addNotification({ title: "Error", message: error.message, type: "error", category: "system" });
+      setData((prev) => prev.map((item) => item.id === line.id ? { ...item, status: line.status } : item));
+    } finally {
+      setStatusLoadingId(null);
+    }
+  };
 
   const isPowerHigh = (value: number) => value >= 30;
 
@@ -531,7 +561,7 @@ export function LineDetailsTable({
             <Button
               size='sm'
               variant='outline'
-              onClick={() => onAssigneeManage(line.id)}
+              onClick={() => { setMobileDetailId(null); onAssigneeManage(line.id); }}
               className='w-full mt-2'
             >
               <Users className='h-3 w-3 mr-1' />
@@ -657,21 +687,19 @@ export function LineDetailsTable({
   return (
     <div className='space-y-4'>
       {/* Search and Filter Controls */}
-      <div className='flex flex-col gap-4 sm:flex-row pt-1 pl-1'>
-        <div className='relative flex-1'>
+      <div className='grid grid-cols-2 gap-2 pt-1 sm:flex sm:flex-wrap sm:items-center sm:gap-3'>
+        <div className='relative col-span-2 min-w-0 sm:flex-1'>
           <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
           <Input
             placeholder='Search by name, phone, address, or DP...'
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className='pl-10'
+            className='h-10 min-w-0 pl-10'
           />
         </div>
         <Select
           value={statusFilter}
-          onValueChange={(v) =>
-            setStatusFilter(v as "all" | "completed" | "pending")
-          }
+          onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
         >
           <SelectTrigger className='w-full sm:w-[150px]'>
             <SelectValue placeholder='Status' />
@@ -679,6 +707,7 @@ export function LineDetailsTable({
           <SelectContent>
             <SelectItem value='all'>All Status</SelectItem>
             <SelectItem value='pending'>Pending</SelectItem>
+            <SelectItem value='in_progress'>In Progress</SelectItem>
             <SelectItem value='completed'>Completed</SelectItem>
           </SelectContent>
         </Select>
@@ -705,7 +734,7 @@ export function LineDetailsTable({
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant='outline' className='w-full sm:w-auto'>
+            <Button variant='outline' className='hidden w-full lg:inline-flex lg:w-auto'>
               <Columns className='mr-2 h-4 w-4' />
               Columns
             </Button>
@@ -731,7 +760,28 @@ export function LineDetailsTable({
       </div>
 
       {/* Table */}
-      <div className='border rounded-lg'>
+      <div className='space-y-2 lg:hidden'>
+        {filteredData.map((line) => (
+          <button key={line.id} type='button' onClick={() => setMobileDetailId(line.id)} className='w-full min-w-0 rounded-xl border bg-card p-3.5 text-left shadow-sm transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'>
+            <div className='flex min-w-0 items-start justify-between gap-3'>
+              <div className='min-w-0'>
+                <span className='flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground'><Phone className='h-3 w-3' />Line</span>
+                <p className='truncate text-base font-semibold tabular-nums'>{line.telephone_no}</p>
+                <p className='mt-0.5 truncate text-sm text-muted-foreground'>{line.name || "Customer name not set"}</p>
+              </div>
+              {getStatusBadge(line)}
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs sm:grid-cols-4'>
+              <div className='min-w-0'><span className='block text-muted-foreground'>DP</span><span className='block truncate font-medium'>{line.dp || "—"}</span></div>
+              <div><span className='block text-muted-foreground'>Distance</span><span className='font-medium tabular-nums'>{Number(line.total_cable || 0).toFixed(2)} m</span></div>
+              <div><span className='flex items-center gap-1 text-muted-foreground'><CalendarDays className='h-3 w-3' />Date</span><span className='font-medium'>{new Date(line.date).toLocaleDateString()}</span></div>
+              <div className='min-w-0'><span className='block text-muted-foreground'>Workers</span><span className='block truncate font-medium'>{line.assignees?.length ? line.assignees.map((person) => person.full_name).join(", ") : "Unassigned"}</span></div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className='hidden overflow-x-auto rounded-lg border lg:block'>
         <Table>
           <TableHeader>
             <TableRow>
@@ -847,52 +897,7 @@ export function LineDetailsTable({
                           }
                           aria-label='Change status'
                           disabled={statusLoadingId === line.id}
-                          onValueChange={async (newStatus) => {
-                            setStatusLoadingId(line.id);
-                            setData((prev) =>
-                              prev.map((l) =>
-                                l.id === line.id ? { ...l, status: newStatus } : l
-                              )
-                            );
-                            try {
-                              const response = await fetch(
-                                `/api/lines/${line.id}`,
-                                {
-                                  method: "PUT",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ status: newStatus }),
-                                }
-                              );
-                              if (!response.ok) {
-                                const error = await response.json();
-                                throw new Error(
-                                  error.error || "Failed to update status"
-                                );
-                              }
-                              addNotification({
-                                title: "Success",
-                                message: `Status updated to ${newStatus}.`,
-                                type: "success",
-                                category: "system",
-                              });
-                              onRefresh();
-                            } catch (error: any) {
-                              addNotification({
-                                title: "Error",
-                                message: error.message,
-                                type: "error",
-                                category: "system",
-                              });
-                              setData((prev) =>
-                                prev.map((l) =>
-                                  l.id === line.id
-                                    ? { ...l, status: line.status }
-                                    : l
-                                )
-                              );
-                            }
-                            setStatusLoadingId(null);
-                          }}
+                          onValueChange={(newStatus) => void updateLineStatus(line, newStatus)}
                         >
                           <SelectTrigger className='w-[130px]'>
                             <SelectValue />
@@ -1012,6 +1017,34 @@ export function LineDetailsTable({
           </p>
         </div>
       )}
+      <Dialog open={Boolean(mobileDetailLine)} onOpenChange={(open) => { if (!open) setMobileDetailId(null); }}>
+        <DialogContent className='max-h-[92dvh] w-[min(96vw,820px)] max-w-none overflow-y-auto rounded-2xl p-4 sm:p-6'>
+          {mobileDetailLine && <>
+            <DialogHeader>
+              <DialogTitle className='flex min-w-0 flex-wrap items-center gap-2 pr-8'>
+                <span className='truncate tabular-nums'>{mobileDetailLine.telephone_no}</span>
+                {getStatusBadge(mobileDetailLine)}
+              </DialogTitle>
+            </DialogHeader>
+            <div className='flex flex-wrap items-center gap-2 border-b pb-4'>
+              <Select
+                value={mobileDetailLine.status === "in_progress" ? "in_progress" : mobileDetailLine.status || "pending"}
+                onValueChange={(value) => void updateLineStatus(mobileDetailLine, value)}
+                disabled={statusLoadingId === mobileDetailLine.id}
+              >
+                <SelectTrigger className='w-full sm:w-[180px]' aria-label='Change line status'><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value='pending'>Pending</SelectItem><SelectItem value='in_progress'>In Progress</SelectItem><SelectItem value='completed'>Completed</SelectItem></SelectContent>
+              </Select>
+              {role && ["admin", "moderator"].includes(role) && <>
+                <Button variant='outline' onClick={() => { const line = mobileDetailLine; setMobileDetailId(null); handleEditLine(line); }}><Edit2 className='mr-2 h-4 w-4' />Edit</Button>
+                <Button variant='outline' onClick={() => { const line = mobileDetailLine; setMobileDetailId(null); void handleDeleteLine(line); }}><Trash2 className='mr-2 h-4 w-4' />Delete</Button>
+                {mobileDetailLine.status !== "completed" && <Button onClick={() => { const id = mobileDetailLine.id; setMobileDetailId(null); void handleCompleteLine(id); }}>Complete</Button>}
+              </>}
+            </div>
+            <ExpandedRowContent line={mobileDetailLine} />
+          </>}
+        </DialogContent>
+      </Dialog>
       {/* Complete Confirmation Dialog */}
       <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
         <DialogContent>

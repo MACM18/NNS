@@ -157,13 +157,13 @@ export default function LineDetailsPage() {
             Manage telecom line installations and track progress
           </p>
         </div>
-        <div className='flex flex-col sm:flex-row gap-2 w-full sm:w-auto'>
+        <div className='grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto'>
           <Button
             variant='outline'
             size='sm'
             onClick={fetchLineStats}
             disabled={isRefreshing}
-            className='w-full sm:w-auto'
+            className='col-span-2 w-full sm:col-span-1 sm:w-auto'
           >
             <RefreshCw
               className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
@@ -204,14 +204,14 @@ export default function LineDetailsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+      <div className='grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5'>
         <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Total Lines</CardTitle>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 p-3 pb-1.5 sm:p-5 sm:pb-2'>
+            <CardTitle className='text-xs font-medium sm:text-sm'>Total Lines</CardTitle>
             <Calendar className='h-4 w-4 text-muted-foreground' />
           </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>{lineStats.total}</div>
+          <CardContent className='p-3 pt-1 sm:p-5 sm:pt-2'>
+            <div className='text-xl font-bold sm:text-2xl'>{lineStats.total}</div>
             <p className='text-xs text-muted-foreground'>
               {months.find((m) => m.value === selectedMonth)?.label}{" "}
               {selectedYear}
@@ -220,12 +220,12 @@ export default function LineDetailsPage() {
         </Card>
 
         <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Completed</CardTitle>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 p-3 pb-1.5 sm:p-5 sm:pb-2'>
+            <CardTitle className='text-xs font-medium sm:text-sm'>Completed</CardTitle>
             <CheckCircle className='h-4 w-4 text-green-600' />
           </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold text-green-600'>
+          <CardContent className='p-3 pt-1 sm:p-5 sm:pt-2'>
+            <div className='text-xl font-bold text-green-600 sm:text-2xl'>
               {lineStats.completed}
             </div>
             <p className='text-xs text-muted-foreground'>
@@ -238,12 +238,12 @@ export default function LineDetailsPage() {
         </Card>
 
         <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>In Progress</CardTitle>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 p-3 pb-1.5 sm:p-5 sm:pb-2'>
+            <CardTitle className='text-xs font-medium sm:text-sm'>In Progress</CardTitle>
             <Clock className='h-4 w-4 text-blue-600' />
           </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold text-blue-600'>
+          <CardContent className='p-3 pt-1 sm:p-5 sm:pt-2'>
+            <div className='text-xl font-bold text-blue-600 sm:text-2xl'>
               {lineStats.inProgress}
             </div>
             <p className='text-xs text-muted-foreground'>
@@ -253,12 +253,12 @@ export default function LineDetailsPage() {
         </Card>
 
         <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Pending</CardTitle>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 p-3 pb-1.5 sm:p-5 sm:pb-2'>
+            <CardTitle className='text-xs font-medium sm:text-sm'>Pending</CardTitle>
             <AlertCircle className='h-4 w-4 text-orange-600' />
           </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold text-orange-600'>
+          <CardContent className='p-3 pt-1 sm:p-5 sm:pt-2'>
+            <div className='text-xl font-bold text-orange-600 sm:text-2xl'>
               {lineStats.pending}
             </div>
             <p className='text-xs text-muted-foreground'>Awaiting assignment</p>
@@ -276,8 +276,8 @@ export default function LineDetailsPage() {
             {selectedYear}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className='overflow-x-auto'>
+        <CardContent className='p-3 sm:p-5'>
+          <div className='min-w-0'>
             <LineDetailsTable
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
