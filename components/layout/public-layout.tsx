@@ -5,7 +5,7 @@ import type React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { ArrowRight, Building2, Menu } from "lucide-react";
+import { ArrowRight, BookOpenCheck, Building2, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -90,18 +90,21 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             ))}
           </div>
           <div className='hidden lg:flex lg:flex-1 lg:justify-end'>
-            <Button onClick={handleAuthAction} disabled={loading}>
-              {loading ? (
-                "Loading..."
-              ) : user ? (
-                <>
-                  Go to Dashboard
-                  <ArrowRight className='ml-2 h-4 w-4' />
-                </>
-              ) : (
-                "Sign In"
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              {user && <Button variant="outline" asChild><Link href="/dashboard/daily-book"><BookOpenCheck className="mr-2 h-4 w-4" />Daily Book</Link></Button>}
+              <Button onClick={handleAuthAction} disabled={loading}>
+                {loading ? (
+                  "Loading..."
+                ) : user ? (
+                  <>
+                    Go to Dashboard
+                    <ArrowRight className='ml-2 h-4 w-4' />
+                  </>
+                ) : (
+                  "Sign In"
+                )}
+              </Button>
+            </div>
           </div>
         </nav>
 
@@ -122,6 +125,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               ))}
               <div className='py-6'>
+                {user && <Button variant="outline" asChild className="mb-3 w-full" onClick={() => setMobileMenuOpen(false)}><Link href="/dashboard/daily-book"><BookOpenCheck className="mr-2 h-4 w-4" />Open Daily Book</Link></Button>}
                 <Button
                   onClick={handleAuthAction}
                   disabled={loading}

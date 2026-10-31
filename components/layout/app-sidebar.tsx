@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   Cable,
+  BookOpenCheck,
   FileText,
   Users,
   Settings,
@@ -56,6 +57,11 @@ const operationsItems: NavItem[] = [
     title: "Lines",
     url: "/dashboard/lines",
     icon: Cable,
+  },
+  {
+    title: "Daily Book",
+    url: "/dashboard/daily-book",
+    icon: BookOpenCheck,
   },
   {
     title: "Invoices",

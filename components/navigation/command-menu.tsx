@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Cable,
+  BookOpenCheck,
   Package,
   FileText,
   Calculator,
@@ -67,6 +68,10 @@ export function CommandMenu({ onAddLine }: CommandMenuProps) {
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/lines"))}>
             <Cable className="mr-2 h-4 w-4" />
             <span>Lines Details & Mapping</span>
+          </CommandItem>
+          <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/daily-book"))}>
+            <BookOpenCheck className="mr-2 h-4 w-4" />
+            <span>Daily Book</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/inventory"))}>
             <Package className="mr-2 h-4 w-4" />

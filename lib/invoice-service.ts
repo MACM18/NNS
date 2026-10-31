@@ -161,9 +161,10 @@ export async function createReviewedInvoicePair(input: {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`service-invoice-pair:${input.year}-${String(input.month).padStart(2, "0")}`}))`;
     const sourceRows = await tx.lineDetails.findMany({
       where: { id: { in: selected.lines.map(line => line.lineId) } },
-      select: { id: true, date: true },
+      select: { id: true, date: true, status: true },
     });
     if (sourceRows.length !== selected.lines.length) throw new Error("One or more source installation records no longer exist.");
+    if (sourceRows.some(source => source.status === "in_progress")) throw new Error("In-progress Daily Book entries cannot be added to invoices.");
     const sourceById = new Map(sourceRows.map(row => [row.id, row]));
     for (const line of selected.lines) {
       const source = sourceById.get(line.lineId)!;
@@ -245,10 +246,11 @@ export async function updateReviewedInvoicePair(input: {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`service-invoice-pair:${anchor.year}-${String(anchor.month).padStart(2, "0")}`}))`;
     const start = new Date(Date.UTC(anchor.year, anchor.month - 1, 1));
     const end = new Date(Date.UTC(anchor.year, anchor.month, 1));
-    const sources = await tx.lineDetails.findMany({ where: { id: { in: selected.lines.map(line => line.lineId) } }, select: { id: true, date: true } });
+    const sources = await tx.lineDetails.findMany({ where: { id: { in: selected.lines.map(line => line.lineId) } }, select: { id: true, date: true, status: true } });
     if (sources.length !== selected.lines.length || sources.some(source => source.date < start || source.date >= end)) {
       throw new Error("The selected source data no longer matches this invoice month. Reload the month and review it again.");
     }
+    if (sources.some(source => source.status === "in_progress")) throw new Error("In-progress Daily Book entries cannot be added to invoices.");
     const existing = await tx.generatedInvoice.findMany({ where: { month: anchor.month, year: anchor.year, invoiceType: { in: ["A", "B"] } } });
     if (!existing.some(invoice => invoice.id === anchor.id)) throw new Error("The invoice pair changed. Reload the archive and try again.");
     const jobMonth = anchor.jobMonth || new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "Asia/Colombo" }).format(start);

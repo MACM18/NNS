@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, FileText, User } from "lucide-react";
+import { Home, FileText, User, BookOpenCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,11 @@ const baseNavItems = [
     icon: FileText,
   },
   {
+    href: "/dashboard/daily-book",
+    label: "Daily Book",
+    icon: BookOpenCheck,
+  },
+  {
     href: "/dashboard/profile",
     label: "Profile",
     icon: User,
@@ -34,7 +39,7 @@ export function MobileBottomNav() {
 
   return (
     <nav className='fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-sm safe-area-inset-bottom lg:hidden'>
-      <div className='grid h-16 grid-cols-4 items-center px-1'>
+      <div className='grid h-16 grid-cols-5 items-center px-1'>
         {navItems.map((item) => {
           // normalize paths by removing trailing slash (but keep root "/")
           const normalize = (p?: string) => {
@@ -51,7 +56,7 @@ export function MobileBottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+                "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 py-2 text-[10px] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
                 isActive
                   ? "text-primary font-medium"
                   : "text-muted-foreground hover:text-foreground"

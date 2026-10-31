@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
           gte: startDate,
           lte: endDate,
         },
+        OR: [{ status: null }, { status: { not: "in_progress" } }],
       },
       orderBy: { date: "asc" },
       select: {

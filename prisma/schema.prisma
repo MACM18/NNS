@@ -157,6 +157,7 @@ model Profile {
   workersCreated            Worker[]                 @relation("WorkerCreatedBy")
   workAssignmentsCreated    WorkAssignment[]         @relation("AssignmentCreatedBy")
   lineAssignees             LineAssignee[]
+  lineRevisions             LineDetailsRevision[] @relation("LineRevisionActor")
   googleSheetConnections    GoogleSheetConnection[]
   materialBalanceImports    MaterialBalanceImport[] @relation("MaterialBalanceImportCreatedBy")
   materialBalanceMappings   MaterialBalanceItemMapping[] @relation("MaterialBalanceMappingCreatedBy")
@@ -462,7 +463,7 @@ model LineDetails {
   taskId       String?   @map("task_id")
   date         DateTime  @default(now()) @db.Date
   telephoneNo  String    @map("telephone_no")
-  dp           String
+  dp           String?
   powerDp      Decimal?  @map("power_dp")
   powerInbox   Decimal?  @map("power_inbox")
   name         String?
@@ -521,10 +522,27 @@ model LineDetails {
   workAssignments WorkAssignment[]
   lineAssignees   LineAssignee[]
   sourceSheetConnection GoogleSheetConnection? @relation(fields: [sourceSheetConnectionId], references: [id], onDelete: SetNull)
+  revisions       LineDetailsRevision[]
 
   @@unique([telephoneNo, date])
   @@index([sourceSheetConnectionId])
   @@map("line_details")
+}
+
+model LineDetailsRevision {
+  id            String   @id @default(uuid())
+  lineId        String   @map("line_id")
+  actorProfileId String  @map("actor_profile_id")
+  changedFields String[] @map("changed_fields")
+  beforeValues  Json     @map("before_values")
+  afterValues   Json     @map("after_values")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  line  LineDetails @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  actor Profile     @relation("LineRevisionActor", fields: [actorProfileId], references: [id], onDelete: Restrict)
+
+  @@index([lineId, createdAt])
+  @@map("line_details_revisions")
 }
 
 // ==========================================
