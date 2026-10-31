@@ -212,12 +212,12 @@ export default function DailyBookPage() {
   const inputField = (field: keyof Entry, label: string, type = "text", hint?: string, meterWarning = false) => {
     const value = entryDraft[field];
     const exceedsMeterLimit = meterWarning && value !== "" && value != null && Number(value) > 25;
-    return <div className="min-w-0 space-y-1" key={String(field)}>
-      <Label htmlFor={`daily-${String(field)}`} className="text-xs font-medium text-muted-foreground">{label}</Label>
+    return <div className="min-w-0 space-y-0.5" key={String(field)}>
+      <Label htmlFor={`daily-${String(field)}`} className="text-[11px] font-medium leading-4 text-muted-foreground">{label}</Label>
       <Input id={`daily-${String(field)}`} type={type} inputMode={type === "number" ? "decimal" : undefined}
         value={String(value ?? "")} onChange={(event) => { updateField(field, event.target.value); scheduleFieldSave(field, event.target.value); }}
-        onBlur={() => saveField(field)} className={`h-9 min-w-0 max-w-full text-sm ${exceedsMeterLimit ? "border-red-500 bg-red-50 text-red-900 ring-1 ring-red-500/30 focus-visible:ring-red-500 dark:bg-red-950/30 dark:text-red-100" : ""}`} />
-      {exceedsMeterLimit ? <p className="text-[11px] font-medium text-red-700 dark:text-red-300">Over 25 · not acceptable</p> : hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+        onBlur={() => saveField(field)} className={`h-8 min-w-0 max-w-full px-2.5 text-sm ${exceedsMeterLimit ? "border-red-500 bg-red-50 text-red-900 ring-1 ring-red-500/30 focus-visible:ring-red-500 dark:bg-red-950/30 dark:text-red-100" : ""}`} />
+      {exceedsMeterLimit ? <p className="text-[10px] font-medium leading-3 text-red-700 dark:text-red-300">Over 25 · not acceptable</p> : hint ? <p className="text-[10px] leading-3 text-muted-foreground">{hint}</p> : null}
     </div>;
   };
 
@@ -229,7 +229,7 @@ export default function DailyBookPage() {
   const g1 = Math.abs(reading("cableMiddle") - reading("cableEnd"));
   const totalCable = f1 + g1;
 
-  return <div className="mx-auto w-full max-w-[1600px] space-y-5 pb-4">
+  return <div className="mx-auto w-full max-w-[1600px] space-y-3 pb-3">
     <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div><p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary"><BookOpen className="h-4 w-4" /> Field operations</p><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Daily Book</h1><p className="mt-1 text-sm text-muted-foreground">Add today’s work as it happens. Entries save as you move through the fields.</p></div>
       <div className="flex items-center gap-2"><Button variant="outline" size="icon" aria-label="Previous day" onClick={() => navigateDate(shortDate(date, -1))}><ChevronLeft className="h-4 w-4" /></Button><div className="relative min-w-0 flex-1 sm:flex-none"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input type="date" value={date} onChange={(event) => event.target.value && navigateDate(event.target.value)} className="h-10 w-full pl-9 sm:w-[170px]" aria-label="Work date" /></div><Button variant="outline" size="icon" aria-label="Next day" onClick={() => navigateDate(shortDate(date, 1))}><ChevronRight className="h-4 w-4" /></Button></div>
@@ -255,44 +255,41 @@ export default function DailyBookPage() {
       <section className="min-w-0">
         {!selectedEntry ? <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed bg-card/50 p-6 text-center"><UserRound className="mb-3 h-8 w-8 text-muted-foreground/50" /><h2 className="font-semibold">Choose an entry to continue</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">Create one with just a phone number, then fill in customer, cable, and equipment information when it’s available.</p></div> : <Card className="min-w-0 overflow-hidden rounded-2xl shadow-sm">
           <div className="flex flex-col gap-3 border-b bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-lg font-bold tabular-nums sm:text-xl">{selectedEntry.telephoneNo}</h2><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedEntry.status === "completed" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{selectedEntry.status === "completed" ? "Completed" : "In progress"}</span></div><p className="mt-1 text-sm text-muted-foreground">{selectedEntry.name || "Add customer details as they become available"}</p></div><div className="flex flex-wrap items-center gap-2"><span className="mr-auto flex items-center gap-1.5 text-xs text-muted-foreground sm:mr-1">{saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving</> : savedAt ? <><Check className="h-3.5 w-3.5 text-emerald-600" />Saved</> : <><Save className="h-3.5 w-3.5" />Auto-save on field exit</>}</span><Button variant="outline" size="sm" onClick={() => void openHistory()}><History className="mr-1.5 h-4 w-4" />History</Button>{selectedEntry.status !== "completed" && <Button size="sm" onClick={() => void markCompleted()}><CheckCircle2 className="mr-1.5 h-4 w-4" />Complete</Button>}</div></div>
-          <CardContent className="min-w-0 p-4 sm:p-5">
-            <div className="space-y-4">
-              <section className="rounded-xl border bg-background/70 p-3 sm:p-4">
-                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h3 className="text-sm font-semibold">Customer & location</h3><p className="text-xs text-muted-foreground">Add the details as they become available.</p></div></div>
-                <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          <CardContent className="min-w-0 p-3 sm:p-4">
+            <div className="space-y-2.5">
+              <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Customer & location</h3><p className="text-[11px] text-muted-foreground">Add details as they become available.</p></div>
+                <div className="grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-2 lg:grid-cols-4">
                   {inputField("name", "Customer name")}{inputField("address", "Address")}{inputField("dp", "DP", "text", "Required before completing")}{inputField("phoneNumber", "Contact number")}
                 </div>
               </section>
-              <section className="rounded-xl border bg-background/70 p-3 sm:p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Cable & signal readings</h3><p className="text-xs text-muted-foreground">Readings above 25 are highlighted for review; this warning does not block saving.</p></div></div>
-                <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+              <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Cable & signal readings</h3><p className="text-[11px] text-muted-foreground">Above 25 is highlighted for review; it won’t block saving.</p></div>
+                <div className="grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3 xl:grid-cols-8">
                   {inputField("powerDp", "DP power", "number")}{inputField("powerInbox", "Inbox power", "number")}{inputField("cableStart", "Cable start reading", "number", undefined, true)}{inputField("cableMiddle", "Cable middle reading", "number", undefined, true)}{inputField("cableEnd", "Cable end reading", "number", undefined, true)}
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 sm:max-w-xl">
-                  {[ ["F1 length", f1], ["G1 length", g1], ["Total length", totalCable] ].map(([label, value]) => <div key={String(label)} className="rounded-lg bg-sky-50 px-3 py-2 dark:bg-sky-950/30"><p className="text-[11px] font-medium text-sky-800 dark:text-sky-200">{label}</p><p className="mt-0.5 text-sm font-semibold tabular-nums text-sky-950 dark:text-sky-50">{Number(value).toFixed(2)} m</p></div>)}
+                  {[ ["F1", f1], ["G1", g1], ["Total", totalCable] ].map(([label, value]) => <div key={String(label)} className="flex min-w-0 flex-col justify-end rounded-lg bg-sky-50 px-2.5 py-1.5 dark:bg-sky-950/30"><p className="truncate text-[10px] font-medium leading-4 text-sky-800 dark:text-sky-200">{label} length</p><p className="truncate text-sm font-semibold tabular-nums text-sky-950 dark:text-sky-50">{Number(value).toFixed(2)} m</p></div>)}
                 </div>
               </section>
-              <section className="rounded-xl border bg-background/70 p-3 sm:p-4">
-                <div className="mb-3"><h3 className="text-sm font-semibold">Equipment & serials</h3><p className="text-xs text-muted-foreground">Record installed device identifiers.</p></div>
-                <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                  {inputField("ont", "ONT")}{inputField("ontSerial", "ONT serial")}{inputField("voiceTestNo", "Voice test number")}{inputField("voiceTestNoNew", "Voice test number (new)")}{inputField("stb", "STB")}{inputField("stbSerial", "STB serial")}
-                </div>
-              </section>
-              <section className="rounded-xl border bg-background/70 p-3 sm:p-4">
-                <div className="mb-3"><h3 className="text-sm font-semibold">Team</h3><p className="text-xs text-muted-foreground">Choose everyone who worked on this entry.</p></div>
-                {workers.length === 0 ? <p className="text-sm text-muted-foreground">No active workers are available.</p> : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+              <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Equipment & team</h3><p className="text-[11px] text-muted-foreground">Device identifiers and assigned workers.</p></div>
+                <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]">
+                  <div className="grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3">
+                    {inputField("ont", "ONT")}{inputField("ontSerial", "ONT serial")}{inputField("voiceTestNo", "Voice test number")}{inputField("voiceTestNoNew", "Voice test number (new)")}{inputField("stb", "STB")}{inputField("stbSerial", "STB serial")}
+                  </div>
+                  {workers.length === 0 ? <p className="self-center text-xs text-muted-foreground">No active workers are available.</p> : <div className="grid content-start gap-1.5 sm:grid-cols-2 xl:grid-cols-2">
                   {workers.map((worker) => {
                     const checked = workerSelection.includes(worker.id);
-                    return <label key={worker.id} className="flex min-h-10 min-w-0 cursor-pointer items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm">
-                      <input type="checkbox" checked={checked} onChange={(event) => void setWorkersForEntry(worker.id, event.target.checked)} className="h-4 w-4 accent-primary" />
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{initials(worker.fullName)}</span>
-                      <span className="min-w-0 truncate text-xs">{worker.fullName}</span>
+                    return <label key={worker.id} className="flex min-h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border bg-background px-2 py-1 text-xs">
+                      <input type="checkbox" checked={checked} onChange={(event) => void setWorkersForEntry(worker.id, event.target.checked)} className="h-3.5 w-3.5 accent-primary" />
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">{initials(worker.fullName)}</span>
+                      <span className="min-w-0 truncate">{worker.fullName}</span>
                     </label>;
                   })}
                 </div>}
+                </div>
               </section>
             </div>
-            <div className="mt-4 flex items-center justify-between border-t pt-3"><p className="text-xs text-muted-foreground">Changes save automatically when you leave a field.</p><span className="text-xs font-medium text-muted-foreground">F1 + G1 = Total length</span></div>
+            <div className="mt-2.5 flex items-center justify-between border-t pt-2"><p className="text-[11px] text-muted-foreground">Changes save automatically when you leave a field.</p><span className="text-[11px] font-medium text-muted-foreground">F1 + G1 = Total length</span></div>
           </CardContent>
         </Card>}
       </section>
