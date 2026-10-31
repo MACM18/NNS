@@ -264,9 +264,9 @@ export default function DailyBookPage() {
                 </div>
               </section>
               <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
-                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Cable & signal readings</h3><p className="text-[11px] text-muted-foreground">Above 25 is highlighted for review; it won’t block saving.</p></div>
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Cable & signal readings</h3><p className="text-[11px] text-muted-foreground">DP and inbox power above 25 is highlighted; it won’t block saving.</p></div>
                 <div className="grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3 xl:grid-cols-8">
-                  {inputField("powerDp", "DP power", "number")}{inputField("powerInbox", "Inbox power", "number")}{inputField("cableStart", "Cable start reading", "number", undefined, true)}{inputField("cableMiddle", "Cable middle reading", "number", undefined, true)}{inputField("cableEnd", "Cable end reading", "number", undefined, true)}
+                  {inputField("powerDp", "DP power", "number", undefined, true)}{inputField("powerInbox", "Inbox power", "number", undefined, true)}{inputField("cableStart", "Cable start reading", "number")}{inputField("cableMiddle", "Cable middle reading", "number")}{inputField("cableEnd", "Cable end reading", "number")}
                   {[ ["F1", f1], ["G1", g1], ["Total", totalCable] ].map(([label, value]) => <div key={String(label)} className="flex min-w-0 flex-col justify-end rounded-lg bg-sky-50 px-2.5 py-1.5 dark:bg-sky-950/30"><p className="truncate text-[10px] font-medium leading-4 text-sky-800 dark:text-sky-200">{label} length</p><p className="truncate text-sm font-semibold tabular-nums text-sky-950 dark:text-sky-50">{Number(value).toFixed(2)} m</p></div>)}
                 </div>
               </section>
