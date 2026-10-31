@@ -210,6 +210,6 @@ export async function checkStockLevelsAndNotify() {
     category: "inventory_low",
     actionUrl: "/dashboard/inventory",
     metadata: { items: lowItems },
-    sendEmailAlert: true,
+    sendEmailAlert: false,
   });
 }

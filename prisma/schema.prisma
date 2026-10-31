@@ -458,6 +458,7 @@ model DrumUsage {
 // ==========================================
 model LineDetails {
   id           String    @id @default(uuid())
+  sourceSheetConnectionId String? @map("source_sheet_connection_id")
   taskId       String?   @map("task_id")
   date         DateTime  @default(now()) @db.Date
   telephoneNo  String    @map("telephone_no")
@@ -519,8 +520,10 @@ model LineDetails {
   drumUsages      DrumUsage[]
   workAssignments WorkAssignment[]
   lineAssignees   LineAssignee[]
+  sourceSheetConnection GoogleSheetConnection? @relation(fields: [sourceSheetConnectionId], references: [id], onDelete: SetNull)
 
   @@unique([telephoneNo, date])
+  @@index([sourceSheetConnectionId])
   @@map("line_details")
 }
 
@@ -880,6 +883,7 @@ model GoogleSheetConnection {
   createdBy Profile? @relation(fields: [createdById], references: [id])
   syncLogs  GoogleSheetSyncLog[]
   materialBalanceImports MaterialBalanceImport[]
+  importedLines LineDetails[]
 
   @@index([year, month])
   @@map("google_sheet_connections")
@@ -904,6 +908,9 @@ model GoogleSheetAutoSyncRun {
   error        String?
   startedAt    DateTime  @default(now()) @map("started_at")
   finishedAt   DateTime? @map("finished_at")
+  summaryEmailStatus String? @map("summary_email_status")
+  summaryEmailError String? @map("summary_email_error")
+  summaryEmailSentAt DateTime? @map("summary_email_sent_at")
 
   @@map("google_sheet_auto_sync_runs")
 }

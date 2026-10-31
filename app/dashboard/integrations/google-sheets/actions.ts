@@ -238,6 +238,7 @@ async function syncConnectionCore(
   onProgress?: (message: string) => void
 ) {
   const skippedRows: any[] = [];
+  const importWarnings: string[] = [];
   try {
     const progress = (m: string) => {
       try {
@@ -447,6 +448,7 @@ async function syncConnectionCore(
     progress("Processing sheet rows");
     
     const parsedRows: any[] = [];
+    let invalidTelephoneRows = 0;
     for (let i = 0; i < values.slice(1).length; i++) {
       const r = values[i + 1];
       const rowNum = i + 2;
@@ -465,6 +467,7 @@ async function syncConnectionCore(
       }
 
       if (!normalizedPhone) {
+        invalidTelephoneRows++;
         skippedRows.push({
           rowNum: rowNum,
           telephoneNo: rawNumber.toString().trim(),
@@ -574,7 +577,7 @@ async function syncConnectionCore(
         // Update existing record with merged data
         await prisma.lineDetails.update({
           where: { id: existing.id },
-          data: mergedData,
+          data: { ...mergedData, sourceSheetConnectionId: connectionId },
         });
         lineIds.push(existing.id);
         updatedCount++;
@@ -589,11 +592,42 @@ async function syncConnectionCore(
       } else {
         // Create new record
         const created = await prisma.lineDetails.create({
-          data: { ...payload, status: "completed" },
+          data: { ...payload, status: "completed", sourceSheetConnectionId: connectionId },
         });
         lineIds.push(created.id);
         insertedCount++;
       }
+    }
+
+    // A successfully read sheet is the source of truth for its imported rows.
+    // Reconcile only rows previously matched to this connection, and only when
+    // every non-empty phone cell was valid and every parsed row was imported.
+    // This prevents a partial/invalid sheet read from removing existing data.
+    let removedCount = 0;
+    const payloadFailures = skippedRows.some((row) => row.reason?.startsWith("Failed to build line payload"));
+    if (invalidTelephoneRows === 0 && !payloadFailures && lineIds.length > 0) {
+      const staleLines = await prisma.lineDetails.findMany({
+        where: {
+          sourceSheetConnectionId: connectionId,
+          date: { gte: syncMonthStart, lte: syncMonthEnd },
+          id: { notIn: lineIds },
+        },
+        select: { id: true },
+      });
+      const staleIds = staleLines.map((line) => line.id);
+      if (staleIds.length) {
+        await prisma.$transaction(async (tx) => {
+          // Preserve tasks and audit snapshots while removing active line data.
+          await tx.task.updateMany({ where: { lineDetailsId: { in: staleIds } }, data: { lineDetailsId: null } });
+          await tx.lineAssignee.deleteMany({ where: { lineId: { in: staleIds } } });
+          await tx.drumUsage.deleteMany({ where: { lineDetailsId: { in: staleIds } } });
+          await tx.lineDetails.deleteMany({ where: { id: { in: staleIds } } });
+        });
+        removedCount = staleIds.length;
+        progress(`Removed ${removedCount} line${removedCount === 1 ? "" : "s"} no longer present in this sheet`);
+      }
+    } else if (invalidTelephoneRows > 0 || payloadFailures) {
+      progress("Skipped sheet reconciliation because one or more rows could not be safely imported");
     }
 
     // Keep the legacy response fields for existing clients while sourcing
@@ -742,6 +776,7 @@ async function syncConnectionCore(
         drumSheetError
       );
       progress("Warning: Drum Number tab sync failed");
+      importWarnings.push(`Drum Number tab sync failed: ${drumSheetError instanceof Error ? drumSheetError.message : String(drumSheetError)}`);
     }
 
     // Process drum tracking and inventory management with enhanced tracking
@@ -851,6 +886,7 @@ async function syncConnectionCore(
     } catch (drumError) {
       console.error("[syncConnection] Drum processing error:", drumError);
       progress("Warning: Some drum tracking operations failed");
+      importWarnings.push(`Drum tracking failed: ${drumError instanceof Error ? drumError.message : String(drumError)}`);
     }
 
     // Update connection status
@@ -865,11 +901,12 @@ async function syncConnectionCore(
       },
     });
 
-    // Check stock levels and trigger alerts
+    // Keep stock alerts in the app, but do not send separate stock alert emails.
     try {
       await checkStockLevelsAndNotify();
     } catch (stockErr) {
       console.error("[syncConnection] Stock check failed:", stockErr);
+      importWarnings.push(`In-app stock alert check failed: ${stockErr instanceof Error ? stockErr.message : String(stockErr)}`);
     }
 
     // Notify admins of successful sync
@@ -890,15 +927,18 @@ async function syncConnectionCore(
         data: {
           connectionId,
           status:
-            skippedRows.some((r) => r.status === "warning") ||
-            materialBalanceResult.status === "warning"
+            skippedRows.some((r) => r.status === "skipped") ||
+            materialBalanceResult.status === "warning" ||
+            importWarnings.length > 0
               ? "warning"
               : "success",
-          message: `Successfully synced Google Sheet connection for ${conn.month}/${conn.year}; Material Balance stock import status: ${materialBalanceResult.status}.`,
+          message: `Synced Google Sheet connection for ${conn.month}/${conn.year}: ${insertedCount} new, ${updatedCount} updated, ${removedCount} removed, ${skippedRows.filter((row) => row.status === "skipped").length} skipped; Material Balance status: ${materialBalanceResult.status}.`,
           details: JSON.parse(JSON.stringify({
             totalParsedRows: parsedRows.length,
             insertedCount,
             updatedCount,
+            removedCount,
+            skippedCount: skippedRows.filter((row) => row.status === "skipped").length,
             drumUsageProcessed,
             drumsCreated,
             drumUpdated,
@@ -953,6 +993,15 @@ async function syncConnectionCore(
       hardwareUpdated,
       hardwareCreated,
       usageRecordsUpdated,
+      insertedCount,
+      updatedCount,
+      removedCount,
+      skippedCount: skippedRows.filter((row) => row.status === "skipped").length,
+      issueSummaries: [...new Set([
+        ...skippedRows.filter((row) => row.status === "skipped").map((row) => row.reason),
+        ...materialBalanceResult.warnings,
+        ...importWarnings,
+      ].filter(Boolean))].slice(0, 12),
       materialBalance: materialBalanceResult,
       drumSheetProcessed: drumProcessed,
       drumSheetAppended: drumAppended,
@@ -994,7 +1043,7 @@ async function syncConnectionCore(
         type: "error",
         category: "system",
         actionUrl: "/dashboard/integrations",
-        sendEmailAlert: true,
+        sendEmailAlert: false,
       });
     } catch (notifyErr) {
       console.error("[syncConnection] Error notification failed:", notifyErr);
