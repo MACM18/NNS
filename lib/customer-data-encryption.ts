@@ -133,7 +133,13 @@ function transformWrite(model: string, operation: string, args: any) {
 
 function transformWhere(model: string, value: any): any {
   if (!value || typeof value !== "object") return value;
+  // Prisma filters can contain special values such as Date instances. Only
+  // walk plain filter objects; rebuilding a Date as `{}` corrupts gte/lte
+  // operands (for example, the Daily Book date range).
+  if (value instanceof Date || value instanceof Uint8Array) return value;
   if (Array.isArray(value)) return value.map((item) => transformWhere(model, item));
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
   const output: Record<string, any> = {};
   for (const [key, child] of Object.entries(value)) {
     const encryptedFields = encryptedStringFields[model] || [];
