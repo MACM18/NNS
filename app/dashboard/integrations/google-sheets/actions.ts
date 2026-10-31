@@ -267,6 +267,7 @@ async function syncConnectionCore(
         sheetUrl: true,
         sheetTab: true,
         sheetId: true,
+        metadata: true,
       },
     });
 
@@ -503,8 +504,11 @@ async function syncConnectionCore(
 
     const sheetRows = mergedParsedRows.map((p) => p.mapped);
 
-    if (!sheetRows.length) {
-      throw new Error("No valid rows with telephone numbers found");
+    // A sheet with valid headers and only blank rows is a valid empty snapshot.
+    // Invalid non-empty phone cells are different: they make the snapshot
+    // incomplete, so preserve existing imported lines and report the issue.
+    if (!sheetRows.length && invalidTelephoneRows > 0) {
+      throw new Error("No valid rows with telephone numbers found; existing imported lines were preserved because the sheet contains invalid phone values.");
     }
 
     // Upsert lines into database (one-way sync: Sheet → DB)
@@ -600,17 +604,32 @@ async function syncConnectionCore(
     }
 
     // A successfully read sheet is the source of truth for its imported rows.
-    // Reconcile only rows previously matched to this connection, and only when
-    // every non-empty phone cell was valid and every parsed row was imported.
-    // This prevents a partial/invalid sheet read from removing existing data.
+    // The line-id snapshot is retained on the connection so cleanup continues
+    // to work even if a legacy imported line is missing its source marker.
+    // Never use the snapshot to remove a line now owned by another connection.
     let removedCount = 0;
     const payloadFailures = skippedRows.some((row) => row.reason?.startsWith("Failed to build line payload"));
-    if (invalidTelephoneRows === 0 && !payloadFailures && lineIds.length > 0) {
+    let reconciliationStatus: "completed" | "skipped_invalid_rows" | "skipped_payload_failures" = "completed";
+    if (invalidTelephoneRows === 0 && !payloadFailures) {
+      const previousMetadata = conn.metadata && typeof conn.metadata === "object" && !Array.isArray(conn.metadata)
+        ? conn.metadata as Record<string, unknown>
+        : {};
+      const previousImport = previousMetadata.sheetImport && typeof previousMetadata.sheetImport === "object" && !Array.isArray(previousMetadata.sheetImport)
+        ? previousMetadata.sheetImport as Record<string, unknown>
+        : {};
+      const previousLineIds = Array.isArray(previousImport.lineIds)
+        ? previousImport.lineIds.filter((id): id is string => typeof id === "string")
+        : [];
       const staleLines = await prisma.lineDetails.findMany({
         where: {
-          sourceSheetConnectionId: connectionId,
           date: { gte: syncMonthStart, lte: syncMonthEnd },
           id: { notIn: lineIds },
+          OR: [
+            { sourceSheetConnectionId: connectionId },
+            ...(previousLineIds.length
+              ? [{ id: { in: previousLineIds }, sourceSheetConnectionId: null }]
+              : []),
+          ],
         },
         select: { id: true },
       });
@@ -626,7 +645,23 @@ async function syncConnectionCore(
         removedCount = staleIds.length;
         progress(`Removed ${removedCount} line${removedCount === 1 ? "" : "s"} no longer present in this sheet`);
       }
+      const nextMetadata = {
+        ...previousMetadata,
+        sheetImport: {
+          lineIds,
+          lastReconciledAt: new Date().toISOString(),
+          rowCount: lineIds.length,
+        },
+      };
+      await prisma.googleSheetConnection.update({
+        where: { id: connectionId },
+        data: { metadata: nextMetadata as any },
+      });
+      if (lineIds.length === 0 && staleIds.length === 0) {
+        progress("The sheet has no valid line rows; there were no previously imported lines to remove");
+      }
     } else if (invalidTelephoneRows > 0 || payloadFailures) {
+      reconciliationStatus = invalidTelephoneRows > 0 ? "skipped_invalid_rows" : "skipped_payload_failures";
       progress("Skipped sheet reconciliation because one or more rows could not be safely imported");
     }
 
@@ -938,6 +973,8 @@ async function syncConnectionCore(
             insertedCount,
             updatedCount,
             removedCount,
+            reconciliationStatus,
+            sourceConnectionLineCount: lineIds.length,
             skippedCount: skippedRows.filter((row) => row.status === "skipped").length,
             drumUsageProcessed,
             drumsCreated,
