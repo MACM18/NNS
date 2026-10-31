@@ -396,6 +396,8 @@
     max-width: none;
     max-height: calc(var(--dialog-viewport-height, 100dvh) - 1rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     transform: translateY(-50%);
+    /* Tailwind v4's translate utility is independent of transform. */
+    translate: none;
     overflow-y: auto;
     overscroll-behavior: contain;
     scroll-padding-block: 3rem;

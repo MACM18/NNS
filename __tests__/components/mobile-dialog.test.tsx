@@ -4,10 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 
-function FormDialog({ onOpenAutoFocus }: { onOpenAutoFocus?: (event: Event) => void }) {
+function FormDialog({ onOpenAutoFocus, className }: { onOpenAutoFocus?: (event: Event) => void; className?: string }) {
   return <Dialog>
     <DialogTrigger>Open form</DialogTrigger>
-    <DialogContent onOpenAutoFocus={onOpenAutoFocus}>
+    <DialogContent className={className} onOpenAutoFocus={onOpenAutoFocus}>
       <DialogTitle>Edit line</DialogTitle>
       <DialogDescription>Enter the customer details.</DialogDescription>
       <input aria-label="Customer" />
@@ -70,6 +70,29 @@ it("responds to keyboard resizing and panning, and removes listeners when closed
   await user.click(screen.getByRole("button", { name: "Close" }));
   await waitFor(() => expect(removeListener).toHaveBeenCalledWith("resize", expect.any(Function)));
   expect(removeListener).toHaveBeenCalledWith("scroll", expect.any(Function));
+});
+
+it("keeps compact dialogs centered without Tailwind's horizontal translate", async () => {
+  const user = userEvent.setup();
+  render(<FormDialog />);
+  await user.click(screen.getByRole("button", { name: "Open form" }));
+  const dialog = screen.getByRole("dialog");
+  expect(dialog.style.getPropertyValue("left")).toBe("max(0.5rem, env(safe-area-inset-left))");
+  expect(dialog.style.getPropertyValue("right")).toBe("max(0.5rem, env(safe-area-inset-right))");
+  expect(dialog.style.getPropertyValue("translate")).toBe("none");
+  expect(dialog.style.getPropertyValue("transform")).toBe("translateY(-50%)");
+});
+
+it("uses the full visible viewport for the Add Line dialog on compact screens", async () => {
+  const user = userEvent.setup();
+  render(<FormDialog className="add-line-dialog" />);
+  await user.click(screen.getByRole("button", { name: "Open form" }));
+  const dialog = screen.getByRole("dialog");
+  expect(dialog.style.getPropertyValue("position")).toBe("fixed");
+  expect(dialog.style.getPropertyValue("left")).toBe("0px");
+  expect(dialog.style.getPropertyValue("right")).toBe("0px");
+  expect(dialog.style.getPropertyValue("width")).toBe("100vw");
+  expect(dialog.style.getPropertyValue("translate")).toBe("none");
 });
 
 it("keeps normal desktop autofocus", async () => {

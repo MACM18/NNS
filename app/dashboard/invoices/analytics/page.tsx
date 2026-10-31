@@ -114,7 +114,8 @@ export default function InvoiceAnalyticsPage() {
         <CardHeader className="border-b"><CardTitle>Month-by-month breakdown</CardTitle><CardDescription>Monthly totals and allocation from saved invoice snapshots.</CardDescription></CardHeader>
         <CardContent className="p-0">
           {loading ? <div className="space-y-3 p-5">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-10 animate-pulse rounded bg-muted/40" />)}</div> : !hasYearData ? <div className="p-8 text-center text-sm text-muted-foreground">No monthly invoice data to show for {year}.</div> : (
-            <div className="w-full overflow-x-auto">
+            <>
+            <div className="hidden w-full overflow-x-auto md:block">
               <table className="w-full min-w-[720px] text-sm">
                 <thead><tr className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground"><th className="px-4 py-3 font-medium">Month</th><th className="px-4 py-3 text-right font-medium">Jobs</th><th className="px-4 py-3 text-right font-medium">Service lines</th><th className="px-4 py-3 text-right font-medium">Invoice A</th><th className="px-4 py-3 text-right font-medium">Invoice B</th><th className="px-4 py-3 text-right font-medium">Grand total</th></tr></thead>
                 <tbody>{data?.byMonth.filter(item => item.invoicePairs > 0).map(item => (
@@ -122,6 +123,18 @@ export default function InvoiceAnalyticsPage() {
                 ))}</tbody>
               </table>
             </div>
+            <div className="space-y-3 p-3 md:hidden">
+              {data?.byMonth.filter(item => item.invoicePairs > 0).map(item => <article key={item.month} className="min-w-0 rounded-xl border bg-card p-3">
+                <div className="flex items-start justify-between gap-3 border-b pb-2"><h3 className="font-medium">{item.label} {year}</h3><span className="shrink-0 text-xs text-muted-foreground">{item.invoicePairs} {item.invoicePairs === 1 ? "job" : "jobs"}</span></div>
+                <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-xs">
+                  <div><p className="text-muted-foreground">Service lines</p><p className="mt-0.5 font-medium tabular-nums">{item.lines.toLocaleString()}</p></div>
+                  <div className="text-right"><p className="text-muted-foreground">Grand total</p><p className="mt-0.5 break-words font-semibold tabular-nums">{money(item.totalBilled)}</p></div>
+                  <div><p className="text-muted-foreground">Invoice A</p><p className="mt-0.5 break-words tabular-nums">{money(item.amountA)}</p></div>
+                  <div className="text-right"><p className="text-muted-foreground">Invoice B</p><p className="mt-0.5 break-words tabular-nums">{money(item.amountB)}</p></div>
+                </div>
+              </article>)}
+            </div>
+            </>
           )}
         </CardContent>
       </Card>

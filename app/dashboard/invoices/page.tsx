@@ -110,7 +110,8 @@ export default function InvoicesPage() {
               {loading ? <div className="p-5"><TableSkeleton columns={7} rows={8} /></div> : invoices.length === 0 ? (
                 <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center"><div className="mb-4 rounded-full bg-primary/10 p-4"><FileText className="h-7 w-7 text-primary" /></div><h2 className="font-medium">No invoices found</h2><p className="mt-1 max-w-md text-sm text-muted-foreground">Choose a month and create a reviewed A/B invoice pair to get started.</p>{canManage && <Button className="mt-4" onClick={() => router.push("/dashboard/invoices/create")}><FilePlus2 className="mr-2 h-4 w-4" />Create invoices</Button>}</div>
               ) : (
-                <div className="w-full overflow-x-auto">
+                <>
+                <div className="hidden w-full overflow-x-auto md:block">
                   <Table className="w-full table-fixed">
                     <TableHeader><TableRow className="bg-muted/50"><TableHead className="w-[25%]">Invoice number</TableHead><TableHead className="w-[10%]">Type</TableHead><TableHead className="w-[17%]">Job month</TableHead><TableHead className="w-[14%]">Invoice date</TableHead><TableHead className="w-[10%] text-right">Lines</TableHead><TableHead className="w-[14%] text-right">Invoice amount</TableHead><TableHead className="w-[10%] text-right">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{invoices.map(invoice => (
@@ -130,6 +131,39 @@ export default function InvoicesPage() {
                     <div className="flex gap-2"><Button size="sm" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage(current => current - 1)}>Previous</Button><Button size="sm" variant="outline" disabled={page >= pagination.totalPages || loading} onClick={() => setPage(current => current + 1)}>Next</Button></div>
                   </div>
                 </div>
+                <div className="space-y-3 p-3 md:hidden">
+                  {invoices.map(invoice => {
+                    const displayNumber = invoice.month && invoice.year
+                      ? formatMonthlyInvoiceDisplayNumber(invoice.year, invoice.month)
+                      : invoice.invoice_number;
+                    const invoiceDate = invoice.invoice_date
+                      ? new Date(`${invoice.invoice_date}T00:00:00`).toLocaleDateString()
+                      : "—";
+                    return <article key={invoice.id} className="min-w-0 rounded-xl border bg-card p-3 shadow-sm">
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-mono text-xs font-medium leading-relaxed [overflow-wrap:anywhere]">{displayNumber}</p>
+                          <p className="mt-1 text-sm font-semibold">{invoice.job_month}</p>
+                        </div>
+                        <Badge className="shrink-0" variant={invoice.invoice_type === "A" ? "default" : "secondary"}>Invoice {invoice.invoice_type}</Badge>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-xs">
+                        <div><p className="text-muted-foreground">Invoice date</p><p className="mt-0.5 font-medium">{invoiceDate}</p></div>
+                        <div className="text-right"><p className="text-muted-foreground">Lines</p><p className="mt-0.5 font-medium tabular-nums">{invoice.line_count}</p></div>
+                        <div className="col-span-2"><p className="text-muted-foreground">Invoice amount</p><p className="mt-0.5 break-words font-semibold tabular-nums">LKR {Number(invoice.total_amount || 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}</p></div>
+                      </div>
+                      <div className="mt-3 flex justify-end gap-2 border-t pt-3">
+                        <Button size="sm" variant="outline" onClick={() => setSelectedInvoice(invoice)}><Eye className="mr-2 h-4 w-4" />Preview</Button>
+                        {canManage && <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/invoices/${invoice.id}/edit`)}><Pencil className="mr-2 h-4 w-4" />Edit</Button>}
+                      </div>
+                    </article>;
+                  })}
+                  <div className="flex flex-col gap-3 border-t px-1 py-3 text-sm text-muted-foreground">
+                    <span>{pagination.total === 0 ? "No records" : `Showing ${(page - 1) * 50 + 1}–${Math.min(page * 50, pagination.total)} of ${pagination.total} invoices`}</span>
+                    <div className="flex gap-2"><Button className="flex-1" size="sm" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage(current => current - 1)}>Previous</Button><Button className="flex-1" size="sm" variant="outline" disabled={page >= pagination.totalPages || loading} onClick={() => setPage(current => current + 1)}>Next</Button></div>
+                  </div>
+                </div>
+                </>
               )}
             </CardContent>
           </Card>

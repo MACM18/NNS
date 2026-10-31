@@ -28,47 +28,69 @@ export function useDialogViewport<T extends HTMLElement>(forwardedRef: Forwarded
       // This dialog has a desktop max-width utility. Apply its compact-screen
       // geometry directly so it cannot be left-aligned at half the viewport if
       // a stylesheet breakpoint is stale or the browser reports desktop width.
-      if (element.classList.contains("add-line-dialog")) {
-        if (window.matchMedia("(max-width: 1023px)").matches) {
-          const mobileStyles: Record<string, string> = {
-            position: "fixed",
-            left: "0px",
-            right: "0px",
-            top: `${viewportTop}px`,
-            bottom: `${viewportBottom}px`,
-            width: "100vw",
-            "max-width": "none",
-            height: "auto",
-            "max-height": "none",
-            "min-width": "0px",
-            margin: "0px",
-            transform: "none",
-            translate: "none",
-            "border-radius": "0px",
-          };
+      const compactViewport = window.matchMedia("(max-width: 767px)").matches;
+      const addLineViewport = window.matchMedia("(max-width: 1023px)").matches;
+      const isAddLineDialog = element.classList.contains("add-line-dialog");
+      const isResponsiveDialog = element.hasAttribute("data-responsive-dialog");
 
-          for (const [property, value] of Object.entries(mobileStyles)) {
-            element.style.setProperty(property, value, "important");
-          }
-        } else {
-          for (const property of [
-            "position",
-            "left",
-            "right",
-            "top",
-            "bottom",
-            "width",
-            "max-width",
-            "height",
-            "max-height",
-            "min-width",
-            "margin",
-            "transform",
-            "translate",
-            "border-radius",
-          ]) {
-            element.style.removeProperty(property);
-          }
+      let mobileStyles: Record<string, string> | null = null;
+      if (isAddLineDialog && addLineViewport) {
+        mobileStyles = {
+          position: "fixed",
+          left: "0px",
+          right: "0px",
+          top: `${viewportTop}px`,
+          bottom: `${viewportBottom}px`,
+          width: "100vw",
+          "max-width": "none",
+          height: "auto",
+          "max-height": "none",
+          "min-width": "0px",
+          margin: "0px",
+          transform: "none",
+          translate: "none",
+          "border-radius": "0px",
+        };
+      } else if (isResponsiveDialog && compactViewport) {
+        mobileStyles = {
+          position: "fixed",
+          left: "max(0.5rem, env(safe-area-inset-left))",
+          right: "max(0.5rem, env(safe-area-inset-right))",
+          top: `${viewportTop + viewportHeight / 2}px`,
+          bottom: "auto",
+          width: "auto",
+          "max-width": "none",
+          "max-height": `calc(${viewportHeight}px - 1rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))`,
+          margin: "0px",
+          transform: "translateY(-50%)",
+          translate: "none",
+          "border-radius": "1rem",
+        };
+      }
+
+      const responsiveProperties = [
+        "position",
+        "left",
+        "right",
+        "top",
+        "bottom",
+        "width",
+        "max-width",
+        "height",
+        "max-height",
+        "min-width",
+        "margin",
+        "transform",
+        "translate",
+        "border-radius",
+      ];
+      if (mobileStyles) {
+        for (const [property, value] of Object.entries(mobileStyles)) {
+          element.style.setProperty(property, value, "important");
+        }
+      } else if (isAddLineDialog || isResponsiveDialog) {
+        for (const property of responsiveProperties) {
+          element.style.removeProperty(property);
         }
       }
     };
