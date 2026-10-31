@@ -8,7 +8,7 @@ import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 
 const navigation = [
-  { name: "Home", href: "/welcome" },
+  { name: "Home", href: "/" },
   { name: "About", href: "/welcome/about" },
   { name: "Articles", href: "/welcome/articles" },
   { name: "Careers", href: "/welcome/job-listings" },
@@ -27,7 +27,7 @@ export function Navigation() {
       >
         <div className='flex lg:flex-1'>
           <Link
-            href='/welcome'
+            href='/'
             className='-m-1.5 p-1.5 flex items-center space-x-2'
           >
             <Building2 className='h-8 w-8 text-primary' />
@@ -70,7 +70,7 @@ export function Navigation() {
           <div className='fixed inset-y-0 right-0 z-50 w-full overflow-y-auto bg-background px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-border'>
             <div className='flex items-center justify-between'>
               <Link
-                href='/welcome'
+                href='/'
                 className='-m-1.5 p-1.5 flex items-center space-x-2'
               >
                 <Building2 className='h-8 w-8 text-primary' />

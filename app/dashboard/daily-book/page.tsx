@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock3, History, Loader2, Plus, Save, Users } from "lucide-react";
+import { BookOpen, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock3, History, Loader2, Plus, Save, UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -64,6 +64,7 @@ export default function DailyBookPage() {
   const [error, setError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<Revision[]>([]);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const selectedIdRef = useRef<string | null>(null);
   const workerSelectionRef = useRef<string[]>([]);
   const workerSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -100,6 +101,13 @@ export default function DailyBookPage() {
   }, []);
 
   useEffect(() => { void loadDay(date, Boolean(selectedIdRef.current)); }, [date, loadDay]);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1279px)");
+    const updateViewport = () => setIsMobileViewport(media.matches);
+    updateViewport();
+    media.addEventListener("change", updateViewport);
+    return () => media.removeEventListener("change", updateViewport);
+  }, []);
   useEffect(() => () => {
     Object.values(fieldSaveTimers.current).forEach(clearTimeout);
     if (workerSaveTimer.current) clearTimeout(workerSaveTimer.current);
@@ -302,6 +310,53 @@ export default function DailyBookPage() {
   const g1 = Math.abs(reading("cableMiddle") - reading("cableEnd"));
   const totalCable = f1 + g1;
 
+  const entryEditorContent = selectedEntry ? <>
+    <div className="flex flex-col gap-3 border-b bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      <div className="min-w-0 text-left">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="truncate text-lg font-bold tabular-nums sm:text-xl">{selectedEntry.telephoneNo}</h2>
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedEntry.status === "completed" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{selectedEntry.status === "completed" ? "Completed" : "In progress"}</span>
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">{selectedEntry.name || "Add customer details as they become available"}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span role="status" className="mr-auto flex items-center gap-1.5 text-xs text-muted-foreground sm:mr-1">
+          {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving</> : error ? <span className="text-destructive">Save needs attention</span> : savedAt ? <><Check className="h-3.5 w-3.5 text-emerald-600" />Saved</> : <><Save className="h-3.5 w-3.5" />Auto-save on field exit</>}
+        </span>
+        <Button variant="outline" size="sm" onClick={() => void openHistory()}><History className="mr-1.5 h-4 w-4" />History</Button>
+        {selectedEntry.status !== "completed" && <Button size="sm" onClick={() => void markCompleted()}><CheckCircle2 className="mr-1.5 h-4 w-4" />Complete</Button>}
+      </div>
+    </div>
+    <div className="min-w-0 space-y-2.5 p-3 sm:p-4">
+      {error && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>}
+      <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Customer & location</h3><p className="text-[11px] text-muted-foreground">Add details as they become available.</p></div>
+        <div className="grid min-w-0 grid-cols-1 gap-x-2.5 gap-y-2 sm:grid-cols-2 lg:grid-cols-4">
+          {inputField("name", "Customer name")}{inputField("address", "Address")}{inputField("dp", "DP", "text", "Required before completing")}{inputField("phoneNumber", "Contact number")}
+        </div>
+      </section>
+      <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Power & cable</h3><p className="text-[11px] text-muted-foreground">DP and inbox power above 25 is highlighted; it won’t block saving.</p></div>
+        <div className="grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3 xl:grid-cols-5">
+          {inputField("powerDp", "DP power", "number", undefined, true)}{inputField("powerInbox", "Inbox power", "number", undefined, true)}
+          {[ ["F1", f1], ["G1", g1], ["Total", totalCable] ].map(([label, value]) => <div key={String(label)} className="flex min-w-0 flex-col justify-end rounded-lg bg-sky-50 px-2.5 py-1.5 dark:bg-sky-950/30"><p className="truncate text-[10px] font-medium leading-4 text-sky-800 dark:text-sky-200">{label} length</p><p className="truncate text-sm font-semibold tabular-nums text-sky-950 dark:text-sky-50">{Number(value).toFixed(2)} m</p></div>)}
+        </div>
+        <div className="mt-2 grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3">
+          {inputField("cableStart", "Cable start", "number")}{inputField("cableMiddle", "Cable middle", "number")}{inputField("cableEnd", "Cable end", "number")}
+        </div>
+      </section>
+      <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Equipment & team</h3><p className="text-[11px] text-muted-foreground">Device identifiers and assigned workers.</p></div>
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]">
+          <div className="grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3">{inputField("ont", "ONT")}{inputField("ontSerial", "ONT serial")}{inputField("voiceTestNo", "Voice test number")}{inputField("voiceTestNoNew", "Voice test number (new)")}{inputField("stb", "STB")}{inputField("stbSerial", "STB serial")}</div>
+          {workers.length === 0 ? <p className="self-center text-xs text-muted-foreground">No active workers are available.</p> : <div className="grid content-start gap-1.5 sm:grid-cols-2 xl:grid-cols-2">{workers.map((worker) => { const checked = workerSelection.includes(worker.id); return <label key={worker.id} className="flex min-h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border bg-background px-2 py-1 text-xs"><input type="checkbox" checked={checked} onChange={(event) => void setWorkersForEntry(worker.id, event.target.checked)} className="h-3.5 w-3.5 accent-primary" /><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">{initials(worker.fullName)}</span><span className="min-w-0 truncate">{worker.fullName}</span></label>; })}</div>}
+        </div>
+      </section>
+      <div className="flex items-center justify-between border-t pt-2"><p className="text-[11px] text-muted-foreground">Changes save automatically when you leave a field.</p><span className="text-[11px] font-medium text-muted-foreground">F1 + G1 = Total length</span></div>
+      <div className="flex justify-end xl:hidden"><Button variant="outline" onClick={() => void closeEntryEditor()} disabled={saving}>Done</Button></div>
+    </div>
+  </> : null;
+
   return <div className="mx-auto w-full max-w-[1600px] space-y-3 pb-3">
     <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div><p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary"><BookOpen className="h-4 w-4" /> Field operations</p><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Daily Book</h1><p className="mt-1 text-sm text-muted-foreground">Add today’s work as it happens. Entries save as you move through the fields.</p></div>
@@ -309,7 +364,7 @@ export default function DailyBookPage() {
     </header>
 
     {error && !selectedId && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>}
-    <div className="min-w-0">
+    <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
       <section className="min-w-0 space-y-3">
         <Card className="overflow-hidden rounded-2xl border-primary/15 bg-gradient-to-br from-primary/[0.08] to-background shadow-sm"><CardContent className="p-4 sm:p-5">
           <div className="mb-3 flex items-center gap-2"><div className="rounded-xl bg-primary/10 p-2 text-primary"><Plus className="h-4 w-4" /></div><div><h2 className="font-semibold">Start an entry</h2><p className="text-xs text-muted-foreground">Phone number is enough to begin.</p></div></div>
@@ -324,51 +379,17 @@ export default function DailyBookPage() {
         </div>
         {recentEntries.some((entry) => entry.date !== date) && <div className="space-y-3 border-t pt-4"><div className="px-1"><h3 className="text-sm font-semibold">Recent days</h3><p className="text-xs text-muted-foreground">Entries from the previous six days</p></div>{Object.entries(recentEntries.filter((entry) => entry.date !== date).reduce<Record<string, Entry[]>>((groups, entry) => { (groups[entry.date] ||= []).push(entry); return groups; }, {})).sort(([a], [b]) => b.localeCompare(a)).map(([groupDate, groupEntries]) => <div key={groupDate} className="space-y-1.5"><div className="flex items-center justify-between px-1"><h4 className="text-xs font-semibold text-muted-foreground">{displayDate(groupDate)}</h4><span className="text-[11px] text-muted-foreground">{groupEntries.length}</span></div>{groupEntries.map((entry) => <button key={entry.id} onClick={() => void selectEntry(entry)} className={`flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-sm ${entry.id === selectedId ? "border-primary/50 bg-primary/[0.06]" : "bg-card hover:bg-muted/50"}`}><span className="min-w-0 truncate font-medium tabular-nums">{entry.telephoneNo}<span className="ml-2 font-normal text-muted-foreground">{entry.name || entry.dp || "Details pending"}</span></span><span className="shrink-0 text-[10px] text-muted-foreground">{entry.status === "completed" ? "Done" : "Open"}</span></button>)}</div>)}</div>}
       </section>
+      <section className="hidden min-w-0 xl:block">
+        <Card className="min-w-0 overflow-hidden rounded-2xl shadow-sm">
+          {selectedEntry ? entryEditorContent : <div className="flex min-h-[420px] flex-col items-center justify-center p-8 text-center"><UserRound className="mb-3 h-9 w-9 text-muted-foreground/50" /><h2 className="font-semibold">Choose an entry to continue</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">Start with a phone number, then add customer, cable, and equipment details here as they become available.</p></div>}
+        </Card>
+      </section>
     </div>
 
-    <Dialog open={Boolean(selectedId && selectedEntry)} onOpenChange={(open) => { if (!open) void closeEntryEditor(); }}>
-      <DialogContent className="flex max-h-[94dvh] w-[min(96vw,1180px)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl p-0">
-        {selectedEntry && <>
-          <DialogHeader className="shrink-0 border-b bg-muted/20 p-4 pr-12 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0 text-left"><div className="flex flex-wrap items-center gap-2"><DialogTitle className="truncate text-lg font-bold tabular-nums sm:text-xl">{selectedEntry.telephoneNo}</DialogTitle><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedEntry.status === "completed" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{selectedEntry.status === "completed" ? "Completed" : "In progress"}</span></div><p className="mt-1 text-sm text-muted-foreground">{selectedEntry.name || "Add customer details as they become available"}</p></div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span role="status" className="mr-auto flex items-center gap-1.5 text-xs text-muted-foreground sm:mr-1">{saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving</> : error ? <span className="text-destructive">Save needs attention</span> : savedAt ? <><Check className="h-3.5 w-3.5 text-emerald-600" />Saved</> : <><Save className="h-3.5 w-3.5" />Auto-save on field exit</>}</span>
-                <Button variant="outline" size="sm" onClick={() => void openHistory()}><History className="mr-1.5 h-4 w-4" />History</Button>{selectedEntry.status !== "completed" && <Button size="sm" onClick={() => void markCompleted()}><CheckCircle2 className="mr-1.5 h-4 w-4" />Complete</Button>}
-              </div>
-            </div>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-            {error && <div role="alert" className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>}
-            <div className="space-y-2.5">
-              <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
-                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Customer & location</h3><p className="text-[11px] text-muted-foreground">Add details as they become available.</p></div>
-                <div className="grid min-w-0 grid-cols-1 gap-x-2.5 gap-y-2 sm:grid-cols-2 lg:grid-cols-4">
-                  {inputField("name", "Customer name")}{inputField("address", "Address")}{inputField("dp", "DP", "text", "Required before completing")}{inputField("phoneNumber", "Contact number")}
-                </div>
-              </section>
-              <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
-                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Power & cable</h3><p className="text-[11px] text-muted-foreground">DP and inbox power above 25 is highlighted; it won’t block saving.</p></div>
-                <div className="grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3 xl:grid-cols-5">
-                  {inputField("powerDp", "DP power", "number", undefined, true)}{inputField("powerInbox", "Inbox power", "number", undefined, true)}
-                  {[ ["F1", f1], ["G1", g1], ["Total", totalCable] ].map(([label, value]) => <div key={String(label)} className="flex min-w-0 flex-col justify-end rounded-lg bg-sky-50 px-2.5 py-1.5 dark:bg-sky-950/30"><p className="truncate text-[10px] font-medium leading-4 text-sky-800 dark:text-sky-200">{label} length</p><p className="truncate text-sm font-semibold tabular-nums text-sky-950 dark:text-sky-50">{Number(value).toFixed(2)} m</p></div>)}
-                </div>
-                <div className="mt-2 grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3">
-                  {inputField("cableStart", "Cable start", "number")}{inputField("cableMiddle", "Cable middle", "number")}{inputField("cableEnd", "Cable end", "number")}
-                </div>
-              </section>
-              <section className="rounded-xl border bg-background/70 p-2.5 sm:p-3">
-                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2"><h3 className="text-sm font-semibold">Equipment & team</h3><p className="text-[11px] text-muted-foreground">Device identifiers and assigned workers.</p></div>
-                <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]">
-                  <div className="grid min-w-0 grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3">{inputField("ont", "ONT")}{inputField("ontSerial", "ONT serial")}{inputField("voiceTestNo", "Voice test number")}{inputField("voiceTestNoNew", "Voice test number (new)")}{inputField("stb", "STB")}{inputField("stbSerial", "STB serial")}</div>
-                  {workers.length === 0 ? <p className="self-center text-xs text-muted-foreground">No active workers are available.</p> : <div className="grid content-start gap-1.5 sm:grid-cols-2 xl:grid-cols-2">{workers.map((worker) => { const checked = workerSelection.includes(worker.id); return <label key={worker.id} className="flex min-h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border bg-background px-2 py-1 text-xs"><input type="checkbox" checked={checked} onChange={(event) => void setWorkersForEntry(worker.id, event.target.checked)} className="h-3.5 w-3.5 accent-primary" /><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">{initials(worker.fullName)}</span><span className="min-w-0 truncate">{worker.fullName}</span></label>; })}</div>}
-                </div>
-              </section>
-            </div>
-            <div className="mt-2.5 flex items-center justify-between border-t pt-2"><p className="text-[11px] text-muted-foreground">Changes save automatically when you leave a field.</p><span className="text-[11px] font-medium text-muted-foreground">F1 + G1 = Total length</span></div>
-          </div>
-          <div className="flex shrink-0 justify-end border-t bg-background p-3"><Button variant="outline" onClick={() => void closeEntryEditor()} disabled={saving}>Done</Button></div>
-        </>}
+    <Dialog open={Boolean(isMobileViewport && selectedId && selectedEntry)} onOpenChange={(open) => { if (!open) void closeEntryEditor(); }}>
+      <DialogContent className="flex max-h-[94dvh] w-[min(96vw,1180px)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl p-0 xl:hidden">
+        <DialogHeader className="sr-only"><DialogTitle>{selectedEntry ? `Daily Book entry ${selectedEntry.telephoneNo}` : "Daily Book entry"}</DialogTitle></DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto">{entryEditorContent}</div>
       </DialogContent>
     </Dialog>
     <Dialog open={historyOpen} onOpenChange={setHistoryOpen}><DialogContent className="max-h-[85dvh] w-[min(96vw,760px)] overflow-y-auto rounded-2xl"><DialogHeader><DialogTitle className="flex items-center gap-2"><History className="h-5 w-5 text-primary" />Entry edit history</DialogTitle></DialogHeader><p className="-mt-2 text-sm text-muted-foreground">Review previous values and who made each saved change.</p><div className="space-y-3">{history.length === 0 ? <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No saved changes yet.</div> : history.map((revision) => <div key={revision.id} className="rounded-xl border p-3.5"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><span className="font-medium">{revision.actor}</span><span className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock3 className="h-3.5 w-3.5" />{new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Colombo" }).format(new Date(revision.createdAt))}</span></div><div className="space-y-2">{revision.changedFields.map((field) => <div key={field} className="grid min-w-0 gap-1 text-sm sm:grid-cols-[150px_minmax(0,1fr)]"><span className="font-medium text-muted-foreground">{fieldLabels[field] || field}</span><span className="min-w-0 break-words"><span className="text-muted-foreground">{formatValue(revision.beforeValues?.[field])}</span><span className="mx-2 text-primary">→</span><span>{formatValue(revision.afterValues[field])}</span></span></div>)}</div></div>)}</div></DialogContent></Dialog>

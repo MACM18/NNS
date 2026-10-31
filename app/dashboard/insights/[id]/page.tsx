@@ -80,7 +80,7 @@ export default async function InsightDetailsPage({ params }: any) {
               been removed.
             </p>
             <Button asChild className='mt-8'>
-              <Link href='/insights'>Back to Insights</Link>
+              <Link href='/dashboard/insights'>Back to Insights</Link>
             </Button>
           </div>
         </section>
@@ -128,7 +128,7 @@ export default async function InsightDetailsPage({ params }: any) {
                 <p>{blog.content}</p>
               </div>
               <Button asChild className='w-full'>
-                <Link href='/insights'>Back to Insights</Link>
+                <Link href='/dashboard/insights'>Back to Insights</Link>
               </Button>
             </CardContent>
           </Card>

@@ -441,7 +441,7 @@ export function Header() {
                 className='justify-start gap-2'
                 onClick={() => {
                   setIsMobileActionsOpen(false);
-                  router.push("/lines");
+                  router.push("/dashboard/lines");
                 }}
               >
                 <Phone className='h-4 w-4' />
@@ -546,7 +546,7 @@ export function Header() {
         <Button
           variant='ghost'
           size='icon'
-          onClick={() => router.push("/settings")}
+          onClick={() => router.push("/dashboard/settings")}
         >
           <Settings className='h-5 w-5' />
           <span className='sr-only'>Open settings</span>

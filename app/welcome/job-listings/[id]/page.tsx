@@ -68,7 +68,7 @@ export default async function JobDetailsPage({ params }: any) {
               removed.
             </p>
             <Button asChild className='mt-8'>
-              <Link href='/job-listings'>Back to Job Listings</Link>
+              <Link href='/welcome/job-listings'>Back to Job Listings</Link>
             </Button>
           </div>
         </section>
@@ -126,7 +126,7 @@ export default async function JobDetailsPage({ params }: any) {
                 asChild
                 className='w-full bg-transparent'
               >
-                <Link href='/job-listings'>Back to Job Listings</Link>
+                <Link href='/welcome/job-listings'>Back to Job Listings</Link>
               </Button>
             </CardContent>
           </Card>
