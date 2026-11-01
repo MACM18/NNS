@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "NNS Telecom Management System",
-    short_name: "NNS Telecom",
+    name: "NNS Enterprise",
+    short_name: "NNS",
     description:
-      "AI-powered telecom management platform for fiber optic installations, inventory, and operations. Manage tasks, track inventory, generate invoices, and monitor work assignments.",
+      "NNS Enterprise operations, installation records, inventory, invoices, and reports.",
     start_url: "/dashboard",
     scope: "/",
     display: "standalone",

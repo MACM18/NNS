@@ -51,6 +51,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useNotification } from "@/contexts/notification-context";
+import { BrowserPushSettings } from "@/components/settings/browser-push-settings";
 import { useTheme } from "next-themes";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -1456,8 +1457,6 @@ If you lose access to your authenticator app, you can use these codes to sign in
                       </div>
                     ))}
                   </div>
-                  <p className='text-xs text-muted-foreground'>Live in-app alerts are active while you are signed in. Browser push alerts are not available yet.</p>
-
                   <div className='flex justify-end'>
                     <Button
                       onClick={handleNotificationUpdate}
@@ -1469,6 +1468,7 @@ If you lose access to your authenticator app, you can use these codes to sign in
                   </div>
                 </CardContent>
               </Card>
+              <BrowserPushSettings />
             </TabsContent>
 
             {/* Security Settings */}

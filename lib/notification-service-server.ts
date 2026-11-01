@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { escapeEmailHtml, sendEmail } from "@/lib/email-service";
+import { deliverWebPush } from "@/lib/web-push-service";
 
 export type NotificationType = "info" | "success" | "warning" | "error";
 export type NotificationCategory =
@@ -31,6 +32,9 @@ export async function createSystemNotification(params: {
       metadata: params.metadata || {},
     },
   });
+
+  try { await deliverWebPush(params.userId, { title: params.title, actionUrl: params.actionUrl }); }
+  catch { console.warn("[notifications] Browser push delivery could not be completed."); }
 
   return notification;
 }

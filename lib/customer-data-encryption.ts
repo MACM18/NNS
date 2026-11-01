@@ -39,6 +39,10 @@ export function customerDataLookup(value: string) {
   return crypto.createHmac("sha256", encryptionKey()).update(`lookup:${normalized}`, "utf8").digest("hex");
 }
 
+export function customerDataExactLookup(value: string) {
+  return crypto.createHmac("sha256", encryptionKey()).update(`exact:${value}`, "utf8").digest("hex");
+}
+
 export function customerDataSearchTokens(values: Array<string | null | undefined>) {
   const tokens = new Set<string>();
   for (const value of values) {
@@ -90,6 +94,7 @@ export function decryptCustomerBytes(value: Uint8Array) {
 const encryptedStringFields: Record<string, string[]> = {
   LineDetails: ["telephoneNo", "dp", "name", "address", "ont", "voiceTestNo", "stb", "drumNumber", "phoneNumber", "ontSerial", "voiceTestNoNew", "stbSerial", "drumNumberNew"],
   Task: ["telephoneNo", "dp", "contactNo", "customerName", "address", "rejectionReason", "notes"],
+  WebPushSubscription: ["endpoint", "p256dh", "auth"],
 };
 const encryptedJsonFields: Record<string, string[]> = {
   LineDetailsRevision: ["beforeValues", "afterValues"],

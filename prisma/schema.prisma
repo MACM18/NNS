@@ -37,6 +37,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   notifications Notification[]
+  pushSubscriptions WebPushSubscription[]
   lineEntries   LineEntry[]
   loginHistory  LoginHistory[]
   emailChangeRequests EmailChangeRequest[]
@@ -817,6 +818,23 @@ model Notification {
   @@index([isRead, createdAt])
   @@index([userId, isRead, createdAt])
   @@map("notifications")
+}
+
+model WebPushSubscription {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  endpoint     String
+  endpointHash String   @unique @map("endpoint_hash")
+  p256dh       String
+  auth         String
+  expirationTime DateTime? @map("expiration_time")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("web_push_subscriptions")
 }
 
 // ==========================================
