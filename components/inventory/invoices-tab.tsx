@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronUp, Eye, FileText, LockKeyhole, Pencil, Trash } from "lucide-react";
+import { ChevronUp, Eye, FileText, LockKeyhole, Pencil, RefreshCw, Trash } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TableSkeleton } from "@/components/skeletons/table-skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InventoryInvoice, InventoryInvoiceItem } from "@/app/dashboard/inventory/page";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface InvoicesTabProps {
   invoices: InventoryInvoice[];
@@ -21,6 +22,7 @@ interface InvoicesTabProps {
   role: string | null;
   onEdit: (invoice: InventoryInvoice) => void;
   onDelete: (invoice: InventoryInvoice) => void;
+  onSync: (invoice: InventoryInvoice) => Promise<void>;
   getStatusBadge: (status: string) => React.ReactNode;
 }
 
@@ -47,10 +49,14 @@ export function InvoicesTab({
   role,
   onEdit,
   onDelete,
+  onSync,
   getStatusBadge,
 }: InvoicesTabProps) {
   const [view, setView] = useState("all");
   const [loadingInvoiceId, setLoadingInvoiceId] = useState<string | null>(null);
+  const [syncTarget, setSyncTarget] = useState<InventoryInvoice | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const normalizedRole = (role || "").toLowerCase();
   const canEdit = ["admin", "moderator", "superadmin"].includes(normalizedRole);
   const canDelete = ["admin", "superadmin"].includes(normalizedRole);
@@ -107,6 +113,7 @@ export function InvoicesTab({
   };
 
   return (
+    <>
     <Card className="glass-card overflow-hidden rounded-3xl border-border/40 shadow-xs">
       <CardHeader className="space-y-4 border-b border-border/40 bg-muted/12">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -168,6 +175,7 @@ export function InvoicesTab({
                           <TableCell>
                             <div className="space-y-1.5">
                               <Badge variant="outline" className={`text-[10px] ${sourceClasses(invoice)}`}>{sourceLabel(invoice)}</Badge>
+                              {invoice.sheet_sync_status && <p className="text-[10px] text-muted-foreground">Sheet: {invoice.sheet_sync_status === "review" ? "Needs review" : invoice.sheet_sync_status === "pending" ? "Pending" : "Synced"}</p>}
                               {invoice.is_system_generated && <p className="text-[10px] text-muted-foreground">{invoice.last_synced_at ? `Synced ${new Date(invoice.last_synced_at).toLocaleDateString()}` : "System generated"}</p>}
                             </div>
                           </TableCell>
@@ -178,6 +186,7 @@ export function InvoicesTab({
                                 {expandedInvoiceId === invoice.id ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </Button>
                               {!locked && canEdit && <Button size="sm" variant="secondary" className="h-8 px-2.5" onClick={() => onEdit(invoice)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>}
+                              {!locked && canEdit && !invoice.sheet_sync_status && <Button size="sm" variant="outline" className="h-8 px-2.5" onClick={() => setSyncTarget(invoice)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Sync sheet</Button>}
                               {!locked && canDelete && <Button size="sm" variant="destructive" className="h-8 px-2.5" onClick={() => onDelete(invoice)}><Trash className="mr-1 h-3.5 w-3.5" />Delete</Button>}
                             </div>
                           </TableCell>
@@ -200,6 +209,7 @@ export function InvoicesTab({
                         <p className="mt-1 text-xs text-muted-foreground">{new Date(invoice.source_date || invoice.date).toLocaleDateString()} · {invoice.total_items} item{invoice.total_items === 1 ? "" : "s"}</p>
                       </div>
                       {getStatusBadge(invoice.status)}
+                      {invoice.sheet_sync_status && <Badge variant={invoice.sheet_sync_status === "review" ? "destructive" : "outline"} className="text-[10px]">Sheet: {invoice.sheet_sync_status === "review" ? "Needs review" : invoice.sheet_sync_status}</Badge>}
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Badge variant="outline" className={`text-[10px] ${sourceClasses(invoice)}`}>{sourceLabel(invoice)}</Badge>
@@ -211,6 +221,7 @@ export function InvoicesTab({
                       <div className="flex gap-1.5">
                         <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => void toggleInvoice(invoice)}>{expandedInvoiceId === invoice.id ? <ChevronUp className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{expandedInvoiceId === invoice.id ? "Hide items" : "View items"}</Button>
                         {!locked && canEdit && <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(invoice)} aria-label={`Edit ${invoice.invoice_number}`}><Pencil className="h-4 w-4" /></Button>}
+                        {!locked && canEdit && !invoice.sheet_sync_status && <Button size="sm" variant="outline" className="h-8" onClick={() => setSyncTarget(invoice)}>Sync sheet</Button>}
                       </div>
                     </div>
                     {expandedInvoiceId === invoice.id && <div className="mt-3 border-t pt-3">{renderItems(invoice)}</div>}
@@ -228,5 +239,12 @@ export function InvoicesTab({
         )}
       </CardContent>
     </Card>
+    <AlertDialog open={Boolean(syncTarget)} onOpenChange={(open) => { if (!open && !syncing) setSyncTarget(null); }}>
+      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Sync this receipt to its sheet?</AlertDialogTitle><AlertDialogDescription>This sends its item quantities to the invoice month’s Material Balance Issued cells. Existing sheet values will wait for review before replacement.</AlertDialogDescription></AlertDialogHeader>
+        {syncError && <p role="alert" className="text-sm text-destructive">{syncError}</p>}
+        <AlertDialogFooter><AlertDialogCancel disabled={syncing}>Cancel</AlertDialogCancel><AlertDialogAction disabled={syncing} onClick={(event) => { event.preventDefault(); if (!syncTarget) return; setSyncing(true); setSyncError(null); void onSync(syncTarget).then(() => setSyncTarget(null)).catch((cause) => setSyncError(cause instanceof Error ? cause.message : "Sheet sync failed")).finally(() => setSyncing(false)); }}>{syncing ? "Syncing…" : "Confirm sync"}</AlertDialogAction></AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

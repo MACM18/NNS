@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { queueLineWrite, processLineWrite } from "@/lib/google-sheet-line-sync";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -82,9 +83,10 @@ const lineSelect = {
   workAssignments: { include: { worker: { select: { id: true, fullName: true } } }, orderBy: { createdAt: "asc" as const } },
 } as const;
 
-function serializeLine(line: any) {
+function serializeLine(line: any, sheetSyncStatus?: string | null) {
   return {
     ...line,
+    sheetSyncStatus: sheetSyncStatus || null,
     date: line.date.toISOString().slice(0, 10),
     powerDp: line.powerDp == null ? "" : Number(line.powerDp),
     powerInbox: line.powerInbox == null ? "" : Number(line.powerInbox),
@@ -111,7 +113,9 @@ export async function GET(req: NextRequest) {
       prisma.lineDetails.findMany({ where: { date: { gte: startDate, lte: endDate } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], select: lineSelect }),
       prisma.worker.findMany({ where: { status: "active" }, orderBy: { fullName: "asc" }, select: { id: true, fullName: true } }),
     ]);
-    return NextResponse.json({ data: lines.map(serializeLine), workers });
+    const syncStates = await prisma.googleSheetLineSync.findMany({ where: { lineId: { in: lines.map((line) => line.id) } }, select: { lineId: true, status: true } });
+    const statuses = new Map(syncStates.map((state) => [state.lineId, state.status]));
+    return NextResponse.json({ data: lines.map((line) => serializeLine(line, statuses.get(line.id))), workers });
   } catch (error) {
     console.error("Daily Book load failed", error);
     return NextResponse.json({ error: "Could not load the Daily Book" }, { status: 500 });
@@ -165,8 +169,10 @@ export async function POST(req: NextRequest) {
         changedFields: Object.keys(initial), beforeValues: {},
         afterValues: initial as Prisma.InputJsonValue,
       } });
+      await queueLineWrite(created.id, undefined, tx);
       return created;
     });
+    await processLineWrite(line.id);
     return NextResponse.json({ data: { ...line, date: line.date.toISOString().slice(0, 10) } }, { status: 201 });
   } catch (error: any) {
     if (error?.code === "P2002") {

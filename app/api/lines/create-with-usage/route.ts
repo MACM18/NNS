@@ -5,6 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { isRecord } from "@/lib/error-utils";
 import { recalculateDrumWithHistory } from "@/lib/drum-tracking-service";
 import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
+import { processLineWrite, queueLineWrite } from "@/lib/google-sheet-line-sync";
 
 function toNumber(value: unknown): number | undefined {
   if (typeof value === "number")
@@ -286,6 +287,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        await queueLineWrite(createdLine.id, undefined, tx);
         return createdLine;
       }
     );
@@ -294,6 +296,7 @@ export async function POST(req: NextRequest) {
     if (selectedDrumId) {
       await recalculateDrumWithHistory(selectedDrumId);
     }
+    await processLineWrite(result.id);
 
     return NextResponse.json({ data: { line: result, wastage: finalWastage } });
   } catch (error) {

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { computeCableMeasurements } from "@/lib/db";
 import { recalculateDrumWithHistory } from "@/lib/drum-tracking-service";
+import { processLineWrite, queueLineDeletion, queueLineWrite } from "@/lib/google-sheet-line-sync";
 
 export async function GET(
   req: NextRequest,
@@ -169,10 +170,12 @@ export async function PUT(
       }
     }
 
-    const line = await prisma.lineDetails.update({
-      where: { id },
-      data: updateData,
+    const line = await prisma.$transaction(async (tx) => {
+      const updated = await tx.lineDetails.update({ where: { id }, data: updateData });
+      await queueLineWrite(id, Object.keys(updateData), tx);
+      return updated;
     });
+    await processLineWrite(id);
 
     // Return formatted snake_case response to match front-end expectations
     // We can reuse the same formatting logic as GET if we want, or just return basic info
@@ -222,6 +225,7 @@ export async function DELETE(
 
     // Use a transaction to handle cascading deletes
     await prisma.$transaction(async (tx: any) => {
+      await queueLineDeletion(id, tx);
       // Remove dependent drum usage records (use Prisma field names)
       await tx.drumUsage.deleteMany({
         where: { lineDetailsId: id },

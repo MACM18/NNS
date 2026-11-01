@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recalculateDrumWithHistory } from "@/lib/drum-tracking-service";
 import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
+import { processLineWrite, queueLineWrite } from "@/lib/google-sheet-line-sync";
 
 // PUT /api/lines/[id]/update-with-usage
 // Update a line's drum usage: restore prior usage (if any), then apply new usage
@@ -176,7 +177,9 @@ export async function PUT(
       }
 
       updated = await tx.lineDetails.findUnique({ where: { id } });
+      await queueLineWrite(id, ["drumNumber"], tx);
     });
+    await processLineWrite(id);
 
     // Run full recalculation on affected drums to update with smart wastage logic
     for (const drumId of drumIdsToRecalculate) {

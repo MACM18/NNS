@@ -45,6 +45,8 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { date: "desc" },
     });
+    const syncStates = await prisma.googleSheetLineSync.findMany({ where: { lineId: { in: lines.map((line) => line.id) } }, select: { lineId: true, status: true } });
+    const syncStatus = new Map(syncStates.map((state) => [state.lineId, state.status]));
 
     // Process lines to include assignees in expected format
     const processedLines = lines.map((line: any) => {
@@ -77,6 +79,7 @@ export async function GET(req: NextRequest) {
         dp: line.dp,
         date: line.date,
         status: normalizedStatus,
+        sheet_sync_status: syncStatus.get(line.id) || null,
         task_id: line.taskId,
         power_dp: Number(line.powerDp || 0),
         power_inbox: Number(line.powerInbox || 0),

@@ -56,6 +56,7 @@ export interface InventoryInvoice {
   drawn_by: string;
   total_items: number;
   status: string;
+  sheet_sync_status?: "pending" | "synced" | "review" | null;
   source_type?: string | null;
   source_key?: string | null;
   material_balance_import_id?: string | null;
@@ -559,6 +560,12 @@ export default function InventoryPage() {
             onDelete={(invoice) => {
               setInvoiceToDelete(invoice);
               setDeleteConfirmOpen(true);
+            }}
+            onSync={async (invoice) => {
+              const response = await fetch(`/api/inventory/invoices/${invoice.id}/sheet-sync`, { method: "POST" });
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error || "Could not queue sheet sync");
+              await fetchInvoices();
             }}
             getStatusBadge={getStatusBadge}
           />

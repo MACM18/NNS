@@ -26,6 +26,7 @@ function createFixture(options: { includeMissingItem?: boolean } = {}) {
   ];
 
   const tx = {
+    googleSheetIssuedSync: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(1),
     $queryRaw: jest.fn().mockImplementation(async () => [{ current_stock: inventoryCurrentStock }]),
     materialBalanceItemMapping: {
@@ -254,6 +255,20 @@ describe("Material Balance stock import", () => {
     expect(second.skipped).toBe(true);
     expect(second.updatedStockCount).toBe(0);
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not create a second receipt for an Issued value already owned by an app invoice", async () => {
+    const fixture = createFixture();
+    fixture.tx.googleSheetIssuedSync.findUnique.mockResolvedValue({ sheetValue: 2, appQuantity: 2, status: "synced" });
+    mockPrisma.materialBalanceImport.findUnique.mockResolvedValue(null);
+    mockPrisma.$transaction.mockImplementation(async (callback: (value: unknown) => unknown) => callback(fixture.tx));
+
+    await importMaterialBalanceValues({
+      connectionId: "connection-1", month: 8, year: 2026,
+      values: dailyValues(2), monthlyValues: monthlyValues(5), createdById: "profile-1",
+    });
+
+    expect(fixture.invoices.filter((invoice) => invoice.sourceType === "google_material_balance_issue")).toHaveLength(0);
   });
 
   it("creates a missing item and updates the same daily invoice on a changed sync", async () => {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
+import { processPendingIssuedWrites, queueInventoryInvoice, removeInventoryInvoiceContributions } from "@/lib/google-sheet-issued-sync";
 
 // GET /api/inventory/invoices/[id] - Get single invoice with items
 export async function GET(
@@ -118,6 +119,7 @@ export async function DELETE(
 
     // Delete in transaction to ensure consistency
     await prisma.$transaction(async (tx: any) => {
+      await removeInventoryInvoiceContributions(id, tx);
       const items = await tx.inventoryInvoiceItem.findMany({
         where: { invoiceId: id },
         select: { itemId: true, quantityIssued: true },
@@ -152,6 +154,7 @@ export async function DELETE(
         where: { id },
       });
     });
+    await processPendingIssuedWrites();
 
     return NextResponse.json({
       success: true,
@@ -217,10 +220,12 @@ export async function PATCH(
     const data = Object.fromEntries(
       Object.entries(body).filter(([key]) => allowedFields.includes(key)),
     );
-    const invoice = await prisma.inventoryInvoice.update({
-      where: { id },
-      data,
+    const invoice = await prisma.$transaction(async (tx) => {
+      const saved = await tx.inventoryInvoice.update({ where: { id }, data });
+      await queueInventoryInvoice(id, tx);
+      return saved;
     });
+    await processPendingIssuedWrites();
 
     return NextResponse.json({
       success: true,

@@ -93,6 +93,7 @@ const encryptedStringFields: Record<string, string[]> = {
 };
 const encryptedJsonFields: Record<string, string[]> = {
   LineDetailsRevision: ["beforeValues", "afterValues"],
+  GoogleSheetLineSync: ["baseline", "drumBaseline"],
   GeneratedInvoice: ["lineDetailsSnapshot", "invoiceContentSnapshot"],
   MonthlyReportVersion: ["sourceSnapshot"],
 };
@@ -179,7 +180,7 @@ function decryptResultValue(value: any): any {
     if (key === "telephoneNoLookup" || key === "customerSearchTokens") { delete output[key]; continue; }
     if (typeof child === "string" && isCustomerDataEncrypted(child)) {
       const plaintext = decryptCustomerValue(child);
-      output[key] = ["beforeValues", "afterValues", "lineDetailsSnapshot", "invoiceContentSnapshot", "sourceSnapshot"].includes(key) ? JSON.parse(plaintext) : plaintext;
+      output[key] = ["beforeValues", "afterValues", "lineDetailsSnapshot", "invoiceContentSnapshot", "sourceSnapshot", "baseline", "drumBaseline"].includes(key) ? JSON.parse(plaintext) : plaintext;
     } else if ((key === "pdfBytes") && child instanceof Uint8Array) output[key] = decryptCustomerBytes(child);
     else output[key] = decryptResultValue(child);
   }

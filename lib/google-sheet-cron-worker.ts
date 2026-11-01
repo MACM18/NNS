@@ -18,6 +18,8 @@ if (!globalThis.googleSheetCronStarted) {
         const headers = { authorization: `Bearer ${secret}` };
         const monthly = await fetch(`http://127.0.0.1:${port}/api/cron/google-sheet-monthly`, { headers, cache: "no-store" });
         if (!monthly.ok) console.error("[google-sheet-cron] Monthly setup check failed:", monthly.status, await monthly.text());
+        const outbox = await fetch(`http://127.0.0.1:${port}/api/cron/google-sheet-outbox`, { headers, cache: "no-store" });
+        if (!outbox.ok) console.error("[google-sheet-cron] Sheet write retry failed:", outbox.status, await outbox.text());
         const response = await fetch(`http://127.0.0.1:${port}/api/cron/google-sheet-import`, { headers, cache: "no-store" });
         if (!response.ok) console.error("[google-sheet-cron] Import check failed:", response.status, await response.text());
       } catch (error) {

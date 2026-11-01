@@ -24,6 +24,7 @@ import ConnectionActions from "./components/ConnectionActions";
 import type { PageProps } from "@/types/common";
 import { reconcileSheetAutoSync } from "@/lib/google-sheet-auto-sync";
 import GoogleSheetAutoSyncSettings from "@/components/integrations/GoogleSheetAutoSyncSettings";
+import SheetSyncReview from "./components/SheetSyncReview";
 
 interface SheetConnectionRow {
   id: string;
@@ -178,7 +179,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
               Google Sheets Integration
             </h1>
             <p className='text-muted-foreground mt-2 text-sm md:text-base'>
-              Sync line installation data and import the read-only Material Balance tab for operational stock.
+              Keep app and sheet lines in sync, and review inventory Issued changes before replacing sheet values.
             </p>
           </div>
 
@@ -199,6 +200,7 @@ export default async function GoogleSheetsPage({ searchParams }: PageProps) {
       </div>
 
       <div className='mb-6'><GoogleSheetAutoSyncSettings canManageMonthly={["admin", "superadmin"].includes(String(session?.user?.role || "").toLowerCase())} /></div>
+      {["admin", "moderator", "superadmin"].includes(String(session?.user?.role || "").toLowerCase()) && <SheetSyncReview />}
 
       {/* Connections List */}
       <Card>

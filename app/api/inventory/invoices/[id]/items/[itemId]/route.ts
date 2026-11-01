@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
+import { processPendingIssuedWrites, queueInventoryInvoice } from "@/lib/google-sheet-issued-sync";
 
 // GET /api/inventory/invoices/[id]/items/[itemId] - Get single invoice item
 export async function GET(
@@ -96,7 +97,7 @@ export async function PATCH(
           reason: "Inventory receipt line updated",
         });
       }
-      return tx.inventoryInvoiceItem.update({
+      const changed = await tx.inventoryInvoiceItem.update({
         where: { id: itemId },
         data: {
           description: body.description,
@@ -105,7 +106,10 @@ export async function PATCH(
           quantityIssued: newQuantity,
         },
       });
+      await queueInventoryInvoice(id, tx);
+      return changed;
     });
+    await processPendingIssuedWrites();
 
     return NextResponse.json({
       success: true,
@@ -174,7 +178,9 @@ export async function DELETE(
         });
       }
       await tx.inventoryInvoiceItem.delete({ where: { id: itemId } });
+      await queueInventoryInvoice(id, tx);
     });
+    await processPendingIssuedWrites();
 
     return NextResponse.json({
       success: true,

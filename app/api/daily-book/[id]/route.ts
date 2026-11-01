@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { processLineWrite, queueLineWrite } from "@/lib/google-sheet-line-sync";
 
 const kinds: Record<string, "string" | "number"> = {
   name: "string", address: "string", dp: "string", powerDp: "number", powerInbox: "number",
@@ -91,9 +92,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         beforeValues: beforeValues as Prisma.InputJsonValue,
         afterValues: afterValues as Prisma.InputJsonValue,
       } });
+      if (changedFields.length) await queueLineWrite(id, changedFields, tx);
       return { updated, changedFields };
     });
-    return NextResponse.json({ success: true, changedFields: result.changedFields, updatedAt: result.updated.updatedAt });
+    if (result.changedFields.length) await processLineWrite(id);
+    const sheetSync = await prisma.googleSheetLineSync.findUnique({ where: { lineId: id }, select: { status: true } });
+    return NextResponse.json({ success: true, changedFields: result.changedFields, updatedAt: result.updated.updatedAt, sheetSyncStatus: sheetSync?.status || null });
   } catch (error: any) {
     if (error?.message === "NOT_FOUND") return NextResponse.json({ error: "Daily Book entry not found" }, { status: 404 });
     if (error?.message === "DP_REQUIRED") return NextResponse.json({ error: "DP is required before completing an entry" }, { status: 400 });

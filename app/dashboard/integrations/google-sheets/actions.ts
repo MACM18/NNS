@@ -5,6 +5,8 @@ import { timingSafeEqual } from "node:crypto";
 import { currentSheetPeriod } from "@/lib/google-sheet-auto-sync";
 import prisma from "@/lib/prisma";
 import { getGoogleSheetsClient } from "@/lib/google-sheets-client";
+import { canRemoveMissingSheetLine, changedLineFields, lineSnapshot, processPendingLineWrites, SHEET_LINE_FIELDS, snapshotBaseline } from "@/lib/google-sheet-line-sync";
+import { processPendingIssuedWrites } from "@/lib/google-sheet-issued-sync";
 import { calculateSmartWastage } from "@/lib/drum-wastage-calculator";
 import {
   importMaterialBalanceValues,
@@ -301,6 +303,11 @@ async function syncConnectionCore(
     progress("Initializing Google Sheets client");
     const sheets = await getSheetsClient();
 
+    // App saves are delivered before the inbound snapshot is compared. A failed
+    // write remains pending, so import must not erase the app's newer values.
+    await processPendingLineWrites(connectionId);
+    await processPendingIssuedWrites(connectionId);
+
     // Get available tabs and determine which to use
     progress("Verifying sheet metadata");
     const metaRes = await sheets.spreadsheets.get({
@@ -415,9 +422,11 @@ async function syncConnectionCore(
       progress(`Warning: ${MATERIAL_BALANCE_TAB} tab was not found; stock was not changed`);
     }
 
-    // Use stored tab or default to first tab
-    if (!sheetTab || !availableTabs.includes(sheetTab)) {
-      sheetTab = availableTabs[0];
+    // Line rows and stable row IDs belong to All. Never reconcile from a
+    // different tab merely because it happens to be first in the workbook.
+    if (!availableTabs.includes("All")) throw new Error("The connected spreadsheet has no All tab for line sync");
+    if (sheetTab !== "All") {
+      sheetTab = "All";
       await prisma.googleSheetConnection.update({
         where: { id: connectionId },
         data: { sheetTab: sheetTab },
@@ -474,13 +483,13 @@ async function syncConnectionCore(
           telephoneNo: rawNumber.toString().trim(),
           name: (r[idx.name] ?? "").toString().trim(),
           status: "skipped",
-          reason: `Invalid telephone number format (raw: "${rawNumber}")`
+          reason: "Invalid telephone number format"
         });
         continue;
       }
 
       const mapped = mapSheetRow(r, idx, month, year);
-      parsedRows.push({ rowNum, mapped });
+      parsedRows.push({ rowNum, mapped, appLineId: typeof r[45] === "string" && /^[0-9a-f-]{36}$/i.test(r[45]) ? r[45] : null });
     }
 
     // Group and merge duplicate phone rows inside the sheet first
@@ -498,7 +507,7 @@ async function syncConnectionCore(
         mergedParsedRows.push(items[0]);
       } else {
         const { primaryRowNum, merged } = mergeGroupedMappedRows(items, skippedRows);
-        mergedParsedRows.push({ rowNum: primaryRowNum, mapped: merged });
+        mergedParsedRows.push({ rowNum: primaryRowNum, mapped: merged, appLineId: null });
       }
     }
 
@@ -515,13 +524,23 @@ async function syncConnectionCore(
     progress("Syncing data to database");
     let insertedCount = 0;
     let updatedCount = 0;
+    let unsafeRowLinks = 0;
     const lineIds: string[] = [];
 
     // Define month start/end for duplicate checking
     const syncMonthStart = new Date(Date.UTC(year, month - 1, 1));
     const syncMonthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+    const deletionStates = await prisma.googleSheetLineSync.findMany({ where: {
+      connectionId, pendingOperation: "delete", status: "review",
+    } });
 
-    for (const { rowNum, mapped } of mergedParsedRows) {
+    for (const { rowNum, mapped, appLineId } of mergedParsedRows) {
+      const awaitingDeletion = deletionStates.find((state) => state.sheetRow === rowNum || state.lineId === appLineId ||
+        normalizeTelephoneCanonical(snapshotBaseline(state.baseline).telephoneNo) === mapped.telephone_no);
+      if (awaitingDeletion) {
+        skippedRows.push({ rowNum, telephoneNo: mapped.telephone_no, name: mapped.name, status: "review", reason: "App deletion awaits manager confirmation before this sheet row is cleared" });
+        continue;
+      }
       const payload = sheetToLinePayload(mapped);
       if (!payload) {
         skippedRows.push({
@@ -535,7 +554,24 @@ async function syncConnectionCore(
       }
 
       // Check if line exists for this phone within the current month
-      const existing = await prisma.lineDetails.findFirst({
+      const linked = appLineId ? await prisma.lineDetails.findUnique({ where: { id: appLineId } }) : null;
+      if (linked && (linked.date < syncMonthStart || linked.date > syncMonthEnd ||
+          (linked.sourceSheetConnectionId && linked.sourceSheetConnectionId !== connectionId))) {
+        unsafeRowLinks++;
+        skippedRows.push({ rowNum, telephoneNo: mapped.telephone_no, name: mapped.name, status: "review", reason: "The row ID points to a line outside this sheet connection; no app record was changed" });
+        importWarnings.push(`All row ${rowNum} has a row link belonging to another period or connection.`);
+        continue;
+      }
+      if (linked) {
+        const linkedState = await prisma.googleSheetLineSync.findUnique({ where: { lineId: linked.id } });
+        if (linkedState && linkedState.connectionId !== connectionId) {
+          unsafeRowLinks++;
+          skippedRows.push({ rowNum, telephoneNo: mapped.telephone_no, name: mapped.name, status: "review", reason: "The row ID is linked to another sheet connection" });
+          importWarnings.push(`All row ${rowNum} is linked to another sheet connection.`);
+          continue;
+        }
+      }
+      const existing = linked || await prisma.lineDetails.findFirst({
         where: {
           telephoneNo: payload.telephoneNo,
           date: {
@@ -544,45 +580,50 @@ async function syncConnectionCore(
           },
         },
       });
-
       if (existing) {
-        // Enforce latest date rule: use the later of the two dates
-        const existingDate = new Date(existing.date);
-        const newDate = new Date(payload.date);
-        const finalDate =
-          existingDate.getTime() > newDate.getTime() ? existingDate : newDate;
-
-        // Resolve Name: use the non-blank one.
-        const resolvedName = payload.name?.trim() 
-          ? payload.name 
-          : ((existing.name as string) || payload.name);
-
-        // Resolve DP: use the highest DP string
-        const resolvedDP = getHighestDP(existing.dp as string, payload.dp);
-
-        // Resolve other fields: keep database value if payload is empty/0
-        const mergedData: any = { 
-          ...payload, 
-          name: resolvedName, 
-          dp: resolvedDP, 
-          date: finalDate 
-        };
-
-        const existingAny = existing as any;
-        for (const key of Object.keys(payload)) {
-          if (payload[key] === 0 && existingAny[key] !== undefined && existingAny[key] !== 0) {
-            mergedData[key] = existingAny[key];
+        const sheetSnapshot = lineSnapshot(payload);
+        const appSnapshot = lineSnapshot(existing as any);
+        const syncState = await prisma.googleSheetLineSync.findUnique({ where: { lineId: existing.id } });
+        if (!syncState) {
+          // Legacy source markers are ambiguous: an older import may have
+          // assigned one to a line originally entered by a person in NNS.
+          const differences = changedLineFields(sheetSnapshot, appSnapshot);
+          await prisma.googleSheetLineSync.create({ data: {
+            lineId: existing.id, connectionId, sheetRow: rowNum,
+            origin: "legacy_unknown", baseline: sheetSnapshot,
+            status: differences.length ? "review" : "synced",
+            conflictFields: differences, appTouched: differences.length > 0,
+          } });
+          if (differences.length) importWarnings.push(`Line at All row ${rowNum} differs from an older app record and needs review.`);
+        } else if (syncState.pendingOperation !== "delete") {
+          const baseline = snapshotBaseline(syncState.baseline);
+          const updates: Record<string, unknown> = {};
+          const conflicts: string[] = [];
+          const appOnly: string[] = [];
+          for (const field of SHEET_LINE_FIELDS) {
+            const sheetChanged = changedLineFields({ [field]: baseline[field] }, { [field]: sheetSnapshot[field] }).includes(field);
+            const appChanged = changedLineFields({ [field]: baseline[field] }, { [field]: appSnapshot[field] }).includes(field);
+            if (sheetChanged && appChanged && changedLineFields({ [field]: sheetSnapshot[field] }, { [field]: appSnapshot[field] }).includes(field)) conflicts.push(field);
+            else if (sheetChanged && !appChanged) updates[field] = (payload as any)[field];
+            else if (!sheetChanged && appChanged) appOnly.push(field);
           }
-          if ((payload[key] === null || payload[key] === "") && existingAny[key] !== undefined) {
-            mergedData[key] = existingAny[key];
+          if (conflicts.length || syncState.status === "review") {
+            await prisma.googleSheetLineSync.update({ where: { lineId: existing.id }, data: {
+              sheetRow: rowNum, status: "review", conflictFields: [...new Set([...syncState.conflictFields, ...conflicts])],
+              lastError: "App and sheet edits differ; choose which values to keep",
+            } });
+            importWarnings.push(`Line at All row ${rowNum} has app/sheet differences that need review.`);
+          } else {
+            if (Object.keys(updates).length) await prisma.lineDetails.update({ where: { id: existing.id }, data: updates });
+            await prisma.googleSheetLineSync.update({ where: { lineId: existing.id }, data: {
+              sheetRow: rowNum, baseline: sheetSnapshot,
+              status: appOnly.length ? "pending" : "synced",
+              pendingOperation: appOnly.length ? "upsert" : null,
+              pendingFields: appOnly,
+              lastSyncedAt: appOnly.length ? syncState.lastSyncedAt : new Date(),
+            } });
           }
         }
-
-        // Update existing record with merged data
-        await prisma.lineDetails.update({
-          where: { id: existing.id },
-          data: { ...mergedData, sourceSheetConnectionId: connectionId },
-        });
         lineIds.push(existing.id);
         updatedCount++;
 
@@ -591,13 +632,17 @@ async function syncConnectionCore(
           telephoneNo: payload.telephoneNo,
           name: payload.name,
           status: "updated",
-          reason: `Telephone number already existed in database. Merged details and updated existing record.`
+          reason: "Matched an existing record; changes were merged only where safe."
         });
       } else {
         // Create new record
         const created = await prisma.lineDetails.create({
           data: { ...payload, status: "completed", sourceSheetConnectionId: connectionId },
         });
+        await prisma.googleSheetLineSync.create({ data: {
+          lineId: created.id, connectionId, sheetRow: rowNum, origin: "sheet",
+          baseline: lineSnapshot(payload), status: "synced", lastSyncedAt: new Date(),
+        } });
         lineIds.push(created.id);
         insertedCount++;
       }
@@ -610,7 +655,7 @@ async function syncConnectionCore(
     let removedCount = 0;
     const payloadFailures = skippedRows.some((row) => row.reason?.startsWith("Failed to build line payload"));
     let reconciliationStatus: "completed" | "skipped_invalid_rows" | "skipped_payload_failures" = "completed";
-    if (invalidTelephoneRows === 0 && !payloadFailures) {
+    if (invalidTelephoneRows === 0 && unsafeRowLinks === 0 && !payloadFailures) {
       const previousMetadata = conn.metadata && typeof conn.metadata === "object" && !Array.isArray(conn.metadata)
         ? conn.metadata as Record<string, unknown>
         : {};
@@ -620,28 +665,51 @@ async function syncConnectionCore(
       const previousLineIds = Array.isArray(previousImport.lineIds)
         ? previousImport.lineIds.filter((id): id is string => typeof id === "string")
         : [];
-      const staleLines = await prisma.lineDetails.findMany({
-        where: {
-          date: { gte: syncMonthStart, lte: syncMonthEnd },
-          id: { notIn: lineIds },
-          OR: [
-            { sourceSheetConnectionId: connectionId },
-            ...(previousLineIds.length
-              ? [{ id: { in: previousLineIds }, sourceSheetConnectionId: null }]
-              : []),
-          ],
-        },
-        select: { id: true },
-      });
-      const staleIds = staleLines.map((line) => line.id);
+      const legacyLines = await prisma.lineDetails.findMany({ where: {
+        sourceSheetConnectionId: connectionId,
+        date: { gte: syncMonthStart, lte: syncMonthEnd },
+        id: { notIn: lineIds },
+      } });
+      const uncertainIds = [...new Set([...previousLineIds, ...legacyLines.map((line) => line.id)])]
+        .filter((id) => !lineIds.includes(id));
+      for (const id of uncertainIds) {
+        const line = legacyLines.find((candidate) => candidate.id === id) || await prisma.lineDetails.findUnique({ where: { id } });
+        if (!line || await prisma.googleSheetLineSync.findUnique({ where: { lineId: id } })) continue;
+        await prisma.googleSheetLineSync.create({ data: {
+          lineId: id, connectionId, origin: "legacy_unknown", baseline: lineSnapshot(line as any),
+          status: "review", appTouched: true, conflictFields: ["sheet_row"],
+          lastError: "This older line is missing from the sheet; its original owner is uncertain, so review it before removal",
+        } });
+      }
+      const states = await prisma.googleSheetLineSync.findMany({ where: { connectionId, lineId: { notIn: lineIds } } });
+      const staleIds: string[] = [];
+      const presentRowNumbers = new Set(parsedRows.map((row) => row.rowNum));
+      for (const state of states) {
+        const line = await prisma.lineDetails.findUnique({ where: { id: state.lineId } });
+        if (!line) continue;
+        if (state.sheetRow && presentRowNumbers.has(state.sheetRow)) continue;
+        if (canRemoveMissingSheetLine(state, line as any)) {
+          staleIds.push(state.lineId);
+        } else if (state.pendingOperation !== "delete") {
+          await prisma.googleSheetLineSync.update({ where: { lineId: state.lineId }, data: {
+            status: "review", conflictFields: ["sheet_row"], lastError: "This line is missing from the sheet but has app changes or uncertain origin",
+          } });
+        }
+      }
       if (staleIds.length) {
+        const removedUsages = await prisma.drumUsage.findMany({ where: { lineDetailsId: { in: staleIds } }, select: { drumId: true } });
         await prisma.$transaction(async (tx) => {
           // Preserve tasks and audit snapshots while removing active line data.
           await tx.task.updateMany({ where: { lineDetailsId: { in: staleIds } }, data: { lineDetailsId: null } });
           await tx.lineAssignee.deleteMany({ where: { lineId: { in: staleIds } } });
           await tx.drumUsage.deleteMany({ where: { lineDetailsId: { in: staleIds } } });
           await tx.lineDetails.deleteMany({ where: { id: { in: staleIds } } });
+          await tx.googleSheetLineSync.deleteMany({ where: { lineId: { in: staleIds } } });
         });
+        for (const drumId of new Set(removedUsages.map((usage) => usage.drumId).filter((id): id is string => Boolean(id)))) {
+          try { await recalculateDrumWithHistory(drumId); }
+          catch { importWarnings.push(`A drum affected by removed sheet rows needs recalculation.`); }
+        }
         removedCount = staleIds.length;
         progress(`Removed ${removedCount} line${removedCount === 1 ? "" : "s"} no longer present in this sheet`);
       }
@@ -660,8 +728,8 @@ async function syncConnectionCore(
       if (lineIds.length === 0 && staleIds.length === 0) {
         progress("The sheet has no valid line rows; there were no previously imported lines to remove");
       }
-    } else if (invalidTelephoneRows > 0 || payloadFailures) {
-      reconciliationStatus = invalidTelephoneRows > 0 ? "skipped_invalid_rows" : "skipped_payload_failures";
+    } else if (invalidTelephoneRows > 0 || unsafeRowLinks > 0 || payloadFailures) {
+      reconciliationStatus = invalidTelephoneRows > 0 || unsafeRowLinks > 0 ? "skipped_invalid_rows" : "skipped_payload_failures";
       progress("Skipped sheet reconciliation because one or more rows could not be safely imported");
     }
 
@@ -735,6 +803,7 @@ async function syncConnectionCore(
               name: true,
               drumNumber: true,
               drumNumberNew: true,
+              wastage: true,
             },
           });
 
@@ -758,19 +827,30 @@ async function syncConnectionCore(
             const arr = linesByPhone.get(r.tp);
             if (!arr || arr.length === 0) continue;
             const target = pickLatest(arr);
-
+            const syncState = await prisma.googleSheetLineSync.findUnique({ where: { lineId: target.id } });
             const updateData: any = {};
-            // From the Drum Number sheet we only take DRUM NUMBER and DW WASTAGE.
-            // All other fields (cable start/middle/end, name, dp, cHook) come
-            // exclusively from the ALL sheet and must not be overwritten here.
-            if (r.drum_number) {
-              updateData.drumNumber = r.drum_number;
+            const sheetValues = { drumNumber: r.drum_number || "", wastage: Number(r.dw_wastage || 0) };
+            const appValues = { drumNumber: target.drumNumber || "", wastage: Number(target.wastage || 0) };
+            const baseline = snapshotBaseline(syncState?.drumBaseline);
+            const conflicts: string[] = [];
+            for (const field of ["drumNumber", "wastage"] as const) {
+              if (field === "wastage" && (!Number.isFinite(sheetValues.wastage) || sheetValues.wastage < 0)) continue;
+              if (!r[field === "drumNumber" ? "drum_number" : "dw_wastage"] && !Object.prototype.hasOwnProperty.call(baseline, field)) continue;
+              const sheetChanged = Object.prototype.hasOwnProperty.call(baseline, field)
+                ? String(sheetValues[field]) !== String(baseline[field])
+                : String(sheetValues[field]) !== String(appValues[field]);
+              const appChanged = Object.prototype.hasOwnProperty.call(baseline, field)
+                ? String(appValues[field]) !== String(baseline[field])
+                : Boolean(syncState?.appTouched);
+              if (sheetChanged && appChanged && String(sheetValues[field]) !== String(appValues[field])) conflicts.push(field);
+              else if (sheetChanged && !appChanged) updateData[field] = sheetValues[field];
             }
-            if (r.dw_wastage) {
-              const wastageNum = Number(r.dw_wastage);
-              if (!isNaN(wastageNum) && wastageNum >= 0) {
-                updateData.wastage = wastageNum;
-              }
+            if (conflicts.length && syncState) {
+              await prisma.googleSheetLineSync.update({ where: { lineId: target.id }, data: {
+                status: "review", conflictFields: [...new Set([...syncState.conflictFields, ...conflicts])],
+                lastError: "Drum Number tab and app both changed the same value",
+              } });
+              continue;
             }
 
             if (Object.keys(updateData).length > 0) {
@@ -780,29 +860,13 @@ async function syncConnectionCore(
               });
               drumProcessed++;
             }
+            if (syncState && syncState.status === "synced") {
+              await prisma.googleSheetLineSync.update({ where: { lineId: target.id }, data: { drumBaseline: sheetValues } });
+            }
           }
 
-          // Bidirectional: append lines from DB that are missing in the Drum Number sheet
-          const drumTPs = new Set(
-            drumRows.map((r) => r.tp).filter(Boolean)
-          );
-          const missingInDrum = currentMonthLines.filter(
-            (l) => l.telephoneNo && !drumTPs.has(l.telephoneNo)
-          );
-
-          if (missingInDrum.length > 0) {
-            const drumAppendRows = missingInDrum.map((l) =>
-              buildDrumSheetRowFromLine(l, drumHeaders)
-            );
-            await sheets.spreadsheets.values.append({
-              spreadsheetId,
-              range: `'${drumTab}'!A1`,
-              valueInputOption: "USER_ENTERED",
-              insertDataOption: "INSERT_ROWS",
-              requestBody: { values: drumAppendRows },
-            });
-            drumAppended = drumAppendRows.length;
-          }
+          // Outbound writes are handled by the row-linked writer. Appending to
+          // this formula-linked tab would detach rows from their All references.
         }
       }
     } catch (drumSheetError) {
@@ -1011,7 +1075,7 @@ async function syncConnectionCore(
             drumSheetProcessed: drumProcessed,
             drumSheetAppended: drumAppended,
           })),
-          skippedRows,
+          skippedRows: skippedRows.map(({ rowNum, status, reason }) => ({ rowNum, status, reason })),
         },
       });
       // Prune old logs if they exceed threshold
@@ -1059,7 +1123,7 @@ async function syncConnectionCore(
           status: "failed",
           message: error instanceof Error ? error.message : String(error),
           details: {},
-          skippedRows,
+          skippedRows: skippedRows.map(({ rowNum, status, reason }) => ({ rowNum, status, reason })),
         },
       });
       // Prune old logs if they exceed threshold
@@ -1210,7 +1274,7 @@ function normalizeTelephoneCanonical(raw: any): string {
   const s = (raw ?? "").toString().trim();
   if (!s) return s;
   // If contains letters, accept as-is
-  if (/[a-zA-Z]/.test(s)) return s;
+  if (/[a-zA-Z]/.test(s)) return s.toUpperCase();
   const digits = s.replace(/\D+/g, "");
   if (!digits) return s;
   if (digits.length === 10) return digits;

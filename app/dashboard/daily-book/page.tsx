@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 type Worker = { id: string; fullName: string };
 type Entry = {
   id: string; date: string; telephoneNo: string; dp: string | null; name: string | null; address: string | null;
+  sheetSyncStatus?: string | null;
   status: string | null; powerDp: number | string; powerInbox: number | string; cableStart: number; cableMiddle: number; cableEnd: number;
   ont: string | null; voiceTestNo: string | null; stb: string | null; ontSerial: string | null; voiceTestNoNew: string | null; stbSerial: string | null; phoneNumber: string | null;
   workAssignments: { workerId: string; workerName: string }[];
@@ -176,6 +177,7 @@ export default function DailyBookPage() {
         const { workerIds: _workerIds, ...lineChanges } = patch;
         const merged = {
           ...lineChanges,
+          sheetSyncStatus: payload.sheetSyncStatus || null,
           ...(assignmentIds ? { workAssignments: workers.filter((worker) => assignmentIds.includes(worker.id)).map((worker) => ({ workerId: worker.id, workerName: worker.fullName })) } : {}),
         };
         setEntries((current) => current.map((entry) => entry.id === targetId ? { ...entry, ...merged } as Entry : entry));
@@ -374,6 +376,7 @@ export default function DailyBookPage() {
         <div className="space-y-2">
           {loading ? <div className="flex items-center justify-center rounded-2xl border py-10 text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading entries</div> : entries.length === 0 ? <div className="rounded-2xl border border-dashed px-4 py-10 text-center"><CalendarDays className="mx-auto mb-3 h-7 w-7 text-muted-foreground/60" /><p className="font-medium">No entries for this day</p><p className="mt-1 text-sm text-muted-foreground">Start with a phone number above.</p></div> : entries.map((entry) => <button key={entry.id} onClick={() => void selectEntry(entry)} className={`w-full min-w-0 rounded-2xl border p-3.5 text-left transition-colors ${entry.id === selectedId ? "border-primary/50 bg-primary/[0.06] shadow-sm" : "bg-card hover:bg-muted/50"}`}>
             <div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0"><p className="truncate font-semibold tabular-nums">{entry.telephoneNo}</p><p className="mt-0.5 truncate text-sm text-muted-foreground">{entry.name || entry.dp || "Details not added yet"}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-medium ${entry.status === "completed" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{entry.status === "completed" ? "Complete" : "In progress"}</span></div>
+            {entry.sheetSyncStatus && <p className="mt-1 text-[11px] text-muted-foreground">Sheet: {entry.sheetSyncStatus === "review" ? "Needs review" : entry.sheetSyncStatus === "pending" ? "Pending" : "Synced"}</p>}
             {entry.workAssignments.length > 0 && <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Users className="h-3.5 w-3.5" />{entry.workAssignments.map((assignment) => initials(assignment.workerName)).join(" · ")}</div>}
           </button>)}
         </div>

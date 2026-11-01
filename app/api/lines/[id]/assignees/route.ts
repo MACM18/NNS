@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { queueLineWrite } from "@/lib/google-sheet-line-sync";
 
 export async function GET(
   req: NextRequest,
@@ -95,6 +96,7 @@ export async function PUT(
           })),
         });
       }
+      if (toAdd.length || toRemove.length) await queueLineWrite(lineId, [], tx);
     });
 
     // Fetch updated assignees

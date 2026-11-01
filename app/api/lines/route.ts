@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { processLineWrite, queueLineWrite } from "@/lib/google-sheet-line-sync";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
@@ -143,9 +144,12 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const line = await prisma.lineDetails.create({
-      data: body,
+    const line = await prisma.$transaction(async (tx) => {
+      const created = await tx.lineDetails.create({ data: body });
+      await queueLineWrite(created.id, undefined, tx);
+      return created;
     });
+    await processLineWrite(line.id);
 
     return NextResponse.json({ data: line });
   } catch (error) {

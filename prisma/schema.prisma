@@ -909,9 +909,73 @@ model GoogleSheetConnection {
   syncLogs  GoogleSheetSyncLog[]
   materialBalanceImports MaterialBalanceImport[]
   importedLines LineDetails[]
+  lineSyncStates GoogleSheetLineSync[]
+  issuedSyncStates GoogleSheetIssuedSync[]
 
   @@index([year, month])
   @@map("google_sheet_connections")
+}
+
+model GoogleSheetLineSync {
+  lineId          String   @id @map("line_id")
+  connectionId    String   @map("connection_id")
+  sheetRow        Int?     @map("sheet_row")
+  origin          String   @default("legacy_unknown")
+  baseline        Json     @default("{}")
+  drumBaseline    Json     @default("{}") @map("drum_baseline")
+  status          String   @default("synced")
+  revision        Int      @default(0)
+  pendingOperation String? @map("pending_operation")
+  pendingFields   String[] @default([]) @map("pending_fields")
+  conflictFields  String[] @default([]) @map("conflict_fields")
+  appTouched      Boolean  @default(false) @map("app_touched")
+  lastError       String?  @map("last_error")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  connection GoogleSheetConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, status])
+  @@index([connectionId, sheetRow])
+  @@map("google_sheet_line_sync")
+}
+
+model GoogleSheetIssuedSync {
+  id              String   @id @default(uuid())
+  connectionId    String   @map("connection_id")
+  sourceDate      DateTime @db.Date @map("source_date")
+  inventoryItemId String   @map("inventory_item_id")
+  sheetRow        Int?     @map("sheet_row")
+  sheetColumn     Int?     @map("sheet_column")
+  sheetValue      Decimal? @map("sheet_value")
+  observedValue   Decimal? @map("observed_value")
+  appQuantity     Decimal  @default(0) @map("app_quantity")
+  status          String   @default("pending")
+  revision        Int      @default(0)
+  lastError       String?  @map("last_error")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  connection GoogleSheetConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, sourceDate, inventoryItemId])
+  @@index([connectionId, status])
+  @@map("google_sheet_issued_sync")
+}
+
+model GoogleSheetInvoiceContribution {
+  invoiceId       String   @map("invoice_id")
+  inventoryItemId String   @map("inventory_item_id")
+  connectionId    String   @map("connection_id")
+  sourceDate      DateTime @db.Date @map("source_date")
+  quantity        Decimal
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@id([invoiceId, inventoryItemId])
+  @@index([connectionId, sourceDate, inventoryItemId])
+  @@map("google_sheet_invoice_contribution")
 }
 
 model GoogleSheetSyncSettings {

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { recordInventoryStockEvent } from "@/lib/inventory-stock-event-service";
+import { processPendingIssuedWrites, queueInventoryInvoice } from "@/lib/google-sheet-issued-sync";
 
 export async function GET(req: NextRequest) {
   try {
@@ -62,7 +63,13 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const formatted = invoices.map((inv) => ({
+    const formatted = await Promise.all(invoices.map(async (inv) => {
+      const contributions = inv.isSystemGenerated ? [] : await prisma.googleSheetInvoiceContribution.findMany({ where: { invoiceId: inv.id } });
+      const states = await Promise.all(contributions.map((entry) => prisma.googleSheetIssuedSync.findUnique({ where: {
+        connectionId_sourceDate_inventoryItemId: { connectionId: entry.connectionId, sourceDate: entry.sourceDate, inventoryItemId: entry.inventoryItemId },
+      } })));
+      const sheetSyncStatus = !contributions.length ? null : states.some((state) => state?.status === "review") ? "review" : states.some((state) => state?.status !== "synced") ? "pending" : "synced";
+      return ({
       id: inv.id,
       invoice_number: inv.invoiceNumber,
       warehouse: inv.warehouse,
@@ -71,6 +78,7 @@ export async function GET(req: NextRequest) {
       drawn_by: inv.drawnBy || "",
       total_items: Number(inv.totalItems || 0),
       status: inv.status,
+      sheet_sync_status: sheetSyncStatus,
       source_type: inv.sourceType || null,
       source_key: inv.sourceKey || null,
       material_balance_import_id: inv.materialBalanceImportId || null,
@@ -85,7 +93,7 @@ export async function GET(req: NextRequest) {
       revision_count: inv.corrections?.length || 0,
       created_at: inv.createdAt?.toISOString(),
       updated_at: inv.updatedAt?.toISOString(),
-    }));
+    }); }));
 
     return NextResponse.json({ data: formatted });
   } catch (error) {
@@ -194,11 +202,13 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        await queueInventoryInvoice(invoice.id, tx);
         return invoice;
       }
     );
 
     const created = result;
+    await processPendingIssuedWrites();
     const formatted = {
       id: created.id,
       invoice_number: created.invoiceNumber,

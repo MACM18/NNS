@@ -77,6 +77,7 @@ interface LineDetail {
   dp: string;
   date: string;
   status?: string;
+  sheet_sync_status?: string | null;
   task_id?: string;
   // Use actual database column names
   power_dp: number;
@@ -768,6 +769,7 @@ export function LineDetailsTable({
                 <span className='flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground'><Phone className='h-3 w-3' />Line</span>
                 <p className='truncate text-base font-semibold tabular-nums'>{line.telephone_no}</p>
                 <p className='mt-0.5 truncate text-sm text-muted-foreground'>{line.name || "Customer name not set"}</p>
+                {line.sheet_sync_status && <p className='mt-1 text-[11px] text-muted-foreground'>Sheet: {line.sheet_sync_status === "review" ? "Needs review" : line.sheet_sync_status}</p>}
               </div>
               {getStatusBadge(line)}
             </div>
@@ -867,6 +869,7 @@ export function LineDetailsTable({
                   {visibleColumns.has("telephone_no") && (
                     <TableCell className='font-medium'>
                       {line.telephone_no}
+                      {line.sheet_sync_status && <span className='block text-[10px] font-normal text-muted-foreground'>Sheet: {line.sheet_sync_status === "review" ? "Needs review" : line.sheet_sync_status}</span>}
                     </TableCell>
                   )}
                   {visibleColumns.has("name") && (

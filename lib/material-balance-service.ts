@@ -723,6 +723,43 @@ type PreparedMaterialItem = ParsedMaterialBalanceItem & {
   autoCreated: boolean;
 };
 
+async function sheetOnlyIssuedLines(
+  tx: Prisma.TransactionClient,
+  connectionId: string,
+  date: string,
+  items: PreparedMaterialItem[],
+) {
+  const sourceDate = new Date(`${date}T00:00:00.000Z`);
+  const lines: Array<{ item: PreparedMaterialItem; quantity: number }> = [];
+  for (const item of items) {
+    if (!item.inventoryItemId) continue;
+    const issued = item.dailyEntries.find((entry) => entry.date === date)?.issued || 0;
+    const state = await tx.googleSheetIssuedSync.findUnique({ where: {
+      connectionId_sourceDate_inventoryItemId: { connectionId, sourceDate, inventoryItemId: item.inventoryItemId },
+    } });
+    if (!state) { lines.push({ item, quantity: issued }); continue; }
+    if (state.sheetValue !== null && Math.abs(Number(state.sheetValue) - issued) < 0.000001) {
+      lines.push({ item, quantity: Math.max(0, issued - Number(state.appQuantity)) });
+      continue;
+    }
+    if (state.sheetValue === null && issued === 0 && state.status === "pending") {
+      item.status = "warning";
+      item.warning = `Issued on ${date} needs sync review before stock reconciliation`;
+      lines.push({ item, quantity: 0 });
+      continue;
+    }
+    // An unconfirmed or changed sheet cell cannot safely produce a second
+    // receipt from a quantity already represented by a manual invoice.
+    item.status = "warning";
+    item.warning = `Issued on ${date} needs sync review before stock reconciliation`;
+    if (state.status !== "review") await tx.googleSheetIssuedSync.update({ where: { id: state.id }, data: {
+      status: "review", observedValue: issued, lastError: item.warning,
+    } });
+    lines.push({ item, quantity: 0 });
+  }
+  return lines;
+}
+
 async function createGeneratedInvoice(
   tx: Prisma.TransactionClient,
   input: {
@@ -1222,12 +1259,7 @@ async function reconcileExistingImport(input: {
           sourceDate: date,
           importId: existing.id,
           createdById: input.createdById,
-          lines: prepared
-            .filter((item) => item.inventoryItemId)
-            .map((item) => ({
-              item,
-              quantity: item.dailyEntries.find((entry) => entry.date === date)?.issued || 0,
-            })),
+          lines: await sheetOnlyIssuedLines(tx, input.connectionId, date, prepared),
         });
         if (daily.invoice) {
           changes.push(...daily.changes);
@@ -1240,7 +1272,8 @@ async function reconcileExistingImport(input: {
     }
 
     for (const snapshot of existing.items) {
-      if (!snapshot.inventoryItemId || !snapshot.inventoryItem) continue;
+      const currentPrepared = prepared.find((item) => item.inventoryItemId === snapshot.inventoryItemId);
+      if (!snapshot.inventoryItemId || !snapshot.inventoryItem || snapshot.warning?.includes("needs sync review") || currentPrepared?.warning?.includes("needs sync review")) continue;
       const currentStock = Number(snapshot.inventoryItem.currentStock || 0);
       const dailyTarget = input.dailyBalanceAsOfDate
         ? input.dailyBalanceTargets?.get(snapshot.normalizedSourceName) || null
@@ -1669,12 +1702,7 @@ export async function importMaterialBalanceValues(input: {
       }
 
       for (const date of dates) {
-        const lines = prepared
-          .filter((item) => item.inventoryItemId)
-          .map((item) => ({
-            item,
-            quantity: item.dailyEntries.find((entry) => entry.date === date)?.issued || 0,
-          }));
+        const lines = await sheetOnlyIssuedLines(tx, input.connectionId, date, prepared);
         const daily = await upsertCanonicalDailyInvoice(tx, {
           connectionId: input.connectionId,
           sourceKey: ["gmb", input.connectionId, date, "issue"].join(":"),
@@ -1694,7 +1722,7 @@ export async function importMaterialBalanceValues(input: {
 
       const monthEnd = new Date(Date.UTC(input.year, input.month, 0)).toISOString().slice(0, 10);
       for (const item of prepared) {
-        if (!item.inventoryItemId || (!item.monthlyItem && !input.dailyBalanceAsOfDate)) continue;
+        if (!item.inventoryItemId || item.warning?.includes("needs sync review") || (!item.monthlyItem && !input.dailyBalanceAsOfDate)) continue;
         const current = await tx.inventoryItem.findUnique({
           where: { id: item.inventoryItemId },
           select: { currentStock: true },
