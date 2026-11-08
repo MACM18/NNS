@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getApiPrincipal } from "@/lib/mobile-auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const principal = await getApiPrincipal(req);
+  if (!principal) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   try {
     const line = await prisma.lineDetails.findUnique({ where: { id }, select: { id: true } });

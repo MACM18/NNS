@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "NNS Enterprise",
+    "slug": "nns-enterprise-mobile",
+    "scheme": "nnsenterprise",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": [
+      "android"
+    ],
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "lk.nns.enterprise.mobile",
+      "versionCode": 1,
+      "allowBackup": false,
+      "permissions": [],
+      "adaptiveIcon": {
+        "backgroundColor": "#123E5A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-router",
+        {
+          "root": "src/app"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {
+        "root": "src/app",
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "83a22313-ccf3-41d1-b056-38aa744fb54d"
+      }
+    },
+    "owner": "macmlk"
+  }
+}

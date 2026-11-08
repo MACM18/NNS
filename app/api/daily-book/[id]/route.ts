@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { auth } from "@/lib/auth";
+import { getApiPrincipal } from "@/lib/mobile-auth";
 import { prisma } from "@/lib/prisma";
 import { processLineWrite, queueLineWrite } from "@/lib/google-sheet-line-sync";
 
@@ -11,14 +11,13 @@ const kinds: Record<string, "string" | "number"> = {
   stbSerial: "string", phoneNumber: "string",
 };
 
-async function actorProfile() {
-  const session = await auth();
-  if (!session?.user?.id) return null;
-  return prisma.profile.findUnique({ where: { userId: session.user.id }, select: { id: true } });
+async function actorProfile(request: NextRequest) {
+  const principal = await getApiPrincipal(request);
+  return principal?.profile ?? null;
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const actor = await actorProfile();
+  const actor = await actorProfile(req);
   if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   try {

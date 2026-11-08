@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { queueLineWrite, processLineWrite } from "@/lib/google-sheet-line-sync";
-import { auth } from "@/lib/auth";
+import { getApiPrincipal } from "@/lib/mobile-auth";
 import { prisma } from "@/lib/prisma";
 
 const editableFields = {
@@ -24,14 +24,9 @@ const editableFields = {
 
 type EditableField = keyof typeof editableFields;
 
-async function getActor() {
-  const session = await auth();
-  if (!session?.user?.id) return null;
-  const profile = await prisma.profile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  });
-  return profile;
+async function getActor(request: NextRequest) {
+  const principal = await getApiPrincipal(request);
+  return principal?.profile ?? null;
 }
 
 function parseDate(value: string | null) {
@@ -99,7 +94,7 @@ function serializeLine(line: any, sheetSyncStatus?: string | null) {
 }
 
 export async function GET(req: NextRequest) {
-  const actor = await getActor();
+  const actor = await getActor(req);
   if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const dateString = req.nextUrl.searchParams.get("date");
   const startDateString = req.nextUrl.searchParams.get("startDate");
@@ -123,7 +118,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const actor = await getActor();
+  const actor = await getActor(req);
   if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   let duplicateKey: { telephoneNo: string; date: Date } | null = null;
   try {
