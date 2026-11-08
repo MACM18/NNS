@@ -7,20 +7,18 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import NetInfo from "@react-native-community/netinfo";
 import * as Crypto from "expo-crypto";
-import * as Google from "expo-auth-session/providers/google";
-import * as WebBrowser from "expo-web-browser";
-import { apiFetch, clearSession, getApiOrigin, getSavedSession, login, NativeSession, revokeCurrentSession, saveApiOrigin, saveSession } from "./src/session";
+import { GoogleOneTapSignIn, isCancelledResponse, isErrorWithCode, isNoSavedCredentialFoundResponse, isSuccessResponse, statusCodes } from "react-native-nitro-google-signin";
+import { apiFetch, clearSession, getSavedSession, login, NativeSession, readApiJson, revokeCurrentSession, saveSession } from "./src/session";
 import { cacheServerEntry, clearConflictMutations, closeBookDatabase, deleteEntryCache, enqueueMutation, finishMutation, flagConflict, getCachedEntries, getConflictedMutations, getPendingMutations, getWorkers, openBookDatabase, pendingCount, pruneBookEntries, replaceLocalId, storeEntry, storeWorkers, updatePendingCreate } from "./src/storage";
 import { AppUser, blankEntry, CachedEntry, cableLengths, Entry, EntryConflict, PendingMutation, sameFieldValue, Worker, workerIds } from "./src/types";
-
-WebBrowser.maybeCompleteAuthSession();
 
 const C = {
   ink: "#132c3a", muted: "#617989", blue: "#14516f", bright: "#168cc4", pale: "#eaf4f8",
   paper: "#f5f8f8", card: "#ffffff", line: "#dbe5e9", good: "#28745b", warn: "#ab4b40",
   yellow: "#fff4d8", yellowInk: "#88621a",
 };
-const builtInApiOrigin = (process.env.EXPO_PUBLIC_NNS_API_URL || "").replace(/\/$/, "");
+const mobileApiConfigured = Boolean((process.env.EXPO_PUBLIC_NNS_API_URL || "").trim());
+const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "";
 
 const pages = ["Entry", "Customer", "Readings", "Equipment", "Team & review"] as const;
 type Page = typeof pages[number];
@@ -66,7 +64,6 @@ function errorMessage(payload: any, fallback: string) { return typeof payload?.e
 export default function App() {
   const [view, setView] = useState<ViewName>("book");
   const [user, setUser] = useState<AppUser | null>(null);
-  const [apiOrigin, setOrigin] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
@@ -91,13 +88,6 @@ export default function App() {
   const [mobileSessions, setMobileSessions] = useState<any[]>([]);
   const syncInProgress = useRef(false);
   const savedSnapshot = useRef<Entry | null>(null);
-  const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    scopes: ["openid", "profile", "email"],
-    selectAccount: true,
-  });
-
   const refreshLocal = useCallback(async () => {
     const [cached, cachedWorkers, pendingCount] = await Promise.all([getCachedEntries(), getWorkers(), pendingCountSafe()]);
     setEntries(cached);
@@ -201,9 +191,8 @@ export default function App() {
     let mounted = true;
     void (async () => {
       try {
-        const [origin, session] = await Promise.all([getApiOrigin(), getSavedSession()]);
+        const session = await getSavedSession();
         if (!mounted) return;
-        setOrigin(origin);
         if (session) {
           await openBookDatabase(session.user.id);
           const [cached, cachedWorkers] = await Promise.all([getCachedEntries(), getWorkers()]);
@@ -229,17 +218,6 @@ export default function App() {
     void (async () => { await createPendingLocalEntries(); await syncOutbox(); await reloadServer(); })();
   }, [user?.id, online, booting]); // Runs when connectivity returns or the account is restored.
 
-  useEffect(() => {
-    if (googleResponse?.type === "success") {
-      const token = googleResponse.params?.id_token;
-      if (token) {
-        setPendingGoogleToken(token);
-        setRequiresTwoFactor(false);
-        void completeLogin({ provider: "google", idToken: token });
-      } else setSyncText("Google sign-in did not return an identity token.");
-    }
-  }, [googleResponse]);
-
   const entryGroups = useMemo(() => {
     const list = entries.map((record) => record.entry).filter((entry) => entry.date >= dateInColombo(-6) && entry.date <= dateInColombo());
     return list.reduce<Record<string, Entry[]>>((acc, entry) => { (acc[entry.date] ||= []).push(entry); return acc; }, {});
@@ -248,10 +226,8 @@ export default function App() {
   async function completeLogin(credentials: Record<string, unknown>) {
     setLoginBusy(true); setSyncText("");
     try {
-      const origin = await saveApiOrigin(apiOrigin);
-      setOrigin(origin);
       const response = await login({ ...credentials, deviceName: "NNS Enterprise Android" });
-      const payload = await response.json();
+      const payload = await readApiJson(response, "sign-in");
       if (response.status === 428 && payload.twoFactorRequired) { setRequiresTwoFactor(true); setSyncText("Enter your authenticator code or a one-time backup code."); return; }
       if (!response.ok) throw new Error(errorMessage(payload, "Could not sign in"));
       const session: NativeSession = { user: payload.user, accessToken: payload.accessToken, refreshToken: payload.refreshToken };
@@ -273,6 +249,40 @@ export default function App() {
   async function submitGoogleSecondFactor() {
     if (!pendingGoogleToken || !twoFactorCode) { setSyncText("Enter your authenticator or backup code."); return; }
     await completeLogin({ provider: "google", idToken: pendingGoogleToken, twoFactorCode });
+  }
+
+  async function startGoogleLogin() {
+    if (!googleWebClientId) {
+      setSyncText("Google sign-in is not configured for this app. Please contact your administrator.");
+      return;
+    }
+    setLoginBusy(true);
+    setSyncText("");
+    try {
+      GoogleOneTapSignIn.configure({ webClientId: googleWebClientId, scopes: ["openid", "profile", "email"] });
+      await GoogleOneTapSignIn.checkPlayServices();
+      let result = await GoogleOneTapSignIn.signIn();
+      if (isNoSavedCredentialFoundResponse(result)) result = await GoogleOneTapSignIn.createAccount();
+      if (isNoSavedCredentialFoundResponse(result)) result = await GoogleOneTapSignIn.presentExplicitSignIn();
+      if (isCancelledResponse(result)) return;
+      if (!isSuccessResponse(result) || !result.data.idToken) {
+        setSyncText("Google did not return a sign-in token. Please try again.");
+        return;
+      }
+      setPendingGoogleToken(result.data.idToken);
+      setRequiresTwoFactor(false);
+      await completeLogin({ provider: "google", idToken: result.data.idToken });
+    } catch (error) {
+      if (isErrorWithCode(error) && error.code === statusCodes.DEVELOPER_ERROR) {
+        setSyncText("Google sign-in setup does not match this app build. Check the Android package name and SHA-1 certificate in Google Cloud.");
+      } else if (isErrorWithCode(error) && error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        setSyncText("Google Play services is unavailable or needs an update on this device.");
+      } else {
+        setSyncText(error instanceof Error ? error.message : "Google sign-in could not start. Please try again.");
+      }
+    } finally {
+      setLoginBusy(false);
+    }
   }
 
   async function startNewEntry() {
@@ -487,10 +497,10 @@ export default function App() {
   if (booting) return <Centered><Text style={styles.appName}>NNS Enterprise</Text><Text style={styles.subtle}>Opening your field book…</Text></Centered>;
   if (fatalStorageError) return <Centered><Text style={styles.brandMark}>NNS</Text><Text style={styles.heading}>Secure storage needed</Text><Text style={styles.body}>{fatalStorageError}</Text><Text style={styles.body}>Install the signed NNS Android test build to use encrypted offline records.</Text></Centered>;
   if (!user) return <SignInScreen
-    apiOrigin={apiOrigin} allowServerAddress={!builtInApiOrigin} setApiOrigin={setOrigin} email={email} setEmail={setEmail} password={password} setPassword={setPassword}
+    appConfigured={mobileApiConfigured} googleConfigured={Boolean(googleWebClientId)} email={email} setEmail={setEmail} password={password} setPassword={setPassword}
     twoFactorCode={twoFactorCode} setTwoFactorCode={setTwoFactorCode} requiresTwoFactor={requiresTwoFactor}
     busy={loginBusy} message={syncText} onSubmit={() => void (requiresTwoFactor && pendingGoogleToken ? submitGoogleSecondFactor() : submitPasswordLogin())}
-    googleReady={Boolean(googleRequest)} onGoogle={() => { setSyncText(""); void promptGoogle(); }}
+    onGoogle={() => void startGoogleLogin()}
   />;
 
   if (view === "sessions") return <SessionScreen sessions={mobileSessions} currentUser={user} onBack={() => setView("book")} onRevoke={(id) => void revokeSession(id).catch((error) => setSyncText(error.message))} />;
@@ -521,9 +531,9 @@ export default function App() {
 
 async function pendingCountSafe() { try { return await pendingCount(); } catch { return 0; } }
 function SignInScreen(props: {
-  apiOrigin: string; allowServerAddress: boolean; setApiOrigin: (value: string) => void; email: string; setEmail: (value: string) => void;
+  appConfigured: boolean; googleConfigured: boolean; email: string; setEmail: (value: string) => void;
   password: string; setPassword: (value: string) => void; twoFactorCode: string; setTwoFactorCode: (value: string) => void;
-  requiresTwoFactor: boolean; busy: boolean; message: string; onSubmit: () => void; googleReady: boolean; onGoogle: () => void;
+  requiresTwoFactor: boolean; busy: boolean; message: string; onSubmit: () => void; onGoogle: () => void;
 }) {
   return <SafeAreaView style={styles.safe}>
     <StatusBar style="dark" />
@@ -534,21 +544,21 @@ function SignInScreen(props: {
           <Text style={styles.eyebrow}>DAILY BOOK</Text>
           <Text style={styles.hero}>Start your day’s record.</Text>
           <Text style={styles.body}>Sign in to continue where the team left off. Entries save securely if the connection drops.</Text>
-          {props.allowServerAddress ? <Field label="NNS server address" value={props.apiOrigin} onChangeText={props.setApiOrigin} placeholder="https://your-company-domain" autoCapitalize="none" keyboardType="url" /> : <View style={styles.serverBadge}><Text style={styles.serverBadgeText}>Secure NNS server · {props.apiOrigin.replace(/^https?:\/\//, "")}</Text></View>}
+          {!props.appConfigured ? <InlineNotice text="App setup is incomplete. Please install the latest NNS Enterprise app or contact your administrator." tone="error" /> : null}
           {!props.requiresTwoFactor && <>
             <Field label="Email" value={props.email} onChangeText={props.setEmail} placeholder="name@company.com" autoCapitalize="none" keyboardType="email-address" />
             <Field label="Password" value={props.password} onChangeText={props.setPassword} placeholder="Enter your password" secureTextEntry />
           </>}
           {props.requiresTwoFactor && <Field label="Authenticator or backup code" value={props.twoFactorCode} onChangeText={props.setTwoFactorCode} placeholder="6 digit code or XXXX-XXXX" autoCapitalize="characters" />}
           {props.message ? <InlineNotice text={props.message} tone={props.message.includes("incorrect") || props.message.includes("Unable") ? "error" : "info"} /> : null}
-          <PrimaryButton label={props.busy ? "Signing in…" : props.requiresTwoFactor ? "Verify and continue" : "Sign in"} onPress={props.onSubmit} disabled={props.busy} />
+          <PrimaryButton label={props.busy ? "Signing in…" : props.requiresTwoFactor ? "Verify and continue" : "Sign in"} onPress={props.onSubmit} disabled={props.busy || !props.appConfigured} />
           {!props.requiresTwoFactor && <>
             <View style={styles.orRow}><View style={styles.rule} /><Text style={styles.subtle}>or continue with</Text><View style={styles.rule} /></View>
-            <SecondaryButton label="Continue with Google" onPress={props.onGoogle} disabled={!props.googleReady || props.busy} />
+            <SecondaryButton label="Continue with Google" onPress={props.onGoogle} disabled={!props.googleConfigured || !props.appConfigured || props.busy} />
           </>}
           <Text style={styles.footnote}>Use your NNS Enterprise account. Access follows your account’s existing permissions.</Text>
         </View>
-        <Text style={styles.footer}>NNS Enterprise · Secure field records</Text>
+        <Text style={styles.footer}>NNS Enterprise · Daily Book</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   </SafeAreaView>;

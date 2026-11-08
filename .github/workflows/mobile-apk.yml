@@ -1,0 +1,41 @@
+name: Build NNS Android APK
+
+on:
+  push:
+    tags:
+      - "mobile-v*"
+      - "release-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Build internal Android APK with EAS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Set up Expo and EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install mobile dependencies
+        run: npm ci
+        working-directory: apps/mobile
+
+      - name: Start Android APK build
+        run: eas build --platform android --profile preview --non-interactive --no-wait
+        working-directory: apps/mobile

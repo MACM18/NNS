@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "web-v*"
+      - "release-v*"
+    paths-ignore:
+      - "apps/mobile/**"
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -60,5 +66,4 @@ jobs:
 
       - name: Trigger Dokploy Deployment
         run: python3 .github/scripts/trigger_dokploy.py "${{ secrets.DOKPLOY_WEBHOOK_URL }}"
-
 

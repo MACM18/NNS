@@ -1,33 +1,34 @@
-# NNS Enterprise Android
+# NNS Enterprise Mobile
 
-The native app is a separate Expo app in this repository. It currently focuses on the Daily Book and talks to the same NNS Enterprise deployment as the web app.
+## Build configuration
 
-## Local setup
+The Android build reads these public values while bundling the app:
 
-1. Copy `.env.example` to `.env.local` and set `EXPO_PUBLIC_NNS_API_URL` to the production or test NNS origin. Set the Google Android and web client IDs if Google sign-in is enabled for your users.
-2. Run `npm install` in this directory.
-3. Run `npx expo prebuild --platform android`, then `npm run android` on a machine with Android Studio/SDK installed. SQLCipher is required; Expo Go is not suitable for testing the encrypted offline database.
+- `EXPO_PUBLIC_NNS_API_URL` — the production NNS site origin, for example `https://nns.example.com`.
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` — the Google OAuth **Web application** client ID.
 
-The Android app uses the existing credential accounts, TOTP/backup-code verification, and Google accounts. Native sessions use short-lived access tokens plus rotating refresh tokens. Server `.env` needs no new session secret; it reuses `AUTH_SECRET`. For Google sign-in, also set `GOOGLE_OAUTH_ANDROID_CLIENT_ID` to the Android OAuth client ID whose package and signing certificate match the APK. `GOOGLE_OAUTH_CLIENT_ID` remains the web client ID. The existing customer-data encryption key is used for server-side records.
+Add both in Expo project settings for the **preview** environment. Use **Sensitive** or **Plain text** visibility, not **Secret**: `EXPO_PUBLIC_` values must be readable by the app bundler and are included in the installed app. The Android OAuth client ID is configured in Google Cloud Console using the package name `lk.nns.enterprise.mobile` and the SHA-1 certificate for the APK signing key; the native sign-in library does not read that ID from JavaScript.
 
-## Signed internal APK
-
-From `apps/mobile`, install the app dependencies and link this project to the organization’s Expo account:
+The backend must have `GOOGLE_OAUTH_CLIENT_ID` set to the same Web application client ID. After changing either public value or native sign-in code, build a new APK:
 
 ```sh
-npm install
-npx eas-cli@latest login
-npx eas-cli@latest init
+npx eas-cli@latest build --platform android --profile preview
 ```
 
-Set `EXPO_PUBLIC_NNS_API_URL` to the production NNS origin in the EAS build environment. If Google sign-in is enabled, also set the Android and web OAuth client IDs from `.env.example`. These are build-time app settings; do not add server secrets or customer-data encryption keys to the mobile build.
+## Test the APK from a Mac without Android Studio
 
-Then create the installable internal APK:
+`adb` can install and control an APK, but it does not emulate Android. To use a physical Android phone, install only the platform tools:
 
 ```sh
-npm run build:apk
+brew install --cask android-platform-tools
+adb version
 ```
 
-The first EAS build may ask to create an Android signing key. Keep EAS credentials private; do not commit signing keys or `.env.local`. The build output includes a download link for the APK.
+Enable Developer options and USB debugging on the phone, connect it to the Mac, accept the debugging prompt, then install the downloaded APK:
 
-The offline database is SQLCipher-encrypted with a random key kept in Android Keystore through Expo SecureStore. If app data is restored without the device key, the app will require a fresh sign-in and will not attempt to read the cache as plaintext.
+```sh
+adb devices
+adb install -r ~/Downloads/nns-enterprise-mobile.apk
+```
+
+To run the app in a window on macOS, an Android emulator and Android system image are still required. These can be installed from Google's command-line SDK tools without installing Android Studio, but they are a separate, multi-gigabyte setup. Once an emulator is running, `adb devices` will list it and `adb install -r <apk-path>` installs the app there.

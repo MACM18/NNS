@@ -1,7 +1,9 @@
 import * as SecureStore from "expo-secure-store";
 import type { AppUser } from "./types";
 
-const API_URL_KEY = "nns-mobile-api-origin-v1";
+// Clear the user-editable host saved by older app builds. The app now connects
+// only to the deployment baked into the signed build.
+const LEGACY_API_URL_KEY = "nns-mobile-api-origin-v1";
 const ACCESS_KEY = "nns-mobile-access-v1";
 const REFRESH_KEY = "nns-mobile-refresh-v1";
 const USER_KEY = "nns-mobile-user-v1";
@@ -9,15 +11,31 @@ const DEFAULT_API_URL = process.env.EXPO_PUBLIC_NNS_API_URL || "";
 
 export type NativeSession = { user: AppUser; accessToken: string; refreshToken: string };
 
+let clearLegacyOrigin: Promise<void> | null = null;
 export async function getApiOrigin() {
-  return (await SecureStore.getItemAsync(API_URL_KEY)) || DEFAULT_API_URL.replace(/\/$/, "");
+  if (!clearLegacyOrigin) clearLegacyOrigin = SecureStore.deleteItemAsync(LEGACY_API_URL_KEY).catch(() => undefined);
+  await clearLegacyOrigin;
+  return DEFAULT_API_URL.replace(/\/$/, "");
 }
 
-export async function saveApiOrigin(value: string) {
-  const trimmed = value.trim().replace(/\/$/, "");
-  if (!/^https:\/\//i.test(trimmed) && !/^http:\/\/(localhost|10\.0\.2\.2)(:\d+)?$/i.test(trimmed)) throw new Error("Use the HTTPS address of your NNS Enterprise server.");
-  await SecureStore.setItemAsync(API_URL_KEY, trimmed);
-  return trimmed;
+export async function readApiJson(response: Response, operation = "NNS") {
+  const text = await response.text();
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (response.status === 404 || response.status === 405) {
+      throw new Error(`The ${operation} service is unavailable. Update the app or contact your administrator.`);
+    }
+    if (response.status >= 500) {
+      throw new Error(`The ${operation} service is temporarily unavailable. Try again shortly.`);
+    }
+    throw new Error(`The server returned an unexpected response during ${operation}. Please try again or contact your administrator.`);
+  }
+}
+
+function missingApiMessage() {
+  return "App setup is incomplete. Please install the latest NNS Enterprise app or contact your administrator.";
 }
 
 export async function getSavedSession(): Promise<NativeSession | null> {
@@ -51,7 +69,7 @@ async function refreshSession() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken: session.refreshToken }),
     });
     if (!response.ok) { await clearSession(); return null; }
-    const tokens = await response.json();
+    const tokens = await readApiJson(response, "session refresh");
     const next: NativeSession = { user: tokens.user || session.user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
     await saveSession(next);
     return next;
@@ -61,7 +79,7 @@ async function refreshSession() {
 
 export async function apiFetch(path: string, init: RequestInit = {}) {
   const origin = await getApiOrigin();
-  if (!origin) throw new Error("Set your NNS Enterprise server address before signing in.");
+  if (!origin) throw new Error(missingApiMessage());
   const session = await getSavedSession();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -88,6 +106,6 @@ export async function revokeCurrentSession() {
 
 export async function login(payload: Record<string, unknown>) {
   const origin = await getApiOrigin();
-  if (!origin) throw new Error("Enter your NNS Enterprise server address.");
+  if (!origin) throw new Error(missingApiMessage());
   return fetch(`${origin}/api/mobile/auth/login`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(payload) });
 }
