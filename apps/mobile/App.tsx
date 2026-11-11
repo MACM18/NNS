@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet,
+  Alert, AppState, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet,
   Text, TextInput, View, useColorScheme,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -11,7 +11,7 @@ import NetInfo from "@react-native-community/netinfo";
 import * as Crypto from "expo-crypto";
 import { GoogleOneTapSignIn, isCancelledResponse, isErrorWithCode, isNoSavedCredentialFoundResponse, isSuccessResponse, statusCodes } from "react-native-nitro-google-signin";
 import { apiFetch, claimMobilePairing, clearSession, confirmMobilePairing, getSavedSession, login, NativeSession, revokeCurrentSession, saveSession } from "./src/session";
-import { cacheServerEntry, clearConflictMutations, closeBookDatabase, deleteEntryCache, enqueueMutation, finishMutation, flagConflict, getCachedEntries, getConflictedMutations, getPendingMutations, getWorkers, openBookDatabase, pendingCount, pruneBookEntries, replaceLocalId, storeEntry, storeWorkers, updatePendingCreate } from "./src/storage";
+import { cacheServerEntry, clearConflictMutations, closeBookDatabase, deleteEntryCache, deleteLocalDraft, enqueueMutation, finishMutation, flagConflict, getCachedEntries, getConflictedMutations, getPendingMutations, getWorkers, openBookDatabase, pendingCount, pruneBookEntries, replaceLocalId, storeEntry, storeWorkers, updatePendingCreate } from "./src/storage";
 import { AppUser, blankEntry, CachedEntry, cableLengths, Entry, EntryConflict, PendingMutation, sameFieldValue, Worker, workerIds } from "./src/types";
 
 type Palette = {
@@ -267,6 +267,32 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     void (async () => { await createPendingLocalEntries(); await syncOutbox(); await reloadServer(); })();
   }, [user?.id, bookReady, online, booting]); // Runs when connectivity returns or the account is restored.
 
+  useEffect(() => {
+    if (!user || !bookReady || !online) return;
+    let active = true;
+    let checking = false;
+    const checkRevocation = async () => {
+      if (!active || checking) return;
+      checking = true;
+      try {
+        const response = await apiFetch("/api/mobile/auth/session");
+        if (response.status === 401) throw new Error("Your access to this device was revoked.");
+      } catch (error) {
+        if (!active || !(error instanceof Error) || !/session expired|access to this device was revoked/i.test(error.message)) return;
+        active = false;
+        await clearSession();
+        await closeBookDatabase();
+        setEntries([]); setWorkers([]); setPending(0); setPendingQueue([]);
+        setActiveEntry(null); setActiveConflict(null); setUser(null); setView("book"); setPairingMode(false);
+        setSyncText("This device’s access was revoked. Sign in again to continue.");
+      } finally { checking = false; }
+    };
+    void checkRevocation();
+    const timer = setInterval(() => void checkRevocation(), 20_000);
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") void checkRevocation(); });
+    return () => { active = false; clearInterval(timer); subscription.remove(); };
+  }, [user?.id, bookReady, online]);
+
   const entryGroups = useMemo(() => {
     const list = entries.map((record) => record.entry).filter((entry) => entry.date >= dateInColombo(-6) && entry.date <= dateInColombo());
     return list.reduce<Record<string, Entry[]>>((acc, entry) => { (acc[entry.date] ||= []).push(entry); return acc; }, {});
@@ -372,6 +398,14 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   async function persistStep(targetPage: number, nextEntry = activeEntry) {
     if (!nextEntry) return;
+    if (nextEntry.id.startsWith("local:") && !nextEntry.telephoneNo.trim()) {
+      await deleteLocalDraft(nextEntry.id);
+      savedSnapshot.current = nextEntry;
+      setEntries(await getCachedEntries());
+      setPending(await pendingCountSafe());
+      setSyncText("Add a telephone number before saving this draft.");
+      return;
+    }
     setSaving(true); setSyncText("");
     try {
       const before = savedSnapshot.current || nextEntry;
@@ -430,7 +464,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   async function handleBack() {
     if (!activeEntry) return;
-    if (page === 0) { await persistStep(page); setView("book"); return; }
+    if (page === 0) { await persistStep(page); setActiveEntry(null); setActiveConflict(null); setView("book"); return; }
     await persistStep(page);
     setPage((current) => Math.max(0, current - 1));
   }
@@ -556,7 +590,19 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     if (!activeEntry) return;
     Alert.alert("Discard this local draft?", "This removes the offline draft and its unsynced changes from this phone.", [
       { text: "Keep draft", style: "cancel" },
-      { text: "Discard draft", style: "destructive", onPress: () => { void (async () => { await clearConflictMutations(activeEntry.id); await deleteEntryCache(activeEntry.id); setActiveEntry(null); setActiveConflict(null); setEntries(await getCachedEntries()); setView("book"); })(); } },
+      { text: "Discard draft", style: "destructive", onPress: () => { void (async () => { await clearConflictMutations(activeEntry.id); await deleteLocalDraft(activeEntry.id); setActiveEntry(null); setActiveConflict(null); setEntries(await getCachedEntries()); setPending(await pendingCountSafe()); setView("book"); })(); } },
+    ]);
+  }
+
+  function deleteActiveDraft() {
+    if (!activeEntry?.id.startsWith("local:")) return;
+    const draftId = activeEntry.id;
+    Alert.alert("Delete this draft?", "This removes the draft and its queued changes from this phone.", [
+      { text: "Keep draft", style: "cancel" },
+      { text: "Delete draft", style: "destructive", onPress: () => { void (async () => {
+        await deleteLocalDraft(draftId);
+        setActiveEntry(null); setActiveConflict(null); setEntries(await getCachedEntries()); setPending(await pendingCountSafe()); setView("book"); setSyncText("Draft deleted.");
+      })(); } },
     ]);
   }
 
@@ -581,7 +627,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     workers={workers} conflict={activeConflict} remote={remoteConflictEntry} conflictChoices={conflictChoices}
     setConflictChoice={(field, choice) => setConflictChoices((current) => ({ ...current, [field]: choice }))}
     onBack={() => void handleBack()} onNext={() => void handleNext()} onComplete={() => void completeEntry()}
-    onHistory={() => void openHistory(activeEntry)} onRetrySync={() => void syncOutbox()}
+    onHistory={() => void openHistory(activeEntry)} onDeleteDraft={deleteActiveDraft} onRetrySync={() => void syncOutbox()}
     onReviewConflict={() => void reviewConflict(activeEntry)} onResolveConflict={() => void resolvePatchConflict()} onSaveAsNew={() => void saveMissingEntryAsNew()}
     onOpenExisting={() => void openExistingFromDuplicate()} onDiscardDuplicate={() => void abandonDuplicateDraft()}
   />;
@@ -600,7 +646,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     onRefreshSessions={() => void loadSessions().catch((error) => setSyncText(error.message))}
     onSignOut={() => Alert.alert("Sign out of this device?", "Offline entries will stay encrypted on this device until you sign in again.", [
       { text: "Cancel", style: "cancel" },
-      { text: "Sign out", style: "destructive", onPress: () => { void (async () => { await revokeCurrentSession(); await closeBookDatabase(); setEntries([]); setWorkers([]); setUser(null); setView("book"); }); } },
+      { text: "Sign out", style: "destructive", onPress: () => { void (async () => { await revokeCurrentSession(); await closeBookDatabase(); setEntries([]); setWorkers([]); setPending(0); setPendingQueue([]); setActiveEntry(null); setActiveConflict(null); setUser(null); setPairingMode(false); setSyncText(""); setView("book"); })(); } },
     ])}
   />;
 
@@ -634,7 +680,7 @@ function SignInScreen(props: {
           <Text style={styles.signInBrandName}>NNS Enterprise</Text>
           <Text style={styles.signInTitle}>{props.requiresTwoFactor ? "One more check." : "Your work,\nwell recorded."}</Text>
           <Text style={styles.signInIntro}>{props.requiresTwoFactor ? "Enter the code from your authenticator or use a backup code." : "Open the team field book and pick up right where the crew left off."}</Text>
-          <View style={styles.coverIndex}><View style={styles.coverIndexLine} /><Text style={styles.coverIndexText}>DAILY OPERATIONS  ·  SRI LANKA</Text></View>
+          <View style={styles.coverIndex}><View style={styles.coverIndexLine} /><Text style={styles.coverIndexText}>FIELD NOTEBOOK</Text></View>
         </View>
         <View style={styles.signInCard}>
           <View style={styles.signInFormHeading}><View><Text style={styles.signInFormKicker}>{props.requiresTwoFactor ? "IDENTITY CHECK" : "CREW ACCESS"}</Text><Text style={styles.signInFormTitle}>{props.requiresTwoFactor ? "Verify it’s you" : "Sign in to your book"}</Text></View><View style={styles.accessSeal}><Text style={styles.accessSealText}>{props.requiresTwoFactor ? "02" : "01"}</Text></View></View>
@@ -872,7 +918,7 @@ function EntryScreen(props: {
   entry: Entry; setEntry: (patch: Partial<Entry>) => void; page: number; setPage: (page: number) => void; saving: boolean; online: boolean; pending: number; message: string;
   workers: Worker[]; conflict: EntryConflict | null; remote: Entry | null; conflictChoices: Record<string, "phone" | "server">; setConflictChoice: (field: string, choice: "phone" | "server") => void;
   onBack: () => void; onNext: () => void; onComplete: () => void; onHistory: () => void; onRetrySync: () => void; onReviewConflict: () => void;
-  onResolveConflict: () => void; onOpenExisting: () => void; onDiscardDuplicate: () => void; onSaveAsNew: () => void;
+  onResolveConflict: () => void; onOpenExisting: () => void; onDiscardDuplicate: () => void; onSaveAsNew: () => void; onDeleteDraft: () => void;
 }) {
   const entry = props.entry;
   const lengths = cableLengths(entry);
@@ -899,7 +945,7 @@ function EntryScreen(props: {
 
   return <SafeAreaView style={styles.safe}>
     <StatusBar style={darkTheme ? "light" : "dark"} />
-    <View style={styles.entryTopBar}><Pressable onPress={props.onBack} style={styles.backButton}><Text style={styles.backArrow}>‹</Text></Pressable><View style={{ flex: 1 }}><Text style={styles.entryTopTitle}>Daily Book</Text><Text style={styles.subtle}>{entry.telephoneNo || "New entry"}</Text></View><View style={[styles.saveBadge, props.saving && styles.saveBadgeWorking]}><Text style={styles.saveBadgeText}>{props.saving ? "Saving" : props.online ? "Saved" : "On device"}</Text></View></View>
+    <View style={styles.entryTopBar}><Pressable onPress={props.onBack} style={styles.backButton}><Text style={styles.backArrow}>‹</Text></Pressable><View style={{ flex: 1 }}><Text style={styles.entryTopTitle}>Daily Book</Text><Text style={styles.subtle}>{entry.telephoneNo || "New entry"}</Text></View>{entry.id.startsWith("local:") && <Pressable onPress={props.onDeleteDraft} style={{ minHeight: 34, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: 1, borderColor: C.errorLine, backgroundColor: C.errorBg }} accessibilityRole="button" accessibilityLabel="Delete draft"><Text style={{ color: C.warn, fontSize: 11, fontWeight: "800" }}>Delete</Text></Pressable>}<View style={[styles.saveBadge, props.saving && styles.saveBadgeWorking]}><Text style={styles.saveBadgeText}>{props.saving ? "Saving" : props.online ? "Saved" : "On device"}</Text></View></View>
     <View style={styles.progressWrap}><View style={styles.progressHeader}><Text style={styles.eyebrow}>PAGE {props.page + 1} OF {pages.length}</Text><Text style={styles.progressPercent}>{Math.round(((props.page + 1) / pages.length) * 100)}%</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${((props.page + 1) / pages.length) * 100}%` }]} /></View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.steps}>{steps}</ScrollView></View>
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
       <ScrollView key={props.page} style={styles.flex} contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">

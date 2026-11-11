@@ -21,14 +21,27 @@ export async function POST(request: NextRequest) {
       select: { id: true, userId: true, tokenHash: true, expiresAt: true, claimedAt: true, confirmedAt: true, cancelledAt: true, user: { select: { profile: { select: { fullName: true, email: true } } } } },
     });
     const now = new Date();
-    if (!pairing || !matchesMobilePairingToken(input.token, pairing.tokenHash) || pairing.expiresAt <= now || pairing.cancelledAt || pairing.confirmedAt || pairing.claimedAt || !pairing.user.profile) {
+    if (!pairing || !matchesMobilePairingToken(input.token, pairing.tokenHash) || pairing.expiresAt <= now || pairing.cancelledAt || pairing.confirmedAt || !pairing.user.profile) {
       return NextResponse.json({ error: "This QR code has expired or was already used. Create a fresh code on the website." }, { status: 410 });
     }
-    const claimed = await prisma.mobilePairingRequest.updateMany({
-      where: { id: pairing.id, tokenHash: pairing.tokenHash, claimedAt: null, confirmedAt: null, cancelledAt: null, expiresAt: { gt: now } },
-      data: { claimedAt: now, deviceName: input.deviceName || "NNS Enterprise Android" },
-    });
-    if (!claimed.count) return NextResponse.json({ error: "This QR code was already scanned or is no longer active. Create a fresh code on the website." }, { status: 409 });
+    // A mobile request can reach the server even if Android loses its response.
+    // Allow the same QR bearer to retry the claim until the user confirms it;
+    // confirmation remains single-use and still creates the actual session.
+    if (!pairing.claimedAt) {
+      const claimed = await prisma.mobilePairingRequest.updateMany({
+        where: { id: pairing.id, tokenHash: pairing.tokenHash, claimedAt: null, confirmedAt: null, cancelledAt: null, expiresAt: { gt: now } },
+        data: { claimedAt: now, deviceName: input.deviceName || "NNS Enterprise Android" },
+      });
+      if (!claimed.count) {
+        const latest = await prisma.mobilePairingRequest.findUnique({
+          where: { id: pairing.id },
+          select: { claimedAt: true, confirmedAt: true, cancelledAt: true, expiresAt: true },
+        });
+        if (!latest?.claimedAt || latest.confirmedAt || latest.cancelledAt || latest.expiresAt <= new Date()) {
+          return NextResponse.json({ error: "This QR code is no longer active. Create a fresh code on the website." }, { status: 409 });
+        }
+      }
+    }
     return NextResponse.json({ fullName: pairing.user.profile.fullName, email: pairing.user.profile.email }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Mobile QR claim failed", error);

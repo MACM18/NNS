@@ -34,6 +34,31 @@ export async function readApiJson(response: Response, operation = "NNS") {
   }
 }
 
+async function fetchWithDeadline(url: string, init: RequestInit, timeoutMs: number, operation: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // Android's native fetch may report AbortController timeouts as a cancelled
+    // request, even while the server is still processing it. Keep the deadline
+    // on the JS side so a slow request does not get cancelled by the app.
+    return await Promise.race([
+      fetch(url, init),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error(`${operation} timed out`);
+          error.name = "NnsRequestTimeout";
+          reject(error);
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function isNetworkFailure(error: unknown) {
+  return error instanceof TypeError || (error instanceof Error && /network|fetch|cancel|abort/i.test(error.message));
+}
+
 function missingApiMessage() {
   return "App setup is incomplete. Please install the latest NNS Enterprise app or contact your administrator.";
 }
@@ -100,57 +125,54 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
 }
 
 export async function revokeCurrentSession() {
-  try { await apiFetch("/api/mobile/auth/session", { method: "DELETE", body: JSON.stringify({}) }); } catch { /* local sign-out still succeeds */ }
+  const [origin, session] = await Promise.all([getApiOrigin(), getSavedSession()]);
   await clearSession();
+  if (origin && session?.accessToken) {
+    // Do not keep the user on the account screen while waiting for a network
+    // request. The captured token still lets the server revoke this device.
+    void fetch(`${origin}/api/mobile/auth/session`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+      body: JSON.stringify({}),
+    }).catch(() => undefined);
+  }
 }
 
 export async function login(payload: Record<string, unknown>) {
   const origin = await getApiOrigin();
   if (!origin) throw new Error(missingApiMessage());
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
-    const response = await fetch(`${origin}/api/mobile/auth/login`, {
+    const response = await fetchWithDeadline(`${origin}/api/mobile/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
+    }, 45_000, "Sign-in");
     const result = await readApiJson(response, "sign-in");
     return { response, payload: result };
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("Sign-in took too long. Check your connection and try again.");
-    }
-    if (error instanceof TypeError) {
-      throw new Error("Could not reach NNS Enterprise. Check your internet connection and try again.");
-    }
+    if (error instanceof Error && error.name === "NnsRequestTimeout") throw new Error("NNS did not reply to the sign-in request in time. Check your connection and try again.");
+    if (isNetworkFailure(error)) throw new Error("The sign-in connection was interrupted before NNS replied. Check your internet connection and try again.");
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
 async function postPairing(path: string, payload: Record<string, string>) {
   const origin = await getApiOrigin();
   if (!origin) throw new Error(missingApiMessage());
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
-    const response = await fetch(`${origin}${path}`, {
+    const response = await fetchWithDeadline(`${origin}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
+    }, 30_000, "QR sign-in");
     const result = await readApiJson(response, "QR sign-in");
     if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : "This QR request is no longer active. Create a fresh one on the website.");
     return result;
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") throw new Error("The QR request took too long. Check your connection and try again.");
-    if (error instanceof TypeError) throw new Error("Could not reach NNS Enterprise. Check your internet connection and try again.");
+    if (error instanceof Error && error.name === "NnsRequestTimeout") throw new Error("NNS did not confirm the QR request in time. Create a fresh QR code on the website and scan it again.");
+    if (isNetworkFailure(error)) throw new Error("The QR connection was interrupted. Create a fresh QR code on the website and scan it again; the previous scan may have reached NNS.");
     throw error;
-  } finally { clearTimeout(timeout); }
+  }
 }
 
 export async function claimMobilePairing(requestId: string, token: string, deviceName: string) {

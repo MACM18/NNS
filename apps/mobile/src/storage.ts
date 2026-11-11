@@ -130,6 +130,15 @@ export async function deleteEntryCache(id: string) {
   await db.runAsync("DELETE FROM book_entries WHERE id = ?", id);
 }
 
+export async function deleteLocalDraft(id: string) {
+  if (!id.startsWith("local:")) throw new Error("Only an unsynced local draft can be deleted here.");
+  const db = await openBookDatabase();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM book_outbox WHERE entry_id = ?", id);
+    await db.runAsync("DELETE FROM book_entries WHERE id = ?", id);
+  });
+}
+
 export async function getWorkers() {
   const db = await openBookDatabase();
   const rows = await db.getAllAsync<{ id: string; name: string }>("SELECT id, name FROM book_workers ORDER BY name");
