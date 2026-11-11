@@ -43,6 +43,7 @@ model User {
   emailChangeRequests EmailChangeRequest[]
   passwordResetRequests PasswordResetRequest[]
   mobileSessions MobileSession[]
+  mobilePairingRequests MobilePairingRequest[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -96,6 +97,22 @@ model MobileSession {
 
   @@index([userId, revokedAt])
   @@map("mobile_sessions")
+}
+
+model MobilePairingRequest {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  tokenHash    String   @unique @map("token_hash")
+  deviceName   String?  @map("device_name")
+  expiresAt    DateTime @map("expires_at")
+  claimedAt    DateTime? @map("claimed_at")
+  confirmedAt  DateTime? @map("confirmed_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("mobile_pairing_requests")
 }
 
 model MobileSyncMutation {

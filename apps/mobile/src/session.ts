@@ -107,5 +107,56 @@ export async function revokeCurrentSession() {
 export async function login(payload: Record<string, unknown>) {
   const origin = await getApiOrigin();
   if (!origin) throw new Error(missingApiMessage());
-  return fetch(`${origin}/api/mobile/auth/login`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(payload) });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(`${origin}/api/mobile/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const result = await readApiJson(response, "sign-in");
+    return { response, payload: result };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Sign-in took too long. Check your connection and try again.");
+    }
+    if (error instanceof TypeError) {
+      throw new Error("Could not reach NNS Enterprise. Check your internet connection and try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function postPairing(path: string, payload: Record<string, string>) {
+  const origin = await getApiOrigin();
+  if (!origin) throw new Error(missingApiMessage());
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(`${origin}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const result = await readApiJson(response, "QR sign-in");
+    if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : "This QR request is no longer active. Create a fresh one on the website.");
+    return result;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw new Error("The QR request took too long. Check your connection and try again.");
+    if (error instanceof TypeError) throw new Error("Could not reach NNS Enterprise. Check your internet connection and try again.");
+    throw error;
+  } finally { clearTimeout(timeout); }
+}
+
+export async function claimMobilePairing(requestId: string, token: string, deviceName: string) {
+  return postPairing("/api/mobile/auth/pairing/claim", { requestId, token, deviceName });
+}
+
+export async function confirmMobilePairing(requestId: string, token: string): Promise<NativeSession> {
+  return postPairing("/api/mobile/auth/pairing/confirm", { requestId, token });
 }

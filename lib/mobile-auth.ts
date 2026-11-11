@@ -1,4 +1,5 @@
 import { createHmac, createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -25,11 +26,11 @@ export function hashMobileRefreshToken(token: string) {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
-export async function createMobileSession(userId: string, sessionVersion: number, deviceName?: string | null) {
+async function issueMobileSession(userId: string, sessionVersion: number, deviceName: string | null | undefined, db: Pick<Prisma.TransactionClient, "mobileSession">) {
   const refreshToken = randomBytes(48).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000);
-  const session = await prisma.mobileSession.create({
+  const session = await db.mobileSession.create({
     data: {
       userId,
       sessionVersion,
@@ -46,6 +47,14 @@ export async function createMobileSession(userId: string, sessionVersion: number
     accessTokenExpiresAt: new Date((iat + ACCESS_TTL_SECONDS) * 1000).toISOString(),
     refreshTokenExpiresAt: expiresAt.toISOString(),
   };
+}
+
+export async function createMobileSession(userId: string, sessionVersion: number, deviceName?: string | null) {
+  return issueMobileSession(userId, sessionVersion, deviceName, prisma);
+}
+
+export async function createMobileSessionInTransaction(userId: string, sessionVersion: number, deviceName: string | null | undefined, tx: Pick<Prisma.TransactionClient, "mobileSession">) {
+  return issueMobileSession(userId, sessionVersion, deviceName, tx);
 }
 
 type AccessClaims = { sub: string; sid: string; sv: number; iat: number; exp: number };

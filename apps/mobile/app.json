@@ -3,7 +3,7 @@
     "name": "NNS Enterprise",
     "slug": "nns-enterprise-mobile",
     "scheme": "nnsenterprise",
-    "version": "1.1.0",
+    "version": "1.1.2",
     "orientation": "portrait",
     "platforms": [
       "android"
@@ -12,7 +12,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "lk.nns.enterprise.mobile",
-      "versionCode": 3,
+      "versionCode": 5,
       "allowBackup": false,
       "permissions": [],
       "adaptiveIcon": {
@@ -33,6 +33,14 @@
         }
       ],
       "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow NNS Enterprise to scan a sign-in QR code.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
       [
         "expo-router",
         {

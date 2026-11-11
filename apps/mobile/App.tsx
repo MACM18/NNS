@@ -6,10 +6,11 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as SecureStore from "expo-secure-store";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import NetInfo from "@react-native-community/netinfo";
 import * as Crypto from "expo-crypto";
 import { GoogleOneTapSignIn, isCancelledResponse, isErrorWithCode, isNoSavedCredentialFoundResponse, isSuccessResponse, statusCodes } from "react-native-nitro-google-signin";
-import { apiFetch, clearSession, getSavedSession, login, NativeSession, readApiJson, revokeCurrentSession, saveSession } from "./src/session";
+import { apiFetch, claimMobilePairing, clearSession, confirmMobilePairing, getSavedSession, login, NativeSession, revokeCurrentSession, saveSession } from "./src/session";
 import { cacheServerEntry, clearConflictMutations, closeBookDatabase, deleteEntryCache, enqueueMutation, finishMutation, flagConflict, getCachedEntries, getConflictedMutations, getPendingMutations, getWorkers, openBookDatabase, pendingCount, pruneBookEntries, replaceLocalId, storeEntry, storeWorkers, updatePendingCreate } from "./src/storage";
 import { AppUser, blankEntry, CachedEntry, cableLengths, Entry, EntryConflict, PendingMutation, sameFieldValue, Worker, workerIds } from "./src/types";
 
@@ -111,8 +112,10 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [pendingGoogleToken, setPendingGoogleToken] = useState("");
+  const [pairingMode, setPairingMode] = useState(false);
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
+  const [bookReady, setBookReady] = useState(false);
   const [booting, setBooting] = useState(true);
   const [fatalStorageError, setFatalStorageError] = useState("");
   const [online, setOnline] = useState(false);
@@ -245,6 +248,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
           setEntries(cached);
           setWorkers(cachedWorkers);
           setUser(session.user);
+          setBookReady(true);
           setView("book");
         } else {
           setEntries([]);
@@ -259,29 +263,46 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   }, []);
 
   useEffect(() => {
-    if (!user || !online || booting) return;
+    if (!user || !bookReady || !online || booting) return;
     void (async () => { await createPendingLocalEntries(); await syncOutbox(); await reloadServer(); })();
-  }, [user?.id, online, booting]); // Runs when connectivity returns or the account is restored.
+  }, [user?.id, bookReady, online, booting]); // Runs when connectivity returns or the account is restored.
 
   const entryGroups = useMemo(() => {
     const list = entries.map((record) => record.entry).filter((entry) => entry.date >= dateInColombo(-6) && entry.date <= dateInColombo());
     return list.reduce<Record<string, Entry[]>>((acc, entry) => { (acc[entry.date] ||= []).push(entry); return acc; }, {});
   }, [entries, bookDate]);
 
+  async function activateMobileSession(session: NativeSession) {
+    await saveSession(session);
+    setBookReady(false);
+    setUser(session.user);
+    setPassword(""); setTwoFactorCode(""); setPendingGoogleToken(""); setRequiresTwoFactor(false); setPairingMode(false); setView("book");
+    setSyncText("Signed in. Preparing your recent entries…");
+    void (async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          openBookDatabase(session.user.id),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Your account is signed in, but secure notebook storage could not open. Close and reopen the app; if this continues, contact your administrator.")), 15_000);
+          }),
+        ]);
+        setBookReady(true);
+        await refreshLocal();
+      } catch (error) {
+        setFatalStorageError(error instanceof Error ? error.message : "Your account is signed in, but secure notebook storage could not open. Close and reopen the app.");
+      } finally { if (timer) clearTimeout(timer); }
+    })();
+  }
+
   async function completeLogin(credentials: Record<string, unknown>) {
     setLoginBusy(true); setSyncText("");
     try {
-      const response = await login({ ...credentials, deviceName: "NNS Enterprise Android" });
-      const payload = await readApiJson(response, "sign-in");
+      const { response, payload } = await login({ ...credentials, deviceName: "NNS Enterprise Android" });
       if (response.status === 428 && payload.twoFactorRequired) { setRequiresTwoFactor(true); setSyncText("Enter your authenticator code or a one-time backup code."); return; }
       if (!response.ok) throw new Error(errorMessage(payload, "Could not sign in"));
       const session: NativeSession = { user: payload.user, accessToken: payload.accessToken, refreshToken: payload.refreshToken };
-      await openBookDatabase(payload.user.id);
-      await saveSession(session);
-      setUser(payload.user);
-      setPassword(""); setTwoFactorCode(""); setPendingGoogleToken(""); setRequiresTwoFactor(false); setView("book");
-      await refreshLocal();
-      await reloadServer();
+      await activateMobileSession(session);
     } catch (error) { setSyncText(error instanceof Error ? error.message : "Could not sign in"); }
     finally { setLoginBusy(false); }
   }
@@ -541,11 +562,16 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   if (booting) return <Centered><Text style={styles.appName}>NNS Enterprise</Text><Text style={styles.subtle}>Opening your field book…</Text></Centered>;
   if (fatalStorageError) return <Centered><Text style={styles.brandMark}>NNS</Text><Text style={styles.heading}>Secure storage needed</Text><Text style={styles.body}>{fatalStorageError}</Text><Text style={styles.body}>Install the signed NNS Android test build to use encrypted offline records.</Text></Centered>;
+  if (user && !bookReady) return <Centered><View style={styles.preparingSeal}><Text style={styles.preparingSealText}>N</Text></View><Text style={styles.heading}>Opening your field book</Text><Text style={styles.body}>Your account is signed in. Preparing this phone’s secure notebook…</Text></Centered>;
+  if (!user && pairingMode) return <MobilePairingScreen
+    onCancel={() => setPairingMode(false)}
+    onConfirm={activateMobileSession}
+  />;
   if (!user) return <SignInScreen
     appConfigured={mobileApiConfigured} googleConfigured={Boolean(googleWebClientId)} email={email} setEmail={setEmail} password={password} setPassword={setPassword}
     twoFactorCode={twoFactorCode} setTwoFactorCode={setTwoFactorCode} requiresTwoFactor={requiresTwoFactor}
     busy={loginBusy} message={syncText} onSubmit={() => void (requiresTwoFactor && pendingGoogleToken ? submitGoogleSecondFactor() : submitPasswordLogin())}
-    onGoogle={() => void startGoogleLogin()}
+    onGoogle={() => void startGoogleLogin()} onPairing={() => setPairingMode(true)}
   />;
 
   if (view === "history") return <HistoryScreen rows={history} onBack={() => setView("entry")} />;
@@ -591,34 +617,112 @@ async function pendingCountSafe() { try { return await pendingCount(); } catch {
 function SignInScreen(props: {
   appConfigured: boolean; googleConfigured: boolean; email: string; setEmail: (value: string) => void;
   password: string; setPassword: (value: string) => void; twoFactorCode: string; setTwoFactorCode: (value: string) => void;
-  requiresTwoFactor: boolean; busy: boolean; message: string; onSubmit: () => void; onGoogle: () => void;
+  requiresTwoFactor: boolean; busy: boolean; message: string; onSubmit: () => void; onGoogle: () => void; onPairing: () => void;
 }) {
   return <SafeAreaView style={styles.safe}>
     <StatusBar style={darkTheme ? "light" : "dark"} />
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={styles.signInScroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.signInBrand}><View style={styles.logo}><Text style={styles.logoText}>N</Text></View><View><Text style={styles.appName}>NNS Enterprise</Text><Text style={styles.subtle}>Field Book</Text></View></View>
+        <View style={styles.signInCover}>
+          <View style={styles.signInCoverTop}>
+            <View style={styles.notebookMark}>
+              <View style={styles.notebookSpine} />
+              <View style={styles.notebookPage}><Text style={styles.notebookN}>N</Text><View style={styles.notebookRule} /><View style={styles.notebookRule} /><View style={styles.notebookRuleShort} /></View>
+            </View>
+            <View style={styles.fieldBookStamp}><Text style={styles.fieldBookStampText}>FIELD</Text><Text style={styles.fieldBookStampText}>EDITION</Text></View>
+          </View>
+          <Text style={styles.signInBrandName}>NNS Enterprise</Text>
+          <Text style={styles.signInTitle}>{props.requiresTwoFactor ? "One more check." : "Your work,\nwell recorded."}</Text>
+          <Text style={styles.signInIntro}>{props.requiresTwoFactor ? "Enter the code from your authenticator or use a backup code." : "Open the team field book and pick up right where the crew left off."}</Text>
+          <View style={styles.coverIndex}><View style={styles.coverIndexLine} /><Text style={styles.coverIndexText}>DAILY OPERATIONS  ·  SRI LANKA</Text></View>
+        </View>
         <View style={styles.signInCard}>
-          <Text style={styles.eyebrow}>DAILY BOOK</Text>
-          <Text style={styles.hero}>Start your day’s record.</Text>
-          <Text style={styles.body}>Sign in to continue where the team left off. Entries save securely if the connection drops.</Text>
+          <View style={styles.signInFormHeading}><View><Text style={styles.signInFormKicker}>{props.requiresTwoFactor ? "IDENTITY CHECK" : "CREW ACCESS"}</Text><Text style={styles.signInFormTitle}>{props.requiresTwoFactor ? "Verify it’s you" : "Sign in to your book"}</Text></View><View style={styles.accessSeal}><Text style={styles.accessSealText}>{props.requiresTwoFactor ? "02" : "01"}</Text></View></View>
+          {!props.requiresTwoFactor ? <Text style={styles.body}>Use your NNS Enterprise account. Your entries stay encrypted on this phone.</Text> : null}
           {!props.appConfigured ? <InlineNotice text="App setup is incomplete. Please install the latest NNS Enterprise app or contact your administrator." tone="error" /> : null}
           {!props.requiresTwoFactor && <>
             <Field label="Email" value={props.email} onChangeText={props.setEmail} placeholder="name@company.com" autoCapitalize="none" keyboardType="email-address" />
             <Field label="Password" value={props.password} onChangeText={props.setPassword} placeholder="Enter your password" secureTextEntry />
           </>}
           {props.requiresTwoFactor && <Field label="Authenticator or backup code" value={props.twoFactorCode} onChangeText={props.setTwoFactorCode} placeholder="6 digit code or XXXX-XXXX" autoCapitalize="characters" />}
-          {props.message ? <InlineNotice text={props.message} tone={props.message.includes("incorrect") || props.message.includes("Unable") ? "error" : "info"} /> : null}
-          <PrimaryButton label={props.busy ? "Signing in…" : props.requiresTwoFactor ? "Verify and continue" : "Sign in"} onPress={props.onSubmit} disabled={props.busy || !props.appConfigured} />
+          {props.message ? <InlineNotice text={props.message} tone={props.message.startsWith("Enter your authenticator") ? "info" : "error"} /> : null}
+          <PrimaryButton label={props.busy ? "Checking your details…" : props.requiresTwoFactor ? "Verify and continue" : "Open Daily Book"} onPress={props.onSubmit} disabled={props.busy || !props.appConfigured} />
           {!props.requiresTwoFactor && <>
-            <View style={styles.orRow}><View style={styles.rule} /><Text style={styles.subtle}>or continue with</Text><View style={styles.rule} /></View>
+            <View style={styles.orRow}><View style={styles.rule} /><Text style={styles.subtle}>OR USE YOUR GOOGLE ACCOUNT</Text><View style={styles.rule} /></View>
             <SecondaryButton label="Continue with Google" onPress={props.onGoogle} disabled={!props.googleConfigured || !props.appConfigured || props.busy} />
+            <SecondaryButton label="Scan a website QR code" onPress={props.onPairing} disabled={!props.appConfigured || props.busy} />
           </>}
-          <Text style={styles.footnote}>Use your NNS Enterprise account. Access follows your account’s existing permissions.</Text>
+          <View style={styles.signInTrust}><Text style={styles.signInTrustGlyph}>✓</Text><Text style={styles.signInTrustText}>Access follows your account permissions. Offline entries remain encrypted on this device.</Text></View>
         </View>
-        <Text style={styles.footer}>NNS Enterprise · Daily Book</Text>
+        <Text style={styles.footer}>NNS ENTERPRISE  ·  FIELD BOOK</Text>
       </ScrollView>
     </KeyboardAvoidingView>
+  </SafeAreaView>;
+}
+
+function MobilePairingScreen(props: { onCancel: () => void; onConfirm: (session: NativeSession) => Promise<void> }) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [pairing, setPairing] = useState<{ requestId: string; token: string; fullName: string; email: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const scanLocked = useRef(false);
+
+  async function handleScan(data: string) {
+    if (scanLocked.current || busy) return;
+    scanLocked.current = true;
+    setBusy(true); setMessage("");
+    try {
+      const scanned = new URL(data);
+      const requestId = scanned.searchParams.get("requestId") || "";
+      const token = scanned.searchParams.get("token") || "";
+      if (scanned.protocol !== "nnsenterprise:" || scanned.hostname !== "pair" || !requestId || !token) throw new Error("That is not an NNS mobile sign-in QR code.");
+      const identity = await claimMobilePairing(requestId, token, "NNS Enterprise Android");
+      setPairing({ requestId, token, fullName: identity.fullName || "NNS Enterprise user", email: identity.email || "" });
+    } catch (error) {
+      scanLocked.current = false;
+      setMessage(error instanceof Error ? error.message : "Could not read this QR code. Try again.");
+    } finally { setBusy(false); }
+  }
+
+  async function confirm() {
+    if (!pairing || busy) return;
+    setBusy(true); setMessage("");
+    try {
+      const session = await confirmMobilePairing(pairing.requestId, pairing.token);
+      await props.onConfirm(session);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to connect this phone. Create a new QR code on the website.");
+      setPairing(null);
+      scanLocked.current = false;
+    } finally { setBusy(false); }
+  }
+
+  return <SafeAreaView style={styles.safe}>
+    <StatusBar style={darkTheme ? "light" : "dark"} />
+    <View style={styles.pairHeader}><Pressable onPress={props.onCancel} style={styles.pairBack}><Text style={styles.pairBackText}>‹</Text></Pressable><View style={styles.flex}><Text style={styles.sectionEyebrow}>NNS ENTERPRISE</Text><Text style={styles.pairTitle}>Connect this phone</Text></View></View>
+    {pairing ? <View style={styles.pairConfirmWrap}>
+      <View style={styles.pairConfirmIcon}><Text style={styles.pairConfirmIconText}>N</Text></View>
+      <Text style={styles.pairKicker}>WEBSITE ACCOUNT</Text>
+      <Text style={styles.pairUserName}>{pairing.fullName}</Text>
+      <Text style={styles.pairUserEmail}>{pairing.email}</Text>
+      <Text style={styles.pairMessage}>Connect this phone to the account shown above? The QR code expires shortly and can only be used once.</Text>
+      {message ? <InlineNotice text={message} tone="error" /> : null}
+      <PrimaryButton label={busy ? "Connecting…" : "Confirm and sign in"} onPress={() => void confirm()} disabled={busy} />
+      <SecondaryButton label="Cancel" onPress={props.onCancel} disabled={busy} />
+    </View> : <View style={styles.scannerPanel}>
+      <Text style={styles.pairMessage}>On your signed-in NNS website, open Profile → Connect mobile app, then scan its QR code.</Text>
+      {!permission ? <View style={styles.cameraPermissionCard}><Text style={styles.body}>Preparing the camera…</Text></View> : !permission.granted ? <View style={styles.cameraPermissionCard}>
+        <Text style={styles.cameraPermissionTitle}>Camera access needed</Text>
+        <Text style={styles.body}>Allow camera access to scan your one-time sign-in code. The app only uses it for QR scanning.</Text>
+        <PrimaryButton label="Allow camera" onPress={() => void requestPermission()} />
+      </View> : <View style={styles.cameraFrame}>
+        <CameraView style={styles.cameraPreview} facing="back" barcodeScannerSettings={{ barcodeTypes: ["qr"] }} onBarcodeScanned={busy ? undefined : (event) => void handleScan(event.data)} />
+        <View pointerEvents="none" style={styles.scanTarget}><View style={styles.scanTargetInner} /></View>
+        <View style={styles.cameraCaption}><Text style={styles.cameraCaptionText}>{busy ? "Checking this sign-in code…" : "Align the website QR inside the frame"}</Text></View>
+      </View>}
+      {message ? <InlineNotice text={message} tone="error" /> : null}
+      <SecondaryButton label="Back to sign in" onPress={props.onCancel} />
+    </View>}
   </SafeAreaView>;
 }
 
@@ -914,9 +1018,29 @@ function ReviewRow(props: { label: string; value: string }) { return <View style
 
 function createStyles(C: Palette) { return StyleSheet.create({
   flex: { flex: 1 }, safe: { flex: 1, backgroundColor: C.paper }, centered: { flex: 1, backgroundColor: C.paper, alignItems: "center", justifyContent: "center", padding: 28, gap: 10 }, heading: { color: C.ink, fontSize: 20, fontWeight: "800" },
-  signInScroll: { flexGrow: 1, justifyContent: "center", padding: 22, paddingBottom: 32 },
-  signInBrand: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 30 }, logo: { width: 52, height: 52, borderRadius: 18, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" }, logoText: { color: "#fff", fontSize: 23, fontWeight: "800" }, smallLogo: { width: 38, height: 38, borderRadius: 14, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" }, serverBadge: { borderRadius: 12, backgroundColor: C.pale, padding: 12, marginTop: 14 }, serverBadgeText: { color: C.blue, fontSize: 12, fontWeight: "700" },
-  appName: { color: C.ink, fontWeight: "800", fontSize: 18 }, subtle: { color: C.muted, fontSize: 13 }, brandMark: { color: C.blue, fontWeight: "900", fontSize: 32 }, signInCard: { backgroundColor: C.card, borderColor: C.line, borderWidth: 1, borderRadius: 25, padding: 22, shadowColor: "#123e5a", shadowOpacity: 0.06, shadowRadius: 20, elevation: 2 },
+  signInScroll: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 20, paddingTop: 18, paddingBottom: 32, gap: 14 },
+  signInCover: { backgroundColor: darkTheme ? "#2b3b30" : "#31594d", borderRadius: 25, padding: 21, overflow: "hidden", minHeight: 244 },
+  signInCoverTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  notebookMark: { width: 62, height: 66, borderRadius: 11, backgroundColor: "#f4efe5", flexDirection: "row", overflow: "hidden", transform: [{ rotate: "-4deg" }], elevation: 3 },
+  notebookSpine: { width: 9, backgroundColor: "#b26745" }, notebookPage: { flex: 1, paddingHorizontal: 7, paddingTop: 4, justifyContent: "space-between", paddingBottom: 8 },
+  notebookN: { color: "#31594d", fontSize: 21, lineHeight: 24, fontWeight: "900" }, notebookRule: { height: 1, backgroundColor: "#c9c0af" }, notebookRuleShort: { height: 1, width: "65%", backgroundColor: "#c9c0af" },
+  fieldBookStamp: { borderColor: "#d3c8a7", borderWidth: 1, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5, transform: [{ rotate: "4deg" }] },
+  fieldBookStampText: { color: "#ead9ac", fontSize: 8, fontWeight: "900", letterSpacing: 1.4, textAlign: "center" },
+  signInBrandName: { color: "#efe7d8", fontSize: 13, fontWeight: "800", letterSpacing: 0.6, marginTop: 17 },
+  signInTitle: { color: "#fffaf1", fontSize: 31, lineHeight: 35, fontWeight: "900", letterSpacing: -0.7, marginTop: 6 },
+  signInIntro: { color: "#e0e7dc", fontSize: 13, lineHeight: 19, marginTop: 7, maxWidth: 310 },
+  coverIndex: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 17 }, coverIndexLine: { width: 23, height: 2, backgroundColor: "#d89972" }, coverIndexText: { color: "#d6dfd1", fontSize: 8, fontWeight: "800", letterSpacing: 1.1 },
+  signInFormHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  signInFormKicker: { color: C.bright, fontSize: 9, fontWeight: "900", letterSpacing: 1.5 },
+  signInFormTitle: { color: C.ink, fontSize: 20, lineHeight: 25, fontWeight: "900", marginTop: 3 },
+  accessSeal: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: C.line, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, accessSealText: { color: C.blue, fontSize: 11, fontWeight: "900" },
+  signInTrust: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderTopWidth: 1, borderColor: C.line, marginTop: 14, paddingTop: 12 }, signInTrustGlyph: { color: C.good, fontSize: 13, fontWeight: "900" }, signInTrustText: { flex: 1, color: C.muted, fontSize: 11, lineHeight: 15 },
+  preparingSeal: { width: 54, height: 58, backgroundColor: C.blue, borderRadius: 13, alignItems: "center", justifyContent: "center", transform: [{ rotate: "-4deg" }] }, preparingSealText: { color: C.paper, fontSize: 25, fontWeight: "900" },
+  pairHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderColor: C.line }, pairBack: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, pairBackText: { color: C.blue, fontSize: 30, lineHeight: 32, marginTop: -4 }, pairTitle: { color: C.ink, fontSize: 21, fontWeight: "900", marginTop: 2 },
+  scannerPanel: { flex: 1, padding: 20, justifyContent: "center" }, cameraFrame: { height: 330, borderRadius: 23, overflow: "hidden", backgroundColor: "#111", marginTop: 18, position: "relative" }, cameraPreview: { flex: 1 }, scanTarget: { position: "absolute", top: "17%", left: "13%", right: "13%", bottom: "22%", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#f6ead5", borderRadius: 20 }, scanTargetInner: { width: "84%", height: "84%", borderWidth: 1, borderColor: "#f6ead566", borderRadius: 14 }, cameraCaption: { position: "absolute", bottom: 0, left: 0, right: 0, minHeight: 48, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, backgroundColor: "#111c" }, cameraCaptionText: { color: "#fffaf1", textAlign: "center", fontSize: 12, fontWeight: "700" },
+  cameraPermissionCard: { marginTop: 18, padding: 18, borderWidth: 1, borderColor: C.line, borderRadius: 19, backgroundColor: C.card }, cameraPermissionTitle: { color: C.ink, fontSize: 18, fontWeight: "900" }, pairConfirmWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, pairConfirmIcon: { width: 68, height: 68, borderRadius: 20, backgroundColor: C.blue, alignItems: "center", justifyContent: "center", transform: [{ rotate: "-4deg" }] }, pairConfirmIconText: { color: C.paper, fontSize: 31, fontWeight: "900" }, pairKicker: { color: C.bright, fontSize: 10, fontWeight: "900", letterSpacing: 1.6, marginTop: 22 }, pairUserName: { color: C.ink, fontSize: 24, fontWeight: "900", textAlign: "center", marginTop: 7 }, pairUserEmail: { color: C.muted, fontSize: 14, marginTop: 3 }, pairMessage: { color: C.muted, fontSize: 14, lineHeight: 21, textAlign: "center", marginTop: 14 },
+  logo: { width: 52, height: 52, borderRadius: 18, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" }, logoText: { color: "#fff", fontSize: 23, fontWeight: "800" }, smallLogo: { width: 38, height: 38, borderRadius: 14, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" }, serverBadge: { borderRadius: 12, backgroundColor: C.pale, padding: 12, marginTop: 14 }, serverBadgeText: { color: C.blue, fontSize: 12, fontWeight: "700" },
+  appName: { color: C.ink, fontWeight: "800", fontSize: 18 }, subtle: { color: C.muted, fontSize: 13 }, brandMark: { color: C.blue, fontWeight: "900", fontSize: 32 }, signInCard: { backgroundColor: C.card, borderColor: C.line, borderWidth: 1, borderRadius: 23, padding: 19, shadowColor: "#123e5a", shadowOpacity: 0.06, shadowRadius: 20, elevation: 2 },
   eyebrow: { color: C.bright, fontSize: 11, fontWeight: "800", letterSpacing: 1.7 }, hero: { color: C.ink, fontSize: 29, lineHeight: 35, fontWeight: "800", marginTop: 10 }, heroSmall: { color: C.ink, fontSize: 25, lineHeight: 31, fontWeight: "800", marginTop: 5 }, body: { color: C.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },
   fieldGroup: { marginTop: 15 }, fieldLabel: { color: C.ink, fontSize: 13, fontWeight: "700", marginBottom: 7 }, input: { minHeight: 50, borderWidth: 1, borderColor: C.line, borderRadius: 14, backgroundColor: C.input, paddingHorizontal: 14, paddingVertical: 11, color: C.ink, fontSize: 16 }, inputMultiline: { minHeight: 92, paddingTop: 12 }, inputWarning: { borderColor: C.warn, backgroundColor: C.errorBg }, fieldHelp: { color: C.muted, fontSize: 12, marginTop: 7, lineHeight: 17 },
   primaryButton: { minHeight: 52, borderRadius: 15, backgroundColor: C.blue, alignItems: "center", justifyContent: "center", paddingHorizontal: 18, marginTop: 17 }, primaryButtonText: { color: C.paper, fontSize: 16, fontWeight: "800" }, secondaryButton: { minHeight: 48, borderWidth: 1, borderColor: C.line, borderRadius: 14, backgroundColor: C.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 16, marginTop: 12 }, secondaryButtonText: { color: C.blue, fontSize: 14, fontWeight: "700" }, disabledAction: { opacity: 0.55 }, disabledSecondary: { opacity: 0.5 },
