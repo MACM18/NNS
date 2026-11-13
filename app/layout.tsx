@@ -11,12 +11,12 @@ import { ConsentAwareSpeedInsights } from "@/components/public/consent-aware-spe
 
 export const metadata: Metadata = {
   title: {
-    default: "NNS Telecom Dashboard",
-    template: "%s | NNS Telecom",
+    default: "NNS Enterprise",
+    template: "%s | NNS Enterprise",
   },
   description:
     "AI-powered telecom management platform for fiber optic operations.",
-  applicationName: "NNS Telecom Dashboard",
+  applicationName: "NNS Enterprise",
   generator: "Next.js",
   manifest: "/manifest.webmanifest",
   keywords: [
@@ -27,15 +27,15 @@ export const metadata: Metadata = {
     "NNS",
     "telecommunications",
   ],
-  authors: [{ name: "NNS Telecom" }],
-  creator: "NNS Telecom",
+  authors: [{ name: "NNS Enterprise" }],
+  creator: "NNS Enterprise",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "NNS Telecom",
     startupImage: [
       {
-        url: "/placeholder-logo.png",
+        url: "/nns-enterprise-icon-512.png",
         media: "(device-width: 768px) and (device-height: 1024px)",
       },
     ],
@@ -45,22 +45,22 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    siteName: "NNS Telecom Dashboard",
-    title: "NNS Telecom Dashboard",
+    siteName: "NNS Enterprise",
+    title: "NNS Enterprise",
     description: "AI-powered telecom management platform",
   },
   twitter: {
     card: "summary",
-    title: "NNS Telecom Dashboard",
+    title: "NNS Enterprise",
     description: "AI-powered telecom management platform",
   },
   icons: {
     icon: [
-      { url: "/placeholder-logo.png", type: "image/png", sizes: "192x192" },
-      { url: "/placeholder-logo.png", type: "image/png", sizes: "512x512" },
+      { url: "/nns-enterprise-icon-180.png", type: "image/png", sizes: "180x180" },
+      { url: "/nns-enterprise-icon-512.png", type: "image/png", sizes: "512x512" },
     ],
     apple: [
-      { url: "/placeholder-logo.png", type: "image/png", sizes: "192x192" },
+      { url: "/nns-enterprise-icon-192.png", type: "image/png", sizes: "192x192" },
     ],
   },
 };

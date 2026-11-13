@@ -5,13 +5,14 @@ import type React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { ArrowRight, BookOpenCheck, Building2, Menu } from "lucide-react";
+import { ArrowRight, BookOpenCheck, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { CookieConsentBanner } from "@/components/public/cookie-consent-banner";
 import { OPEN_COOKIE_SETTINGS_EVENT } from "@/lib/cookie-consent";
+import { BrandLogo } from "@/components/brand-logo";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -62,10 +63,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         >
           <div className='flex lg:flex-1'>
             <Link href='/' className='-m-1.5 p-1.5 flex items-center space-x-2'>
-              <Building2 className='h-8 w-8 text-primary' />
-              <span className='text-xl font-bold text-foreground'>
-                NNS Enterprise
-              </span>
+              <BrandLogo className="h-9 w-auto max-w-[190px]" />
             </Link>
           </div>
           <div className='flex lg:hidden'>
@@ -156,8 +154,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className='grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4'>
             <div>
               <div className='flex items-center space-x-2'>
-                <Building2 className='h-6 w-6 text-primary' />
-                <span className='text-lg font-bold'>NNS Enterprise</span>
+                <BrandLogo className="h-8 w-auto max-w-[170px]" />
               </div>
               <p className='mt-4 text-sm text-muted-foreground'>
                 Specialized in FTTH establishment and expanding into

@@ -1,4 +1,4 @@
-const CACHE_NAME = "nns-static-v3";
+const CACHE_NAME = "nns-static-v4";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -66,8 +66,8 @@ self.addEventListener("push", (event) => {
       : "/dashboard/notifications";
     await self.registration.showNotification("NNS Enterprise", {
       body: "You have a new update. Open NNS to view the details.",
-      icon: "/placeholder-logo.png",
-      badge: "/placeholder-logo.png",
+      icon: "/nns-enterprise-icon-192.png",
+      badge: "/nns-enterprise-icon-192.png",
       tag: "nns-update",
       renotify: false,
       data: { path },

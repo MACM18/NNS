@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 type SharedDocument = { publicId: string; reportType: string; title: string; fileName: string };
 type Props = { token: string; companyName: string; monthName: string; year: number; versionNumber: number; documents: SharedDocument[] };
@@ -17,7 +18,7 @@ export function SharedMonthlyReportViewer({ token, companyName, monthName, year,
       <aside className="flex min-h-0 flex-col border-b border-slate-200 bg-white lg:sticky lg:top-0 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:block lg:px-6 lg:py-7">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#164568] text-sm font-bold tracking-wide text-white shadow-sm">NNS</span>
+            <Image src="/nns-enterprise-icon-192.png" alt="NNS Enterprise" width={40} height={40} className="size-10 shrink-0 rounded-lg object-contain" />
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold text-slate-900">{companyName}</span>
               <span className="mt-0.5 block text-xs text-slate-500">Shared reports</span>

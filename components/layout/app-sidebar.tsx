@@ -15,7 +15,6 @@ import {
   Package,
   Search,
   LogOut,
-  Building2,
   CalendarDays,
   Zap,
   Banknote,
@@ -36,6 +35,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/auth-context";
+import { BrandLogo } from "@/components/brand-logo";
 
 type NavItem = {
   title: string;
@@ -163,10 +163,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar {...props}>
       <SidebarHeader>
         <Link href='/' className='flex items-center space-x-2 p-2'>
-          <Building2 className='h-6 w-6 text-primary' />
-          <span className='text-lg font-bold text-foreground'>
-            NNS Enterprise
-          </span>
+          <BrandLogo className="h-8 w-auto max-w-[190px]" />
         </Link>
       </SidebarHeader>
       <SidebarContent>

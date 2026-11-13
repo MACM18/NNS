@@ -3,7 +3,7 @@
     "name": "NNS Enterprise",
     "slug": "nns-enterprise-mobile",
     "scheme": "nnsenterprise",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "orientation": "portrait",
     "platforms": [
       "android"
@@ -12,14 +12,12 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "lk.nns.enterprise.mobile",
-      "versionCode": 7,
+      "versionCode": 8,
       "allowBackup": false,
       "permissions": [],
       "adaptiveIcon": {
-        "backgroundColor": "#123E5A",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#F2F9FD",
+        "foregroundImage": "./assets/icon.png"
       },
       "predictiveBackGestureEnabled": false
     },

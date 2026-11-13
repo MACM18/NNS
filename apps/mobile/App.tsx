@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert, AppState, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet,
+  Alert, AppState, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet,
   Text, TextInput, View, useColorScheme,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -671,10 +671,7 @@ function SignInScreen(props: {
       <ScrollView contentContainerStyle={styles.signInScroll} keyboardShouldPersistTaps="handled">
         <View style={styles.signInCover}>
           <View style={styles.signInCoverTop}>
-            <View style={styles.notebookMark}>
-              <View style={styles.notebookSpine} />
-              <View style={styles.notebookPage}><Text style={styles.notebookN}>N</Text><View style={styles.notebookRule} /><View style={styles.notebookRule} /><View style={styles.notebookRuleShort} /></View>
-            </View>
+            <Image source={require("./assets/icon.png")} style={styles.signInLogoIcon} resizeMode="contain" />
             <View style={styles.fieldBookStamp}><Text style={styles.fieldBookStampText}>FIELD</Text><Text style={styles.fieldBookStampText}>EDITION</Text></View>
           </View>
           <Text style={styles.signInBrandName}>NNS Enterprise</Text>
@@ -786,7 +783,7 @@ function BookScreen(props: {
   return <SafeAreaView style={styles.safe}>
     <StatusBar style={darkTheme ? "light" : "dark"} />
     <View style={styles.topBar}>
-      <View style={styles.brandInline}><View style={styles.smallLogo}><Text style={styles.logoText}>N</Text></View><View><Text style={styles.appName}>NNS Enterprise</Text><Text style={styles.subtle}>Daily Book</Text></View></View>
+      <View style={styles.brandInline}><Image source={require("./assets/icon.png")} style={styles.smallLogoImage} resizeMode="contain" /><View><Text style={styles.appName}>NNS Enterprise</Text><Text style={styles.subtle}>Daily Book</Text></View></View>
       <View style={styles.fieldMark}><Text style={styles.fieldMarkText}>FIELD NOTES</Text></View>
     </View>
     <View style={styles.connectionStrip}>
@@ -1067,7 +1064,8 @@ function createStyles(C: Palette) { return StyleSheet.create({
   signInScroll: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 20, paddingTop: 18, paddingBottom: 32, gap: 14 },
   signInCover: { backgroundColor: darkTheme ? "#2b3b30" : "#31594d", borderRadius: 25, padding: 21, overflow: "hidden", minHeight: 244 },
   signInCoverTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
-  notebookMark: { width: 62, height: 66, borderRadius: 11, backgroundColor: "#f4efe5", flexDirection: "row", overflow: "hidden", transform: [{ rotate: "-4deg" }], elevation: 3 },
+  signInLogoIcon: { width: 66, height: 66, borderRadius: 16 },
+  smallLogoImage: { width: 38, height: 38, borderRadius: 12 },
   notebookSpine: { width: 9, backgroundColor: "#b26745" }, notebookPage: { flex: 1, paddingHorizontal: 7, paddingTop: 4, justifyContent: "space-between", paddingBottom: 8 },
   notebookN: { color: "#31594d", fontSize: 21, lineHeight: 24, fontWeight: "900" }, notebookRule: { height: 1, backgroundColor: "#c9c0af" }, notebookRuleShort: { height: 1, width: "65%", backgroundColor: "#c9c0af" },
   fieldBookStamp: { borderColor: "#d3c8a7", borderWidth: 1, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5, transform: [{ rotate: "4deg" }] },

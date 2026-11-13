@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Building2 } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/brand-logo";
 
 const navigation = [
   { name: "Home", href: "/" },
@@ -30,10 +31,7 @@ export function Navigation() {
             href='/'
             className='-m-1.5 p-1.5 flex items-center space-x-2'
           >
-            <Building2 className='h-8 w-8 text-primary' />
-            <span className='text-xl font-bold text-foreground'>
-              NNS Enterprise
-            </span>
+            <BrandLogo className="h-9 w-auto max-w-[190px]" />
           </Link>
         </div>
         <div className='flex lg:hidden'>
@@ -73,10 +71,7 @@ export function Navigation() {
                 href='/'
                 className='-m-1.5 p-1.5 flex items-center space-x-2'
               >
-                <Building2 className='h-8 w-8 text-primary' />
-                <span className='text-xl font-bold text-foreground'>
-                  NNS Enterprise
-                </span>
+                <BrandLogo className="h-9 w-auto max-w-[190px]" />
               </Link>
               <Button
                 variant='ghost'

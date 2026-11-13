@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Building2, Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 
 export function Footer() {
   return (
@@ -7,10 +8,7 @@ export function Footer() {
       <div className='mx-auto max-w-7xl px-6 py-12 md:flex md:items-center md:justify-between lg:px-8'>
         <div className='flex flex-col md:flex-row md:items-center md:space-x-8'>
           <div className='flex items-center space-x-2 mb-4 md:mb-0'>
-            <Building2 className='h-6 w-6 text-primary' />
-            <span className='text-lg font-bold text-foreground'>
-              NNS Enterprise
-            </span>
+            <BrandLogo className="h-8 w-auto max-w-[190px]" />
           </div>
           <div className='flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-6 text-sm text-muted-foreground'>
             <div className='flex items-center space-x-2'>
