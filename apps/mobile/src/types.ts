@@ -1,5 +1,13 @@
 export type Worker = { id: string; fullName: string };
 
+export type MonthlyLineSummary = {
+  month: string;
+  totals: { lines: number; completed: number; inProgress: number; pending: number; f1: number; g1: number; cable: number };
+  daily: { date: string; total: number; completed: number; inProgress: number; f1: number; g1: number; cable: number }[];
+  crew: { workerId: string; workerName: string; lines: number; completed: number; cable: number }[];
+  fetchedAt: string;
+};
+
 export type Entry = {
   id: string;
   date: string;

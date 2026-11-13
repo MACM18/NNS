@@ -11,8 +11,8 @@ import NetInfo from "@react-native-community/netinfo";
 import * as Crypto from "expo-crypto";
 import { GoogleOneTapSignIn, isCancelledResponse, isErrorWithCode, isNoSavedCredentialFoundResponse, isSuccessResponse, statusCodes } from "react-native-nitro-google-signin";
 import { apiFetch, claimMobilePairing, clearSession, confirmMobilePairing, getSavedSession, login, NativeSession, revokeCurrentSession, saveSession } from "./src/session";
-import { cacheServerEntry, clearConflictMutations, closeBookDatabase, deleteEntryCache, deleteLocalDraft, enqueueMutation, finishMutation, flagConflict, getCachedEntries, getConflictedMutations, getPendingMutations, getWorkers, openBookDatabase, pendingCount, pruneBookEntries, replaceLocalId, storeEntry, storeWorkers, updatePendingCreate } from "./src/storage";
-import { AppUser, blankEntry, CachedEntry, cableLengths, Entry, EntryConflict, PendingMutation, sameFieldValue, Worker, workerIds } from "./src/types";
+import { cacheServerEntry, clearConflictMutations, closeBookDatabase, deleteEntryCache, deleteLocalDraft, enqueueMutation, finishMutation, flagConflict, getCachedEntries, getConflictedMutations, getMonthlySummary, getPendingMutations, getWorkers, openBookDatabase, pendingCount, pruneBookEntries, replaceLocalId, storeEntry, storeMonthlySummary, storeWorkers, updatePendingCreate } from "./src/storage";
+import { AppUser, blankEntry, CachedEntry, cableLengths, Entry, EntryConflict, MonthlyLineSummary, PendingMutation, sameFieldValue, Worker, workerIds } from "./src/types";
 
 type Palette = {
   ink: string; muted: string; blue: string; bright: string; pale: string; paper: string; card: string;
@@ -43,7 +43,8 @@ const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "";
 
 const pages = ["Entry", "Customer", "Readings", "Equipment", "Team & review"] as const;
 type Page = typeof pages[number];
-type ViewName = "book" | "entry" | "history" | "review" | "account";
+type MainTab = "book" | "review" | "summary";
+type ViewName = MainTab | "entry" | "history" | "account";
 const pageFields: Record<number, string[]> = {
   1: ["name", "address", "dp"],
   2: ["powerDp", "powerInbox", "cableStart", "cableMiddle", "cableEnd"],
@@ -63,6 +64,24 @@ function dateInColombo(offset = 0) {
   const date = new Date(`${values.year}-${values.month}-${values.day}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + offset);
   return date.toISOString().slice(0, 10);
+}
+
+function monthInColombo(offset = 0) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const date = new Date(Date.UTC(Number(values.year), Number(values.month) - 1 + offset, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function shiftMonth(value: string, amount: number) {
+  const [year, month] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + amount, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function prettyMonth(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
 
 function prettyDate(date: string) {
@@ -107,6 +126,7 @@ export default function App() {
 
 function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThemeMode: (mode: ThemeMode) => void }) {
   const [view, setView] = useState<ViewName>("book");
+  const [accountReturnView, setAccountReturnView] = useState<MainTab>("book");
   const [user, setUser] = useState<AppUser | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -124,6 +144,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   const [pending, setPending] = useState(0);
   const [bookDate, setBookDate] = useState(dateInColombo());
   const [activeEntry, setActiveEntry] = useState<Entry | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [activeConflict, setActiveConflict] = useState<EntryConflict | null>(null);
   const [remoteConflictEntry, setRemoteConflictEntry] = useState<Entry | null>(null);
   const [conflictChoices, setConflictChoices] = useState<Record<string, "phone" | "server">>({});
@@ -133,6 +154,10 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   const [history, setHistory] = useState<any[]>([]);
   const [mobileSessions, setMobileSessions] = useState<any[]>([]);
   const [pendingQueue, setPendingQueue] = useState<PendingMutation[]>([]);
+  const [summaryMonth, setSummaryMonth] = useState(monthInColombo());
+  const [monthlySummary, setMonthlySummary] = useState<MonthlyLineSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryMessage, setSummaryMessage] = useState("");
   const syncInProgress = useRef(false);
   const savedSnapshot = useRef<Entry | null>(null);
   const refreshLocal = useCallback(async () => {
@@ -165,6 +190,33 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
       await refreshLocal();
     }
   }, [online, refreshLocal]);
+
+  const loadMonthlySummary = useCallback(async (month: string) => {
+    if (!user?.id) return;
+    setSummaryLoading(true);
+    setSummaryMessage("");
+    try {
+      const cached = await getMonthlySummary(month);
+      if (cached) setMonthlySummary(cached);
+      else setMonthlySummary(null);
+      if (!online) {
+        setSummaryMessage(cached ? "Offline · showing the last saved summary." : "Connect to load this month’s summary.");
+        return;
+      }
+      const [year, monthNumber] = month.split("-");
+      const response = await apiFetch(`/api/mobile/line-summary?month=${monthNumber}&year=${year}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(errorMessage(payload, "Could not load this month’s summary."));
+      const result = payload as MonthlyLineSummary;
+      await storeMonthlySummary(result);
+      setMonthlySummary(result);
+      setSummaryMessage("");
+    } catch (error) {
+      setSummaryMessage(error instanceof Error ? `${error.message} Showing the last saved summary if available.` : "Could not refresh the summary.");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [online, user?.id]);
 
   const syncOutbox = useCallback(async () => {
     if (!online || !user || syncInProgress.current) return;
@@ -266,6 +318,10 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     if (!user || !bookReady || !online || booting) return;
     void (async () => { await createPendingLocalEntries(); await syncOutbox(); await reloadServer(); })();
   }, [user?.id, bookReady, online, booting]); // Runs when connectivity returns or the account is restored.
+
+  useEffect(() => {
+    if (view === "summary" && user && bookReady) void loadMonthlySummary(summaryMonth);
+  }, [view, user?.id, bookReady, summaryMonth, loadMonthlySummary]);
 
   useEffect(() => {
     if (!user || !bookReady || !online) return;
@@ -379,16 +435,25 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   async function startNewEntry() {
     const entry = blankEntry(bookDate, "", `local:${Crypto.randomUUID()}`);
-    setActiveEntry(entry); setActiveConflict(null); setPage(0); savedSnapshot.current = entry; setView("entry");
+    setActiveEntry(entry); setEditingEntryId(entry.id); setActiveConflict(null); setPage(0); savedSnapshot.current = entry; setView("entry");
   }
 
   function openEntry(entry: Entry) {
     const record = entries.find((item) => item.entry.id === entry.id);
     setActiveEntry(entry);
+    setEditingEntryId(null);
     setActiveConflict(record?.conflict || null);
     setPage(0);
     savedSnapshot.current = entry;
     setView("entry");
+  }
+
+  function enableEntryEditing() {
+    if (!activeEntry || activeEntry.id.startsWith("local:")) return;
+    Alert.alert("Enable editing?", "Changes to this saved entry will be recorded in its edit history and synced to the shared NNS records.", [
+      { text: "Keep viewing", style: "cancel" },
+      { text: "Enable editing", onPress: () => setEditingEntryId(activeEntry.id) },
+    ]);
   }
 
   function localEntryPatchValue(entry: Entry, field: string): unknown {
@@ -398,6 +463,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   async function persistStep(targetPage: number, nextEntry = activeEntry) {
     if (!nextEntry) return;
+    if (!nextEntry.id.startsWith("local:") && editingEntryId !== nextEntry.id) return;
     if (nextEntry.id.startsWith("local:") && !nextEntry.telephoneNo.trim()) {
       await deleteLocalDraft(nextEntry.id);
       savedSnapshot.current = nextEntry;
@@ -458,19 +524,22 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   async function handleNext() {
     if (!activeEntry) return;
     if (page === 0 && !activeEntry.telephoneNo.trim()) { setSyncText("Enter the telephone number to start this entry."); return; }
-    await persistStep(page);
+    if (activeEntry.id.startsWith("local:") || editingEntryId === activeEntry.id) await persistStep(page);
     setPage((current) => Math.min(pages.length - 1, current + 1));
   }
 
   async function handleBack() {
     if (!activeEntry) return;
-    if (page === 0) { await persistStep(page); setActiveEntry(null); setActiveConflict(null); setView("book"); return; }
-    await persistStep(page);
+    if (page === 0) {
+      if (activeEntry.id.startsWith("local:") || editingEntryId === activeEntry.id) await persistStep(page);
+      setActiveEntry(null); setEditingEntryId(null); setActiveConflict(null); setView("book"); return;
+    }
+    if (activeEntry.id.startsWith("local:") || editingEntryId === activeEntry.id) await persistStep(page);
     setPage((current) => Math.max(0, current - 1));
   }
 
   async function updateActiveEntry(patch: Partial<Entry>) {
-    if (!activeEntry) return;
+    if (!activeEntry || (!activeEntry.id.startsWith("local:") && editingEntryId !== activeEntry.id)) return;
     const updated = { ...activeEntry, ...patch };
     setActiveEntry(updated);
     await storeEntry(updated, savedSnapshot.current, activeConflict);
@@ -478,12 +547,13 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   }
 
   async function completeEntry() {
+    if (!activeEntry || (!activeEntry.id.startsWith("local:") && editingEntryId !== activeEntry.id)) return;
     if (!activeEntry?.dp?.trim()) { setSyncText("Add the DP before marking this entry complete."); return; }
     const updated = { ...activeEntry, status: "completed" };
     setActiveEntry(updated);
     await persistStep(4, updated);
     setView("book");
-    setActiveEntry(null);
+    setActiveEntry(null); setEditingEntryId(null);
   }
 
   async function openHistory(entry: Entry) {
@@ -590,7 +660,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     if (!activeEntry) return;
     Alert.alert("Discard this local draft?", "This removes the offline draft and its unsynced changes from this phone.", [
       { text: "Keep draft", style: "cancel" },
-      { text: "Discard draft", style: "destructive", onPress: () => { void (async () => { await clearConflictMutations(activeEntry.id); await deleteLocalDraft(activeEntry.id); setActiveEntry(null); setActiveConflict(null); setEntries(await getCachedEntries()); setPending(await pendingCountSafe()); setView("book"); })(); } },
+      { text: "Discard draft", style: "destructive", onPress: () => { void (async () => { await clearConflictMutations(activeEntry.id); await deleteLocalDraft(activeEntry.id); setActiveEntry(null); setEditingEntryId(null); setActiveConflict(null); setEntries(await getCachedEntries()); setPending(await pendingCountSafe()); setView("book"); })(); } },
     ]);
   }
 
@@ -601,7 +671,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
       { text: "Keep draft", style: "cancel" },
       { text: "Delete draft", style: "destructive", onPress: () => { void (async () => {
         await deleteLocalDraft(draftId);
-        setActiveEntry(null); setActiveConflict(null); setEntries(await getCachedEntries()); setPending(await pendingCountSafe()); setView("book"); setSyncText("Draft deleted.");
+        setActiveEntry(null); setEditingEntryId(null); setActiveConflict(null); setEntries(await getCachedEntries()); setPending(await pendingCountSafe()); setView("book"); setSyncText("Draft deleted.");
       })(); } },
     ]);
   }
@@ -622,11 +692,13 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   if (view === "history") return <HistoryScreen rows={history} onBack={() => setView("entry")} />;
   if (view === "entry" && activeEntry) return <EntryScreen
-    entry={activeEntry} setEntry={(patch) => { setActiveEntry((current) => current ? { ...current, ...patch } : current); }}
+    entry={activeEntry} editable={activeEntry.id.startsWith("local:") || editingEntryId === activeEntry.id}
+    setEntry={(patch) => { if (activeEntry.id.startsWith("local:") || editingEntryId === activeEntry.id) setActiveEntry((current) => current ? { ...current, ...patch } : current); }}
     page={page} setPage={setPage} saving={saving} online={online} pending={pending} message={syncText}
     workers={workers} conflict={activeConflict} remote={remoteConflictEntry} conflictChoices={conflictChoices}
     setConflictChoice={(field, choice) => setConflictChoices((current) => ({ ...current, [field]: choice }))}
     onBack={() => void handleBack()} onNext={() => void handleNext()} onComplete={() => void completeEntry()}
+    onEnableEditing={enableEntryEditing}
     onHistory={() => void openHistory(activeEntry)} onDeleteDraft={deleteActiveDraft} onRetrySync={() => void syncOutbox()}
     onReviewConflict={() => void reviewConflict(activeEntry)} onResolveConflict={() => void resolvePatchConflict()} onSaveAsNew={() => void saveMissingEntryAsNew()}
     onOpenExisting={() => void openExistingFromDuplicate()} onDiscardDuplicate={() => void abandonDuplicateDraft()}
@@ -634,20 +706,28 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   if (view === "review") return <ReviewScreen
     entries={entries} queue={pendingQueue} online={online} message={syncText}
-    onTab={(tab) => { setView(tab); if (tab === "account") void loadSessions().catch((error) => setSyncText(error.message)); }}
+    onTab={(tab) => setView(tab)} onProfile={() => { setAccountReturnView("review"); setView("account"); void loadSessions().catch((error) => setSyncText(error.message)); }}
     onOpen={(entry) => { const record = entries.find((row) => row.entry.id === entry.id); if (record?.conflict) void reviewConflict(entry); else openEntry(entry); }}
     onReviewConflict={(entry) => void reviewConflict(entry)} onSync={() => void (async () => { await createPendingLocalEntries(); await syncOutbox(); await reloadServer(); })()}
   />;
 
   if (view === "account") return <AccountScreen
     user={user} sessions={mobileSessions} themeMode={themeMode} onThemeMode={setThemeMode}
-    onTab={(tab) => { setView(tab); if (tab === "account") void loadSessions().catch((error) => setSyncText(error.message)); }}
+    onBack={() => setView(accountReturnView)}
     onRevoke={(id) => void revokeSession(id).catch((error) => setSyncText(error.message))}
     onRefreshSessions={() => void loadSessions().catch((error) => setSyncText(error.message))}
     onSignOut={() => Alert.alert("Sign out of this device?", "Offline entries will stay encrypted on this device until you sign in again.", [
       { text: "Cancel", style: "cancel" },
-      { text: "Sign out", style: "destructive", onPress: () => { void (async () => { await revokeCurrentSession(); await closeBookDatabase(); setEntries([]); setWorkers([]); setPending(0); setPendingQueue([]); setActiveEntry(null); setActiveConflict(null); setUser(null); setPairingMode(false); setSyncText(""); setView("book"); })(); } },
+      { text: "Sign out", style: "destructive", onPress: () => { void (async () => { await revokeCurrentSession(); await closeBookDatabase(); setEntries([]); setWorkers([]); setPending(0); setPendingQueue([]); setActiveEntry(null); setEditingEntryId(null); setActiveConflict(null); setUser(null); setPairingMode(false); setSyncText(""); setView("book"); })(); } },
     ])}
+  />;
+
+  if (view === "summary") return <LineSummaryScreen
+    month={summaryMonth} summary={monthlySummary?.month === summaryMonth ? monthlySummary : null}
+    loading={summaryLoading} online={online} message={summaryMessage}
+    onMonthChange={(amount) => setSummaryMonth((current) => shiftMonth(current, amount))}
+    onRefresh={() => void loadMonthlySummary(summaryMonth)} onProfile={() => { setAccountReturnView("summary"); setView("account"); void loadSessions().catch((error) => setSyncText(error.message)); }}
+    onTab={setView}
   />;
 
   return <BookScreen
@@ -655,7 +735,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     selectedDate={bookDate} setSelectedDate={setBookDate}
     onNew={() => void startNewEntry()} onOpen={openEntry} onReviewConflict={(entry) => void reviewConflict(entry)} onHistory={(entry) => void openHistory(entry)}
     onRefresh={() => void (async () => { await createPendingLocalEntries(); await syncOutbox(); await reloadServer(); })()}
-    onTab={(tab) => { setView(tab); if (tab === "account") void loadSessions().catch((error) => setSyncText(error.message)); }}
+    onTab={setView} onProfile={() => { setAccountReturnView("book"); setView("account"); void loadSessions().catch((error) => setSyncText(error.message)); }}
   />;
 }
 
@@ -772,7 +852,7 @@ function MobilePairingScreen(props: { onCancel: () => void; onConfirm: (session:
 function BookScreen(props: {
   user: AppUser; entries: CachedEntry[]; groups: Record<string, Entry[]>; workers: Worker[]; online: boolean; pending: number; message: string;
   selectedDate: string; setSelectedDate: (date: string) => void; onNew: () => void; onOpen: (entry: Entry) => void;
-  onReviewConflict: (entry: Entry) => void; onHistory: (entry: Entry) => void; onRefresh: () => void; onTab: (tab: "book" | "review" | "account") => void;
+  onReviewConflict: (entry: Entry) => void; onHistory: (entry: Entry) => void; onRefresh: () => void; onTab: (tab: MainTab) => void; onProfile: () => void;
 }) {
   const dates = Object.keys(props.groups).sort((a, b) => b.localeCompare(a));
   const openEntry = (entry: Entry) => {
@@ -784,7 +864,7 @@ function BookScreen(props: {
     <StatusBar style={darkTheme ? "light" : "dark"} />
     <View style={styles.topBar}>
       <View style={styles.brandInline}><Image source={require("./assets/icon.png")} style={styles.smallLogoImage} resizeMode="contain" /><View><Text style={styles.appName}>NNS Enterprise</Text><Text style={styles.subtle}>Daily Book</Text></View></View>
-      <View style={styles.fieldMark}><Text style={styles.fieldMarkText}>FIELD NOTES</Text></View>
+      <View style={styles.topBarActions}><View style={styles.fieldMark}><Text style={styles.fieldMarkText}>FIELD NOTES</Text></View><ProfileButton name={props.user.fullName} onPress={props.onProfile} /></View>
     </View>
     <View style={styles.connectionStrip}>
       <View style={[styles.statusDot, { backgroundColor: props.online ? C.good : C.yellowInk }]} />
@@ -816,11 +896,11 @@ function BookScreen(props: {
   </SafeAreaView>;
 }
 
-function TabBar(props: { active: "book" | "review" | "account"; pending: number; onSelect: (tab: "book" | "review" | "account") => void }) {
+function TabBar(props: { active: MainTab; pending: number; onSelect: (tab: MainTab) => void }) {
   const tabs = [
     { id: "book" as const, title: "Book", icon: "▤" },
     { id: "review" as const, title: "Review", icon: "☷" },
-    { id: "account" as const, title: "Account", icon: "◉" },
+    { id: "summary" as const, title: "Line Summary", icon: "▥" },
   ];
   return <View style={styles.tabBar}>
     {tabs.map((tab) => <Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{ selected: props.active === tab.id }} onPress={() => props.onSelect(tab.id)} style={styles.tabButton}>
@@ -832,7 +912,7 @@ function TabBar(props: { active: "book" | "review" | "account"; pending: number;
 
 function ReviewScreen(props: {
   entries: CachedEntry[]; queue: PendingMutation[]; online: boolean; message: string;
-  onTab: (tab: "book" | "review" | "account") => void; onOpen: (entry: Entry) => void;
+  onTab: (tab: MainTab) => void; onProfile: () => void; onOpen: (entry: Entry) => void;
   onReviewConflict: (entry: Entry) => void; onSync: () => void;
 }) {
   const conflicted = props.entries.filter((record) => Boolean(record.conflict));
@@ -842,7 +922,7 @@ function ReviewScreen(props: {
   const reviewCount = conflicted.length + Math.max(localEntries.length, 0) + queuedEntries.length;
   return <SafeAreaView style={styles.safe}>
     <StatusBar style={darkTheme ? "light" : "dark"} />
-    <View style={styles.screenHeader}><Text style={styles.sectionEyebrow}>FIELD DESK</Text><Text style={styles.heroSmall}>Review & sync</Text><Text style={styles.body}>Changes stay safely on this device until they reach NNS Enterprise.</Text></View>
+    <View style={styles.screenHeader}><View style={styles.mainHeaderRow}><View style={styles.flex}><Text style={styles.sectionEyebrow}>FIELD DESK</Text><Text style={styles.heroSmall}>Review & sync</Text><Text style={styles.body}>Changes stay safely on this device until they reach NNS Enterprise.</Text></View><ProfileButton name={undefined} onPress={props.onProfile} /></View></View>
     <View style={styles.reviewSummary}><View style={styles.reviewSummaryIcon}><Text style={styles.reviewSummaryGlyph}>{props.online ? "↻" : "⌁"}</Text></View><View style={styles.flex}><Text style={styles.cardTitle}>{props.online ? "Connection ready" : "Working offline"}</Text><Text style={styles.cardSubtitle}>{props.online ? "You can send saved changes now." : "Saved notes will wait here until you reconnect."}</Text></View><Text style={styles.reviewCount}>{reviewCount}</Text></View>
     {props.message ? <View style={{ paddingHorizontal: 18 }}><InlineNotice text={props.message} tone="info" onPress={props.onSync} /></View> : null}
     {props.queue.length || localEntries.length ? <View style={{ paddingHorizontal: 18 }}><PrimaryButton label={props.online ? `Sync ${props.queue.length || localEntries.length} saved change${(props.queue.length || localEntries.length) === 1 ? "" : "s"}` : "Saved on this device"} onPress={props.onSync} disabled={!props.online} /></View> : null}
@@ -864,7 +944,7 @@ function ReviewScreen(props: {
 
 function AccountScreen(props: {
   user: AppUser; sessions: any[]; themeMode: ThemeMode; onThemeMode: (mode: ThemeMode) => void;
-  onTab: (tab: "book" | "review" | "account") => void; onRevoke: (id: string) => void; onRefreshSessions: () => void; onSignOut: () => void;
+  onBack: () => void; onRevoke: (id: string) => void; onRefreshSessions: () => void; onSignOut: () => void;
 }) {
   const modes: { value: ThemeMode; label: string; caption: string }[] = [
     { value: "system", label: "System", caption: "Follow this phone" },
@@ -873,7 +953,8 @@ function AccountScreen(props: {
   ];
   return <SafeAreaView style={styles.safe}>
     <StatusBar style={darkTheme ? "light" : "dark"} />
-    <View style={styles.screenHeader}><Text style={styles.sectionEyebrow}>YOUR FIELD DESK</Text><Text style={styles.heroSmall}>Account</Text><Text style={styles.body}>Signed in as {props.user.fullName || props.user.email}.</Text></View>
+    <View style={styles.entryTopBar}><Pressable onPress={props.onBack} style={styles.backButton}><Text style={styles.backArrow}>‹</Text></Pressable><View style={styles.flex}><Text style={styles.sectionEyebrow}>YOUR FIELD DESK</Text><Text style={styles.entryTopTitle}>Account & settings</Text></View></View>
+    <View style={styles.screenHeader}><Text style={styles.body}>Signed in as {props.user.fullName || props.user.email}.</Text></View>
     <ScrollView contentContainerStyle={styles.accountContent}>
       <Card title="Page appearance" subtitle="This choice is saved on this device and stays when you sign out.">
         <View style={styles.appearanceChoices}>{modes.map((mode) => <Pressable key={mode.value} accessibilityRole="radio" accessibilityState={{ selected: props.themeMode === mode.value }} onPress={() => props.onThemeMode(mode.value)} style={[styles.appearanceChoice, props.themeMode === mode.value && styles.appearanceChoiceSelected]}>
@@ -888,8 +969,60 @@ function AccountScreen(props: {
       <Pressable onPress={props.onSignOut} style={styles.signOutButton}><Text style={styles.signOutButtonText}>Sign out of this device</Text></Pressable>
       <Text style={styles.accountFooter}>NNS Enterprise · Daily Book</Text>
     </ScrollView>
-    <TabBar active="account" pending={0} onSelect={props.onTab} />
   </SafeAreaView>;
+}
+
+function ProfileButton(props: { name?: string | null; onPress: () => void; disabled?: boolean }) {
+  const initials = (props.name || "NNS").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  return <Pressable accessibilityRole="button" accessibilityLabel="Open account and settings" disabled={props.disabled} onPress={props.onPress} style={[styles.profileButton, props.disabled && { opacity: 0.75 }]}>
+    <Text style={styles.profileButtonText}>{initials || "N"}</Text>
+  </Pressable>;
+}
+
+function LineSummaryScreen(props: {
+  month: string; summary: MonthlyLineSummary | null; loading: boolean; online: boolean; message: string;
+  onMonthChange: (amount: number) => void; onRefresh: () => void; onProfile: () => void; onTab: (tab: MainTab) => void;
+}) {
+  const totals = props.summary?.totals;
+  const updated = props.summary?.fetchedAt ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Colombo" }).format(new Date(props.summary.fetchedAt)) : "";
+  return <SafeAreaView style={styles.safe}>
+    <StatusBar style={darkTheme ? "light" : "dark"} />
+    <View style={styles.screenHeader}><View style={styles.mainHeaderRow}><View style={styles.flex}><Text style={styles.sectionEyebrow}>FIELD DESK</Text><Text style={styles.heroSmall}>Line Summary</Text><Text style={styles.body}>A month at a glance: completed work, cable, and crew.</Text></View><ProfileButton name={undefined} onPress={props.onProfile} /></View></View>
+    <ScrollView contentContainerStyle={styles.summaryContent}>
+      <View style={styles.dateSelector}>
+        <Pressable accessibilityLabel="Previous month" style={styles.dateNudge} onPress={() => props.onMonthChange(-1)}><Text style={styles.dateNudgeText}>‹</Text></Pressable>
+        <View style={{ flex: 1, alignItems: "center" }}><Text style={styles.sectionEyebrow}>SELECTED MONTH</Text><Text style={styles.dateTitle}>{prettyMonth(props.month)}</Text></View>
+        <Pressable accessibilityLabel="Next month" style={styles.dateNudge} onPress={() => props.onMonthChange(1)}><Text style={styles.dateNudgeText}>›</Text></Pressable>
+      </View>
+      {props.message ? <InlineNotice text={props.message} tone={props.online ? "info" : "info"} /> : null}
+      <View style={styles.summaryRefreshRow}><Text style={styles.fieldHelp}>{updated ? `Last updated ${updated}` : props.online ? "Ready to load from NNS Enterprise" : "No saved summary for this month"}</Text><Pressable onPress={props.onRefresh} disabled={!props.online || props.loading} style={[styles.summaryRefreshButton, (!props.online || props.loading) && styles.disabledSecondary]}><Text style={styles.summaryRefreshText}>{props.loading ? "Loading…" : "Refresh"}</Text></Pressable></View>
+      {totals ? <>
+        <View style={styles.summaryMetricRow}>
+          <SummaryMetric label="Total lines" value={String(totals.lines)} accent />
+          <SummaryMetric label="Completed" value={String(totals.completed)} />
+          <SummaryMetric label="In progress" value={String(totals.inProgress)} />
+        </View>
+        <Card title="Cable lengths" subtitle="Calculated from the start, middle, and end meter marks.">
+          <View style={styles.summaryMetricRow}><SummaryMetric label="F1" value={`${totals.f1.toFixed(2)} m`} /><SummaryMetric label="G1" value={`${totals.g1.toFixed(2)} m`} /><SummaryMetric label="Total" value={`${totals.cable.toFixed(2)} m`} accent /></View>
+        </Card>
+        <Card title="Daily work" subtitle="Line counts and cable totals for each recorded day.">
+          {props.summary!.daily.length ? props.summary!.daily.map((day) => <View key={day.date} style={styles.summaryListRow}>
+            <View style={styles.flex}><Text style={styles.sessionName}>{new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Colombo" }).format(new Date(`${day.date}T00:00:00+05:30`))}</Text><Text style={styles.subtle}>{day.completed} completed · {day.inProgress} in progress</Text></View><View style={styles.summaryListValue}><Text style={styles.summaryListStrong}>{day.total} lines</Text><Text style={styles.subtle}>{day.cable.toFixed(1)} m</Text></View>
+          </View>) : <Text style={styles.fieldHelp}>No line records for this month.</Text>}
+        </Card>
+        <Card title="Work by crew" subtitle="Each assigned worker is credited once per line.">
+          {props.summary!.crew.length ? props.summary!.crew.map((person) => <View key={person.workerId} style={styles.summaryListRow}>
+            <View style={styles.workerInitial}><Text style={styles.workerInitialText}>{person.workerName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</Text></View><View style={styles.flex}><Text style={styles.sessionName}>{person.workerName}</Text><Text style={styles.subtle}>{person.completed} completed · {person.cable.toFixed(1)} m cable</Text></View><Text style={styles.summaryListStrong}>{person.lines}</Text>
+          </View>) : <Text style={styles.fieldHelp}>No crew assignments for this month.</Text>}
+        </Card>
+      </> : <View style={styles.emptyCard}><View style={styles.emptyIcon}><Text style={styles.emptyIconText}>{props.loading ? "↻" : "▥"}</Text></View><Text style={styles.emptyTitle}>{props.loading ? "Loading this month" : "Summary not available"}</Text><Text style={styles.body}>{props.loading ? "Fetching the latest totals from NNS Enterprise." : props.online ? "Refresh to load this month’s line activity." : "Reconnect to load a summary for this month."}</Text></View>}
+    </ScrollView>
+    <TabBar active="summary" pending={0} onSelect={props.onTab} />
+  </SafeAreaView>;
+}
+
+function SummaryMetric(props: { label: string; value: string; accent?: boolean }) {
+  return <View style={[styles.summaryMetric, props.accent && styles.summaryMetricAccent]}><Text style={styles.summaryMetricLabel}>{props.label}</Text><Text style={styles.summaryMetricValue}>{props.value}</Text></View>;
 }
 
 function EntryCard(props: { entry: Entry; record?: CachedEntry; compact?: boolean; onPress: () => void; onHistory: () => void }) {
@@ -912,12 +1045,13 @@ function EmptyCard(props: { onPress: () => void }) {
 }
 
 function EntryScreen(props: {
-  entry: Entry; setEntry: (patch: Partial<Entry>) => void; page: number; setPage: (page: number) => void; saving: boolean; online: boolean; pending: number; message: string;
+  entry: Entry; editable: boolean; setEntry: (patch: Partial<Entry>) => void; page: number; setPage: (page: number) => void; saving: boolean; online: boolean; pending: number; message: string;
   workers: Worker[]; conflict: EntryConflict | null; remote: Entry | null; conflictChoices: Record<string, "phone" | "server">; setConflictChoice: (field: string, choice: "phone" | "server") => void;
-  onBack: () => void; onNext: () => void; onComplete: () => void; onHistory: () => void; onRetrySync: () => void; onReviewConflict: () => void;
+  onBack: () => void; onNext: () => void; onComplete: () => void; onEnableEditing: () => void; onHistory: () => void; onRetrySync: () => void; onReviewConflict: () => void;
   onResolveConflict: () => void; onOpenExisting: () => void; onDiscardDuplicate: () => void; onSaveAsNew: () => void; onDeleteDraft: () => void;
 }) {
   const entry = props.entry;
+  const editable = props.editable;
   const lengths = cableLengths(entry);
   const pageTitle = pages[props.page];
   const isDuplicate = Boolean(props.conflict?.existingId);
@@ -930,6 +1064,7 @@ function EntryScreen(props: {
   const textField = (field: keyof Entry, title = labels[String(field)], multiline = false) => <Field
     key={String(field)} label={title} value={String(entry[field] ?? "")} multiline={multiline}
     onChangeText={(value) => props.setEntry({ [field]: value } as Partial<Entry>)}
+    editable={editable}
     keyboardType={String(field).startsWith("cable") || String(field).startsWith("power") ? "decimal-pad" : undefined}
     warning={String(field).startsWith("power") && Number(entry[field]) > 25 ? "Above 25 · review power value" : undefined}
   />;
@@ -937,12 +1072,13 @@ function EntryScreen(props: {
   const numberField = (field: "cableStart" | "cableMiddle" | "cableEnd" | "powerDp" | "powerInbox") => <Field
     key={field} label={labels[field]} value={String(entry[field] ?? "")} keyboardType="decimal-pad"
     onChangeText={(value) => props.setEntry({ [field]: value as any })}
+    editable={editable}
     warning={field.startsWith("power") && Number(entry[field]) > 25 ? "Above 25 · review power value" : undefined}
   />;
 
   return <SafeAreaView style={styles.safe}>
     <StatusBar style={darkTheme ? "light" : "dark"} />
-    <View style={styles.entryTopBar}><Pressable onPress={props.onBack} style={styles.backButton}><Text style={styles.backArrow}>‹</Text></Pressable><View style={{ flex: 1 }}><Text style={styles.entryTopTitle}>Daily Book</Text><Text style={styles.subtle}>{entry.telephoneNo || "New entry"}</Text></View>{entry.id.startsWith("local:") && <Pressable onPress={props.onDeleteDraft} style={{ minHeight: 34, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: 1, borderColor: C.errorLine, backgroundColor: C.errorBg }} accessibilityRole="button" accessibilityLabel="Delete draft"><Text style={{ color: C.warn, fontSize: 11, fontWeight: "800" }}>Delete</Text></Pressable>}<View style={[styles.saveBadge, props.saving && styles.saveBadgeWorking]}><Text style={styles.saveBadgeText}>{props.saving ? "Saving" : props.online ? "Saved" : "On device"}</Text></View></View>
+    <View style={styles.entryTopBar}><Pressable onPress={props.onBack} style={styles.backButton}><Text style={styles.backArrow}>‹</Text></Pressable><View style={{ flex: 1 }}><Text style={styles.entryTopTitle}>Daily Book</Text><Text style={styles.subtle}>{entry.telephoneNo || "New entry"}</Text></View>{!editable && !entry.id.startsWith("local:") ? <Pressable onPress={props.onEnableEditing} style={styles.editEntryButton}><Text style={styles.editEntryButtonText}>Edit</Text></Pressable> : null}{entry.id.startsWith("local:") && <Pressable onPress={props.onDeleteDraft} style={{ minHeight: 34, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: 1, borderColor: C.errorLine, backgroundColor: C.errorBg }} accessibilityRole="button" accessibilityLabel="Delete draft"><Text style={{ color: C.warn, fontSize: 11, fontWeight: "800" }}>Delete</Text></Pressable>}<View style={[styles.saveBadge, !editable && styles.viewBadge, props.saving && styles.saveBadgeWorking]}><Text style={styles.saveBadgeText}>{!editable ? "Viewing" : props.saving ? "Saving" : props.online ? "Saved" : "On device"}</Text></View></View>
     <View style={styles.progressWrap}><View style={styles.progressHeader}><Text style={styles.eyebrow}>PAGE {props.page + 1} OF {pages.length}</Text><Text style={styles.progressPercent}>{Math.round(((props.page + 1) / pages.length) * 100)}%</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${((props.page + 1) / pages.length) * 100}%` }]} /></View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.steps}>{steps}</ScrollView></View>
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
       <ScrollView key={props.page} style={styles.flex} contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
@@ -978,7 +1114,7 @@ function EntryScreen(props: {
           <Card title="Team" subtitle="Select everyone who worked on this entry.">
             {props.workers.length ? <View style={styles.workerGrid}>{props.workers.map((worker) => {
               const selected = workerIds(entry).includes(worker.id);
-              return <Pressable key={worker.id} onPress={() => props.setEntry({ workAssignments: selected ? entry.workAssignments.filter((item) => item.workerId !== worker.id) : [...entry.workAssignments, { workerId: worker.id, workerName: worker.fullName }] })} style={[styles.workerChip, selected && styles.workerChipSelected]}><View style={[styles.workerInitial, selected && styles.workerInitialSelected]}><Text style={[styles.workerInitialText, selected && styles.workerInitialTextSelected]}>{worker.fullName.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</Text></View><Text style={styles.workerName}>{worker.fullName}</Text><Text style={[styles.checkbox, selected && styles.checkboxSelected]}>{selected ? "✓" : ""}</Text></Pressable>;
+              return <Pressable key={worker.id} disabled={!editable} onPress={() => props.setEntry({ workAssignments: selected ? entry.workAssignments.filter((item) => item.workerId !== worker.id) : [...entry.workAssignments, { workerId: worker.id, workerName: worker.fullName }] })} style={[styles.workerChip, selected && styles.workerChipSelected, !editable && styles.readOnlyField]}><View style={[styles.workerInitial, selected && styles.workerInitialSelected]}><Text style={[styles.workerInitialText, selected && styles.workerInitialTextSelected]}>{worker.fullName.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</Text></View><Text style={styles.workerName}>{worker.fullName}</Text><Text style={[styles.checkbox, selected && styles.checkboxSelected]}>{selected ? "✓" : ""}</Text></Pressable>;
             })}</View> : <Text style={styles.subtle}>{props.online ? "No active workers are listed." : "Worker list is available after it has synced once."}</Text>}
           </Card>
           <Card title="Review this entry" subtitle="Check the key details before finishing.">
@@ -991,7 +1127,7 @@ function EntryScreen(props: {
     </KeyboardAvoidingView>
     <View style={styles.bottomActions}>
       <Pressable style={styles.secondaryAction} onPress={props.onBack}><Text style={styles.secondaryActionText}>{props.page === 0 ? "Close" : "Back"}</Text></Pressable>
-      {props.page < pages.length - 1 ? <Pressable style={styles.primaryAction} onPress={props.onNext}><Text style={styles.primaryActionText}>{props.saving ? "Saving…" : "Save & continue  →"}</Text></Pressable> : <Pressable style={[styles.primaryAction, !entry.dp?.trim() && styles.disabledAction]} onPress={props.onComplete}><Text style={styles.primaryActionText}>{entry.status === "completed" ? "Save changes" : "Mark complete"}</Text></Pressable>}
+      {props.page < pages.length - 1 ? <Pressable style={styles.primaryAction} onPress={props.onNext}><Text style={styles.primaryActionText}>{editable ? props.saving ? "Saving…" : "Save & continue  →" : "Next page  →"}</Text></Pressable> : editable ? <Pressable style={[styles.primaryAction, !entry.dp?.trim() && styles.disabledAction]} onPress={props.onComplete}><Text style={styles.primaryActionText}>{entry.status === "completed" ? "Save changes" : "Mark complete"}</Text></Pressable> : <Pressable style={styles.primaryAction} onPress={props.onEnableEditing}><Text style={styles.primaryActionText}>Enable editing</Text></Pressable>}
     </View>
     {props.message ? <View style={styles.stickyNotice}><InlineNotice text={props.message} tone={props.message.toLowerCase().includes("could not") || props.message.toLowerCase().includes("invalid") ? "error" : "info"} onPress={props.onRetrySync} /></View> : null}
   </SafeAreaView>;
@@ -1046,8 +1182,8 @@ function SessionScreen(props: { sessions: any[]; currentUser: AppUser; onBack: (
 function TopBack(props: { title: string; onBack: () => void }) { return <View style={styles.entryTopBar}><Pressable onPress={props.onBack} style={styles.backButton}><Text style={styles.backArrow}>‹</Text></Pressable><Text style={styles.entryTopTitle}>{props.title}</Text></View>; }
 
 function Card(props: { title: string; subtitle?: string; children: React.ReactNode }) { return <View style={styles.formCard}><Text style={styles.cardTitle}>{props.title}</Text>{props.subtitle ? <Text style={styles.cardSubtitle}>{props.subtitle}</Text> : null}{props.children}</View>; }
-function Field(props: { label: string; value: string; onChangeText: (value: string) => void; placeholder?: string; keyboardType?: any; autoCapitalize?: any; secureTextEntry?: boolean; multiline?: boolean; warning?: string }) {
-  return <View style={styles.fieldGroup}><Text style={styles.fieldLabel}>{props.label}</Text><TextInput value={props.value} onChangeText={props.onChangeText} placeholder={props.placeholder} placeholderTextColor="#8ba0ab" keyboardType={props.keyboardType} autoCapitalize={props.autoCapitalize || "sentences"} secureTextEntry={props.secureTextEntry} multiline={props.multiline} textAlignVertical={props.multiline ? "top" : "center"} style={[styles.input, props.multiline && styles.inputMultiline, props.warning && styles.inputWarning]} /></View>;
+function Field(props: { label: string; value: string; onChangeText: (value: string) => void; placeholder?: string; keyboardType?: any; autoCapitalize?: any; secureTextEntry?: boolean; multiline?: boolean; warning?: string; editable?: boolean }) {
+  return <View style={styles.fieldGroup}><Text style={styles.fieldLabel}>{props.label}</Text><TextInput editable={props.editable !== false} value={props.value} onChangeText={props.onChangeText} placeholder={props.placeholder} placeholderTextColor="#8ba0ab" keyboardType={props.keyboardType} autoCapitalize={props.autoCapitalize || "sentences"} secureTextEntry={props.secureTextEntry} multiline={props.multiline} textAlignVertical={props.multiline ? "top" : "center"} style={[styles.input, props.multiline && styles.inputMultiline, props.warning && styles.inputWarning, props.editable === false && styles.readOnlyField]} /></View>;
 }
 function InlineNotice(props: { text: string; tone?: "info" | "error" | "success"; onPress?: () => void }) {
   const tone = props.tone || "info";
@@ -1089,18 +1225,18 @@ function createStyles(C: Palette) { return StyleSheet.create({
   fieldGroup: { marginTop: 15 }, fieldLabel: { color: C.ink, fontSize: 13, fontWeight: "700", marginBottom: 7 }, input: { minHeight: 50, borderWidth: 1, borderColor: C.line, borderRadius: 14, backgroundColor: C.input, paddingHorizontal: 14, paddingVertical: 11, color: C.ink, fontSize: 16 }, inputMultiline: { minHeight: 92, paddingTop: 12 }, inputWarning: { borderColor: C.warn, backgroundColor: C.errorBg }, fieldHelp: { color: C.muted, fontSize: 12, marginTop: 7, lineHeight: 17 },
   primaryButton: { minHeight: 52, borderRadius: 15, backgroundColor: C.blue, alignItems: "center", justifyContent: "center", paddingHorizontal: 18, marginTop: 17 }, primaryButtonText: { color: C.paper, fontSize: 16, fontWeight: "800" }, secondaryButton: { minHeight: 48, borderWidth: 1, borderColor: C.line, borderRadius: 14, backgroundColor: C.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 16, marginTop: 12 }, secondaryButtonText: { color: C.blue, fontSize: 14, fontWeight: "700" }, disabledAction: { opacity: 0.55 }, disabledSecondary: { opacity: 0.5 },
   notice: { backgroundColor: C.pale, borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: C.line }, noticeError: { backgroundColor: C.errorBg, borderColor: C.errorLine }, noticeSuccess: { backgroundColor: C.successBg, borderColor: C.successLine }, noticeText: { color: C.ink, fontSize: 13, lineHeight: 18 }, noticeAction: { color: C.blue, fontSize: 12, fontWeight: "700", marginTop: 5 }, orRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 18 }, rule: { height: 1, backgroundColor: C.line, flex: 1 }, footnote: { color: C.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 17 }, footer: { color: C.muted, fontSize: 11, textAlign: "center", marginTop: 22 },
-  topBar: { minHeight: 65, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: C.paper }, brandInline: { flexDirection: "row", gap: 10, alignItems: "center" }, iconButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, iconText: { color: C.blue, fontSize: 18, fontWeight: "900", letterSpacing: 2 }, fieldMark: { borderWidth: 1, borderColor: C.line, backgroundColor: C.card, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, transform: [{ rotate: "-3deg" }] }, fieldMarkText: { color: C.bright, fontSize: 8, fontWeight: "900", letterSpacing: 1.2 },
+  topBar: { minHeight: 65, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: C.paper }, topBarActions: { flexDirection: "row", alignItems: "center", gap: 10 }, brandInline: { flexDirection: "row", gap: 10, alignItems: "center" }, iconButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, iconText: { color: C.blue, fontSize: 18, fontWeight: "900", letterSpacing: 2 }, fieldMark: { borderWidth: 1, borderColor: C.line, backgroundColor: C.card, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, transform: [{ rotate: "-3deg" }] }, fieldMarkText: { color: C.bright, fontSize: 8, fontWeight: "900", letterSpacing: 1.2 },
   connectionStrip: { minHeight: 34, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", gap: 8, borderBottomWidth: 1, borderColor: C.line }, statusDot: { width: 8, height: 8, borderRadius: 9 }, connectionText: { color: C.muted, fontSize: 11, flex: 1 }, bookContent: { padding: 20, paddingBottom: 24, gap: 14 }, bookHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4, marginBottom: 5 }, pageStamp: { width: 64, height: 72, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, alignItems: "center", justifyContent: "center", transform: [{ rotate: "3deg" }] }, pageStampSmall: { color: C.bright, fontSize: 9, fontWeight: "900", letterSpacing: 1.2 }, pageStampValue: { color: C.blue, fontSize: 27, fontWeight: "800", marginTop: 2 },
   dateSelector: { flexDirection: "row", alignItems: "center", gap: 13, borderRadius: 17, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 12 }, dateNudge: { minWidth: 42, minHeight: 42, borderRadius: 13, backgroundColor: C.pale, alignItems: "center", justifyContent: "center", paddingHorizontal: 9 }, dateNudgeText: { color: C.blue, fontSize: 27, fontWeight: "500", marginTop: -3 }, todayButtonText: { color: C.blue, fontSize: 12, fontWeight: "800" }, sectionEyebrow: { color: C.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1 }, dateTitle: { color: C.ink, fontSize: 15, fontWeight: "700", marginTop: 3 }, sectionHeadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 13 }, sectionTitle: { color: C.ink, fontSize: 18, fontWeight: "800" }, countBadge: { color: C.blue, backgroundColor: C.pale, minWidth: 31, textAlign: "center", overflow: "hidden", paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, fontSize: 12, fontWeight: "800" },
   entryCard: { backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 17, marginTop: 10, overflow: "hidden" }, entryCardCompact: { borderRadius: 14, marginTop: 7 }, entryCardMain: { flexDirection: "row", alignItems: "center", padding: 13, gap: 11 }, entryNumber: { width: 42, height: 46, borderRadius: 13, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, entryNumberText: { color: C.blue, fontSize: 15, fontWeight: "800" }, entryCardText: { flex: 1, minWidth: 0 }, entryPhone: { color: C.ink, fontSize: 15, fontWeight: "800" }, entryLocation: { color: C.muted, fontSize: 12, marginTop: 2 }, entryMeta: { color: C.muted, fontSize: 10, marginTop: 5 }, cardStatus: { alignItems: "center", gap: 5, minWidth: 42 }, cardStatusText: { color: C.muted, fontSize: 9, fontWeight: "800" }, historyLink: { borderTopWidth: 1, borderColor: C.line, paddingHorizontal: 14, paddingVertical: 8, alignItems: "flex-end" }, historyLinkText: { color: C.blue, fontSize: 11, fontWeight: "700" }, conflictPreview: { marginHorizontal: 13, marginBottom: 12, color: C.warn, fontSize: 12 }, pastDay: { marginTop: 13 }, pastDayHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 2, marginBottom: 3 }, pastDayTitle: { color: C.ink, fontSize: 14, fontWeight: "800" }, signOut: { alignItems: "center", padding: 10 },
   emptyCard: { alignItems: "center", backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderStyle: "dashed", borderRadius: 19, padding: 20, marginTop: 8 }, emptyIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, emptyIconText: { color: C.bright, fontSize: 23, fontWeight: "800" }, emptyTitle: { color: C.ink, fontSize: 16, fontWeight: "800", marginTop: 10 },
-  entryTopBar: { minHeight: 64, backgroundColor: C.paper, borderBottomWidth: 1, borderColor: C.line, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 11 }, backButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: "center", justifyContent: "center" }, backArrow: { color: C.blue, fontSize: 29, marginTop: -4 }, entryTopTitle: { color: C.ink, fontSize: 16, fontWeight: "800" }, saveBadge: { backgroundColor: C.successBg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }, saveBadgeWorking: { backgroundColor: C.yellow }, saveBadgeText: { color: C.good, fontSize: 10, fontWeight: "800" }, progressWrap: { paddingHorizontal: 18, paddingTop: 13, paddingBottom: 10, backgroundColor: C.card, borderBottomWidth: 1, borderColor: C.line }, progressHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, progressPercent: { color: C.blue, fontSize: 11, fontWeight: "800" }, progressTrack: { height: 4, borderRadius: 5, backgroundColor: C.line, marginTop: 8, overflow: "hidden" }, progressFill: { height: 4, backgroundColor: C.bright, borderRadius: 5 }, steps: { paddingTop: 12, paddingBottom: 2, alignItems: "center" }, stepItem: { flexDirection: "row", alignItems: "center" }, stepCircle: { width: 23, height: 23, borderRadius: 12, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, stepCircleActive: { backgroundColor: C.blue }, stepNum: { color: C.muted, fontSize: 10, fontWeight: "800" }, stepNumActive: { color: C.paper }, stepLabel: { color: C.muted, fontSize: 9, marginLeft: 5, marginRight: 6 }, stepLabelActive: { color: C.blue, fontWeight: "800" }, stepConnector: { width: 13, height: 1, backgroundColor: C.line }, stepConnectorActive: { backgroundColor: C.bright }, formContent: { padding: 17, paddingBottom: 24, gap: 12 }, pageHeading: { marginBottom: 2 }, formCard: { borderWidth: 1, borderColor: C.line, borderRadius: 18, backgroundColor: C.card, padding: 15, marginBottom: 2 }, cardTitle: { color: C.ink, fontSize: 16, fontWeight: "800" }, cardSubtitle: { color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 2 }, paperNote: { borderLeftWidth: 3, borderColor: C.bright, backgroundColor: C.pale, padding: 11, borderRadius: 9, marginTop: 13 }, paperNoteTitle: { color: C.blue, fontSize: 12, fontWeight: "800" }, paperNoteText: { color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  entryTopBar: { minHeight: 64, backgroundColor: C.paper, borderBottomWidth: 1, borderColor: C.line, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 11 }, backButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: "center", justifyContent: "center" }, backArrow: { color: C.blue, fontSize: 29, marginTop: -4 }, entryTopTitle: { color: C.ink, fontSize: 16, fontWeight: "800" }, editEntryButton: { minHeight: 34, paddingHorizontal: 11, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: C.pale, borderWidth: 1, borderColor: C.line }, editEntryButtonText: { color: C.blue, fontSize: 11, fontWeight: "900" }, viewBadge: { backgroundColor: C.pale }, saveBadge: { backgroundColor: C.successBg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }, saveBadgeWorking: { backgroundColor: C.yellow }, saveBadgeText: { color: C.good, fontSize: 10, fontWeight: "800" }, readOnlyField: { opacity: 0.78 }, progressWrap: { paddingHorizontal: 18, paddingTop: 13, paddingBottom: 10, backgroundColor: C.card, borderBottomWidth: 1, borderColor: C.line }, progressHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, progressPercent: { color: C.blue, fontSize: 11, fontWeight: "800" }, progressTrack: { height: 4, borderRadius: 5, backgroundColor: C.line, marginTop: 8, overflow: "hidden" }, progressFill: { height: 4, backgroundColor: C.bright, borderRadius: 5 }, steps: { paddingTop: 12, paddingBottom: 2, alignItems: "center" }, stepItem: { flexDirection: "row", alignItems: "center" }, stepCircle: { width: 23, height: 23, borderRadius: 12, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, stepCircleActive: { backgroundColor: C.blue }, stepNum: { color: C.muted, fontSize: 10, fontWeight: "800" }, stepNumActive: { color: C.paper }, stepLabel: { color: C.muted, fontSize: 9, marginLeft: 5, marginRight: 6 }, stepLabelActive: { color: C.blue, fontWeight: "800" }, stepConnector: { width: 13, height: 1, backgroundColor: C.line }, stepConnectorActive: { backgroundColor: C.bright }, formContent: { padding: 17, paddingBottom: 24, gap: 12 }, pageHeading: { marginBottom: 2 }, formCard: { borderWidth: 1, borderColor: C.line, borderRadius: 18, backgroundColor: C.card, padding: 15, marginBottom: 2 }, cardTitle: { color: C.ink, fontSize: 16, fontWeight: "800" }, cardSubtitle: { color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 2 }, paperNote: { borderLeftWidth: 3, borderColor: C.bright, backgroundColor: C.pale, padding: 11, borderRadius: 9, marginTop: 13 }, paperNoteTitle: { color: C.blue, fontSize: 12, fontWeight: "800" }, paperNoteText: { color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   readingRow: { flexDirection: "row", gap: 9 }, measurements: { flexDirection: "row", gap: 7, marginTop: 15 }, measure: { flex: 1, backgroundColor: C.pale, padding: 9, borderRadius: 12 }, measureLabel: { color: C.blue, fontSize: 10, fontWeight: "700" }, measureValue: { color: C.ink, fontSize: 13, fontWeight: "800", marginTop: 5 }, workerGrid: { gap: 8, marginTop: 12 }, workerChip: { borderWidth: 1, borderColor: C.line, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", gap: 9, alignItems: "center" }, workerChipSelected: { borderColor: C.bright, backgroundColor: C.pale }, workerInitial: { width: 30, height: 30, borderRadius: 11, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, workerInitialSelected: { backgroundColor: C.blue }, workerInitialText: { color: C.muted, fontSize: 9, fontWeight: "800" }, workerInitialTextSelected: { color: "#fff" }, workerName: { color: C.ink, fontSize: 13, flex: 1 }, checkbox: { width: 19, height: 19, borderRadius: 6, borderWidth: 1.5, borderColor: C.muted, color: "#fff", textAlign: "center", fontSize: 12, overflow: "hidden" }, checkboxSelected: { backgroundColor: C.blue, borderColor: C.blue }, reviewRow: { borderBottomWidth: 1, borderColor: C.line, paddingVertical: 9, flexDirection: "row", justifyContent: "space-between", gap: 12 }, reviewLabel: { color: C.muted, fontSize: 12 }, reviewValue: { color: C.ink, fontSize: 12, fontWeight: "700", flex: 1, textAlign: "right" },
   bottomActions: { backgroundColor: C.card, borderTopWidth: 1, borderColor: C.line, flexDirection: "row", paddingHorizontal: 15, paddingTop: 10, paddingBottom: Platform.OS === "android" ? 12 : 20, gap: 10 }, secondaryAction: { minHeight: 49, paddingHorizontal: 18, borderRadius: 14, backgroundColor: C.raised, alignItems: "center", justifyContent: "center" }, secondaryActionText: { color: C.blue, fontWeight: "800", fontSize: 14 }, primaryAction: { flex: 1, minHeight: 49, backgroundColor: C.blue, borderRadius: 14, alignItems: "center", justifyContent: "center" }, primaryActionText: { color: C.paper, fontSize: 14, fontWeight: "800" }, stickyNotice: { backgroundColor: C.paper, paddingHorizontal: 12, paddingBottom: 8 },
   conflictCard: { borderWidth: 1, borderColor: C.errorLine, backgroundColor: C.errorBg, borderRadius: 16, padding: 13, marginBottom: 3 }, conflictTitle: { color: C.warn, fontSize: 15, fontWeight: "800" }, conflictText: { color: C.ink, fontSize: 12, lineHeight: 17, marginTop: 6 }, conflictField: { borderTopWidth: 1, borderColor: C.errorLine, paddingTop: 9, marginTop: 9 }, conflictFieldLabel: { color: C.ink, fontSize: 12, fontWeight: "800", marginBottom: 6 }, conflictChoices: { flexDirection: "row", gap: 7 }, conflictChoice: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 11, backgroundColor: C.card, padding: 8 }, conflictChoiceSelected: { borderColor: C.bright, backgroundColor: C.pale }, conflictChoiceTitle: { color: C.muted, fontSize: 9, fontWeight: "800", textTransform: "uppercase" }, conflictChoiceValue: { color: C.ink, fontSize: 11, marginTop: 4 }, discardLink: { alignItems: "center", padding: 10 }, discardLinkText: { color: C.warn, fontSize: 12, fontWeight: "700" },
   historyCard: { borderWidth: 1, borderColor: C.line, borderRadius: 16, backgroundColor: C.card, padding: 14, marginTop: 12 }, historyActor: { color: C.ink, fontSize: 14, fontWeight: "800" }, historyRow: { borderTopWidth: 1, borderColor: C.line, paddingTop: 8, marginTop: 8 }, historyField: { color: C.muted, fontSize: 11, fontWeight: "700" }, historyValues: { color: C.ink, fontSize: 12, marginTop: 4 }, sessionCard: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.raised, borderRadius: 15, padding: 13, marginTop: 11 }, sessionName: { color: C.ink, fontSize: 14, fontWeight: "800", marginBottom: 3 }, revokeButton: { backgroundColor: C.errorBg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 }, revokeText: { color: C.warn, fontWeight: "800", fontSize: 12 },
   tabBar: { flexDirection: "row", minHeight: 68, paddingTop: 7, paddingBottom: Platform.OS === "android" ? 7 : 17, paddingHorizontal: 12, backgroundColor: C.card, borderTopWidth: 1, borderColor: C.line },
   tabButton: { flex: 1, alignItems: "center", justifyContent: "center", gap: 3, minHeight: 48 }, tabIconWrap: { width: 40, height: 30, borderRadius: 11, alignItems: "center", justifyContent: "center", position: "relative" }, tabIconWrapActive: { backgroundColor: C.pale }, tabIcon: { color: C.muted, fontSize: 19, fontWeight: "700" }, tabIconActive: { color: C.blue }, tabLabel: { color: C.muted, fontSize: 10, fontWeight: "700" }, tabLabelActive: { color: C.blue, fontWeight: "900" }, tabBadge: { position: "absolute", right: 1, top: -2, width: 15, height: 15, borderRadius: 8, backgroundColor: C.bright, alignItems: "center", justifyContent: "center" }, tabBadgeText: { color: "#fff", fontSize: 8, fontWeight: "900" },
-  screenHeader: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, backgroundColor: C.paper }, accountContent: { paddingHorizontal: 18, paddingTop: 5, paddingBottom: 22, gap: 14 }, reviewSummary: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 18, marginTop: 5, padding: 13, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, reviewSummaryIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, reviewSummaryGlyph: { color: C.blue, fontSize: 23, fontWeight: "800" }, reviewCount: { color: C.blue, fontSize: 22, fontWeight: "900" }, reviewItem: { flexDirection: "row", alignItems: "center", gap: 11, padding: 13, marginTop: 8, borderWidth: 1, borderColor: C.line, borderRadius: 15, backgroundColor: C.card }, reviewItemStamp: { width: 36, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: C.pale, borderRadius: 10, borderWidth: 1, borderColor: C.line, transform: [{ rotate: "-2deg" }] }, reviewItemStampWarn: { backgroundColor: C.errorBg, borderColor: C.errorLine }, reviewItemStampText: { color: C.blue, fontSize: 18, fontWeight: "900" }, reviewItemStampTextWarn: { color: C.warn }, reviewArrow: { color: C.bright, fontSize: 27, fontWeight: "400" },
+  screenHeader: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, backgroundColor: C.paper }, mainHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12 }, profileButton: { width: 43, height: 43, borderRadius: 22, backgroundColor: C.blue, borderWidth: 2, borderColor: C.card, alignItems: "center", justifyContent: "center", shadowColor: C.ink, shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 }, profileButtonText: { color: C.paper, fontSize: 13, fontWeight: "900" }, accountContent: { paddingHorizontal: 18, paddingTop: 5, paddingBottom: 22, gap: 14 }, summaryContent: { paddingHorizontal: 18, paddingTop: 9, paddingBottom: 24, gap: 12 }, summaryRefreshRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }, summaryRefreshButton: { minHeight: 34, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, borderRadius: 11, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, summaryRefreshText: { color: C.blue, fontSize: 11, fontWeight: "800" }, summaryMetricRow: { flexDirection: "row", gap: 8 }, summaryMetric: { flex: 1, minWidth: 0, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 11 }, summaryMetricAccent: { borderColor: C.bright, backgroundColor: C.pale }, summaryMetricLabel: { color: C.muted, fontSize: 10, fontWeight: "700" }, summaryMetricValue: { color: C.ink, fontSize: 17, fontWeight: "900", marginTop: 5 }, summaryListRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderColor: C.line, paddingVertical: 10 }, summaryListValue: { alignItems: "flex-end" }, summaryListStrong: { color: C.ink, fontSize: 12, fontWeight: "900" }, reviewSummary: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 18, marginTop: 5, padding: 13, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, reviewSummaryIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, reviewSummaryGlyph: { color: C.blue, fontSize: 23, fontWeight: "800" }, reviewCount: { color: C.blue, fontSize: 22, fontWeight: "900" }, reviewItem: { flexDirection: "row", alignItems: "center", gap: 11, padding: 13, marginTop: 8, borderWidth: 1, borderColor: C.line, borderRadius: 15, backgroundColor: C.card }, reviewItemStamp: { width: 36, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: C.pale, borderRadius: 10, borderWidth: 1, borderColor: C.line, transform: [{ rotate: "-2deg" }] }, reviewItemStampWarn: { backgroundColor: C.errorBg, borderColor: C.errorLine }, reviewItemStampText: { color: C.blue, fontSize: 18, fontWeight: "900" }, reviewItemStampTextWarn: { color: C.warn }, reviewArrow: { color: C.bright, fontSize: 27, fontWeight: "400" },
   appearanceChoices: { gap: 8, marginTop: 12 }, appearanceChoice: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: C.line, borderRadius: 13, padding: 11, backgroundColor: C.raised }, appearanceChoiceSelected: { borderColor: C.bright, backgroundColor: C.pale }, appearanceDot: { width: 21, height: 21, borderRadius: 11, borderWidth: 1.5, borderColor: C.muted, alignItems: "center", justifyContent: "center" }, appearanceDotSelected: { borderColor: C.blue, backgroundColor: C.blue }, appearanceCheck: { color: C.paper, fontSize: 12, fontWeight: "900" }, appearanceTitle: { color: C.ink, fontSize: 14, fontWeight: "800" }, appearanceCaption: { color: C.muted, fontSize: 11, marginTop: 1 }, refreshSessions: { alignSelf: "flex-start", paddingVertical: 8 }, refreshSessionsText: { color: C.blue, fontSize: 12, fontWeight: "800" }, sessionSeal: { width: 36, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: C.pale }, sessionSealText: { color: C.blue, fontWeight: "900" }, signOutButton: { minHeight: 49, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.errorLine, backgroundColor: C.errorBg, borderRadius: 14 }, signOutButtonText: { color: C.warn, fontSize: 14, fontWeight: "800" }, accountFooter: { textAlign: "center", color: C.muted, fontSize: 11, marginTop: 2 },
 }); }

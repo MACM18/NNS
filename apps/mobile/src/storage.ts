@@ -1,7 +1,7 @@
 import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
-import type { CachedEntry, Entry, PendingMutation, Worker } from "./types";
+import type { CachedEntry, Entry, MonthlyLineSummary, PendingMutation, Worker } from "./types";
 
 const KEY_NAME = "nns-daily-book-cache-key-v1";
 let database: SQLite.SQLiteDatabase | null = null;
@@ -41,6 +41,11 @@ export async function openBookDatabase(ownerId = activeOwnerId) {
     );
     CREATE INDEX IF NOT EXISTS book_entries_day_idx ON book_entries(day DESC);
     CREATE TABLE IF NOT EXISTS book_workers (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS book_month_summaries (
+      month TEXT PRIMARY KEY NOT NULL,
+      payload TEXT NOT NULL,
+      fetched_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS book_outbox (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       entry_id TEXT NOT NULL,
@@ -57,6 +62,20 @@ export async function openBookDatabase(ownerId = activeOwnerId) {
   databaseOwner = ownerHash;
   activeOwnerId = ownerId;
   return db;
+}
+
+export async function storeMonthlySummary(summary: MonthlyLineSummary) {
+  const db = await openBookDatabase();
+  await db.runAsync(
+    "INSERT INTO book_month_summaries(month, payload, fetched_at) VALUES(?, ?, ?) ON CONFLICT(month) DO UPDATE SET payload=excluded.payload, fetched_at=excluded.fetched_at",
+    summary.month, JSON.stringify(summary), summary.fetchedAt,
+  );
+}
+
+export async function getMonthlySummary(month: string) {
+  const db = await openBookDatabase();
+  const row = await db.getFirstAsync<{ payload: string }>("SELECT payload FROM book_month_summaries WHERE month = ?", month);
+  return row ? JSON.parse(row.payload) as MonthlyLineSummary : null;
 }
 
 export async function closeBookDatabase() {
