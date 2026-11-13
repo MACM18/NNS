@@ -3,7 +3,7 @@
     "name": "NNS Enterprise",
     "slug": "nns-enterprise-mobile",
     "scheme": "nnsenterprise",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "orientation": "portrait",
     "platforms": [
       "android"
@@ -12,7 +12,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "lk.nns.enterprise.mobile",
-      "versionCode": 8,
+      "versionCode": 9,
       "allowBackup": false,
       "permissions": [],
       "adaptiveIcon": {

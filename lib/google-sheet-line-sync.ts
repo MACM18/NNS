@@ -30,6 +30,9 @@ const HEADERS: Partial<Record<LineField, string[]>> = {
   nutBolt: ["Nut&Bolt", "Nut Bolt"], screwNail: ["Screw Nail", "Screw Nail 1 1/2"],
   drumNumber: ["Drum Number", "Drum No", "Drum", "Drum #"],
 };
+const REQUIRED_ROW_FIELDS: LineField[] = ["date", "telephoneNo", "dp", "powerDp", "powerInbox", "name", "address"];
+const FORMULA_COLUMNS = new Set([11, 12, 13]); // L-N are maintained by the template.
+const APP_ROW_ID_COLUMN = 45; // AT is reserved for the app's hidden, stable row ID.
 
 const normalized = (value: unknown) => value == null ? "" : String(value).trim();
 const phoneKey = (value: unknown) => {
@@ -140,6 +143,71 @@ function columnIndex(headers: unknown[], field: LineField) {
   return headers.findIndex((value) => names.some((name) => normalized(value).toLowerCase().replace(/\s+/g, " ") === name.toLowerCase()));
 }
 
+function requiredAllColumns(headers: unknown[]) {
+  const columns = new Map<LineField, number>();
+  for (const field of REQUIRED_ROW_FIELDS) {
+    const index = columnIndex(headers, field);
+    if (index < 0) throw new Error(`The All tab is missing the required ${HEADERS[field]?.[0] || field} column`);
+    columns.set(field, index);
+  }
+  return columns;
+}
+
+function isBlank(value: unknown) {
+  return normalized(value) === "";
+}
+
+function isAvailableAllRow(row: unknown[], requiredColumns: Map<LineField, number>) {
+  if (!REQUIRED_ROW_FIELDS.every((field) => isBlank(row[requiredColumns.get(field)!]))) return false;
+  if (!isBlank(row[APP_ROW_ID_COLUMN])) return false;
+
+  // A key-field-empty row may still contain a partially entered record in another
+  // input column. Skip that row, but allow serial numbers and template formulas.
+  for (let column = 1; column < APP_ROW_ID_COLUMN; column++) {
+    if (FORMULA_COLUMNS.has(column)) continue;
+    if (!isBlank(row[column])) return false;
+  }
+  return true;
+}
+
+function sheetDateKey(value: unknown, month: number, year: number) {
+  const raw = normalized(value);
+  const numeric = typeof value === "number" ? value : Number(raw);
+  if (Number.isFinite(numeric) && numeric > 30000) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.round(numeric) * 86400000);
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{1,2}$/.test(raw)) {
+    const day = Number(raw);
+    return day >= 1 && day <= 31 ? new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) : "";
+  }
+  const twoPart = raw.match(/^(\d{1,2})[/-](\d{1,2})$/);
+  if (twoPart) {
+    const first = Number(twoPart[1]);
+    const second = Number(twoPart[2]);
+    const day = first <= 31 && second === month ? first : second <= 31 && first === month ? second : first;
+    return day >= 1 && day <= 31 ? new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) : "";
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+}
+
+function firstAvailableAllRow(rows: unknown[][], requiredColumns: Map<LineField, number>) {
+  for (let index = 1; index < rows.length; index++) {
+    if (isAvailableAllRow(rows[index] || [], requiredColumns)) return index + 1;
+  }
+  return null;
+}
+
+function lastUsedAllRow(rows: unknown[][]) {
+  for (let index = rows.length - 1; index >= 1; index--) {
+    const row = rows[index] || [];
+    if (row.some((value, column) => column !== 0 && !FORMULA_COLUMNS.has(column) && !isBlank(value))) return index + 1;
+  }
+  return 1;
+}
+
 function sheetId(connection: { sheetId: string | null; sheetUrl: string }) {
   return connection.sheetId || connection.sheetUrl.match(/\/spreadsheets\/d\/([^/]+)/)?.[1] || null;
 }
@@ -158,7 +226,7 @@ export async function processLineWrite(lineId: string) {
   if (!claim.count) return;
   const [line, connection] = await Promise.all([
     prisma.lineDetails.findUnique({ where: { id: lineId } }),
-    prisma.googleSheetConnection.findUnique({ where: { id: state.connectionId }, select: { sheetId: true, sheetUrl: true } }),
+    prisma.googleSheetConnection.findUnique({ where: { id: state.connectionId }, select: { sheetId: true, sheetUrl: true, month: true, year: true } }),
   ]);
   if (!line || !connection) {
     await prisma.googleSheetLineSync.updateMany({ where: { lineId, revision: state.revision, status: "writing" }, data: { status: "review", lastError: "The app line or sheet connection is no longer available" } });
@@ -171,38 +239,40 @@ export async function processLineWrite(lineId: string) {
     const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'All'!A1:AT", valueRenderOption: "UNFORMATTED_VALUE" });
     const rows = response.data.values || [];
     const headers = rows[0] || [];
-    const phoneColumn = columnIndex(headers, "telephoneNo");
-    if (phoneColumn < 0) throw new Error("The All tab is missing its Number column");
-    const idColumn = 45; // AT is reserved for the app's hidden, stable row ID.
-    if (normalized(headers[idColumn])) throw new Error("All!AT is already in use; no app data was written");
-    let row = rows.findIndex((values, index) => index > 0 && normalized(values[idColumn]) === lineId) + 1;
+    const requiredColumns = requiredAllColumns(headers);
+    const phoneColumn = requiredColumns.get("telephoneNo")!;
+    const dateColumn = requiredColumns.get("date")!;
+    if (normalized(headers[APP_ROW_ID_COLUMN])) throw new Error("All!AT is already in use; no app data was written");
+    let row = rows.findIndex((values, index) => index > 0 && normalized(values[APP_ROW_ID_COLUMN]) === lineId) + 1;
     if (!row && state.sheetRow) {
       const candidate = rows[state.sheetRow - 1] || [];
       const oldPhone = snapshotBaseline(state.baseline).telephoneNo;
-      if (candidate[idColumn] && normalized(candidate[idColumn]) !== lineId) {
+      if (candidate[APP_ROW_ID_COLUMN] && normalized(candidate[APP_ROW_ID_COLUMN]) !== lineId) {
         throw new Error(`All row ${state.sheetRow} belongs to another record; review the row link`);
       }
-      if (!candidate[idColumn] && (phoneKey(candidate[phoneColumn]) === phoneKey(oldPhone) || phoneKey(candidate[phoneColumn]) === phoneKey(line.telephoneNo))) {
+      const candidateMatchesLine = phoneKey(candidate[phoneColumn]) === phoneKey(line.telephoneNo) &&
+        sheetDateKey(candidate[dateColumn], connection.month, connection.year) === lineSnapshot(line as any).date;
+      const candidateMatchesBaseline = phoneKey(candidate[phoneColumn]) === phoneKey(oldPhone) &&
+        sheetDateKey(candidate[dateColumn], connection.month, connection.year) === String(snapshotBaseline(state.baseline).date || "").slice(0, 10);
+      if (!candidate[APP_ROW_ID_COLUMN] && (candidateMatchesBaseline || candidateMatchesLine)) {
         row = state.sheetRow;
-      } else if (normalized(candidate[phoneColumn])) {
+      } else if (normalized(candidate[phoneColumn]) || normalized(candidate[dateColumn])) {
         throw new Error(`All row ${state.sheetRow} changed; review the row link before writing`);
       }
     }
     if (!row && !state.sheetRow) {
-      const matches = rows.flatMap((values, index) => index > 0 && phoneKey(values[phoneColumn]) === phoneKey(line.telephoneNo) ? [index + 1] : []);
-      if (matches.length > 1) throw new Error("Multiple All rows have this telephone number; review the row link");
+      const lineDate = lineSnapshot(line as any).date;
+      const matches = rows.flatMap((values, index) => index > 0 &&
+        phoneKey(values[phoneColumn]) === phoneKey(line.telephoneNo) && sheetDateKey(values[dateColumn], connection.month, connection.year) === lineDate ? [index + 1] : []);
+      if (matches.length > 1) throw new Error("Multiple All rows match this date and number; review the row link");
       if (matches.length === 1) row = matches[0];
     }
     const isNew = !row;
     if (!row) {
-      row = Math.max(2, rows.reduce((last, values, index) => index > 0 && normalized(values[phoneColumn]) ? index + 1 : last, 1) + 1);
-      const existing = rows[row - 1] || [];
-      if (existing.some((value, index) => index !== 0 && index !== 11 && index !== 12 && index !== 13 && index !== idColumn && normalized(value))) {
-        throw new Error(`All row ${row} contains unlinked data; review before writing`);
-      }
+      row = firstAvailableAllRow(rows, requiredColumns) || Math.max(2, lastUsedAllRow(rows) + 1);
     }
     const current = rows[row - 1] || [];
-    if (current[idColumn] && normalized(current[idColumn]) !== lineId) throw new Error(`All row ${row} belongs to another record`);
+    if (current[APP_ROW_ID_COLUMN] && normalized(current[APP_ROW_ID_COLUMN]) !== lineId) throw new Error(`All row ${row} belongs to another record`);
     const properties = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties(sheetId,title,gridProperties)" });
     const allTab = properties.data.sheets?.find((tab) => tab.properties?.title === "All")?.properties;
     const drumTab = properties.data.sheets?.find((tab) => tab.properties?.title === "Drum Number")?.properties;
@@ -252,7 +322,7 @@ export async function processLineWrite(lineId: string) {
       return;
     }
     writes.push({ range: `'All'!AT${row}`, values: [[lineId]] });
-    if (isNew) writes.push({ range: `'All'!A${row}`, values: [[row - 1]] });
+    if (isNew && isBlank(current[0])) writes.push({ range: `'All'!A${row}`, values: [[row - 1]] });
     const growth: any[] = [];
     for (const tab of [allTab, drumTab]) {
       if (row > Number(tab.gridProperties?.rowCount || 0)) growth.push({ appendDimension: { sheetId: tab.sheetId, dimension: "ROWS", length: row - Number(tab.gridProperties?.rowCount || 0) } });

@@ -21,9 +21,15 @@ const db = prisma as unknown as {
 
 function fixture(sheetName: string) {
   const headers = Array(46).fill("");
+  headers[0] = "Date";
   headers[2] = "Number";
+  headers[3] = "DP";
+  headers[4] = "Power (DP)";
+  headers[5] = "Power (inbox)";
   headers[6] = "Name";
+  headers[7] = "Address";
   const row = Array(46).fill("");
+  row[0] = 46327; // 2026-11-01
   row[2] = "0342212345";
   row[6] = sheetName;
   row[45] = "line-1";
@@ -89,16 +95,58 @@ it("adds a new row while copying the All and Drum Number formulas", async () => 
   sheets.spreadsheets.values.get.mockImplementation(async ({ range }: { range: string }) => {
     if (range.startsWith("'Drum Number'")) return { data: { values: [] } };
     const headers = Array(46).fill("");
-    headers[2] = "Number"; headers[6] = "Name";
-    const existing = Array(46).fill(""); existing[2] = "0342299999"; existing[6] = "Another customer";
-    return { data: { values: [headers, existing] } };
+    headers[0] = "Date"; headers[2] = "Number"; headers[3] = "DP";
+    headers[4] = "Power (DP)"; headers[5] = "Power (inbox)";
+    headers[6] = "Name"; headers[7] = "Address";
+    const occupied = Array(46).fill("");
+    occupied[14] = "Keep this unrelated sheet value";
+    const existing = Array(46).fill(""); existing[0] = 46327; existing[2] = "0342299999"; existing[6] = "Another customer";
+    const available = Array(46).fill(""); available[0] = 3;
+    return { data: { values: [headers, occupied, existing, available] } };
   });
   await processLineWrite("line-1");
   const formulaCopies = sheets.spreadsheets.batchUpdate.mock.calls[0][0].requestBody.requests
     .filter((request: { copyPaste?: unknown }) => request.copyPaste);
   expect(formulaCopies).toHaveLength(2);
-  expect(formulaCopies[0].copyPaste.destination.startRowIndex).toBe(2);
-  expect(formulaCopies[1].copyPaste.destination.startRowIndex).toBe(2);
+  expect(formulaCopies[0].copyPaste.destination.startRowIndex).toBe(3);
+  expect(formulaCopies[1].copyPaste.destination.startRowIndex).toBe(3);
+  const writes = sheets.spreadsheets.values.batchUpdate.mock.calls[0][0].requestBody.data;
+  expect(writes).toContainEqual({ range: "'All'!AT4", values: [["line-1"]] });
+  expect(writes).not.toContainEqual({ range: "'All'!A4", values: [[3]] });
+});
+
+it("requires all seven row-identification headers before writing", async () => {
+  const sheets = fixture("Old name");
+  sheets.spreadsheets.values.get.mockResolvedValue({ data: { values: [Array(46).fill("")] } });
+  await processLineWrite("line-1");
+  expect(sheets.spreadsheets.values.batchUpdate).not.toHaveBeenCalled();
+  expect(db.googleSheetLineSync.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+    data: expect.objectContaining({ status: "review", conflictFields: ["sheet_row"] }),
+  }));
+});
+
+it("does not link a row that has the same number on a different date", async () => {
+  const sheets = fixture("Old name");
+  db.googleSheetLineSync.findUnique.mockResolvedValue({
+    lineId: "line-1", connectionId: "connection-1", status: "pending", revision: 1,
+    sheetRow: null, pendingOperation: "upsert", pendingFields: ["telephoneNo", "name"],
+    baseline: {}, drumBaseline: {},
+  });
+  sheets.spreadsheets.values.get.mockImplementation(async ({ range }: { range: string }) => {
+    if (range.startsWith("'Drum Number'")) return { data: { values: [] } };
+    const headers = Array(46).fill("");
+    headers[0] = "Date"; headers[2] = "Number"; headers[3] = "DP";
+    headers[4] = "Power (DP)"; headers[5] = "Power (inbox)";
+    headers[6] = "Name"; headers[7] = "Address";
+    const differentDate = Array(46).fill("");
+    differentDate[0] = 46326; differentDate[2] = "0342212345"; differentDate[6] = "Earlier job";
+    return { data: { values: [headers, differentDate, Array(46).fill("")] } };
+  });
+
+  await processLineWrite("line-1");
+  const writes = sheets.spreadsheets.values.batchUpdate.mock.calls[0][0].requestBody.data;
+  expect(writes).toContainEqual({ range: "'All'!AT3", values: [["line-1"]] });
+  expect(writes).not.toContainEqual({ range: "'All'!G2", values: [["New name"]] });
 });
 
 it("finds an older deleted line by phone and clears inputs without clearing formulas", async () => {
