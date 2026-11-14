@@ -25,7 +25,6 @@ import {
 const COLUMNS = [
   { id: "telephone_no", label: "Line No." },
   { id: "name", label: "Customer" },
-  { id: "address", label: "Address" },
   { id: "dp", label: "DP" },
   { id: "total_cable", label: "Distance" },
   { id: "status", label: "Status" },
@@ -423,6 +422,10 @@ export function LineDetailsTable({
             </CardTitle>
           </CardHeader>
           <CardContent className='space-y-2'>
+            <div className='space-y-1 border-b pb-2'>
+              <span className='text-sm text-muted-foreground'>Address:</span>
+              <p className='break-words font-medium'>{line.address || "Not provided"}</p>
+            </div>
             <div className='flex justify-between'>
               <span className='text-sm text-muted-foreground'>DP:</span>
               <Badge variant='outline'>{line.dp}</Badge>
@@ -776,7 +779,6 @@ export function LineDetailsTable({
                 <span className='flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground'><Phone className='h-3 w-3' />Line</span>
                 <p className='truncate text-base font-semibold tabular-nums'>{line.telephone_no}</p>
                 <p className='mt-0.5 truncate text-sm text-muted-foreground'>{line.name || "Customer name not set"}</p>
-                {line.address && <p className='mt-1 flex min-w-0 items-start gap-1 text-xs text-muted-foreground'><MapPin className='mt-0.5 h-3 w-3 shrink-0' /><span className='line-clamp-2'>{line.address}</span></p>}
                 {line.sheet_sync_status && <p className='mt-1 text-[11px] text-muted-foreground'>Sheet: {line.sheet_sync_status === "review" ? "Needs review" : line.sheet_sync_status}</p>}
               </div>
               {getStatusBadge(line)}
@@ -823,7 +825,6 @@ export function LineDetailsTable({
                   )}
                 </TableHead>
               )}
-              {visibleColumns.has("address") && <TableHead>Address</TableHead>}
               {visibleColumns.has("dp") && (
                 <TableHead
                   className='cursor-pointer hover:bg-muted/50'
@@ -883,11 +884,6 @@ export function LineDetailsTable({
                   )}
                   {visibleColumns.has("name") && (
                     <TableCell>{line.name}</TableCell>
-                  )}
-                  {visibleColumns.has("address") && (
-                    <TableCell className='max-w-[280px] truncate' title={line.address || ""}>
-                      {line.address || "—"}
-                    </TableCell>
                   )}
                   {visibleColumns.has("dp") && (
                     <TableCell>
