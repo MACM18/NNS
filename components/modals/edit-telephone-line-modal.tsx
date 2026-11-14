@@ -35,6 +35,9 @@ interface TelephoneLine {
   notes?: string;
   drum_id?: string;
   cable_used?: number;
+  cable_start?: number;
+  cable_middle?: number;
+  cable_end?: number;
   // Material fields (optional as they might not be in the initial prop)
   [key: string]: any;
 }
@@ -73,6 +76,12 @@ export function EditTelephoneLineModal({
       // Initialize with prop data first
       setFormData({
         ...line,
+        cable_start: line.cable_start ?? 0,
+        cable_middle: line.cable_middle ?? 0,
+        cable_end: line.cable_end ?? 0,
+        _cable_start_at_load: Number(line.cable_start ?? 0),
+        _cable_middle_at_load: Number(line.cable_middle ?? 0),
+        _cable_end_at_load: Number(line.cable_end ?? 0),
         // Ensure defaults for materials if not present
         retainers: line.retainers || 0,
         l_hook: line.l_hook || 0,
@@ -123,6 +132,9 @@ export function EditTelephoneLineModal({
         setFormData((prev: any) => ({
           ...prev,
           ...lineData.data, // This generally has snake_case fields as verified in API
+          _cable_start_at_load: Number(lineData.data.cable_start ?? 0),
+          _cable_middle_at_load: Number(lineData.data.cable_middle ?? 0),
+          _cable_end_at_load: Number(lineData.data.cable_end ?? 0),
           // If usage exists, prefer it for drum_id and cable_used
           drum_id: usageData.data?.drum_id || prev.drum_id || (lineData.data.drum_number ? 'none' : ''), // Fallback if needed
           cable_used: usageData.data?.quantity_used ?? prev.cable_used ?? 0,
@@ -160,12 +172,31 @@ export function EditTelephoneLineModal({
     if (!line) return;
     setIsLoading(true);
 
+    const cableStart = Number(formData.cable_start) || 0;
+    const cableMiddle = Number(formData.cable_middle) || 0;
+    const cableEnd = Number(formData.cable_end) || 0;
+    const f1 = Math.abs(cableStart - cableMiddle);
+    const g1 = Math.abs(cableMiddle - cableEnd);
+    const totalCable = f1 + g1;
+    const readingsChanged =
+      cableStart !== Number(formData._cable_start_at_load ?? 0) ||
+      cableMiddle !== Number(formData._cable_middle_at_load ?? 0) ||
+      cableEnd !== Number(formData._cable_end_at_load ?? 0);
+
     try {
       // 1. Update General Line Details (Materials)
       const updateRes = await fetch(`/api/lines/${line.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          telephone_no: formData.telephone_no || formData.line_number,
+          name: formData.customer_name ?? formData.name,
+          address: formData.customer_address ?? formData.address,
+          cable_start: cableStart,
+          cable_middle: cableMiddle,
+          cable_end: cableEnd,
+        }),
       });
 
       if (!updateRes.ok) throw new Error("Failed to update line details");
@@ -177,7 +208,11 @@ export function EditTelephoneLineModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           drum_id: formData.drum_id || null,
-          cable_used: formData.cable_used || 0,
+          // Keep historical usage intact when only editing other fields. Once
+          // readings are changed, the measured total becomes the drum usage.
+          cable_used: readingsChanged
+            ? totalCable
+            : Number(formData.cable_used ?? totalCable),
         }),
       });
 
@@ -214,6 +249,13 @@ export function EditTelephoneLineModal({
       />
     </div>
   );
+
+  const cableStart = Number(formData.cable_start) || 0;
+  const cableMiddle = Number(formData.cable_middle) || 0;
+  const cableEnd = Number(formData.cable_end) || 0;
+  const f1 = Math.abs(cableStart - cableMiddle);
+  const g1 = Math.abs(cableMiddle - cableEnd);
+  const totalCable = f1 + g1;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -305,16 +347,31 @@ export function EditTelephoneLineModal({
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cable_used">Cable Used (meters)</Label>
-                    <Input
-                      id="cable_used"
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={formData.cable_used}
-                      onChange={(e) => handleChange("cable_used", parseFloat(e.target.value))}
-                    />
+                  <div className="space-y-3 md:col-span-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {([
+                        ["Cable start (m)", "cable_start"],
+                        ["Cable middle (m)", "cable_middle"],
+                        ["Cable end (m)", "cable_end"],
+                      ] as const).map(([label, field]) => (
+                        <div key={field} className="space-y-2">
+                          <Label htmlFor={field}>{label}</Label>
+                          <Input
+                            id={field}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData[field] ?? 0}
+                            onChange={(e) => handleChange(field, e.target.value === "" ? 0 : Number(e.target.value))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-3 text-sm">
+                      <div><span className="block text-muted-foreground">F1</span><strong>{f1.toFixed(2)} m</strong></div>
+                      <div><span className="block text-muted-foreground">G1</span><strong>{g1.toFixed(2)} m</strong></div>
+                      <div><span className="block text-muted-foreground">Total used</span><strong>{totalCable.toFixed(2)} m</strong></div>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="monthly_fee">Monthly Fee</Label>
