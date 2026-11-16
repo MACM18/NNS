@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
 import {
   Alert, AppState, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet,
-  Text, TextInput, View, useColorScheme,
+  Text, View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as SecureStore from "expo-secure-store";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import NetInfo from "@react-native-community/netinfo";
 import * as Crypto from "expo-crypto";
@@ -13,28 +13,9 @@ import { GoogleOneTapSignIn, isCancelledResponse, isErrorWithCode, isNoSavedCred
 import { apiFetch, claimMobilePairing, clearSession, confirmMobilePairing, getSavedSession, login, NativeSession, revokeCurrentSession, saveSession } from "./src/session";
 import { cacheServerEntry, clearConflictMutations, closeBookDatabase, deleteEntryCache, deleteLocalDraft, enqueueMutation, finishMutation, flagConflict, getCachedEntries, getConflictedMutations, getMonthlySummary, getPendingMutations, getWorkers, openBookDatabase, pendingCount, pruneBookEntries, replaceLocalId, storeEntry, storeMonthlySummary, storeWorkers, updatePendingCreate } from "./src/storage";
 import { AppUser, blankEntry, CachedEntry, cableLengths, Entry, EntryConflict, MonthlyLineSummary, PendingMutation, sameFieldValue, Worker, workerIds } from "./src/types";
+import { Palette, ThemeMode, paletteByMode, useAppearance } from "./src/theme";
+import { Button as MaterialButton, Card as MaterialCard, TextInput as MaterialTextInput, Searchbar } from "react-native-paper";
 
-type Palette = {
-  ink: string; muted: string; blue: string; bright: string; pale: string; paper: string; card: string;
-  line: string; good: string; warn: string; yellow: string; yellowInk: string; input: string;
-  raised: string; errorBg: string; errorLine: string; successBg: string; successLine: string;
-};
-type ThemeMode = "system" | "light" | "dark";
-const paletteByMode: Record<Exclude<ThemeMode, "system">, Palette> = {
-  light: {
-    ink: "#2e2a23", muted: "#776f61", blue: "#31594d", bright: "#b26745", pale: "#e9eee4",
-    paper: "#f4efe5", card: "#fffaf1", line: "#ddd4c4", good: "#3e7558", warn: "#a2473a",
-    yellow: "#f5e5bd", yellowInk: "#806021", input: "#fffdf8", raised: "#f8f2e7",
-    errorBg: "#fbefea", errorLine: "#e6c7ba", successBg: "#e8f1e8", successLine: "#c9ddcb",
-  },
-  dark: {
-    ink: "#f3ead9", muted: "#b9ad99", blue: "#a9c8ad", bright: "#e5a17d", pale: "#303b34",
-    paper: "#191d1a", card: "#222823", line: "#3b433c", good: "#9bc6a0", warn: "#efa18f",
-    yellow: "#4c4027", yellowInk: "#e4c77e", input: "#1d231f", raised: "#2b322c",
-    errorBg: "#392824", errorLine: "#704b40", successBg: "#26352a", successLine: "#405f47",
-  },
-};
-const APPEARANCE_KEY = "nns-mobile-appearance-v1";
 let C: Palette = paletteByMode.light;
 let styles = createStyles(C);
 let darkTheme = false;
@@ -102,29 +83,17 @@ function apiEntry(data: any): Entry {
 function errorMessage(payload: any, fallback: string) { return typeof payload?.error === "string" ? payload.error : fallback; }
 
 export default function App() {
-  const systemScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
-  const [appearanceLoaded, setAppearanceLoaded] = useState(false);
-  const resolvedMode = themeMode === "system" ? (systemScheme === "dark" ? "dark" : "light") : themeMode;
-  const palette = paletteByMode[resolvedMode];
+  const { themeMode, setThemeMode, resolvedMode, palette } = useAppearance();
   const themeStyles = useMemo(() => createStyles(palette), [palette]);
   C = palette;
   styles = themeStyles;
   darkTheme = resolvedMode === "dark";
-
-  useEffect(() => {
-    void SecureStore.getItemAsync(APPEARANCE_KEY).then((saved) => {
-      if (saved === "system" || saved === "light" || saved === "dark") setThemeMode(saved);
-    }).catch(() => undefined).finally(() => setAppearanceLoaded(true));
-  }, []);
-  useEffect(() => {
-    if (appearanceLoaded) void SecureStore.setItemAsync(APPEARANCE_KEY, themeMode).catch(() => undefined);
-  }, [appearanceLoaded, themeMode]);
-
   return <AppContent themeMode={themeMode} setThemeMode={setThemeMode} />;
 }
 
 function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThemeMode: (mode: ThemeMode) => void }) {
+  const navigation = router;
+  const routeParams = useLocalSearchParams<{ mobileEditLineId?: string | string[] }>();
   const [view, setView] = useState<ViewName>("book");
   const [accountReturnView, setAccountReturnView] = useState<MainTab>("book");
   const [user, setUser] = useState<AppUser | null>(null);
@@ -158,8 +127,16 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   const [monthlySummary, setMonthlySummary] = useState<MonthlyLineSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryMessage, setSummaryMessage] = useState("");
+  const [monthLines, setMonthLines] = useState<Entry[]>([]);
+  const [monthLineQuery, setMonthLineQuery] = useState("");
+  const [monthLineCursor, setMonthLineCursor] = useState<string | null>(null);
+  const [monthLinesHasMore, setMonthLinesHasMore] = useState(false);
+  const [monthLinesLoading, setMonthLinesLoading] = useState(false);
+  const [monthLinesMessage, setMonthLinesMessage] = useState("");
   const syncInProgress = useRef(false);
   const savedSnapshot = useRef<Entry | null>(null);
+  const pendingEditConfirmation = useRef("");
+  const lineListRequest = useRef(0);
   const refreshLocal = useCallback(async () => {
     const [cached, cachedWorkers, pendingCount, queued] = await Promise.all([getCachedEntries(), getWorkers(), pendingCountSafe(), getPendingMutations(100)]);
     setEntries(cached);
@@ -215,6 +192,44 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
       setSummaryMessage(error instanceof Error ? `${error.message} Showing the last saved summary if available.` : "Could not refresh the summary.");
     } finally {
       setSummaryLoading(false);
+    }
+  }, [online, user?.id]);
+
+  const loadMonthlyLines = useCallback(async (month: string, query = "", cursor: string | null = null, append = false) => {
+    if (!user?.id) return;
+    const requestId = ++lineListRequest.current;
+    setMonthLinesLoading(true);
+    setMonthLinesMessage("");
+    try {
+      if (!online) {
+        const cached = (await getCachedEntries()).map((record) => record.entry).filter((entry) => entry.date.startsWith(month));
+        if (requestId !== lineListRequest.current) return;
+        const normalized = query.trim().toLocaleLowerCase();
+        const filtered = normalized ? cached.filter((entry) => [entry.telephoneNo, entry.name, entry.address, entry.dp].some((value) => value?.toLocaleLowerCase().includes(normalized))) : cached;
+        setMonthLines((current) => append ? [...current, ...filtered] : filtered);
+        setMonthLineCursor(null);
+        setMonthLinesHasMore(false);
+        setMonthLinesMessage(filtered.length ? "Offline · showing recent lines saved on this device." : "No saved lines for this month are available offline.");
+        return;
+      }
+      const params = new URLSearchParams({ month, limit: "30" });
+      if (query.trim()) params.set("q", query.trim());
+      if (cursor) params.set("cursor", cursor);
+      const response = await apiFetch(`/api/mobile/lines?${params.toString()}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(errorMessage(payload, "Could not load this month’s lines."));
+      if (requestId !== lineListRequest.current) return;
+      const rows = (payload.data || []).map(apiEntry);
+      setMonthLines((current) => append ? [...current, ...rows] : rows);
+      setMonthLineCursor(payload.nextCursor || null);
+      setMonthLinesHasMore(Boolean(payload.nextCursor));
+    } catch (error) {
+      if (requestId === lineListRequest.current) {
+        setMonthLinesMessage(error instanceof Error ? error.message : "Could not load this month’s lines.");
+        if (!append) setMonthLines([]);
+      }
+    } finally {
+      if (requestId === lineListRequest.current) setMonthLinesLoading(false);
     }
   }, [online, user?.id]);
 
@@ -322,6 +337,12 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   useEffect(() => {
     if (view === "summary" && user && bookReady) void loadMonthlySummary(summaryMonth);
   }, [view, user?.id, bookReady, summaryMonth, loadMonthlySummary]);
+
+  useEffect(() => {
+    if (view !== "summary" || !user || !bookReady) return;
+    const timer = setTimeout(() => { void loadMonthlyLines(summaryMonth, monthLineQuery); }, 300);
+    return () => clearTimeout(timer);
+  }, [view, user?.id, bookReady, summaryMonth, monthLineQuery, loadMonthlyLines]);
 
   useEffect(() => {
     if (!user || !bookReady || !online) return;
@@ -455,6 +476,37 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
       { text: "Enable editing", onPress: () => setEditingEntryId(activeEntry.id) },
     ]);
   }
+
+  const mobileEditLineId = Array.isArray(routeParams.mobileEditLineId) ? routeParams.mobileEditLineId[0] : routeParams.mobileEditLineId;
+  useEffect(() => {
+    if (!mobileEditLineId || !user || !bookReady || pendingEditConfirmation.current === mobileEditLineId) return;
+    pendingEditConfirmation.current = mobileEditLineId;
+    void (async () => {
+      try {
+        const response = await apiFetch(`/api/mobile/lines/${encodeURIComponent(mobileEditLineId)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(errorMessage(payload, "Could not open this line."));
+        const entry = apiEntry(payload.data);
+        setActiveEntry(entry);
+        setEditingEntryId(null);
+        setActiveConflict(null);
+        setPage(0);
+        savedSnapshot.current = entry;
+        setView("entry");
+        navigation.setParams({ mobileEditLineId: undefined });
+      } catch (error) {
+        pendingEditConfirmation.current = "";
+        setSyncText(error instanceof Error ? error.message : "Could not open this line.");
+        navigation.setParams({ mobileEditLineId: undefined });
+      }
+    })();
+  }, [mobileEditLineId, user?.id, bookReady]);
+
+  useEffect(() => {
+    if (view !== "entry" || !activeEntry || pendingEditConfirmation.current !== activeEntry.id) return;
+    pendingEditConfirmation.current = "";
+    enableEntryEditing();
+  }, [view, activeEntry?.id]);
 
   function localEntryPatchValue(entry: Entry, field: string): unknown {
     if (field === "workerIds") return workerIds(entry);
@@ -725,15 +777,24 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   if (view === "summary") return <LineSummaryScreen
     month={summaryMonth} summary={monthlySummary?.month === summaryMonth ? monthlySummary : null}
     loading={summaryLoading} online={online} message={summaryMessage}
+    lines={monthLines} lineQuery={monthLineQuery} setLineQuery={(value) => { setMonthLineQuery(value); setMonthLineCursor(null); }}
+    linesLoading={monthLinesLoading} linesMessage={monthLinesMessage} linesHasMore={monthLinesHasMore}
     onMonthChange={(amount) => setSummaryMonth((current) => shiftMonth(current, amount))}
-    onRefresh={() => void loadMonthlySummary(summaryMonth)} onProfile={() => { setAccountReturnView("summary"); setView("account"); void loadSessions().catch((error) => setSyncText(error.message)); }}
+    onRefresh={() => { void loadMonthlySummary(summaryMonth); void loadMonthlyLines(summaryMonth, monthLineQuery); }} onProfile={() => { setAccountReturnView("summary"); setView("account"); void loadSessions().catch((error) => setSyncText(error.message)); }}
+    onLoadMore={() => { if (monthLineCursor) void loadMonthlyLines(summaryMonth, monthLineQuery, monthLineCursor, true); }}
+    onOpenLine={(id) => navigation.push({ pathname: "/line/[id]", params: { id } })}
     onTab={setView}
   />;
 
   return <BookScreen
     user={user} entries={entries} groups={entryGroups} workers={workers} online={online} pending={pending} message={syncText}
     selectedDate={bookDate} setSelectedDate={setBookDate}
-    onNew={() => void startNewEntry()} onOpen={openEntry} onReviewConflict={(entry) => void reviewConflict(entry)} onHistory={(entry) => void openHistory(entry)}
+    onNew={() => void startNewEntry()} onOpen={(entry) => {
+      const record = entries.find((row) => row.entry.id === entry.id);
+      if (record?.conflict) void reviewConflict(entry);
+      else if (entry.id.startsWith("local:")) openEntry(entry);
+      else navigation.push({ pathname: "/line/[id]", params: { id: entry.id } });
+    }} onReviewConflict={(entry) => void reviewConflict(entry)} onHistory={(entry) => void openHistory(entry)}
     onRefresh={() => void (async () => { await createPendingLocalEntries(); await syncOutbox(); await reloadServer(); })()}
     onTab={setView} onProfile={() => { setAccountReturnView("book"); setView("account"); void loadSessions().catch((error) => setSyncText(error.message)); }}
   />;
@@ -981,6 +1042,8 @@ function ProfileButton(props: { name?: string | null; onPress: () => void; disab
 
 function LineSummaryScreen(props: {
   month: string; summary: MonthlyLineSummary | null; loading: boolean; online: boolean; message: string;
+  lines: Entry[]; lineQuery: string; setLineQuery: (value: string) => void; linesLoading: boolean; linesMessage: string;
+  linesHasMore: boolean; onLoadMore: () => void; onOpenLine: (id: string) => void;
   onMonthChange: (amount: number) => void; onRefresh: () => void; onProfile: () => void; onTab: (tab: MainTab) => void;
 }) {
   const totals = props.summary?.totals;
@@ -1016,6 +1079,27 @@ function LineSummaryScreen(props: {
           </View>) : <Text style={styles.fieldHelp}>No crew assignments for this month.</Text>}
         </Card>
       </> : <View style={styles.emptyCard}><View style={styles.emptyIcon}><Text style={styles.emptyIconText}>{props.loading ? "↻" : "▥"}</Text></View><Text style={styles.emptyTitle}>{props.loading ? "Loading this month" : "Summary not available"}</Text><Text style={styles.body}>{props.loading ? "Fetching the latest totals from NNS Enterprise." : props.online ? "Refresh to load this month’s line activity." : "Reconnect to load a summary for this month."}</Text></View>}
+      <Card title="Lines" subtitle={props.online ? "Search and open a line to see its full details." : "Only recent lines already saved on this phone are available offline."}>
+        <Searchbar
+          placeholder="Search number, customer, or DP"
+          value={props.lineQuery}
+          onChangeText={props.setLineQuery}
+          style={styles.lineSearch}
+          inputStyle={styles.lineSearchInput}
+          iconColor={C.muted}
+          placeholderTextColor={C.muted}
+          elevation={0}
+        />
+        {props.linesMessage ? <Text style={styles.fieldHelp}>{props.linesMessage}</Text> : null}
+        {props.lines.map((line) => <Pressable key={line.id} onPress={() => props.onOpenLine(line.id)} style={styles.monthLineRow}>
+          <View style={styles.monthLineStamp}><Text style={styles.monthLineStampText}>{line.telephoneNo.slice(-2) || "—"}</Text></View>
+          <View style={styles.flex}><Text style={styles.monthLineName} numberOfLines={1}>{line.name || line.telephoneNo}</Text><Text style={styles.monthLineMeta} numberOfLines={1}>{line.telephoneNo} · {line.dp || "No DP"}</Text><Text style={styles.monthLineMeta}>{prettyDate(line.date)} · {line.status === "completed" ? "Complete" : "In progress"}</Text></View>
+          <Text style={styles.monthLineArrow}>›</Text>
+        </Pressable>)}
+        {!props.lines.length && !props.linesLoading ? <Text style={styles.fieldHelp}>No lines found for this month.</Text> : null}
+        {props.linesLoading ? <Text style={styles.fieldHelp}>Loading lines…</Text> : null}
+        {props.linesHasMore ? <MaterialButton mode="outlined" compact disabled={props.linesLoading} onPress={props.onLoadMore} style={styles.loadMoreButton} textColor={C.blue}>Load more</MaterialButton> : null}
+      </Card>
     </ScrollView>
     <TabBar active="summary" pending={0} onSelect={props.onTab} />
   </SafeAreaView>;
@@ -1181,16 +1265,16 @@ function SessionScreen(props: { sessions: any[]; currentUser: AppUser; onBack: (
 
 function TopBack(props: { title: string; onBack: () => void }) { return <View style={styles.entryTopBar}><Pressable onPress={props.onBack} style={styles.backButton}><Text style={styles.backArrow}>‹</Text></Pressable><Text style={styles.entryTopTitle}>{props.title}</Text></View>; }
 
-function Card(props: { title: string; subtitle?: string; children: React.ReactNode }) { return <View style={styles.formCard}><Text style={styles.cardTitle}>{props.title}</Text>{props.subtitle ? <Text style={styles.cardSubtitle}>{props.subtitle}</Text> : null}{props.children}</View>; }
+function Card(props: { title: string; subtitle?: string; children: React.ReactNode }) { return <MaterialCard mode="outlined" style={styles.formCard}><MaterialCard.Content style={styles.materialCardContent}><Text style={styles.cardTitle}>{props.title}</Text>{props.subtitle ? <Text style={styles.cardSubtitle}>{props.subtitle}</Text> : null}{props.children}</MaterialCard.Content></MaterialCard>; }
 function Field(props: { label: string; value: string; onChangeText: (value: string) => void; placeholder?: string; keyboardType?: any; autoCapitalize?: any; secureTextEntry?: boolean; multiline?: boolean; warning?: string; editable?: boolean }) {
-  return <View style={styles.fieldGroup}><Text style={styles.fieldLabel}>{props.label}</Text><TextInput editable={props.editable !== false} value={props.value} onChangeText={props.onChangeText} placeholder={props.placeholder} placeholderTextColor="#8ba0ab" keyboardType={props.keyboardType} autoCapitalize={props.autoCapitalize || "sentences"} secureTextEntry={props.secureTextEntry} multiline={props.multiline} textAlignVertical={props.multiline ? "top" : "center"} style={[styles.input, props.multiline && styles.inputMultiline, props.warning && styles.inputWarning, props.editable === false && styles.readOnlyField]} /></View>;
+  return <View style={styles.fieldGroup}><Text style={styles.fieldLabel}>{props.label}</Text><MaterialTextInput mode="outlined" dense editable={props.editable !== false} value={props.value} onChangeText={props.onChangeText} placeholder={props.placeholder} placeholderTextColor={C.muted} keyboardType={props.keyboardType} autoCapitalize={props.autoCapitalize || "sentences"} secureTextEntry={props.secureTextEntry} multiline={props.multiline} textAlignVertical={props.multiline ? "top" : "center"} outlineColor={props.warning ? C.warn : C.line} activeOutlineColor={props.warning ? C.warn : C.blue} textColor={C.ink} selectionColor={C.blue} style={[styles.input, props.multiline && styles.inputMultiline, props.warning && styles.inputWarning, props.editable === false && styles.readOnlyField]} contentStyle={styles.materialInputContent} />{props.warning ? <Text style={styles.inputWarningText}>{props.warning}</Text> : null}</View>;
 }
 function InlineNotice(props: { text: string; tone?: "info" | "error" | "success"; onPress?: () => void }) {
   const tone = props.tone || "info";
   return <Pressable onPress={props.onPress} style={[styles.notice, tone === "error" && styles.noticeError, tone === "success" && styles.noticeSuccess]}><Text style={styles.noticeText}>{props.text}</Text>{props.onPress ? <Text style={styles.noticeAction}>Tap to retry</Text> : null}</Pressable>;
 }
-function PrimaryButton(props: { label: string; onPress: () => void; disabled?: boolean }) { return <Pressable onPress={props.onPress} disabled={props.disabled} style={[styles.primaryButton, props.disabled && styles.disabledAction]}><Text style={styles.primaryButtonText}>{props.label}</Text></Pressable>; }
-function SecondaryButton(props: { label: string; onPress: () => void; disabled?: boolean }) { return <Pressable onPress={props.onPress} disabled={props.disabled} style={[styles.secondaryButton, props.disabled && styles.disabledSecondary]}><Text style={styles.secondaryButtonText}>{props.label}</Text></Pressable>; }
+function PrimaryButton(props: { label: string; onPress: () => void; disabled?: boolean }) { return <MaterialButton mode="contained" onPress={props.onPress} disabled={props.disabled} buttonColor={C.blue} textColor={darkTheme ? "#172019" : "#fffaf1"} contentStyle={styles.materialButtonContent} style={styles.materialButton}>{props.label}</MaterialButton>; }
+function SecondaryButton(props: { label: string; onPress: () => void; disabled?: boolean }) { return <MaterialButton mode="outlined" onPress={props.onPress} disabled={props.disabled} textColor={C.blue} contentStyle={styles.materialButtonContent} style={styles.materialButton}>{props.label}</MaterialButton>; }
 function Centered(props: { children: React.ReactNode }) { return <SafeAreaView style={styles.centered}><StatusBar style={darkTheme ? "light" : "dark"} />{props.children}</SafeAreaView>; }
 function Measure(props: { label: string; value: number }) { return <View style={styles.measure}><Text style={styles.measureLabel}>{props.label}</Text><Text style={styles.measureValue}>{props.value.toFixed(2)} m</Text></View>; }
 function ReviewRow(props: { label: string; value: string }) { return <View style={styles.reviewRow}><Text style={styles.reviewLabel}>{props.label}</Text><Text style={styles.reviewValue}>{props.value}</Text></View>; }
@@ -1222,21 +1306,21 @@ function createStyles(C: Palette) { return StyleSheet.create({
   logo: { width: 52, height: 52, borderRadius: 18, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" }, logoText: { color: "#fff", fontSize: 23, fontWeight: "800" }, smallLogo: { width: 38, height: 38, borderRadius: 14, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" }, serverBadge: { borderRadius: 12, backgroundColor: C.pale, padding: 12, marginTop: 14 }, serverBadgeText: { color: C.blue, fontSize: 12, fontWeight: "700" },
   appName: { color: C.ink, fontWeight: "800", fontSize: 18 }, subtle: { color: C.muted, fontSize: 13 }, brandMark: { color: C.blue, fontWeight: "900", fontSize: 32 }, signInCard: { backgroundColor: C.card, borderColor: C.line, borderWidth: 1, borderRadius: 23, padding: 19, shadowColor: "#123e5a", shadowOpacity: 0.06, shadowRadius: 20, elevation: 2 },
   eyebrow: { color: C.bright, fontSize: 11, fontWeight: "800", letterSpacing: 1.7 }, hero: { color: C.ink, fontSize: 29, lineHeight: 35, fontWeight: "800", marginTop: 10 }, heroSmall: { color: C.ink, fontSize: 25, lineHeight: 31, fontWeight: "800", marginTop: 5 }, body: { color: C.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },
-  fieldGroup: { marginTop: 15 }, fieldLabel: { color: C.ink, fontSize: 13, fontWeight: "700", marginBottom: 7 }, input: { minHeight: 50, borderWidth: 1, borderColor: C.line, borderRadius: 14, backgroundColor: C.input, paddingHorizontal: 14, paddingVertical: 11, color: C.ink, fontSize: 16 }, inputMultiline: { minHeight: 92, paddingTop: 12 }, inputWarning: { borderColor: C.warn, backgroundColor: C.errorBg }, fieldHelp: { color: C.muted, fontSize: 12, marginTop: 7, lineHeight: 17 },
-  primaryButton: { minHeight: 52, borderRadius: 15, backgroundColor: C.blue, alignItems: "center", justifyContent: "center", paddingHorizontal: 18, marginTop: 17 }, primaryButtonText: { color: C.paper, fontSize: 16, fontWeight: "800" }, secondaryButton: { minHeight: 48, borderWidth: 1, borderColor: C.line, borderRadius: 14, backgroundColor: C.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 16, marginTop: 12 }, secondaryButtonText: { color: C.blue, fontSize: 14, fontWeight: "700" }, disabledAction: { opacity: 0.55 }, disabledSecondary: { opacity: 0.5 },
+  fieldGroup: { marginTop: 15 }, fieldLabel: { color: C.ink, fontSize: 13, fontWeight: "700", marginBottom: 7 }, input: { minHeight: 50, borderRadius: 14, backgroundColor: C.input }, materialInputContent: { minHeight: 48, paddingHorizontal: 2, fontSize: 16 }, inputMultiline: { minHeight: 92, paddingTop: 12 }, inputWarning: { backgroundColor: C.errorBg }, inputWarningText: { color: C.warn, fontSize: 11, marginTop: 5 }, fieldHelp: { color: C.muted, fontSize: 12, marginTop: 7, lineHeight: 17 },
+  materialButton: { marginTop: 14, borderRadius: 13 }, materialButtonContent: { minHeight: 46, paddingHorizontal: 10 }, disabledAction: { opacity: 0.5 }, disabledSecondary: { opacity: 0.5 },
   notice: { backgroundColor: C.pale, borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: C.line }, noticeError: { backgroundColor: C.errorBg, borderColor: C.errorLine }, noticeSuccess: { backgroundColor: C.successBg, borderColor: C.successLine }, noticeText: { color: C.ink, fontSize: 13, lineHeight: 18 }, noticeAction: { color: C.blue, fontSize: 12, fontWeight: "700", marginTop: 5 }, orRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 18 }, rule: { height: 1, backgroundColor: C.line, flex: 1 }, footnote: { color: C.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 17 }, footer: { color: C.muted, fontSize: 11, textAlign: "center", marginTop: 22 },
   topBar: { minHeight: 65, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: C.paper }, topBarActions: { flexDirection: "row", alignItems: "center", gap: 10 }, brandInline: { flexDirection: "row", gap: 10, alignItems: "center" }, iconButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, iconText: { color: C.blue, fontSize: 18, fontWeight: "900", letterSpacing: 2 }, fieldMark: { borderWidth: 1, borderColor: C.line, backgroundColor: C.card, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, transform: [{ rotate: "-3deg" }] }, fieldMarkText: { color: C.bright, fontSize: 8, fontWeight: "900", letterSpacing: 1.2 },
   connectionStrip: { minHeight: 34, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", gap: 8, borderBottomWidth: 1, borderColor: C.line }, statusDot: { width: 8, height: 8, borderRadius: 9 }, connectionText: { color: C.muted, fontSize: 11, flex: 1 }, bookContent: { padding: 20, paddingBottom: 24, gap: 14 }, bookHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4, marginBottom: 5 }, pageStamp: { width: 64, height: 72, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, alignItems: "center", justifyContent: "center", transform: [{ rotate: "3deg" }] }, pageStampSmall: { color: C.bright, fontSize: 9, fontWeight: "900", letterSpacing: 1.2 }, pageStampValue: { color: C.blue, fontSize: 27, fontWeight: "800", marginTop: 2 },
   dateSelector: { flexDirection: "row", alignItems: "center", gap: 13, borderRadius: 17, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 12 }, dateNudge: { minWidth: 42, minHeight: 42, borderRadius: 13, backgroundColor: C.pale, alignItems: "center", justifyContent: "center", paddingHorizontal: 9 }, dateNudgeText: { color: C.blue, fontSize: 27, fontWeight: "500", marginTop: -3 }, todayButtonText: { color: C.blue, fontSize: 12, fontWeight: "800" }, sectionEyebrow: { color: C.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1 }, dateTitle: { color: C.ink, fontSize: 15, fontWeight: "700", marginTop: 3 }, sectionHeadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 13 }, sectionTitle: { color: C.ink, fontSize: 18, fontWeight: "800" }, countBadge: { color: C.blue, backgroundColor: C.pale, minWidth: 31, textAlign: "center", overflow: "hidden", paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, fontSize: 12, fontWeight: "800" },
   entryCard: { backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 17, marginTop: 10, overflow: "hidden" }, entryCardCompact: { borderRadius: 14, marginTop: 7 }, entryCardMain: { flexDirection: "row", alignItems: "center", padding: 13, gap: 11 }, entryNumber: { width: 42, height: 46, borderRadius: 13, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, entryNumberText: { color: C.blue, fontSize: 15, fontWeight: "800" }, entryCardText: { flex: 1, minWidth: 0 }, entryPhone: { color: C.ink, fontSize: 15, fontWeight: "800" }, entryLocation: { color: C.muted, fontSize: 12, marginTop: 2 }, entryMeta: { color: C.muted, fontSize: 10, marginTop: 5 }, cardStatus: { alignItems: "center", gap: 5, minWidth: 42 }, cardStatusText: { color: C.muted, fontSize: 9, fontWeight: "800" }, historyLink: { borderTopWidth: 1, borderColor: C.line, paddingHorizontal: 14, paddingVertical: 8, alignItems: "flex-end" }, historyLinkText: { color: C.blue, fontSize: 11, fontWeight: "700" }, conflictPreview: { marginHorizontal: 13, marginBottom: 12, color: C.warn, fontSize: 12 }, pastDay: { marginTop: 13 }, pastDayHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 2, marginBottom: 3 }, pastDayTitle: { color: C.ink, fontSize: 14, fontWeight: "800" }, signOut: { alignItems: "center", padding: 10 },
   emptyCard: { alignItems: "center", backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderStyle: "dashed", borderRadius: 19, padding: 20, marginTop: 8 }, emptyIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, emptyIconText: { color: C.bright, fontSize: 23, fontWeight: "800" }, emptyTitle: { color: C.ink, fontSize: 16, fontWeight: "800", marginTop: 10 },
-  entryTopBar: { minHeight: 64, backgroundColor: C.paper, borderBottomWidth: 1, borderColor: C.line, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 11 }, backButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: "center", justifyContent: "center" }, backArrow: { color: C.blue, fontSize: 29, marginTop: -4 }, entryTopTitle: { color: C.ink, fontSize: 16, fontWeight: "800" }, editEntryButton: { minHeight: 34, paddingHorizontal: 11, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: C.pale, borderWidth: 1, borderColor: C.line }, editEntryButtonText: { color: C.blue, fontSize: 11, fontWeight: "900" }, viewBadge: { backgroundColor: C.pale }, saveBadge: { backgroundColor: C.successBg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }, saveBadgeWorking: { backgroundColor: C.yellow }, saveBadgeText: { color: C.good, fontSize: 10, fontWeight: "800" }, readOnlyField: { opacity: 0.78 }, progressWrap: { paddingHorizontal: 18, paddingTop: 13, paddingBottom: 10, backgroundColor: C.card, borderBottomWidth: 1, borderColor: C.line }, progressHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, progressPercent: { color: C.blue, fontSize: 11, fontWeight: "800" }, progressTrack: { height: 4, borderRadius: 5, backgroundColor: C.line, marginTop: 8, overflow: "hidden" }, progressFill: { height: 4, backgroundColor: C.bright, borderRadius: 5 }, steps: { paddingTop: 12, paddingBottom: 2, alignItems: "center" }, stepItem: { flexDirection: "row", alignItems: "center" }, stepCircle: { width: 23, height: 23, borderRadius: 12, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, stepCircleActive: { backgroundColor: C.blue }, stepNum: { color: C.muted, fontSize: 10, fontWeight: "800" }, stepNumActive: { color: C.paper }, stepLabel: { color: C.muted, fontSize: 9, marginLeft: 5, marginRight: 6 }, stepLabelActive: { color: C.blue, fontWeight: "800" }, stepConnector: { width: 13, height: 1, backgroundColor: C.line }, stepConnectorActive: { backgroundColor: C.bright }, formContent: { padding: 17, paddingBottom: 24, gap: 12 }, pageHeading: { marginBottom: 2 }, formCard: { borderWidth: 1, borderColor: C.line, borderRadius: 18, backgroundColor: C.card, padding: 15, marginBottom: 2 }, cardTitle: { color: C.ink, fontSize: 16, fontWeight: "800" }, cardSubtitle: { color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 2 }, paperNote: { borderLeftWidth: 3, borderColor: C.bright, backgroundColor: C.pale, padding: 11, borderRadius: 9, marginTop: 13 }, paperNoteTitle: { color: C.blue, fontSize: 12, fontWeight: "800" }, paperNoteText: { color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  entryTopBar: { minHeight: 64, backgroundColor: C.paper, borderBottomWidth: 1, borderColor: C.line, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 11 }, backButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: "center", justifyContent: "center" }, backArrow: { color: C.blue, fontSize: 29, marginTop: -4 }, entryTopTitle: { color: C.ink, fontSize: 16, fontWeight: "800" }, editEntryButton: { minHeight: 34, paddingHorizontal: 11, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: C.pale, borderWidth: 1, borderColor: C.line }, editEntryButtonText: { color: C.blue, fontSize: 11, fontWeight: "900" }, viewBadge: { backgroundColor: C.pale }, saveBadge: { backgroundColor: C.successBg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }, saveBadgeWorking: { backgroundColor: C.yellow }, saveBadgeText: { color: C.good, fontSize: 10, fontWeight: "800" }, readOnlyField: { opacity: 0.78 }, progressWrap: { paddingHorizontal: 18, paddingTop: 13, paddingBottom: 10, backgroundColor: C.card, borderBottomWidth: 1, borderColor: C.line }, progressHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, progressPercent: { color: C.blue, fontSize: 11, fontWeight: "800" }, progressTrack: { height: 4, borderRadius: 5, backgroundColor: C.line, marginTop: 8, overflow: "hidden" }, progressFill: { height: 4, backgroundColor: C.bright, borderRadius: 5 }, steps: { paddingTop: 12, paddingBottom: 2, alignItems: "center" }, stepItem: { flexDirection: "row", alignItems: "center" }, stepCircle: { width: 23, height: 23, borderRadius: 12, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, stepCircleActive: { backgroundColor: C.blue }, stepNum: { color: C.muted, fontSize: 10, fontWeight: "800" }, stepNumActive: { color: C.paper }, stepLabel: { color: C.muted, fontSize: 9, marginLeft: 5, marginRight: 6 }, stepLabelActive: { color: C.blue, fontWeight: "800" }, stepConnector: { width: 13, height: 1, backgroundColor: C.line }, stepConnectorActive: { backgroundColor: C.bright }, formContent: { padding: 17, paddingBottom: 24, gap: 12 }, pageHeading: { marginBottom: 2 }, formCard: { borderWidth: 1, borderColor: C.line, borderRadius: 18, backgroundColor: C.card, marginBottom: 2 }, materialCardContent: { padding: 15 }, cardTitle: { color: C.ink, fontSize: 16, fontWeight: "800" }, cardSubtitle: { color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 2 }, paperNote: { borderLeftWidth: 3, borderColor: C.bright, backgroundColor: C.pale, padding: 11, borderRadius: 9, marginTop: 13 }, paperNoteTitle: { color: C.blue, fontSize: 12, fontWeight: "800" }, paperNoteText: { color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   readingRow: { flexDirection: "row", gap: 9 }, measurements: { flexDirection: "row", gap: 7, marginTop: 15 }, measure: { flex: 1, backgroundColor: C.pale, padding: 9, borderRadius: 12 }, measureLabel: { color: C.blue, fontSize: 10, fontWeight: "700" }, measureValue: { color: C.ink, fontSize: 13, fontWeight: "800", marginTop: 5 }, workerGrid: { gap: 8, marginTop: 12 }, workerChip: { borderWidth: 1, borderColor: C.line, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", gap: 9, alignItems: "center" }, workerChipSelected: { borderColor: C.bright, backgroundColor: C.pale }, workerInitial: { width: 30, height: 30, borderRadius: 11, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, workerInitialSelected: { backgroundColor: C.blue }, workerInitialText: { color: C.muted, fontSize: 9, fontWeight: "800" }, workerInitialTextSelected: { color: "#fff" }, workerName: { color: C.ink, fontSize: 13, flex: 1 }, checkbox: { width: 19, height: 19, borderRadius: 6, borderWidth: 1.5, borderColor: C.muted, color: "#fff", textAlign: "center", fontSize: 12, overflow: "hidden" }, checkboxSelected: { backgroundColor: C.blue, borderColor: C.blue }, reviewRow: { borderBottomWidth: 1, borderColor: C.line, paddingVertical: 9, flexDirection: "row", justifyContent: "space-between", gap: 12 }, reviewLabel: { color: C.muted, fontSize: 12 }, reviewValue: { color: C.ink, fontSize: 12, fontWeight: "700", flex: 1, textAlign: "right" },
   bottomActions: { backgroundColor: C.card, borderTopWidth: 1, borderColor: C.line, flexDirection: "row", paddingHorizontal: 15, paddingTop: 10, paddingBottom: Platform.OS === "android" ? 12 : 20, gap: 10 }, secondaryAction: { minHeight: 49, paddingHorizontal: 18, borderRadius: 14, backgroundColor: C.raised, alignItems: "center", justifyContent: "center" }, secondaryActionText: { color: C.blue, fontWeight: "800", fontSize: 14 }, primaryAction: { flex: 1, minHeight: 49, backgroundColor: C.blue, borderRadius: 14, alignItems: "center", justifyContent: "center" }, primaryActionText: { color: C.paper, fontSize: 14, fontWeight: "800" }, stickyNotice: { backgroundColor: C.paper, paddingHorizontal: 12, paddingBottom: 8 },
   conflictCard: { borderWidth: 1, borderColor: C.errorLine, backgroundColor: C.errorBg, borderRadius: 16, padding: 13, marginBottom: 3 }, conflictTitle: { color: C.warn, fontSize: 15, fontWeight: "800" }, conflictText: { color: C.ink, fontSize: 12, lineHeight: 17, marginTop: 6 }, conflictField: { borderTopWidth: 1, borderColor: C.errorLine, paddingTop: 9, marginTop: 9 }, conflictFieldLabel: { color: C.ink, fontSize: 12, fontWeight: "800", marginBottom: 6 }, conflictChoices: { flexDirection: "row", gap: 7 }, conflictChoice: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 11, backgroundColor: C.card, padding: 8 }, conflictChoiceSelected: { borderColor: C.bright, backgroundColor: C.pale }, conflictChoiceTitle: { color: C.muted, fontSize: 9, fontWeight: "800", textTransform: "uppercase" }, conflictChoiceValue: { color: C.ink, fontSize: 11, marginTop: 4 }, discardLink: { alignItems: "center", padding: 10 }, discardLinkText: { color: C.warn, fontSize: 12, fontWeight: "700" },
   historyCard: { borderWidth: 1, borderColor: C.line, borderRadius: 16, backgroundColor: C.card, padding: 14, marginTop: 12 }, historyActor: { color: C.ink, fontSize: 14, fontWeight: "800" }, historyRow: { borderTopWidth: 1, borderColor: C.line, paddingTop: 8, marginTop: 8 }, historyField: { color: C.muted, fontSize: 11, fontWeight: "700" }, historyValues: { color: C.ink, fontSize: 12, marginTop: 4 }, sessionCard: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.raised, borderRadius: 15, padding: 13, marginTop: 11 }, sessionName: { color: C.ink, fontSize: 14, fontWeight: "800", marginBottom: 3 }, revokeButton: { backgroundColor: C.errorBg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 }, revokeText: { color: C.warn, fontWeight: "800", fontSize: 12 },
   tabBar: { flexDirection: "row", minHeight: 68, paddingTop: 7, paddingBottom: Platform.OS === "android" ? 7 : 17, paddingHorizontal: 12, backgroundColor: C.card, borderTopWidth: 1, borderColor: C.line },
   tabButton: { flex: 1, alignItems: "center", justifyContent: "center", gap: 3, minHeight: 48 }, tabIconWrap: { width: 40, height: 30, borderRadius: 11, alignItems: "center", justifyContent: "center", position: "relative" }, tabIconWrapActive: { backgroundColor: C.pale }, tabIcon: { color: C.muted, fontSize: 19, fontWeight: "700" }, tabIconActive: { color: C.blue }, tabLabel: { color: C.muted, fontSize: 10, fontWeight: "700" }, tabLabelActive: { color: C.blue, fontWeight: "900" }, tabBadge: { position: "absolute", right: 1, top: -2, width: 15, height: 15, borderRadius: 8, backgroundColor: C.bright, alignItems: "center", justifyContent: "center" }, tabBadgeText: { color: "#fff", fontSize: 8, fontWeight: "900" },
-  screenHeader: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, backgroundColor: C.paper }, mainHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12 }, profileButton: { width: 43, height: 43, borderRadius: 22, backgroundColor: C.blue, borderWidth: 2, borderColor: C.card, alignItems: "center", justifyContent: "center", shadowColor: C.ink, shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 }, profileButtonText: { color: C.paper, fontSize: 13, fontWeight: "900" }, accountContent: { paddingHorizontal: 18, paddingTop: 5, paddingBottom: 22, gap: 14 }, summaryContent: { paddingHorizontal: 18, paddingTop: 9, paddingBottom: 24, gap: 12 }, summaryRefreshRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }, summaryRefreshButton: { minHeight: 34, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, borderRadius: 11, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, summaryRefreshText: { color: C.blue, fontSize: 11, fontWeight: "800" }, summaryMetricRow: { flexDirection: "row", gap: 8 }, summaryMetric: { flex: 1, minWidth: 0, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 11 }, summaryMetricAccent: { borderColor: C.bright, backgroundColor: C.pale }, summaryMetricLabel: { color: C.muted, fontSize: 10, fontWeight: "700" }, summaryMetricValue: { color: C.ink, fontSize: 17, fontWeight: "900", marginTop: 5 }, summaryListRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderColor: C.line, paddingVertical: 10 }, summaryListValue: { alignItems: "flex-end" }, summaryListStrong: { color: C.ink, fontSize: 12, fontWeight: "900" }, reviewSummary: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 18, marginTop: 5, padding: 13, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, reviewSummaryIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, reviewSummaryGlyph: { color: C.blue, fontSize: 23, fontWeight: "800" }, reviewCount: { color: C.blue, fontSize: 22, fontWeight: "900" }, reviewItem: { flexDirection: "row", alignItems: "center", gap: 11, padding: 13, marginTop: 8, borderWidth: 1, borderColor: C.line, borderRadius: 15, backgroundColor: C.card }, reviewItemStamp: { width: 36, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: C.pale, borderRadius: 10, borderWidth: 1, borderColor: C.line, transform: [{ rotate: "-2deg" }] }, reviewItemStampWarn: { backgroundColor: C.errorBg, borderColor: C.errorLine }, reviewItemStampText: { color: C.blue, fontSize: 18, fontWeight: "900" }, reviewItemStampTextWarn: { color: C.warn }, reviewArrow: { color: C.bright, fontSize: 27, fontWeight: "400" },
+  screenHeader: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, backgroundColor: C.paper }, mainHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12 }, profileButton: { width: 43, height: 43, borderRadius: 22, backgroundColor: C.blue, borderWidth: 2, borderColor: C.card, alignItems: "center", justifyContent: "center", shadowColor: C.ink, shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 }, profileButtonText: { color: C.paper, fontSize: 13, fontWeight: "900" }, accountContent: { paddingHorizontal: 18, paddingTop: 5, paddingBottom: 22, gap: 14 }, summaryContent: { paddingHorizontal: 18, paddingTop: 9, paddingBottom: 24, gap: 12 }, summaryRefreshRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }, summaryRefreshButton: { minHeight: 34, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, borderRadius: 11, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, summaryRefreshText: { color: C.blue, fontSize: 11, fontWeight: "800" }, summaryMetricRow: { flexDirection: "row", gap: 8 }, summaryMetric: { flex: 1, minWidth: 0, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 11 }, summaryMetricAccent: { borderColor: C.bright, backgroundColor: C.pale }, summaryMetricLabel: { color: C.muted, fontSize: 10, fontWeight: "700" }, summaryMetricValue: { color: C.ink, fontSize: 17, fontWeight: "900", marginTop: 5 }, summaryListRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderColor: C.line, paddingVertical: 10 }, summaryListValue: { alignItems: "flex-end" }, summaryListStrong: { color: C.ink, fontSize: 12, fontWeight: "900" }, lineSearch: { backgroundColor: C.input, borderColor: C.line, borderWidth: 1, borderRadius: 14, marginTop: 12, height: 48 }, lineSearchInput: { minHeight: 42, fontSize: 13, color: C.ink }, monthLineRow: { flexDirection: "row", alignItems: "center", gap: 11, borderTopWidth: 1, borderColor: C.line, paddingVertical: 11 }, monthLineStamp: { width: 38, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: C.pale }, monthLineStampText: { color: C.blue, fontSize: 13, fontWeight: "900" }, monthLineName: { color: C.ink, fontSize: 13, fontWeight: "800" }, monthLineMeta: { color: C.muted, fontSize: 10, marginTop: 3 }, monthLineArrow: { color: C.bright, fontSize: 24, paddingHorizontal: 2 }, loadMoreButton: { marginTop: 7 }, reviewSummary: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 18, marginTop: 5, padding: 13, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }, reviewSummaryIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" }, reviewSummaryGlyph: { color: C.blue, fontSize: 23, fontWeight: "800" }, reviewCount: { color: C.blue, fontSize: 22, fontWeight: "900" }, reviewItem: { flexDirection: "row", alignItems: "center", gap: 11, padding: 13, marginTop: 8, borderWidth: 1, borderColor: C.line, borderRadius: 15, backgroundColor: C.card }, reviewItemStamp: { width: 36, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: C.pale, borderRadius: 10, borderWidth: 1, borderColor: C.line, transform: [{ rotate: "-2deg" }] }, reviewItemStampWarn: { backgroundColor: C.errorBg, borderColor: C.errorLine }, reviewItemStampText: { color: C.blue, fontSize: 18, fontWeight: "900" }, reviewItemStampTextWarn: { color: C.warn }, reviewArrow: { color: C.bright, fontSize: 27, fontWeight: "400" },
   appearanceChoices: { gap: 8, marginTop: 12 }, appearanceChoice: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: C.line, borderRadius: 13, padding: 11, backgroundColor: C.raised }, appearanceChoiceSelected: { borderColor: C.bright, backgroundColor: C.pale }, appearanceDot: { width: 21, height: 21, borderRadius: 11, borderWidth: 1.5, borderColor: C.muted, alignItems: "center", justifyContent: "center" }, appearanceDotSelected: { borderColor: C.blue, backgroundColor: C.blue }, appearanceCheck: { color: C.paper, fontSize: 12, fontWeight: "900" }, appearanceTitle: { color: C.ink, fontSize: 14, fontWeight: "800" }, appearanceCaption: { color: C.muted, fontSize: 11, marginTop: 1 }, refreshSessions: { alignSelf: "flex-start", paddingVertical: 8 }, refreshSessionsText: { color: C.blue, fontSize: 12, fontWeight: "800" }, sessionSeal: { width: 36, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: C.pale }, sessionSealText: { color: C.blue, fontWeight: "900" }, signOutButton: { minHeight: 49, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.errorLine, backgroundColor: C.errorBg, borderRadius: 14 }, signOutButtonText: { color: C.warn, fontSize: 14, fontWeight: "800" }, accountFooter: { textAlign: "center", color: C.muted, fontSize: 11, marginTop: 2 },
 }); }
