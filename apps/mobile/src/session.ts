@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import * as Crypto from "expo-crypto";
 import type { AppUser } from "./types";
 
 // Clear the user-editable host saved by older app builds. The app now connects
@@ -7,6 +8,7 @@ const LEGACY_API_URL_KEY = "nns-mobile-api-origin-v1";
 const ACCESS_KEY = "nns-mobile-access-v1";
 const REFRESH_KEY = "nns-mobile-refresh-v1";
 const USER_KEY = "nns-mobile-user-v1";
+const PAIRING_DEVICE_KEY = "nns-mobile-pairing-device-v1";
 const DEFAULT_API_URL = process.env.EXPO_PUBLIC_NNS_API_URL || "";
 
 export type NativeSession = { user: AppUser; accessToken: string; refreshToken: string };
@@ -16,6 +18,14 @@ export async function getApiOrigin() {
   if (!clearLegacyOrigin) clearLegacyOrigin = SecureStore.deleteItemAsync(LEGACY_API_URL_KEY).catch(() => undefined);
   await clearLegacyOrigin;
   return DEFAULT_API_URL.replace(/\/$/, "");
+}
+
+export async function getPairingDeviceKey() {
+  const saved = await SecureStore.getItemAsync(PAIRING_DEVICE_KEY);
+  if (saved && /^[a-f0-9]{64}$/i.test(saved)) return saved;
+  const key = Crypto.randomUUID().replace(/-/g, "") + Crypto.randomUUID().replace(/-/g, "");
+  await SecureStore.setItemAsync(PAIRING_DEVICE_KEY, key);
+  return key;
 }
 
 export async function readApiJson(response: Response, operation = "NNS") {
@@ -175,10 +185,10 @@ async function postPairing(path: string, payload: Record<string, string>) {
   }
 }
 
-export async function claimMobilePairing(requestId: string, token: string, deviceName: string) {
-  return postPairing("/api/mobile/auth/pairing/claim", { requestId, token, deviceName });
+export async function claimMobilePairing(requestId: string, token: string, deviceName: string, deviceKey: string) {
+  return postPairing("/api/mobile/auth/pairing/claim", { requestId, token, deviceName, deviceKey });
 }
 
-export async function confirmMobilePairing(requestId: string, token: string): Promise<NativeSession> {
-  return postPairing("/api/mobile/auth/pairing/confirm", { requestId, token });
+export async function confirmMobilePairing(requestId: string, token: string, deviceKey: string): Promise<NativeSession> {
+  return postPairing("/api/mobile/auth/pairing/confirm", { requestId, token, deviceKey });
 }

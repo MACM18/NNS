@@ -10,6 +10,11 @@ export function hashMobilePairingToken(token: string) {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
+export function hashMobilePairingDeviceKey(deviceKey: string) {
+  if (!/^[a-f0-9]{64}$/i.test(deviceKey)) throw new Error("Invalid mobile pairing device key");
+  return createHash("sha256").update(deviceKey, "utf8").digest("hex");
+}
+
 export function matchesMobilePairingToken(token: string, expectedHash: string) {
   if (!/^[A-Za-z0-9_-]{40,50}$/.test(token) || !/^[a-f0-9]{64}$/.test(expectedHash)) return false;
   const actual = Buffer.from(hashMobilePairingToken(token), "hex");

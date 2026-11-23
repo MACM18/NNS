@@ -91,7 +91,7 @@ export default function ProfilePage() {
       const response = await fetch("/api/profile/mobile-pairing", { method: "POST", cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not create a sign-in QR code.");
-      const image = await QRCode.toDataURL(result.pairingUrl, { width: 300, margin: 2, errorCorrectionLevel: "M" });
+      const image = await QRCode.toDataURL(result.pairingUrl, { width: 480, margin: 4, errorCorrectionLevel: "Q" });
       setPairingRequest({ requestId: result.requestId, pairingUrl: result.pairingUrl, expiresAt: result.expiresAt, image });
       setPairingStatus("waiting");
     } catch (error) {
@@ -118,7 +118,7 @@ export default function ProfilePage() {
         const response = await fetch(`/api/profile/mobile-pairing/${pairingRequest.requestId}`, { cache: "no-store" });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Unable to check the QR status.");
-        if (!stopped) setPairingStatus(result.status as PairingStatus);
+        if (!stopped) { setPairingError(""); setPairingStatus(result.status as PairingStatus); }
         if (!stopped && result.status === "connected") void loadMobileDevices();
       } catch (error) {
         if (!stopped) setPairingError(error instanceof Error ? error.message : "Unable to check the QR status.");
@@ -514,7 +514,7 @@ export default function ProfilePage() {
           </Card>
 
           <Dialog open={pairingOpen} onOpenChange={closePairing}>
-            <DialogContent className="w-[calc(100vw-2rem)] max-w-md p-5 sm:p-6">
+            <DialogContent className="w-[calc(100vw-1.5rem)] max-w-lg p-5 sm:p-6">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><QrCode className="h-5 w-5 text-primary" />Connect mobile app</DialogTitle>
                 <DialogDescription>Open NNS Enterprise on your phone, choose “Scan a website QR code”, then approve the account shown on your phone.</DialogDescription>
@@ -522,13 +522,13 @@ export default function ProfilePage() {
               <div className="flex flex-col items-center gap-4">
                 {pairingRequest && pairingStatus !== "expired" && pairingStatus !== "cancelled" ? (
                   <div className="relative rounded-2xl border bg-white p-3 shadow-sm">
-                    <img src={pairingRequest.image} alt="One-time NNS mobile sign-in QR code" className={`h-64 w-64 max-w-[70vw] object-contain ${pairingStatus === "connected" ? "opacity-30" : ""}`} />
+                    <img src={pairingRequest.image} alt="One-time NNS mobile sign-in QR code" className={`h-80 w-80 max-h-[72vw] max-w-[72vw] object-contain sm:h-96 sm:w-96 ${pairingStatus === "connected" ? "opacity-30" : ""}`} />
                     {pairingStatus === "connected" && <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-white/85 text-center"><ShieldCheck className="h-10 w-10 text-emerald-600" /><span className="mt-2 font-semibold text-emerald-700">Phone connected</span></div>}
                   </div>
                 ) : pairingBusy ? (
-                  <div className="flex h-64 w-64 flex-col items-center justify-center gap-3 rounded-2xl border bg-muted/30 text-sm text-muted-foreground"><Loader2 className="h-7 w-7 animate-spin" />Preparing your secure code…</div>
+                  <div className="flex h-80 w-80 max-h-[72vw] max-w-[72vw] flex-col items-center justify-center gap-3 rounded-2xl border bg-muted/30 text-sm text-muted-foreground"><Loader2 className="h-7 w-7 animate-spin" />Preparing your secure code…</div>
                 ) : (
-                  <div className="flex h-64 w-64 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-muted/30 p-6 text-center">
+                  <div className="flex h-80 w-80 max-h-[72vw] max-w-[72vw] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-muted/30 p-6 text-center">
                     {pairingStatus === "expired" ? <Clock className="h-8 w-8 text-amber-600" /> : <QrCode className="h-8 w-8 text-muted-foreground" />}
                     <p className="text-sm text-muted-foreground">{pairingError || (pairingStatus === "expired" ? "This QR code expired." : pairingStatus === "cancelled" ? "This connection request was cancelled." : "Create a QR code to connect this phone.")}</p>
                   </div>
@@ -539,6 +539,7 @@ export default function ProfilePage() {
                   </p>
                   {pairingRequest && pairingStatus !== "connected" && <p className="mt-1 text-xs text-muted-foreground">Expires {new Date(pairingRequest.expiresAt).toLocaleTimeString()}</p>}
                 </div>
+                {pairingError && <p role="alert" className="w-full text-center text-sm text-destructive">{pairingError}</p>}
                 {(pairingStatus === "expired" || pairingStatus === "cancelled" || !pairingRequest) && !pairingBusy && (
                   <Button className="w-full" onClick={() => void createPairing()}><RefreshCw className="mr-2 h-4 w-4" />Create a new QR code</Button>
                 )}

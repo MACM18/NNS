@@ -26,13 +26,14 @@ export function hashMobileRefreshToken(token: string) {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
-async function issueMobileSession(userId: string, sessionVersion: number, deviceName: string | null | undefined, db: Pick<Prisma.TransactionClient, "mobileSession">) {
+async function issueMobileSession(userId: string, sessionVersion: number, deviceName: string | null | undefined, db: Pick<Prisma.TransactionClient, "mobileSession">, pairingRequestId?: string) {
   const refreshToken = randomBytes(48).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000);
   const session = await db.mobileSession.create({
     data: {
       userId,
+      ...(pairingRequestId ? { pairingRequestId } : {}),
       sessionVersion,
       refreshTokenHash: hashMobileRefreshToken(refreshToken),
       deviceName: deviceName?.trim().slice(0, 80) || "Android device",
@@ -53,8 +54,25 @@ export async function createMobileSession(userId: string, sessionVersion: number
   return issueMobileSession(userId, sessionVersion, deviceName, prisma);
 }
 
-export async function createMobileSessionInTransaction(userId: string, sessionVersion: number, deviceName: string | null | undefined, tx: Pick<Prisma.TransactionClient, "mobileSession">) {
-  return issueMobileSession(userId, sessionVersion, deviceName, tx);
+export async function createMobileSessionInTransaction(userId: string, sessionVersion: number, deviceName: string | null | undefined, tx: Pick<Prisma.TransactionClient, "mobileSession">, pairingRequestId?: string) {
+  return issueMobileSession(userId, sessionVersion, deviceName, tx, pairingRequestId);
+}
+
+export async function rotateMobileSessionInTransaction(session: { id: string; userId: string; sessionVersion: number; refreshTokenHash: string; expiresAt: Date }, tx: Pick<Prisma.TransactionClient, "mobileSession">) {
+  const now = new Date();
+  const refreshToken = randomBytes(48).toString("base64url");
+  const updated = await tx.mobileSession.updateMany({
+    where: { id: session.id, refreshTokenHash: session.refreshTokenHash, revokedAt: null, expiresAt: { gt: now } },
+    data: { refreshTokenHash: hashMobileRefreshToken(refreshToken), lastUsedAt: now },
+  });
+  if (updated.count !== 1) return null;
+  const iat = Math.floor(now.getTime() / 1000);
+  return {
+    accessToken: sign({ sub: session.userId, sid: session.id, sv: session.sessionVersion, iat, exp: iat + ACCESS_TTL_SECONDS }),
+    refreshToken,
+    accessTokenExpiresAt: new Date((iat + ACCESS_TTL_SECONDS) * 1000).toISOString(),
+    refreshTokenExpiresAt: session.expiresAt.toISOString(),
+  };
 }
 
 type AccessClaims = { sub: string; sid: string; sv: number; iat: number; exp: number };

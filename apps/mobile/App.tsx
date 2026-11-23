@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   Alert, AppState, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet,
-  Text, View,
+  Text, View, useWindowDimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,7 +10,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import NetInfo from "@react-native-community/netinfo";
 import * as Crypto from "expo-crypto";
 import { GoogleOneTapSignIn, isCancelledResponse, isErrorWithCode, isNoSavedCredentialFoundResponse, isSuccessResponse, statusCodes } from "react-native-nitro-google-signin";
-import { apiFetch, claimMobilePairing, clearSession, confirmMobilePairing, getSavedSession, login, NativeSession, revokeCurrentSession, saveSession } from "./src/session";
+import { apiFetch, claimMobilePairing, clearSession, confirmMobilePairing, getPairingDeviceKey, getSavedSession, login, NativeSession, revokeCurrentSession, saveSession } from "./src/session";
 import { cacheServerEntry, clearConflictMutations, closeBookDatabase, deleteEntryCache, deleteLocalDraft, enqueueMutation, finishMutation, flagConflict, getCachedEntries, getConflictedMutations, getMonthlySummary, getPendingMutations, getWorkers, openBookDatabase, pendingCount, pruneBookEntries, replaceLocalId, storeEntry, storeMonthlySummary, storeWorkers, updatePendingCreate } from "./src/storage";
 import { AppUser, blankEntry, CachedEntry, cableLengths, Entry, EntryConflict, MonthlyLineSummary, PendingMutation, sameFieldValue, Worker, workerIds } from "./src/types";
 import { Palette, ThemeMode, paletteByMode, useAppearance } from "./src/theme";
@@ -845,11 +845,14 @@ function SignInScreen(props: {
 }
 
 function MobilePairingScreen(props: { onCancel: () => void; onConfirm: (session: NativeSession) => Promise<void> }) {
+  const { height: screenHeight } = useWindowDimensions();
   const [permission, requestPermission] = useCameraPermissions();
   const [pairing, setPairing] = useState<{ requestId: string; token: string; fullName: string; email: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [torchOn, setTorchOn] = useState(false);
   const scanLocked = useRef(false);
+  const cameraHeight = Math.max(290, Math.min(screenHeight * 0.52, 620));
 
   async function handleScan(data: string) {
     if (scanLocked.current || busy) return;
@@ -860,7 +863,7 @@ function MobilePairingScreen(props: { onCancel: () => void; onConfirm: (session:
       const requestId = scanned.searchParams.get("requestId") || "";
       const token = scanned.searchParams.get("token") || "";
       if (scanned.protocol !== "nnsenterprise:" || scanned.hostname !== "pair" || !requestId || !token) throw new Error("That is not an NNS mobile sign-in QR code.");
-      const identity = await claimMobilePairing(requestId, token, "NNS Enterprise Android");
+      const identity = await claimMobilePairing(requestId, token, "NNS Enterprise Android", await getPairingDeviceKey());
       setPairing({ requestId, token, fullName: identity.fullName || "NNS Enterprise user", email: identity.email || "" });
     } catch (error) {
       scanLocked.current = false;
@@ -872,12 +875,10 @@ function MobilePairingScreen(props: { onCancel: () => void; onConfirm: (session:
     if (!pairing || busy) return;
     setBusy(true); setMessage("");
     try {
-      const session = await confirmMobilePairing(pairing.requestId, pairing.token);
+      const session = await confirmMobilePairing(pairing.requestId, pairing.token, await getPairingDeviceKey());
       await props.onConfirm(session);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to connect this phone. Create a new QR code on the website.");
-      setPairing(null);
-      scanLocked.current = false;
+      setMessage(`${error instanceof Error ? error.message : "Unable to connect this phone."} You can retry safely here.`);
     } finally { setBusy(false); }
   }
 
@@ -891,21 +892,22 @@ function MobilePairingScreen(props: { onCancel: () => void; onConfirm: (session:
       <Text style={styles.pairUserEmail}>{pairing.email}</Text>
       <Text style={styles.pairMessage}>Connect this phone to the account shown above? The QR code expires shortly and can only be used once.</Text>
       {message ? <InlineNotice text={message} tone="error" /> : null}
-      <PrimaryButton label={busy ? "Connecting…" : "Confirm and sign in"} onPress={() => void confirm()} disabled={busy} />
-      <SecondaryButton label="Cancel" onPress={props.onCancel} disabled={busy} />
+      <PrimaryButton label={busy ? "Connecting…" : message ? "Try connection again" : "Confirm and sign in"} onPress={() => void confirm()} disabled={busy} />
+      <SecondaryButton label="Scan a different QR code" onPress={() => { setPairing(null); setMessage(""); scanLocked.current = false; }} disabled={busy} />
     </View> : <View style={styles.scannerPanel}>
-      <Text style={styles.pairMessage}>On your signed-in NNS website, open Profile → Connect mobile app, then scan its QR code.</Text>
+      <Text style={styles.scanInstructions}>On your signed-in website, open Profile → Connect mobile app. Hold steady and fit the full QR code inside the frame.</Text>
       {!permission ? <View style={styles.cameraPermissionCard}><Text style={styles.body}>Preparing the camera…</Text></View> : !permission.granted ? <View style={styles.cameraPermissionCard}>
         <Text style={styles.cameraPermissionTitle}>Camera access needed</Text>
         <Text style={styles.body}>Allow camera access to scan your one-time sign-in code. The app only uses it for QR scanning.</Text>
         <PrimaryButton label="Allow camera" onPress={() => void requestPermission()} />
-      </View> : <View style={styles.cameraFrame}>
-        <CameraView style={styles.cameraPreview} facing="back" barcodeScannerSettings={{ barcodeTypes: ["qr"] }} onBarcodeScanned={busy ? undefined : (event) => void handleScan(event.data)} />
-        <View pointerEvents="none" style={styles.scanTarget}><View style={styles.scanTargetInner} /></View>
+      </View> : <View style={[styles.cameraFrame, { height: cameraHeight }]}>
+        <CameraView style={styles.cameraPreview} facing="back" enableTorch={torchOn} barcodeScannerSettings={{ barcodeTypes: ["qr"] }} onBarcodeScanned={busy ? undefined : (event) => void handleScan(event.data)} />
+        <View pointerEvents="none" style={styles.scanTarget}><View style={styles.scanTargetSquare}><View style={styles.scanTargetInner} /></View></View>
+        <Pressable accessibilityRole="button" accessibilityLabel={torchOn ? "Turn flashlight off" : "Turn flashlight on"} onPress={() => setTorchOn((value) => !value)} style={styles.torchButton}><Text style={styles.torchButtonText}>{torchOn ? "Flashlight on · tap to turn off" : "Turn on flashlight"}</Text></Pressable>
         <View style={styles.cameraCaption}><Text style={styles.cameraCaptionText}>{busy ? "Checking this sign-in code…" : "Align the website QR inside the frame"}</Text></View>
       </View>}
       {message ? <InlineNotice text={message} tone="error" /> : null}
-      <SecondaryButton label="Back to sign in" onPress={props.onCancel} />
+      {!permission?.granted ? <SecondaryButton label="Back to sign in" onPress={props.onCancel} /> : <Pressable style={styles.scannerBack} onPress={props.onCancel}><Text style={styles.scannerBackText}>Back to sign in</Text></Pressable>}
     </View>}
   </SafeAreaView>;
 }
@@ -1301,7 +1303,7 @@ function createStyles(C: Palette) { return StyleSheet.create({
   signInTrust: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderTopWidth: 1, borderColor: C.line, marginTop: 14, paddingTop: 12 }, signInTrustGlyph: { color: C.good, fontSize: 13, fontWeight: "900" }, signInTrustText: { flex: 1, color: C.muted, fontSize: 11, lineHeight: 15 },
   preparingSeal: { width: 54, height: 58, backgroundColor: C.blue, borderRadius: 13, alignItems: "center", justifyContent: "center", transform: [{ rotate: "-4deg" }] }, preparingSealText: { color: C.paper, fontSize: 25, fontWeight: "900" },
   pairHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderColor: C.line }, pairBack: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: C.card, borderWidth: 1, borderColor: C.line }, pairBackText: { color: C.blue, fontSize: 30, lineHeight: 32, marginTop: -4 }, pairTitle: { color: C.ink, fontSize: 21, fontWeight: "900", marginTop: 2 },
-  scannerPanel: { flex: 1, padding: 20, justifyContent: "center" }, cameraFrame: { height: 330, borderRadius: 23, overflow: "hidden", backgroundColor: "#111", marginTop: 18, position: "relative" }, cameraPreview: { flex: 1 }, scanTarget: { position: "absolute", top: "17%", left: "13%", right: "13%", bottom: "22%", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#f6ead5", borderRadius: 20 }, scanTargetInner: { width: "84%", height: "84%", borderWidth: 1, borderColor: "#f6ead566", borderRadius: 14 }, cameraCaption: { position: "absolute", bottom: 0, left: 0, right: 0, minHeight: 48, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, backgroundColor: "#111c" }, cameraCaptionText: { color: "#fffaf1", textAlign: "center", fontSize: 12, fontWeight: "700" },
+  scannerPanel: { flex: 1, paddingHorizontal: 18, paddingTop: 11, paddingBottom: 10, justifyContent: "flex-start" }, scanInstructions: { color: C.muted, fontSize: 13, lineHeight: 18, textAlign: "center", paddingHorizontal: 5 }, cameraFrame: { flex: 1, minHeight: 290, maxHeight: 620, borderRadius: 23, overflow: "hidden", backgroundColor: "#111", marginTop: 12, marginBottom: 3, position: "relative" }, cameraPreview: { flex: 1 }, scanTarget: { position: "absolute", top: 0, left: 0, right: 0, bottom: 48, alignItems: "center", justifyContent: "center" }, scanTargetSquare: { width: "78%", aspectRatio: 1, borderWidth: 2, borderColor: "#f6ead5", borderRadius: 22, alignItems: "center", justifyContent: "center" }, scanTargetInner: { width: "88%", height: "88%", borderWidth: 1, borderColor: "#f6ead566", borderRadius: 15 }, torchButton: { position: "absolute", top: 12, right: 12, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: "#111c", borderWidth: 1, borderColor: "#fff5" }, torchButtonText: { color: "#fffaf1", fontSize: 11, fontWeight: "800" }, cameraCaption: { position: "absolute", bottom: 0, left: 0, right: 0, minHeight: 48, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, backgroundColor: "#111c" }, cameraCaptionText: { color: "#fffaf1", textAlign: "center", fontSize: 12, fontWeight: "700" }, scannerBack: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 18 }, scannerBackText: { color: C.blue, fontWeight: "800", fontSize: 13 },
   cameraPermissionCard: { marginTop: 18, padding: 18, borderWidth: 1, borderColor: C.line, borderRadius: 19, backgroundColor: C.card }, cameraPermissionTitle: { color: C.ink, fontSize: 18, fontWeight: "900" }, pairConfirmWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, pairConfirmIcon: { width: 68, height: 68, borderRadius: 20, backgroundColor: C.blue, alignItems: "center", justifyContent: "center", transform: [{ rotate: "-4deg" }] }, pairConfirmIconText: { color: C.paper, fontSize: 31, fontWeight: "900" }, pairKicker: { color: C.bright, fontSize: 10, fontWeight: "900", letterSpacing: 1.6, marginTop: 22 }, pairUserName: { color: C.ink, fontSize: 24, fontWeight: "900", textAlign: "center", marginTop: 7 }, pairUserEmail: { color: C.muted, fontSize: 14, marginTop: 3 }, pairMessage: { color: C.muted, fontSize: 14, lineHeight: 21, textAlign: "center", marginTop: 14 },
   logo: { width: 52, height: 52, borderRadius: 18, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" }, logoText: { color: "#fff", fontSize: 23, fontWeight: "800" }, smallLogo: { width: 38, height: 38, borderRadius: 14, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" }, serverBadge: { borderRadius: 12, backgroundColor: C.pale, padding: 12, marginTop: 14 }, serverBadgeText: { color: C.blue, fontSize: 12, fontWeight: "700" },
   appName: { color: C.ink, fontWeight: "800", fontSize: 18 }, subtle: { color: C.muted, fontSize: 13 }, brandMark: { color: C.blue, fontWeight: "900", fontSize: 32 }, signInCard: { backgroundColor: C.card, borderColor: C.line, borderWidth: 1, borderRadius: 23, padding: 19, shadowColor: "#123e5a", shadowOpacity: 0.06, shadowRadius: 20, elevation: 2 },
